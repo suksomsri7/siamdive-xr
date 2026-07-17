@@ -3,6 +3,7 @@
   "rootNamespace": "DiveMap.Tests",
   "references": [
     "DiveMap.Core",
+    "DiveMap.Runtime",
     "UnityEngine.TestRunner",
     "UnityEditor.TestRunner"
   ],

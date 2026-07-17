@@ -1,0 +1,17 @@
+{
+  "name": "DiveMap.Runtime",
+  "rootNamespace": "DiveMap.Runtime",
+  "references": [
+    "DiveMap.Core",
+    "glTFast"
+  ],
+  "includePlatforms": [],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": true,
+  "defineConstraints": [],
+  "versionDefines": [],
+  "noEngineReferences": false
+}
