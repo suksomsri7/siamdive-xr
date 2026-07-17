@@ -314,5 +314,9 @@ QC ข้ามระบบ: แมพจริงทุก template + demo เ�
 | `SECURITY_PLAN.md` | ความปลอดภัย: no-secret-in-APK, สิทธิ์ตัดสินที่ server, keystore, UGC, incident response |
 
 ## 8. สถานะโปรเจกต์
-- **2026-07-17:** Design v1.2 + QC + Security ครบ — 📋 **รอ user สั่งเริ่ม WO-XR-00** (user ยืนยันจะทำแน่นอน แต่ยังไม่พร้อมตอนนี้) · ห้ามเริ่มเองก่อนได้รับคำสั่ง
-- อัปเดตสถานะ WO ที่หัวข้อนี้เมื่องานเริ่มจริง · แก้ spec ต้องแก้เอกสารก่อนโค้ดเสมอ
+- **2026-07-17 Night Run #1 → ⏸️ PAUSED โดย user:**
+  - WO-XR-00: 95% — repo+CI+license ✅, เทส 26/26 เขียวบน CI, **ค้างผล build APK แรก (run 29593800372)**
+  - WO-XR-01: 85% — โค้ด SceneLoader ครบ (แมพ demo Htms Chang), รอ APK + เทสบนเครื่อง
+  - XR-LOD: ✅ 10/10 (`/root/asset-masters/xr_lod/`) ยังไม่อัป CDN
+  - รายละเอียด/บทเรียน → memory `project_siamdive_xr_holomap`
+- แก้ spec ต้องแก้เอกสารก่อนโค้ดเสมอ
