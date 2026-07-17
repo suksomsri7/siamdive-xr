@@ -3,32 +3,36 @@ on: workflow_dispatch
 
 jobs:
   activation:
-    name: Named-user activation → .ulf
+    name: Licensing client probe + activation
     runs-on: ubuntu-latest
     timeout-minutes: 25
     container:
       image: unityci/editor:ubuntu-6000.0.79f1-base-3
     steps:
-      - name: Activate with username/password (named-user licensing)
+      - name: Probe licensing client capabilities
         env:
           UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
           UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
         run: |
-          unity-editor -batchmode -nographics -quit \
-            -username "$UNITY_EMAIL" -password "$UNITY_PASSWORD" \
-            -logFile /dev/stdout || true
-          echo "── possible license locations ──"
-          ls -la ~/.local/share/unity3d/Unity/ 2>/dev/null || true
-          ls -la /usr/share/unity3d/config/ 2>/dev/null || true
-          find / -name "Unity_lic.ulf" -o -name "*.ulf" 2>/dev/null | grep -v proc | head -5 || true
+          set -x
+          LC=$(find /opt -name "Unity.Licensing.Client" 2>/dev/null | head -1)
+          echo "CLIENT=$LC"
+          "$LC" --help || true
+          echo "────────────────────────────────"
+          # ลองทุกท่าที่เป็นไปได้สำหรับ personal
+          "$LC" --activate-personal --username "$UNITY_EMAIL" --password "$UNITY_PASSWORD" || true
+          "$LC" --activate-license --license-kind personal --username "$UNITY_EMAIL" --password "$UNITY_PASSWORD" || true
+          echo "── after attempts ──"
+          find / -name "*.ulf" 2>/dev/null | grep -v proc | head -5 || true
+          ls -la ~/.local/share/unity3d/Unity/ /usr/share/unity3d/config/ 2>/dev/null || true
           mkdir -p /tmp/ulfout
-          cp ~/.local/share/unity3d/Unity/Unity_lic.ulf /tmp/ulfout/ 2>/dev/null || \
-          cp /usr/share/unity3d/config/Unity_lic.ulf /tmp/ulfout/ 2>/dev/null || \
-          { F=$(find / -name "Unity_lic.ulf" 2>/dev/null | grep -v proc | head -1); [ -n "$F" ] && cp "$F" /tmp/ulfout/; }
-          ls -la /tmp/ulfout/ && test -f /tmp/ulfout/Unity_lic.ulf
-      - name: Upload .ulf
+          F=$(find / -name "Unity_lic.ulf" 2>/dev/null | grep -v proc | head -1); [ -n "$F" ] && cp "$F" /tmp/ulfout/ || true
+          ls -la /tmp/ulfout/ || true
+      - name: Upload .ulf (ถ้าได้)
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: ulf
-          path: /tmp/ulfout/Unity_lic.ulf
+          path: /tmp/ulfout/
           retention-days: 1
+          if-no-files-found: ignore
