@@ -3,7 +3,8 @@
   "rootNamespace": "DiveMap.Runtime",
   "references": [
     "DiveMap.Core",
-    "glTFast"
+    "glTFast",
+    "UnityEngine.UI"
   ],
   "includePlatforms": [],
   "excludePlatforms": [],
