@@ -1,0 +1,14 @@
+# Unity
+DiveMap/Library/
+DiveMap/Temp/
+DiveMap/Obj/
+DiveMap/Logs/
+DiveMap/UserSettings/
+DiveMap/Build/
+DiveMap/Builds/
+*.csproj
+*.sln
+.vs/
+.idea/
+# OS
+.DS_Store
