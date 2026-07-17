@@ -5,16 +5,18 @@ jobs:
   activation:
     name: Request .alf
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 25
+    container:
+      image: unityci/editor:ubuntu-6000.0.79f1-base-3
     steps:
-      - name: Request manual activation file
-        id: getManualLicenseFile
-        uses: game-ci/unity-request-activation-file@v2
-        with:
-          unityVersion: 6000.0.79f1
+      - name: Create manual activation file (.alf)
+        run: |
+          unity-editor -batchmode -nographics -quit \
+            -createManualActivationFile -logFile /dev/stdout || true
+          ls -la *.alf || { echo "NO ALF PRODUCED"; exit 1; }
       - name: Upload .alf
         uses: actions/upload-artifact@v4
         with:
           name: alf
-          path: ${{ steps.getManualLicenseFile.outputs.filePath }}
+          path: "*.alf"
           retention-days: 3
