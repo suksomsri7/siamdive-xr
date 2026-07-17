@@ -17,11 +17,8 @@ jobs:
           set -x
           LC=$(find /opt -name "Unity.Licensing.Client" 2>/dev/null | head -1)
           echo "CLIENT=$LC"
-          "$LC" --help || true
-          echo "────────────────────────────────"
-          # ลองทุกท่าที่เป็นไปได้สำหรับ personal
-          "$LC" --activate-personal --username "$UNITY_EMAIL" --password "$UNITY_PASSWORD" || true
-          "$LC" --activate-license --license-kind personal --username "$UNITY_EMAIL" --password "$UNITY_PASSWORD" || true
+          # ท่าจริงจาก --help: --activate-ulf + username/password (ไม่มี serial = Personal)
+          "$LC" --activate-ulf --username "$UNITY_EMAIL" --password "$UNITY_PASSWORD" || true
           echo "── after attempts ──"
           find / -name "*.ulf" 2>/dev/null | grep -v proc | head -5 || true
           ls -la ~/.local/share/unity3d/Unity/ /usr/share/unity3d/config/ 2>/dev/null || true
