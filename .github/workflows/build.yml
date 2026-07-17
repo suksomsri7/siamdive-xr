@@ -9,6 +9,10 @@ concurrency:
   group: divemap-ci-${{ github.ref }}
   cancel-in-progress: true
 
+permissions:
+  contents: read
+  checks: write
+
 env:
   PROJECT_PATH: DiveMap
   UNITY_VERSION: 6000.0.79f1
