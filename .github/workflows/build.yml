@@ -196,3 +196,67 @@ jobs:
           retention-days: 14
           if-no-files-found: error
 
+  # ────────────────────────────────────────────────────────────────────────────
+  # 4) QC screenshot — Linux player รันบน xvfb ถ่ายภาพจริงของแอป (QC_PLAN ชั้น 2)
+  # ────────────────────────────────────────────────────────────────────────────
+  qc-shot:
+    name: QC screenshot
+    needs: test
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Free disk space
+        uses: jlumbroso/free-disk-space@main
+        with:
+          tool-cache: true
+          android: false
+          dotnet: true
+          haskell: true
+          large-packages: true
+          swap-storage: false
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Cache Library
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.PROJECT_PATH }}/Library
+          key: Library-linux-${{ hashFiles('DiveMap/Packages/manifest.json') }}
+          restore-keys: |
+            Library-linux-
+
+      - name: Build Linux
+        uses: game-ci/unity-builder@v4
+        env:
+          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+        with:
+          projectPath: ${{ env.PROJECT_PATH }}
+          unityVersion: ${{ env.UNITY_VERSION }}
+          targetPlatform: StandaloneLinux64
+          buildMethod: DiveMap.EditorTools.CIBuild.BuildLinux
+          allowDirtyBuild: true
+
+      - name: Run app headless and capture screenshot
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq xvfb mesa-utils libgl1 > /dev/null
+          BIN=$(find . -path '*/build/*' -name 'DiveMap' -type f | head -1)
+          echo "BIN=$BIN"; chmod +x "$BIN"
+          sudo chown -R $USER . || true
+          timeout 300 xvfb-run -a -s "-screen 0 1280x720x24" \
+            "$BIN" -qcshot "$PWD/qc_screenshot.png" -screen-width 1280 -screen-height 720 -force-glcore || true
+          ls -la qc_screenshot.png || { echo "::warning::no screenshot produced"; cp ~/.config/unity3d/SiamDive/DiveMap/Player.log qc_player.log 2>/dev/null || true; }
+          cp ~/.config/unity3d/SiamDive/DiveMap/Player.log qc_player.log 2>/dev/null || true
+
+      - name: Upload QC artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: qc-screenshot
+          path: |
+            qc_screenshot.png
+            qc_player.log
+          retention-days: 14
+          if-no-files-found: warn
+

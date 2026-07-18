@@ -1,3 +1,4 @@
+using System;
 using System.Collections;
 using UnityEngine;
 using UnityEngine.EventSystems;
@@ -120,6 +121,29 @@ namespace DiveMap.Runtime
             SetStatus($"{title}  ·  โหลดแล้ว {result.Loaded} · แทนที่ {result.Failed}");
 
             if (_orbit != null) _orbit.Frame(result.Center, result.Radius);
+
+            // ── QC screenshot mode (CI): -qcshot <path> → รอเฟรม settle → แคป → ปิดตัวเอง ──
+            // ใช้ใน headless CI (xvfb) เพื่อให้ orchestrator เห็นภาพจริงทุก build (QC_PLAN ชั้น 2)
+            string qcPath = GetArg("-qcshot");
+            if (!string.IsNullOrEmpty(qcPath)) StartCoroutine(QcShot(qcPath));
+        }
+
+        private static string GetArg(string name)
+        {
+            var args = Environment.GetCommandLineArgs();
+            for (int i = 0; i < args.Length - 1; i++)
+                if (args[i] == name) return args[i + 1];
+            return null;
+        }
+
+        private IEnumerator QcShot(string path)
+        {
+            // รอให้ render settle 2 วิ (GLB วาง เฟรมแรกๆ อาจยังไม่ครบ)
+            yield return new WaitForSeconds(2f);
+            ScreenCapture.CaptureScreenshot(path);
+            Debug.Log($"[QC] screenshot -> {path}");
+            yield return new WaitForSeconds(1f); // ให้ไฟล์เขียนเสร็จ
+            Application.Quit(0);
         }
 
         private void Retry()

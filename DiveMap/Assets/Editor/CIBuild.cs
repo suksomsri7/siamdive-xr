@@ -128,6 +128,50 @@ namespace DiveMap.EditorTools
             }
         }
 
+        // Called by CI:  -buildMethod DiveMap.EditorTools.CIBuild.BuildLinux
+        // Linux player สำหรับ QC screenshot อัตโนมัติบน CI (xvfb + llvmpipe)
+        public static void BuildLinux()
+        {
+            try
+            {
+                PlayerSettings.productName = ProductName;
+                PlayerSettings.companyName = CompanyName;
+                PlayerSettings.SetScriptingBackend(NamedBuildTarget.Standalone, ScriptingImplementation.Mono2x);
+                PlayerSettings.fullScreenMode = FullScreenMode.Windowed;
+                PlayerSettings.defaultScreenWidth = 1280;
+                PlayerSettings.defaultScreenHeight = 720;
+                PlayerSettings.runInBackground = true;
+
+                // BUILD_PATH จาก unity-builder = โฟลเดอร์ → ต่อชื่อไบนารีเสมอ (Linux ไม่มีนามสกุล)
+                string fromEnv = Environment.GetEnvironmentVariable("BUILD_PATH");
+                string dir = string.IsNullOrWhiteSpace(fromEnv) ? "Build/Linux" : fromEnv.Trim().TrimEnd('/', '\\');
+                string outputPath = dir + "/DiveMap";
+                EnsureParentDirectory(outputPath);
+
+                var scenes = ResolveScenes();
+                if (scenes.Length == 0) { Fail("No enabled scenes."); return; }
+
+                var options = new BuildPlayerOptions
+                {
+                    scenes = scenes,
+                    locationPathName = outputPath,
+                    target = BuildTarget.StandaloneLinux64,
+                    targetGroup = BuildTargetGroup.Standalone,
+                    options = BuildOptions.None,
+                };
+
+                Debug.Log($"[CIBuild] Building Linux player -> {outputPath}");
+                BuildReport report = BuildPipeline.BuildPlayer(options);
+                if (report.summary.result == BuildResult.Succeeded)
+                {
+                    Debug.Log($"[CIBuild] Build succeeded: {report.summary.totalSize} bytes. Output: {report.summary.outputPath}");
+                    EditorApplication.Exit(0);
+                }
+                else Fail($"Build failed: result={report.summary.result}, errors={report.summary.totalErrors}.");
+            }
+            catch (Exception ex) { Fail($"Unhandled exception during build: {ex}"); }
+        }
+
         private static void ConfigurePlayerSettings()
         {
             PlayerSettings.applicationIdentifier = ApplicationIdentifier;
