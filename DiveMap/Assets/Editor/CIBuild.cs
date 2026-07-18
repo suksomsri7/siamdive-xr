@@ -72,6 +72,62 @@ namespace DiveMap.EditorTools
             }
         }
 
+        // Called by CI:  -buildMethod DiveMap.EditorTools.CIBuild.BuildWindows
+        // Windows player (Mono — IL2CPP cross-compile จาก Linux ไป Windows ทำไม่ได้)
+        // ใช้เทสบน Windows Server ผ่าน RDP: เมาส์ควบคุมได้ (OrbitCamera มี mouse fallback)
+        public static void BuildWindows()
+        {
+            try
+            {
+                PlayerSettings.productName = ProductName;
+                PlayerSettings.companyName = CompanyName;
+                PlayerSettings.SetScriptingBackend(NamedBuildTarget.Standalone, ScriptingImplementation.Mono2x);
+                // หน้าต่างธรรมดา 1280x720 — เหมาะกับ RDP (fullscreen บน RDP มักค้าง/สลับจอลำบาก)
+                PlayerSettings.fullScreenMode = FullScreenMode.Windowed;
+                PlayerSettings.defaultScreenWidth = 1280;
+                PlayerSettings.defaultScreenHeight = 720;
+                PlayerSettings.resizableWindow = true;
+                PlayerSettings.runInBackground = true;
+
+                string outputPath = ResolveOutputPathWithExt(".exe", "Build/Windows/DiveMap.exe");
+                EnsureParentDirectory(outputPath);
+
+                var scenes = ResolveScenes();
+                if (scenes.Length == 0)
+                {
+                    Fail("No enabled scenes found in EditorBuildSettings. Aborting build.");
+                    return;
+                }
+
+                var options = new BuildPlayerOptions
+                {
+                    scenes = scenes,
+                    locationPathName = outputPath,
+                    target = BuildTarget.StandaloneWindows64,
+                    targetGroup = BuildTargetGroup.Standalone,
+                    options = BuildOptions.None,
+                };
+
+                Debug.Log($"[CIBuild] Building Windows player -> {outputPath}");
+                BuildReport report = BuildPipeline.BuildPlayer(options);
+                BuildSummary summary = report.summary;
+
+                if (summary.result == BuildResult.Succeeded)
+                {
+                    Debug.Log($"[CIBuild] Build succeeded: {summary.totalSize} bytes in {summary.totalTime}. Output: {summary.outputPath}");
+                    EditorApplication.Exit(0);
+                }
+                else
+                {
+                    Fail($"Build failed: result={summary.result}, errors={summary.totalErrors}, warnings={summary.totalWarnings}.");
+                }
+            }
+            catch (Exception ex)
+            {
+                Fail($"Unhandled exception during build: {ex}");
+            }
+        }
+
         private static void ConfigurePlayerSettings()
         {
             PlayerSettings.applicationIdentifier = ApplicationIdentifier;
@@ -105,6 +161,15 @@ namespace DiveMap.EditorTools
             string path = string.IsNullOrWhiteSpace(fromEnv) ? DefaultOutputPath : fromEnv.Trim();
             if (!path.EndsWith(".apk", StringComparison.OrdinalIgnoreCase))
                 path = path.TrimEnd('/', '\\') + "/DiveMap.apk";
+            return path;
+        }
+
+        private static string ResolveOutputPathWithExt(string ext, string defaultPath)
+        {
+            string fromEnv = Environment.GetEnvironmentVariable("BUILD_PATH");
+            string path = string.IsNullOrWhiteSpace(fromEnv) ? defaultPath : fromEnv.Trim();
+            if (!path.EndsWith(ext, StringComparison.OrdinalIgnoreCase))
+                path = path.TrimEnd('/', '\\') + "/DiveMap" + ext;
             return path;
         }
 
