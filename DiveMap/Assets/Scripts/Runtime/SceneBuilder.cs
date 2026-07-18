@@ -226,9 +226,19 @@ namespace DiveMap.Runtime
             return new Color(0.5f, 0.5f, 0.5f); // gray fallback
         }
 
+        // Material ฐานจาก Resources — บังคับให้ Standard shader (+variant โปร่งใส) ถูกฝังเข้า build
+        // (Shader.Find เฉยๆ ใช้ใน build ไม่ได้ ถ้าไม่มี asset อ้าง shader → โดน strip → จอชมพู
+        //  บทเรียนจริงจากเทสบน Windows Server รอบแรก)
+        private static Material BaseMat(bool transparent)
+        {
+            var src = Resources.Load<Material>(transparent ? "DM_StandardTransparent" : "DM_Standard");
+            if (src != null) return new Material(src); // clone กัน asset โดนแก้
+            return new Material(Shader.Find("Standard")); // fallback ใน editor
+        }
+
         private static Material PlaceholderMaterial(SceneItem item, AssetManifest.Module module)
         {
-            var mat = new Material(Shader.Find("Standard"));
+            var mat = BaseMat(false);
             mat.color = ColorForItem(item, module);
             mat.SetFloat("_Glossiness", 0f); // flat-shaded look
             return mat;
@@ -480,7 +490,7 @@ namespace DiveMap.Runtime
 
         private static Material SandMaterial()
         {
-            var mat = new Material(Shader.Find("Standard"));
+            var mat = BaseMat(false);
             mat.color = new Color(0.82f, 0.74f, 0.58f);
             mat.SetFloat("_Glossiness", 0.1f);
             mat.SetFloat("_Metallic", 0f);
@@ -489,8 +499,8 @@ namespace DiveMap.Runtime
 
         private static Material WaterMaterial()
         {
-            var mat = new Material(Shader.Find("Standard"));
-            // Transparent rendering mode.
+            var mat = BaseMat(true);
+            // Transparent rendering mode (material ฐานตั้ง keyword มาแล้ว — เซ็ตซ้ำกัน regress)
             mat.SetFloat("_Mode", 3f);
             mat.SetFloat("_SrcBlend", (float)(int)UnityEngine.Rendering.BlendMode.SrcAlpha);
             mat.SetFloat("_DstBlend", (float)(int)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
