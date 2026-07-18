@@ -97,8 +97,15 @@ namespace DiveMap.EditorTools
 
         private static string ResolveOutputPath()
         {
+            // unity-builder (GameCI) ตั้ง BUILD_PATH เป็น "โฟลเดอร์" (เช่น build/Android)
+            // ไม่ใช่ path ไฟล์ — ถ้าไม่ลงท้าย .apk ให้ต่อชื่อไฟล์เสมอ ไม่งั้น
+            // BuildPlayer เขียน output ไร้นามสกุล แล้ว artifact glob *.apk หาไม่เจอ
+            // (บทเรียนจริง run 29620954253)
             string fromEnv = Environment.GetEnvironmentVariable("BUILD_PATH");
-            return string.IsNullOrWhiteSpace(fromEnv) ? DefaultOutputPath : fromEnv.Trim();
+            string path = string.IsNullOrWhiteSpace(fromEnv) ? DefaultOutputPath : fromEnv.Trim();
+            if (!path.EndsWith(".apk", StringComparison.OrdinalIgnoreCase))
+                path = path.TrimEnd('/', '\\') + "/DiveMap.apk";
+            return path;
         }
 
         private static void EnsureParentDirectory(string outputPath)
