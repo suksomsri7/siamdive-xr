@@ -314,9 +314,11 @@ QC ข้ามระบบ: แมพจริงทุก template + demo เ�
 | `SECURITY_PLAN.md` | ความปลอดภัย: no-secret-in-APK, สิทธิ์ตัดสินที่ server, keystore, UGC, incident response |
 
 ## 8. สถานะโปรเจกต์
-- **2026-07-18 Night Run #1 🎉 จบสมบูรณ์:**
-  - WO-XR-00: ✅ **DONE** — CI เขียวทั้งสาย (เทส 26/26 + build APK 30.5MB ทุก push) APK ส่ง user ทาง Telegram แล้ว
-  - WO-XR-01: 90% — โค้ดครบ + compile/เทสผ่าน รอ user เทสบนเครื่อง (checklist 6 ข้อ)
-  - XR-LOD: ✅ 10/10 (`/root/asset-masters/xr_lod/` + สคริปต์ใน `tools/`) ยังไม่อัป CDN
-  - บทเรียน CI ทั้งหมด → memory `project_siamdive_xr_holomap`
+- **2026-07-18 ⏸️ PAUSED (รอ user สั่ง resume):**
+  - WO-XR-00: ✅ DONE — CI 3 targets (Android APK / Windows exe / Linux QC) + license + เทส 26/26
+  - WO-XR-01: ✅ DONE — user เทสผ่านจริงบน Windows Server: Htms Chang สีจริง (GLB 12/14) + กล้องเมาส์/สัมผัส
+  - **ระบบตาอัตโนมัติ (QC ชั้น 2): ✅ LIVE** — job `qc-shot` แอปถ่ายรูปตัวเองทุก build, orchestrator QC เอง
+  - XR-LOD: ✅ 10/10 gen แล้ว ยังไม่อัป CDN (คิวแรกตอน resume)
+  - Backlog เก็บงาน: น้ำไม่เห็น / กล้อง Frame กว้าง / ฟอนต์ไทย Linux player
+  - บทเรียนทั้งหมด (shader stripping, GameCI, license) → memory `project_siamdive_xr_holomap`
 - แก้ spec ต้องแก้เอกสารก่อนโค้ดเสมอ
