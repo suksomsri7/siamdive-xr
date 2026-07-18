@@ -242,9 +242,9 @@ jobs:
       - name: Run app headless and capture screenshot
         run: |
           sudo apt-get update -qq && sudo apt-get install -y -qq xvfb mesa-utils libgl1 > /dev/null
+          sudo chown -R "$USER:$USER" . || true
           BIN=$(find . -path '*/build/*' -name 'DiveMap' -type f | head -1)
           echo "BIN=$BIN"; chmod +x "$BIN"
-          sudo chown -R $USER . || true
           timeout 300 xvfb-run -a -s "-screen 0 1280x720x24" \
             "$BIN" -qcshot "$PWD/qc_screenshot.png" -screen-width 1280 -screen-height 720 -force-glcore || true
           ls -la qc_screenshot.png || { echo "::warning::no screenshot produced"; cp ~/.config/unity3d/SiamDive/DiveMap/Player.log qc_player.log 2>/dev/null || true; }
