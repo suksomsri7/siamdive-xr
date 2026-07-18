@@ -126,6 +126,17 @@ jobs:
       - name: Locate APK
         run: find . -name '*.apk' -not -path '*/Library/*' -not -path '*/Temp/*' -exec ls -la {} \;
 
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: DiveMap-apk
+          path: |
+            build/**/*.apk
+            DiveMap/build/**/*.apk
+            DiveMap/Build/**/*.apk
+          retention-days: 14
+          if-no-files-found: error
+
   # ────────────────────────────────────────────────────────────────────────────
   # 3) Windows player (Mono) — เทสบน Windows Server ผ่าน RDP (เมาส์)
   # ────────────────────────────────────────────────────────────────────────────
@@ -185,13 +196,3 @@ jobs:
           retention-days: 14
           if-no-files-found: error
 
-      - name: Upload APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: DiveMap-apk
-          path: |
-            build/**/*.apk
-            DiveMap/build/**/*.apk
-            DiveMap/Build/**/*.apk
-          retention-days: 14
-          if-no-files-found: error
