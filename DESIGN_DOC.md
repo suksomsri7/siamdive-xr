@@ -314,9 +314,9 @@ QC ข้ามระบบ: แมพจริงทุก template + demo เ�
 | `SECURITY_PLAN.md` | ความปลอดภัย: no-secret-in-APK, สิทธิ์ตัดสินที่ server, keystore, UGC, incident response |
 
 ## 8. สถานะโปรเจกต์
-- **2026-07-17 Night Run #1 → ⏸️ PAUSED โดย user:**
-  - WO-XR-00: 95% — repo+CI+license ✅, เทส 26/26 เขียวบน CI, **ค้างผล build APK แรก (run 29593800372)**
-  - WO-XR-01: 85% — โค้ด SceneLoader ครบ (แมพ demo Htms Chang), รอ APK + เทสบนเครื่อง
-  - XR-LOD: ✅ 10/10 (`/root/asset-masters/xr_lod/`) ยังไม่อัป CDN
-  - รายละเอียด/บทเรียน → memory `project_siamdive_xr_holomap`
+- **2026-07-18 Night Run #1 🎉 จบสมบูรณ์:**
+  - WO-XR-00: ✅ **DONE** — CI เขียวทั้งสาย (เทส 26/26 + build APK 30.5MB ทุก push) APK ส่ง user ทาง Telegram แล้ว
+  - WO-XR-01: 90% — โค้ดครบ + compile/เทสผ่าน รอ user เทสบนเครื่อง (checklist 6 ข้อ)
+  - XR-LOD: ✅ 10/10 (`/root/asset-masters/xr_lod/` + สคริปต์ใน `tools/`) ยังไม่อัป CDN
+  - บทเรียน CI ทั้งหมด → memory `project_siamdive_xr_holomap`
 - แก้ spec ต้องแก้เอกสารก่อนโค้ดเสมอ
