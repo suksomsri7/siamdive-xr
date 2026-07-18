@@ -213,7 +213,7 @@ namespace DiveMap.Runtime
 
         private static void EnsureEventSystem()
         {
-            if (Object.FindFirstObjectByType<EventSystem>() != null) return;
+            if (UnityEngine.Object.FindFirstObjectByType<EventSystem>() != null) return;
             var es = new GameObject("EventSystem");
             es.AddComponent<EventSystem>();
             es.AddComponent<StandaloneInputModule>();
