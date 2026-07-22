@@ -78,5 +78,59 @@ namespace DiveMap.Tests
             Assert.AreEqual("CORAL", m.Get("coral:2").Kind);
             Assert.IsNull(m.Get("nope"));
         }
+
+        // ── XR-optimized GLB resolution (KTX2/Draco LOD variant) ─────────────────────
+
+        private const string XrManifestJson = @"{
+  ""baseUrl"": ""https://maps.siamdive.com/"",
+  ""count"": 3,
+  ""modules"": [
+    { ""id"": ""msh:tiger_shark"", ""kind"": ""MARINE_LIFE"", ""name"": ""ฉลามเสือ"",
+      ""glbUrl"": ""models/marine/tiger_shark.glb"",
+      ""xrGlbUrl"": ""https://maps.siamdive.com/models/xr/Tiger_Shark_xr0.glb"",
+      ""xrGlbUrlLod1"": ""https://maps.siamdive.com/models/xr/Tiger_Shark_xr1.glb"" },
+    { ""id"": ""cc0:statue_singha"", ""kind"": ""WRECK"", ""name"": ""รูปปั้นสิงห์"",
+      ""glbUrl"": ""/models/special/statue_singha.glb"",
+      ""xrGlbUrl"": ""/models/xr/Singha_Statue_Underwater_xr0.glb"" },
+    { ""id"": ""rock:0"", ""kind"": ""ROCK"", ""name"": ""กลม"", ""glbUrl"": ""/models/rock_0.glb"" }
+  ]
+}";
+
+        private AssetManifest LoadXr() => AssetManifest.FromJson(XrManifestJson);
+
+        [Test]
+        public void ResolveUrl_PrefersXrGlbUrl_WhenPresent()
+        {
+            var m = LoadXr();
+            // Absolute XR url passes through unchanged and WINS over the WebP web glbUrl.
+            Assert.AreEqual("https://maps.siamdive.com/models/xr/Tiger_Shark_xr0.glb",
+                m.ResolveUrl("msh:tiger_shark"));
+        }
+
+        [Test]
+        public void ResolveUrl_XrRelativeUrl_NormalizedAgainstBase()
+        {
+            var m = LoadXr();
+            Assert.AreEqual("https://maps.siamdive.com/models/xr/Singha_Statue_Underwater_xr0.glb",
+                m.ResolveUrl("cc0:statue_singha"));
+        }
+
+        [Test]
+        public void ResolveUrl_WithoutXr_FallsBackToWebGlb()
+        {
+            var m = LoadXr();
+            // A module with no xrGlbUrl resolves exactly as before.
+            Assert.AreEqual("https://maps.siamdive.com/models/rock_0.glb", m.ResolveUrl("rock:0"));
+        }
+
+        [Test]
+        public void Parse_ReadsXrFields()
+        {
+            var m = LoadXr();
+            var mod = m.Get("msh:tiger_shark");
+            Assert.AreEqual("https://maps.siamdive.com/models/xr/Tiger_Shark_xr0.glb", mod.XrGlbUrl);
+            Assert.AreEqual("https://maps.siamdive.com/models/xr/Tiger_Shark_xr1.glb", mod.XrGlbUrlLod1);
+            Assert.IsNull(m.Get("rock:0").XrGlbUrl);
+        }
     }
 }

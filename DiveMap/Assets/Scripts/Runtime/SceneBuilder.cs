@@ -28,6 +28,32 @@ namespace DiveMap.Runtime
             public Vector3 Center;
             public float Radius;
             public string MapName;
+
+            // Framing box (decor/structure only, swimmers excluded) — fed to OrbitCamera.FrameBox
+            // so the opening shot centres on the real content (e.g. the wreck), not the whole
+            // seabed + water column.
+            public Vector3 FrameCenter;
+            public float FrameSizeX;
+            public float FrameSizeY;
+            public float FrameSizeZ;
+            public float FrameMinY;
+        }
+
+        // Kinds that swim (drift through the water column) — excluded from the opening-shot
+        // framing box and NOT grounded to the seabed (they float at their stored Y).
+        private static bool IsSwimmer(string kind)
+        {
+            if (string.IsNullOrEmpty(kind)) return false;
+            switch (kind.ToUpperInvariant())
+            {
+                case "MARINE_LIFE":
+                case "SCHOOL":
+                case "FISH":
+                case "TURTLE":
+                    return true;
+                default:
+                    return false;
+            }
         }
 
         // Preliminary seabed sizing (WO-XR-01). areaScale multiplies this base radius.
@@ -71,6 +97,8 @@ namespace DiveMap.Runtime
 
             // ── Items ─────────────────────────────────────────────────────────────
             IReadOnlyList<SceneItem> items = scene?.Items() ?? new List<SceneItem>();
+            var decorGos = new List<GameObject>();   // structure/scenery (for framing box)
+            var allGos = new List<GameObject>();      // fallback when a map is swimmers-only
             foreach (SceneItem item in items)
             {
                 var itemGo = new GameObject(ItemName(item));
@@ -81,6 +109,10 @@ namespace DiveMap.Runtime
 
                 string url = manifest != null ? manifest.ResolveUrl(item.AssetId) : null;
                 AssetManifest.Module module = manifest != null ? manifest.Get(item.AssetId) : null;
+                bool swimmer = IsSwimmer(module?.Kind);
+
+                allGos.Add(itemGo);
+                if (!swimmer) decorGos.Add(itemGo);
 
                 if (string.IsNullOrEmpty(url))
                 {
@@ -91,7 +123,9 @@ namespace DiveMap.Runtime
                 else
                 {
                     _loadState.BeginLoad();
-                    LoadItemAsync(url, itemGo.transform, item, module); // fire-and-forget, tracked
+                    // Static scenery (wreck/rock/coral/statue…) is grounded so its base
+                    // sits on the seabed — matching the web's bakeStatic() recenter+drop.
+                    LoadItemAsync(url, itemGo.transform, item, module, ground: !swimmer);
                 }
             }
 
@@ -106,6 +140,14 @@ namespace DiveMap.Runtime
             Vector3 center = bounds.center;
             float radius = Mathf.Max(bounds.extents.magnitude, seabedRadius, 1f);
 
+            // Framing box: prefer real rendered bounds of the scenery; fall back to all
+            // items, then to the seabed disc. This is what the camera actually frames.
+            Bounds frameBox;
+            if (!TryContentBounds(decorGos, out frameBox) && !TryContentBounds(allGos, out frameBox))
+            {
+                frameBox = new Bounds(new Vector3(0f, 0f, 0f), new Vector3(seabedRadius * 2f, 2f, seabedRadius * 2f));
+            }
+
             onDone?.Invoke(new BuildResult
             {
                 Root = root,
@@ -114,6 +156,11 @@ namespace DiveMap.Runtime
                 Center = center,
                 Radius = radius,
                 MapName = scene?.Name,
+                FrameCenter = frameBox.center,
+                FrameSizeX = frameBox.size.x,
+                FrameSizeY = frameBox.size.y,
+                FrameSizeZ = frameBox.size.z,
+                FrameMinY = frameBox.min.y,
             });
         }
 
@@ -150,7 +197,7 @@ namespace DiveMap.Runtime
 
         // ── Async GLB load (fire-and-forget, tracked via SceneLoadState) ───────────
 
-        private async void LoadItemAsync(string url, Transform parent, SceneItem item, AssetManifest.Module module)
+        private async void LoadItemAsync(string url, Transform parent, SceneItem item, AssetManifest.Module module, bool ground)
         {
             bool ok = false;
             try
@@ -171,6 +218,10 @@ namespace DiveMap.Runtime
 
             if (ok)
             {
+                // Match the web builder's bakeStatic(): recentre the model on X/Z and drop
+                // its base to the pivot (localPosition Y=0) so it rests ON the seabed instead
+                // of the GLB's own (often centred) pivot half-sinking into the sand.
+                if (ground && parent != null) GroundToBase(parent);
                 _loaded++;
             }
             else
@@ -181,6 +232,81 @@ namespace DiveMap.Runtime
             }
 
             _loadState.CompleteLoad();
+        }
+
+        // ── Grounding (bakeStatic parity) ─────────────────────────────────────────────
+
+        /// <summary>
+        /// Recentre the freshly-instantiated GLB content under <paramref name="pivot"/> so
+        /// that, in the pivot's local space, the content is centred on X/Z and its lowest
+        /// point sits at Y=0. Mirrors the web builder's bakeStatic() so that a stored item
+        /// position with Y=0 places the model's BASE on the seabed (not its centre).
+        /// No-op when there is nothing renderable yet.
+        /// </summary>
+        private static void GroundToBase(Transform pivot)
+        {
+            if (!TryLocalBounds(pivot, out Bounds local)) return;
+
+            var offset = new Vector3(-local.center.x, -local.min.y, -local.center.z);
+            if (offset.sqrMagnitude < 1e-8f) return;
+
+            for (int i = 0; i < pivot.childCount; i++)
+                pivot.GetChild(i).localPosition += offset;
+        }
+
+        /// <summary>AABB of all mesh renderers under <paramref name="pivot"/>, expressed in
+        /// the pivot's LOCAL space (labels excluded). Exact under rotation via mesh corners.</summary>
+        private static bool TryLocalBounds(Transform pivot, out Bounds local)
+        {
+            local = default;
+            var renderers = pivot.GetComponentsInChildren<MeshRenderer>(true);
+            bool has = false;
+            Vector3 min = Vector3.positiveInfinity, max = Vector3.negativeInfinity;
+            Matrix4x4 worldToPivot = pivot.worldToLocalMatrix;
+
+            foreach (var r in renderers)
+            {
+                if (r == null || r.transform.name == "Label") continue;
+                var mf = r.GetComponent<MeshFilter>();
+                Mesh mesh = mf != null ? mf.sharedMesh : null;
+                if (mesh == null) continue;
+
+                Bounds mb = mesh.bounds; // local to the renderer
+                Matrix4x4 m = worldToPivot * r.transform.localToWorldMatrix;
+                Vector3 c = mb.center, e = mb.extents;
+                for (int sx = -1; sx <= 1; sx += 2)
+                for (int sy = -1; sy <= 1; sy += 2)
+                for (int sz = -1; sz <= 1; sz += 2)
+                {
+                    Vector3 corner = m.MultiplyPoint3x4(c + new Vector3(sx * e.x, sy * e.y, sz * e.z));
+                    min = Vector3.Min(min, corner);
+                    max = Vector3.Max(max, corner);
+                    has = true;
+                }
+            }
+
+            if (!has) return false;
+            local = new Bounds((min + max) * 0.5f, max - min);
+            return true;
+        }
+
+        /// <summary>World-space AABB over a set of item GameObjects (labels excluded).</summary>
+        private static bool TryContentBounds(List<GameObject> gos, out Bounds bounds)
+        {
+            bounds = default;
+            bool has = false;
+            foreach (var go in gos)
+            {
+                if (go == null) continue;
+                var renderers = go.GetComponentsInChildren<MeshRenderer>(true);
+                foreach (var r in renderers)
+                {
+                    if (r == null || r.transform.name == "Label") continue;
+                    if (!has) { bounds = r.bounds; has = true; }
+                    else bounds.Encapsulate(r.bounds);
+                }
+            }
+            return has;
         }
 
         // ── Placeholder ─────────────────────────────────────────────────────────────
@@ -251,6 +377,15 @@ namespace DiveMap.Runtime
             go.transform.localPosition = new Vector3(0f, 0.9f, 0f);
 
             var tm = go.AddComponent<TextMesh>();
+            // Bundled Thai font so labels like "HTMS ช้าง" keep their Thai glyphs on the
+            // font-less Linux player (a TextMesh needs the font's material on its renderer).
+            Font font = UiFont.Get();
+            if (font != null)
+            {
+                tm.font = font;
+                var mr = go.GetComponent<MeshRenderer>();
+                if (mr != null) mr.sharedMaterial = font.material;
+            }
             tm.text = text;
             tm.characterSize = 0.15f;
             tm.fontSize = 48;
@@ -324,7 +459,10 @@ namespace DiveMap.Runtime
             water.transform.localPosition = new Vector3(0f, waterLevel, 0f);
             var wmf = water.AddComponent<MeshFilter>();
             var wmr = water.AddComponent<MeshRenderer>();
-            wmf.sharedMesh = BuildDisc(radius * 1.02f, 64);
+            // Double-sided disc: the orbit camera commonly sits BELOW the water level
+            // (looking up at a tall wreck), and a single-sided (Cull Back) plane would be
+            // invisible from underneath — the "no water in the QC shot" bug.
+            wmf.sharedMesh = BuildDisc(radius * 1.02f, 64, doubleSided: true);
             wmr.sharedMaterial = WaterMaterial();
             water.AddComponent<WaterScroll>();
 
@@ -446,7 +584,7 @@ namespace DiveMap.Runtime
             return sum / n.Length;
         }
 
-        private static Mesh BuildDisc(float radius, int seg)
+        private static Mesh BuildDisc(float radius, int seg, bool doubleSided = false)
         {
             var verts = new Vector3[seg + 1];
             var uvs = new Vector2[seg + 1];
@@ -461,21 +599,41 @@ namespace DiveMap.Runtime
                 uvs[1 + j] = new Vector2(0.5f + 0.5f * Mathf.Cos(ang), 0.5f + 0.5f * Mathf.Sin(ang));
             }
 
-            var tris = new int[seg * 3];
+            var triList = new List<int>(seg * (doubleSided ? 6 : 3));
             for (int j = 0; j < seg; j++)
             {
-                tris[j * 3] = 0;
-                tris[j * 3 + 1] = 1 + j;
-                tris[j * 3 + 2] = 1 + (j + 1) % seg;
+                triList.Add(0); triList.Add(1 + j); triList.Add(1 + (j + 1) % seg);
+            }
+            // Second, reverse-wound copy so the disc renders from above AND below without
+            // needing a Cull-Off shader variant (which the build strips → magenta lesson).
+            if (doubleSided)
+            {
+                for (int j = 0; j < seg; j++)
+                {
+                    triList.Add(0); triList.Add(1 + (j + 1) % seg); triList.Add(1 + j);
+                }
             }
 
             var mesh = new Mesh { name = "WaterDisc" };
             mesh.vertices = verts;
             mesh.uv = uvs;
-            mesh.triangles = tris;
-            mesh.RecalculateNormals();
+            mesh.triangles = triList.ToArray();
+            if (doubleSided)
+            {
+                // Coplanar opposing tris make RecalculateNormals cancel to ~zero (→ black
+                // lighting). Force a constant up normal so shading is stable from both sides.
+                var normals = new Vector3[verts.Length];
+                for (int i = 0; i < normals.Length; i++) normals[i] = Vector3.up;
+                mesh.normals = normals;
+            }
+            else
+            {
+                mesh.RecalculateNormals();
+            }
             mesh.RecalculateBounds();
-            if (AverageNormalY(mesh) < 0f)
+            // Single-sided path keeps the up-facing winding guarantee; double-sided already
+            // covers both hemispheres so we leave its (constant-up) normals as built.
+            if (!doubleSided && AverageNormalY(mesh) < 0f)
             {
                 int[] t = mesh.triangles;
                 for (int i = 0; i < t.Length; i += 3)
@@ -509,7 +667,9 @@ namespace DiveMap.Runtime
             mat.EnableKeyword("_ALPHABLEND_ON");
             mat.DisableKeyword("_ALPHAPREMULTIPLY_ON");
             mat.renderQueue = (int)UnityEngine.Rendering.RenderQueue.Transparent;
-            mat.color = new Color(0.10f, 0.42f, 0.60f, 0.28f);
+            // Clearer, more saturated tropical blue with a higher alpha — the old (0.28)
+            // wash was nearly invisible over the deep-blue background in the QC shot.
+            mat.color = new Color(0.10f, 0.52f, 0.78f, 0.55f);
             mat.SetFloat("_Glossiness", 0.85f);
 
             var tex = GenerateCausticTexture(64);

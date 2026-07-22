@@ -31,6 +31,10 @@ namespace DiveMap.Runtime
             public string Kind;
             public string Name;
             public string GlbUrl;
+            /// <summary>Optional XR-optimized GLB (KTX2/Draco, LOD0). Preferred over <see cref="GlbUrl"/> when present.</summary>
+            public string XrGlbUrl;
+            /// <summary>Optional XR LOD1 (lower-poly). Carried in data for later use; not selected yet.</summary>
+            public string XrGlbUrlLod1;
             public double DefaultScale = 1;
             public double DefaultY = 0;
             public bool Animated;
@@ -104,6 +108,8 @@ namespace DiveMap.Runtime
                         Kind = (string)o["kind"],
                         Name = (string)o["name"],
                         GlbUrl = (string)o["glbUrl"],
+                        XrGlbUrl = (string)o["xrGlbUrl"],
+                        XrGlbUrlLod1 = (string)o["xrGlbUrlLod1"],
                         DefaultScale = o["defaultScale"] != null ? (double)o["defaultScale"] : 1,
                         DefaultY = o["defaultY"] != null ? (double)o["defaultY"] : 0,
                         Animated = o["animated"] != null && (bool)o["animated"],
@@ -127,15 +133,25 @@ namespace DiveMap.Runtime
 
         /// <summary>
         /// Absolute GLB URL for an assetId, or null when the id is unknown or has no
-        /// glbUrl. Normalizes both "/models/x.glb" and "models/x.glb" against baseUrl,
-        /// and passes through already-absolute http(s) URLs untouched.
+        /// usable url. Prefers the XR-optimized GLB (<see cref="Module.XrGlbUrl"/>,
+        /// KTX2/Draco LOD0) when present, otherwise the web <see cref="Module.GlbUrl"/>.
+        /// Normalizes both "/models/x.glb" and "models/x.glb" against baseUrl, and
+        /// passes through already-absolute http(s) URLs untouched.
         /// </summary>
         public string ResolveUrl(string assetId)
         {
             Module m = Get(assetId);
-            if (m == null || string.IsNullOrEmpty(m.GlbUrl)) return null;
+            if (m == null) return null;
 
-            string g = m.GlbUrl.Trim();
+            // XR variant wins when available (real KTX2 textures vs the WebP web GLBs).
+            string raw = !string.IsNullOrWhiteSpace(m.XrGlbUrl) ? m.XrGlbUrl : m.GlbUrl;
+            return Normalize(raw);
+        }
+
+        private string Normalize(string url)
+        {
+            if (string.IsNullOrEmpty(url)) return null;
+            string g = url.Trim();
             if (g.StartsWith("http://", StringComparison.OrdinalIgnoreCase) ||
                 g.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
             {

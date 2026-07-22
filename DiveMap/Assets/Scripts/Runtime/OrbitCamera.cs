@@ -21,7 +21,7 @@ namespace DiveMap.Runtime
         public float minPitch = 5f;
         public float maxPitch = 85f;
         public float minDistance = 2f;
-        public float maxDistance = 300f;
+        public float maxDistance = 950f; // matches web builder controls.maxDistance (large sites)
 
         public float orbitSpeed = 0.3f;      // deg per pixel
         public float pinchZoomSpeed = 0.02f; // per pixel of pinch delta
@@ -47,6 +47,57 @@ namespace DiveMap.Runtime
             _yaw = 45f;
             _pitch = 35f;
             Apply();
+        }
+
+        /// <summary>
+        /// Frame around a content bounding box the way the web builder's frameContent()
+        /// does: aim at the lower part of the box, back off by the HORIZONTAL extent only
+        /// (so a tall water column / tall statue doesn't push the camera miles away), and
+        /// look down at a gentle ~18° angle so both the seabed and the water surface stay
+        /// in shot. Camera ends up at (cx, aimY + dist*0.32, cz + dist).
+        /// </summary>
+        public void FrameBox(Vector3 center, float sizeX, float sizeY, float sizeZ, float minY)
+        {
+            Framing f = ComputeFraming(center.x, center.z, sizeX, sizeY, sizeZ, minY, minDistance, maxDistance);
+            target = new Vector3(f.TargetX, f.TargetY, f.TargetZ);
+            _yaw = f.Yaw;
+            _pitch = f.Pitch;
+            distance = f.Distance;
+            Apply();
+        }
+
+        /// <summary>Pure framing solution (no Unity object access) so it is unit-testable.</summary>
+        public struct Framing
+        {
+            public float TargetX, TargetY, TargetZ;
+            public float Yaw, Pitch, Distance;
+        }
+
+        public static Framing ComputeFraming(
+            float centerX, float centerZ, float sizeX, float sizeY, float sizeZ, float minY,
+            float minDistance, float maxDistance)
+        {
+            float r = Mathf.Max(sizeX, sizeZ) * 0.5f;
+            if (r <= 0f) r = 30f;
+
+            // web: dist = min(cap, r*1.45 + 40); camera raised by dist*0.32, pushed back by dist.
+            float dist = Mathf.Min(maxDistance, r * 1.45f + 40f);
+            float vert = dist * 0.32f;
+
+            float aimY = minY + Mathf.Min(sizeY * 0.4f, 45f);
+
+            float pitch = Mathf.Atan2(vert, dist) * Mathf.Rad2Deg; // ~17.7°
+            float distance = Mathf.Sqrt(dist * dist + vert * vert); // |offset| so pos == target+(0,vert,dist)
+
+            return new Framing
+            {
+                TargetX = centerX,
+                TargetY = aimY,
+                TargetZ = centerZ,
+                Yaw = 180f,       // put the camera on the +Z side looking toward -Z (matches web +Z back-off)
+                Pitch = Mathf.Clamp(pitch, 5f, 85f),
+                Distance = Mathf.Clamp(distance, minDistance, maxDistance),
+            };
         }
 
         private void Update()

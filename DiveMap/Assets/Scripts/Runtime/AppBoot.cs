@@ -120,7 +120,8 @@ namespace DiveMap.Runtime
             string title = string.IsNullOrEmpty(result.MapName) ? mapName : result.MapName;
             SetStatus($"{title}  ·  โหลดแล้ว {result.Loaded} · แทนที่ {result.Failed}");
 
-            if (_orbit != null) _orbit.Frame(result.Center, result.Radius);
+            if (_orbit != null)
+                _orbit.FrameBox(result.FrameCenter, result.FrameSizeX, result.FrameSizeY, result.FrameSizeZ, result.FrameMinY);
 
             // ── QC screenshot mode (CI): -qcshot <path> → รอเฟรม settle → แคป → ปิดตัวเอง ──
             // ใช้ใน headless CI (xvfb) เพื่อให้ orchestrator เห็นภาพจริงทุก build (QC_PLAN ชั้น 2)
@@ -167,7 +168,9 @@ namespace DiveMap.Runtime
             scaler.matchWidthOrHeight = 0.5f;
             canvasGo.AddComponent<GraphicRaycaster>();
 
-            Font font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+            // Bundled Noto Sans Thai (Latin + Thai) — the Linux CI player has no Thai
+            // system font, so the builtin LegacyRuntime.ttf drops every Thai glyph.
+            Font font = UiFont.Get();
 
             // Top-left status line (small).
             _statusText = MakeText(canvas.transform, "Status", font, 26, TextAnchor.UpperLeft);
