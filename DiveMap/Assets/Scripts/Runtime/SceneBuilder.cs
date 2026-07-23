@@ -84,19 +84,37 @@ namespace DiveMap.Runtime
             return 40;
         }
 
-        // Bright, high-key albedo so the fish separate from the deep-blue water column and the
-        // sand floor in the QC shot. The old silvery-blue (0.62,0.74,0.86) sat only a hair
-        // above the water tone and vanished; the web's scad flash near-white silver with a
-        // yellow-green cast, so we push toward a luminous silver-cyan / silver-gold that reads
-        // at distance without needing a runtime _EMISSION keyword (which the build strips → magenta).
+        // Mid silver-grey albedo (QC r7). The old near-white (0.86,0.92,0.80) drew each fish as
+        // a blazing-white kite with a pitch-black shadow side (max lit/shadow contrast). A mid
+        // silver-grey — a real fish's countershaded silver — drops the lit side so the shadow
+        // side (Trilight ambient + reflection-cube sheen) is a natural dim grey, not black, and
+        // the flock reads as a silver cloud. Still no runtime _EMISSION keyword (build strips it → magenta).
         private static Color SpeciesColor(string assetId)
         {
             string a = assetId.ToLowerInvariant();
-            if (a.StartsWith("school:scad")) return new Color(0.86f, 0.92f, 0.80f);       // bright silver-green (yellowstripe scad)
-            if (a.StartsWith("school:barracuda")) return new Color(0.74f, 0.80f, 0.84f);  // bright steel
-            if (a.StartsWith("pod:yellowtail")) return new Color(0.96f, 0.86f, 0.34f);    // vivid yellow
-            if (a.StartsWith("pod:")) return new Color(0.68f, 0.76f, 0.80f);
-            return new Color(0.60f, 0.82f, 0.98f); // generic school bright blue
+            if (a.StartsWith("school:scad")) return new Color(0.58f, 0.64f, 0.60f);       // silver-olive (yellowstripe scad)
+            if (a.StartsWith("school:barracuda")) return new Color(0.56f, 0.60f, 0.64f);  // cool steel-silver
+            if (a.StartsWith("pod:yellowtail")) return new Color(0.66f, 0.62f, 0.42f);    // muted silver-gold
+            if (a.StartsWith("pod:")) return new Color(0.56f, 0.62f, 0.66f);
+            return new Color(0.55f, 0.62f, 0.66f); // generic school silver-grey
+        }
+
+        // Per-fish REAL length (metres). The web sizes a fish as a SMALL fraction of the school
+        // cluster (item.scale), NOT flen×item.scale — that conflation was the QC-r6 "kite" bug
+        // (scad 4.2 m, barracuda 17.5 m). Absolute lengths are anchored to the web's per-species
+        // size intent (defaultScale: barracuda 8.0 = biggest ≫ scad 3.5 > batfish 3.0) and real
+        // biology (great barracuda ~1.5 m; bigeye scad ~0.35 m); the barracuda:scad ≈ 4.2× draw
+        // ratio the web produces holds. Small fish also make the flock read DENSE (fixes r5).
+        private static float SpeciesFishLen(string assetId)
+        {
+            string a = assetId.ToLowerInvariant();
+            if (a.StartsWith("school:scad")) return 0.35f;       // bigeye/yellowstripe scad ~30 cm
+            if (a.StartsWith("school:barracuda")) return 1.5f;   // great barracuda ~1.5 m (web's biggest defaultScale)
+            if (a.StartsWith("school:batfish")) return 0.50f;    // batfish (Platax) ~0.5 m
+            if (a.StartsWith("pod:yellowtail")) return 0.45f;    // yellowtail scad — small
+            if (a.StartsWith("pod:")) return 0.70f;              // pods = larger animals
+            if (a.StartsWith("school:")) return 0.40f;           // generic small schooling fish
+            return 0.50f;
         }
 
         private static FishSchoolSystem.SchoolReg MakeSchoolReg(string assetId, Transform tr)
@@ -105,7 +123,8 @@ namespace DiveMap.Runtime
             return new FishSchoolSystem.SchoolReg
             {
                 Anchor = tr.position,
-                FishLen = Mathf.Max(0.3f, scale),
+                ClusterScale = Mathf.Max(0.3f, scale),   // item.scale → school CLUSTER size (formation)
+                FishMeters   = SpeciesFishLen(assetId),  // small per-species fish length (metres)
                 Count = SpeciesCount(assetId),
                 Color = SpeciesColor(assetId),
                 Species = assetId,

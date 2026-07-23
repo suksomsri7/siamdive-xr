@@ -31,7 +31,8 @@ namespace DiveMap.Runtime.Marine
         public struct SchoolReg
         {
             public Vector3 Anchor;
-            public float   FishLen;   // per-fish world length (≈ item scale)
+            public float   ClusterScale; // item.scale — the school CLUSTER size (formation), NOT the fish
+            public float   FishMeters;   // per-fish real world length (metres): scad≈0.35 … barracuda≈1.5
             public int     Count;
             public Color   Color;
             public string  Species;
@@ -99,6 +100,12 @@ namespace DiveMap.Runtime.Marine
         private const float WiggleRate = 7.0f;   // builder.html wiggle default
         private const float WiggleAmp  = 0.18f;  // radians (~10°), transform-level approximation
 
+        // Cluster/formation size vs item.scale. The web normalises a school GLB to a fixed
+        // cluster bbox; here item.scale carries that cluster scale and the blob DIAMETER is
+        // ≈1.9×item.scale (scad≈4.2 m, barracuda≈17.5 m). This is the CORRECT home for the
+        // "1.9" that QC-r6 mis-applied to per-fish size (the kite bug).
+        private const float ClusterDiamPerItemScale = 1.9f;
+
         // ── Setup ─────────────────────────────────────────────────────────────────
 
         public void Configure(
@@ -133,23 +140,29 @@ namespace DiveMap.Runtime.Marine
             for (int si = 0; si < schools.Count; si++)
             {
                 SchoolReg s = schools[si];
-                float fl = Mathf.Max(0.3f, s.FishLen);
-                // Formation radius. The old (2.8..count·0.07) formula was calibrated for the
-                // web's 500-fish shoal; with ~70 fish it spread them into a thin 44 m-wide disc
-                // (QC r5 "โหรงเหรง"). Tighten the scatter AND — the real culprit — shrink the
-                // home radius from 3.2R to 1.7R so the weak anchor pull can't let the school
-                // bleed out to a 22 m sparse cloud. Result: a compact, visibly dense ball.
-                float R = fl * Mathf.Max(2.5f, s.Count * 0.04f); // formation radius (builder.html 1495, retuned for ~70)
-                float homeR = R * 1.7f;                          // safety radius — keep the shoal tight
-                float maxSpeed = fl * 4.0f;                      // cruise (units/sec)
+                // Two INDEPENDENT scales (the QC-r6 kite bug conflated them):
+                //   • clusterScale = item.scale — the size of the whole school CLUSTER. The web
+                //     normalises each school GLB to a fixed cluster bbox and every fish is a
+                //     SMALL fraction of it; it does NOT size a fish as flen×itemScale. So we
+                //     read item.scale as the cluster/formation scale: blob DIAMETER ≈
+                //     1.9×item.scale (scad≈4.2 m, barracuda≈17.5 m) ⇒ radius = 0.95×.
+                //   • fishLen = a small per-species REAL length (metres), set in SceneBuilder.
+                float clusterScale = Mathf.Max(0.3f, s.ClusterScale);
+                float fishLen      = Mathf.Max(0.05f, s.FishMeters);
+                float R     = clusterScale * (ClusterDiamPerItemScale * 0.5f); // formation radius (blob diameter = 1.9×item.scale)
+                float homeR = R * 1.7f;                                        // safety radius — keep the shoal tight
+                float maxSpeed = clusterScale * 4.0f;                          // cruise (units/sec) — UNCHANGED motion feel
+                // Boids spacing tracks the FISH size (as the web does), not the cluster: with
+                // small fish the flock packs tight into a dense cloud instead of a sparse dusting.
+                // (natural pack radius ≈ SepR·count^⅓ ≈ R, so anchor & separation agree.)
 
                 _schools[si] = new SchoolParams
                 {
                     Anchor    = ToF3(s.Anchor),
-                    FishLen   = fl,
+                    FishLen   = clusterScale,   // sim length unit → speed/turn (cluster-scaled, unchanged)
                     HomeR     = homeR,
-                    NeighborR = fl * 4.0f,
-                    SepR      = fl * 1.5f,
+                    NeighborR = fishLen * 4.0f,
+                    SepR      = fishLen * 1.5f,
                     MaxSpeed  = maxSpeed,
                     Start     = cursor,
                     Count     = s.Count,
@@ -161,10 +174,12 @@ namespace DiveMap.Runtime.Marine
                 Material mat = baseMat != null ? new Material(baseMat) : new Material(Shader.Find("Standard"));
                 mat.color = s.Color;
                 mat.enableInstancing = true;
-                // Matte, non-metallic so the bright albedo shows as a flat luminous body from
-                // every angle (a metallic fish reads dark unless it happens to catch a specular
-                // highlight — the "dark dots" half of the QC r5 visibility miss).
-                if (mat.HasProperty("_Glossiness")) mat.SetFloat("_Glossiness", 0.1f);
+                // Non-metallic (r5: a metallic fish reads dark unless it catches a highlight —
+                // avoid the "dark dots" regression) but with a light silvery gloss so the scene's
+                // bright reflection cube (0.60,0.72,0.82) adds a soft blue-grey sheen on the
+                // shadow side — the "ด้านเงาไม่ดำสนิท" fix. The albedo is now a mid silver-grey
+                // (SceneBuilder), not near-white, so the lit/shadow contrast is a fish, not a kite.
+                if (mat.HasProperty("_Glossiness")) mat.SetFloat("_Glossiness", 0.3f);
                 if (mat.HasProperty("_Metallic"))   mat.SetFloat("_Metallic", 0f);
 
                 for (int k = 0; k < s.Count; k++)
@@ -186,15 +201,13 @@ namespace DiveMap.Runtime.Marine
                     cursor++;
                 }
 
-                // Scale fix (QC r6): the ~1.08 procedural mesh × item scale drew fish ~57% of
-                // the web's size (the web sizes each fish flen≈1.9 × item scale). Grow the DRAW
-                // scale to the 1.9-unit GLB norm so a fish reads at web size, WITHOUT touching
-                // the sim's length unit (fl) — formation radius / speed / the r5 density tuning
-                // stay exactly as calibrated.
-                float drawScale = fl * FishMeshFactory.WebScaleFactor;
-                float worldLen  = FishMeshFactory.BaseLen * drawScale; // = WebNormLen × fl
+                // Draw scale (QC r7): size each fish to its small per-species REAL length, NOT
+                // to item.scale. The QC-r6 fix drew fish at 1.9×item.scale (scad 4.2 m,
+                // barracuda 17.5 m — kites); item.scale is the CLUSTER size, and the web's fish
+                // are a small fraction of it. worldLen = BaseLen × drawScale = fishLen (metres).
+                float drawScale = fishLen / FishMeshFactory.BaseLen;
                 Debug.Log($"[Marine] school={si} species={s.Species} " +
-                          $"fishLen={worldLen:F1}m meshBaseLen={FishMeshFactory.BaseLen:F2} finalScale={drawScale:F2}");
+                          $"clusterR={R:F1}m fishLen={fishLen:F1}m count={s.Count}");
 
                 _render.Add(new SchoolRender
                 {
@@ -202,7 +215,7 @@ namespace DiveMap.Runtime.Marine
                     Matrices = new Matrix4x4[s.Count],
                     Start = _schools[si].Start,
                     Count = s.Count,
-                    FishLen = fl,
+                    FishLen = clusterScale,
                     DrawScale = drawScale,
                     PhaseOffset = (si * 37) % 101, // spread frame-skip load (builder.html _lodPh)
                     Anchor = s.Anchor,
