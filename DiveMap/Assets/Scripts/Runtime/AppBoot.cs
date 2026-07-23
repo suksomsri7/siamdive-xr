@@ -90,8 +90,8 @@ namespace DiveMap.Runtime
         private void SetupLighting()
         {
             RenderSettings.ambientMode         = UnityEngine.Rendering.AmbientMode.Trilight;
-            RenderSettings.ambientSkyColor     = new Color(0.40f, 0.55f, 0.66f); // r2 0.48 → pulled down (sand was cream-blown)
-            RenderSettings.ambientEquatorColor = new Color(0.32f, 0.45f, 0.53f); // r2 0.38 → down
+            RenderSettings.ambientSkyColor     = new Color(0.348f, 0.478f, 0.574f); // r4 −13% (sand still cream vs web); boat lit by reflection cube, ~unaffected
+            RenderSettings.ambientEquatorColor = new Color(0.278f, 0.392f, 0.461f); // r4 −13% down (sand faces up = sky+equator ambient)
             RenderSettings.ambientGroundColor  = new Color(0.20f, 0.28f, 0.31f); // 0x123040 lifted (no black undersides)
             RenderSettings.fog = false; // web daylight = no fog; underwater fog is 400-9000u (negligible near)
 

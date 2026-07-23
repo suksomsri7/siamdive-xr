@@ -74,6 +74,23 @@ namespace DiveMap.Runtime.Marine
         private int    _frame;
         private float  _accumMs;
         private int    _accumN;
+        private bool   _useInstancing = true;
+
+        // Software GL renderers (Mesa llvmpipe on the headless CI, SwiftShader) report
+        // SystemInfo.supportsInstancing == true yet silently draw NOTHING from
+        // Graphics.RenderMeshInstanced — the per-instance unity_ObjectToWorld never lands,
+        // so every fish collapses to world origin (occluded under the wreck) and the QC eye
+        // sees an empty reef while the non-instanced whale renders fine. Detect those and
+        // fall back to one Graphics.RenderMesh per fish (415 draws is nothing for the QC
+        // shot). Real mobile GPUs keep the single-draw instanced path untouched.
+        private static bool IsSoftwareRenderer()
+        {
+            string n = SystemInfo.graphicsDeviceName;
+            if (string.IsNullOrEmpty(n)) return false;
+            n = n.ToLowerInvariant();
+            return n.Contains("llvmpipe") || n.Contains("softpipe") ||
+                   n.Contains("swiftshader") || n.Contains("software") || n.Contains("microsoft basic");
+        }
 
         private const float WiggleRate = 7.0f;   // builder.html wiggle default
         private const float WiggleAmp  = 0.18f;  // radians (~10°), transform-level approximation
@@ -86,6 +103,11 @@ namespace DiveMap.Runtime.Marine
         {
             _cam = cam != null ? cam : Camera.main;
             _fishMesh = FishMeshFactory.Fish();
+
+            _useInstancing = SystemInfo.supportsInstancing && !IsSoftwareRenderer();
+            Debug.Log($"[Marine] supportsInstancing={SystemInfo.supportsInstancing} " +
+                      $"device='{SystemInfo.graphicsDeviceName}' useInstancing={_useInstancing} " +
+                      $"(software fallback → per-fish RenderMesh so the QC eye always sees fish)");
 
             // Obstacles (may be empty).
             int obN = obstacles != null ? obstacles.Count : 0;
@@ -176,9 +198,16 @@ namespace DiveMap.Runtime.Marine
                     Material wm = baseMat != null ? new Material(baseMat) : new Material(Shader.Find("Standard"));
                     wm.color = w.Color;
                     mr.sharedMaterial = wm;
-                    go.transform.localScale = Vector3.one * Mathf.Max(1f, w.Size);
+                    // Whaleshark = a BIG animal. The item scale (~3.2 web default) applied to
+                    // the ~1 m procedural mesh gives a 3 m dot — far smaller than the web's
+                    // whaleshark GLB. Bridge the mesh-size gap (×2.5) and clamp to a believable
+                    // whaleshark length [8..16 m] so it reads large in the QC shot whether the
+                    // DB item ships 3.2 or 34.2.
+                    float whaleWorld = Mathf.Clamp(Mathf.Max(1f, w.Size) * 2.5f, 8f, 16f);
+                    go.transform.localScale = Vector3.one * whaleWorld;
                     var wc = go.AddComponent<WhaleController>();
-                    wc.Init(w.Anchor, w.Size);
+                    wc.Init(w.Anchor, whaleWorld);
+                    Debug.Log($"[Marine] whale item.scale={w.Size:F1} → world≈{whaleWorld:F1}m at {w.Anchor}");
                     _whaleCount++;
                 }
             }
@@ -221,7 +250,8 @@ namespace DiveMap.Runtime.Marine
             // Swap buffers.
             var tmp = _cur; _cur = _nxt; _nxt = tmp;
 
-            // Build matrices + one instanced draw per school.
+            // Build matrices + one instanced draw per school (or per-fish under software GL).
+            int drawn = 0;
             for (int si = 0; si < _render.Count; si++)
             {
                 SchoolRender sr = _render[si];
@@ -240,16 +270,39 @@ namespace DiveMap.Runtime.Marine
                     mats[k] = Matrix4x4.TRS(pos, rot, Vector3.one * sr.FishLen);
                 }
 
-                var rp = new RenderParams(sr.Mat)
+                if (sr.Count <= 0) continue;
+
+                if (_useInstancing)
                 {
-                    worldBounds = new Bounds(ToV3(_schools[si].Anchor),
-                                             Vector3.one * (_schools[si].HomeR * 2f + sr.FishLen * 6f)),
-                    shadowCastingMode = ShadowCastingMode.Off,
-                    receiveShadows = false,
-                };
-                if (sr.Count > 0)
+                    var rp = new RenderParams(sr.Mat)
+                    {
+                        worldBounds = new Bounds(ToV3(_schools[si].Anchor),
+                                                 Vector3.one * (_schools[si].HomeR * 2f + sr.FishLen * 6f)),
+                        shadowCastingMode = ShadowCastingMode.Off,
+                        receiveShadows = false,
+                    };
                     Graphics.RenderMeshInstanced(rp, _fishMesh, 0, mats, sr.Count);
+                }
+                else
+                {
+                    // Software-GL fallback: draw each fish on its own so the QC eye sees the
+                    // swarm even where RenderMeshInstanced would no-op. Per-object culling uses
+                    // the mesh bounds × matrix, so no batch-cull risk.
+                    var rp = new RenderParams(sr.Mat)
+                    {
+                        shadowCastingMode = ShadowCastingMode.Off,
+                        receiveShadows = false,
+                    };
+                    for (int k = 0; k < sr.Count; k++)
+                        Graphics.RenderMesh(rp, _fishMesh, 0, mats[k]);
+                }
+                drawn += sr.Count;
             }
+
+            // First-frames diagnostic so the orchestrator can confirm fish were submitted
+            // (path + count) straight from the player log next QC round.
+            if (_frame < 3)
+                Debug.Log($"[Marine] frame={_frame} path={(_useInstancing ? "instanced" : "per-fish")} instancesSubmitted={drawn}");
 
             // Frame-cost accounting + periodic summary for the orchestrator.
             _accumMs += Time.deltaTime * 1000f;
