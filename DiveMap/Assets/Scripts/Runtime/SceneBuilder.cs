@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using GLTFast;
 using UnityEngine;
 using DiveMap.Core;
+using DiveMap.Runtime.Marine;
 
 namespace DiveMap.Runtime
 {
@@ -56,6 +57,63 @@ namespace DiveMap.Runtime
             }
         }
 
+        // ── Marine routing (WO-XR-03) ─────────────────────────────────────────────
+        // school:* and pod:* → instanced boid swarm; msh:* → looping big animal.
+        private static bool IsSchoolItem(string assetId)
+            => !string.IsNullOrEmpty(assetId) &&
+               (assetId.StartsWith("school:", StringComparison.OrdinalIgnoreCase) ||
+                assetId.StartsWith("pod:", StringComparison.OrdinalIgnoreCase));
+
+        private static bool IsBigAnimalItem(string assetId)
+            => !string.IsNullOrEmpty(assetId) &&
+               assetId.StartsWith("msh:", StringComparison.OrdinalIgnoreCase);
+
+        // Fish per school by species — sized so a real reef map clears the ≥300 DoD
+        // (Htms Chang: 7×scad + barracuda + 2×yellowtail = 315+60+40 = 415 fish).
+        private static int SpeciesCount(string assetId)
+        {
+            string a = assetId.ToLowerInvariant();
+            if (a.StartsWith("school:scad")) return 45;
+            if (a.StartsWith("school:barracuda")) return 60;
+            if (a.StartsWith("school:batfish")) return 40;
+            if (a.StartsWith("pod:")) return 20;   // pods are fewer, larger animals
+            if (a.StartsWith("school:")) return 40;
+            return 30;
+        }
+
+        private static Color SpeciesColor(string assetId)
+        {
+            string a = assetId.ToLowerInvariant();
+            if (a.StartsWith("school:scad")) return new Color(0.62f, 0.74f, 0.86f);       // silvery blue
+            if (a.StartsWith("school:barracuda")) return new Color(0.52f, 0.58f, 0.62f);  // steel grey
+            if (a.StartsWith("pod:yellowtail")) return new Color(0.90f, 0.80f, 0.32f);    // yellow
+            if (a.StartsWith("pod:")) return new Color(0.45f, 0.55f, 0.60f);
+            return new Color(0.30f, 0.70f, 0.95f); // generic school blue
+        }
+
+        private static FishSchoolSystem.SchoolReg MakeSchoolReg(string assetId, Transform tr)
+        {
+            float scale = tr.localScale.x;
+            return new FishSchoolSystem.SchoolReg
+            {
+                Anchor = tr.position,
+                FishLen = Mathf.Max(0.3f, scale),
+                Count = SpeciesCount(assetId),
+                Color = SpeciesColor(assetId),
+                Species = assetId,
+            };
+        }
+
+        private static FishSchoolSystem.WhaleReg MakeWhaleReg(Transform tr)
+        {
+            return new FishSchoolSystem.WhaleReg
+            {
+                Anchor = tr.position,
+                Size = Mathf.Max(1f, tr.localScale.x),
+                Color = new Color(0.55f, 0.60f, 0.66f),
+            };
+        }
+
         // Preliminary seabed sizing (WO-XR-01). areaScale multiplies this base radius.
         private const float BaseSeabedRadius = 15f;
         private const float PerItemLoadTimeout = 25f;   // per GLB, soft
@@ -99,6 +157,14 @@ namespace DiveMap.Runtime
             IReadOnlyList<SceneItem> items = scene?.Items() ?? new List<SceneItem>();
             var decorGos = new List<GameObject>();   // structure/scenery (for framing box)
             var allGos = new List<GameObject>();      // fallback when a map is swimmers-only
+
+            // WO-XR-03: SCHOOL/pod items become live instanced boid swarms and msh:* big
+            // animals become looping swimmers, instead of a single static GLB blob. We
+            // collect their registrations here and spin up one FishSchoolSystem after the
+            // static loads settle (so obstacle bounds — the wreck — are known).
+            var schoolRegs = new List<FishSchoolSystem.SchoolReg>();
+            var whaleRegs = new List<FishSchoolSystem.WhaleReg>();
+
             foreach (SceneItem item in items)
             {
                 var itemGo = new GameObject(ItemName(item));
@@ -106,6 +172,20 @@ namespace DiveMap.Runtime
                 ApplyTransform(itemGo.transform, item, manifest);
 
                 bounds.Encapsulate(itemGo.transform.localPosition);
+
+                string aid = item.AssetId ?? "";
+                if (IsSchoolItem(aid))
+                {
+                    schoolRegs.Add(MakeSchoolReg(aid, itemGo.transform));
+                    _loaded++;
+                    continue; // no static GLB — the swarm renders itself
+                }
+                if (IsBigAnimalItem(aid))
+                {
+                    whaleRegs.Add(MakeWhaleReg(itemGo.transform));
+                    _loaded++;
+                    continue;
+                }
 
                 string url = manifest != null ? manifest.ResolveUrl(item.AssetId) : null;
                 AssetManifest.Module module = manifest != null ? manifest.Get(item.AssetId) : null;
@@ -135,6 +215,26 @@ namespace DiveMap.Runtime
             {
                 t += Time.deltaTime;
                 yield return null;
+            }
+
+            // ── Marine system (WO-XR-03) ──────────────────────────────────────────
+            // Obstacles = the loaded static decor (the wreck) as world-space AABBs so
+            // fish steer around them (warp gates excluded — not solid). Built AFTER the
+            // GLB loads settle so renderer bounds are real.
+            if (schoolRegs.Count > 0 || whaleRegs.Count > 0)
+            {
+                var obstacles = new List<ObstacleBox>();
+                foreach (GameObject go in decorGos)
+                {
+                    if (go == null) continue;
+                    if (go.name.Contains("_warp:")) continue; // portals are not solid
+                    var one = new List<GameObject> { go };
+                    if (TryContentBounds(one, out Bounds b))
+                        obstacles.Add(new ObstacleBox { Min = b.min, Max = b.max, ObsR = 4f });
+                }
+
+                var marine = root.AddComponent<FishSchoolSystem>();
+                marine.Configure(schoolRegs, whaleRegs, obstacles, Camera.main, BaseMat(false));
             }
 
             Vector3 center = bounds.center;

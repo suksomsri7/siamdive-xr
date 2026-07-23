@@ -4,7 +4,10 @@
   "references": [
     "DiveMap.Core",
     "glTFast",
-    "UnityEngine.UI"
+    "UnityEngine.UI",
+    "Unity.Burst",
+    "Unity.Collections",
+    "Unity.Mathematics"
   ],
   "includePlatforms": [],
   "excludePlatforms": [],
