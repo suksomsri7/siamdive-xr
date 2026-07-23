@@ -66,25 +66,43 @@ namespace DiveMap.Runtime
         }
 
         // ── Lighting (web builder.html parity) ───────────────────────────────────────
-        // The scene rendered near-black — the wreck a bare silhouette — because the only
-        // light was a lone directional over Unity's dark default ambient (sky 0.21 grey),
-        // so bright-albedo sand showed but the wreck's darker texture read as black.
+        // QC r2 lifted the *sand* (Unity Standard, metallic 0) with a bright Trilight
+        // ambient — but the *wreck* stayed near-black. Root cause (QC r3 diagnosis):
         //
-        // Web builder.html (underwater default) lights with:
-        //   HemisphereLight(sky 0xbfe6ff, ground 0x123040, 1.05)
-        //   DirectionalLight sun 0xfff3df @1.2 from (60,160,70)
-        //   DirectionalLight fill 0x3f78a8 @0.5 from (-90,40,-70)
-        //   ACESFilmic tonemap, exposure 1.05 (lifts midtones)
-        // Unity built-in has no tonemap, so we port the hemisphere as a bright gradient
-        // ambient (Trilight) + a warm key + a cool fill. Pulled back from full web values
-        // so the bright sand doesn't blow out without the ACES highlight rolloff.
+        //   The wreck GLB (HTMS_Chang_xr0) renders through glTFast's built-in-RP
+        //   metallic-roughness shader and its baked metallicRoughness map reads highly
+        //   metallic. In built-in RP a metal surface has ~zero diffuse albedo — its
+        //   colour comes almost entirely from the *environment specular reflection*.
+        //   Main.unity has no reflection probe (customReflection null, IndirectSpecular
+        //   (0,0,0)), so metal reflected pure black → the hull went black and only the
+        //   thin deck band the sun grazes caught any light. Sand is diffuse, so ambient
+        //   lit it fine — hence bright sand + black wreck in the same shot.
+        //
+        // Fix is decoupled by shading path (no GLB/SceneBuilder edits, no shader-property
+        // guesswork):
+        //   • WRECK (specular)  ← a bright custom reflection cubemap. Metals reflect a lit
+        //     underwater environment tinted by their own base colour (F0 = olive) → the
+        //     hull reads bright green-olive all round. Does NOT touch diffuse sand.
+        //   • SAND  (diffuse)   ← Trilight ambient, pulled down a touch from r2 so the
+        //     cream sand settles to a natural tone. Barely moves the metallic wreck.
+        //   • Sun soft-shadow strength eased so the camera-facing hull isn't a hard black
+        //     self-shadow band (ambient + reflection now fill it).
         private void SetupLighting()
         {
             RenderSettings.ambientMode         = UnityEngine.Rendering.AmbientMode.Trilight;
-            RenderSettings.ambientSkyColor     = new Color(0.48f, 0.64f, 0.76f); // 0xbfe6ff, pulled back
-            RenderSettings.ambientEquatorColor = new Color(0.38f, 0.52f, 0.60f);
+            RenderSettings.ambientSkyColor     = new Color(0.40f, 0.55f, 0.66f); // r2 0.48 → pulled down (sand was cream-blown)
+            RenderSettings.ambientEquatorColor = new Color(0.32f, 0.45f, 0.53f); // r2 0.38 → down
             RenderSettings.ambientGroundColor  = new Color(0.20f, 0.28f, 0.31f); // 0x123040 lifted (no black undersides)
             RenderSettings.fog = false; // web daylight = no fog; underwater fog is 400-9000u (negligible near)
+
+            // Custom reflection so the metallic wreck reflects a lit underwater environment
+            // instead of black. Uniform bright blue-white cubemap; a metal surface's spec
+            // colour is its own base colour (olive), so the hull reads bright green-olive.
+            // Diffuse sand is unaffected — reflection only feeds specular. (built-in RP:
+            // feeds unity_SpecCube0 globally via DefaultReflectionMode.Custom.)
+            RenderSettings.defaultReflectionMode  = UnityEngine.Rendering.DefaultReflectionMode.Custom;
+            RenderSettings.customReflectionTexture = AmbientReflectionCube(new Color(0.60f, 0.72f, 0.82f));
+            RenderSettings.reflectionIntensity     = 1f;
 
             // Key light (sun): reuse the scene's directional if there is one, else make it.
             Light sun = null;
@@ -97,8 +115,10 @@ namespace DiveMap.Runtime
                 sun.type = LightType.Directional;
             }
             sun.color = new Color(1f, 0.957f, 0.839f); // 0xfff3df
-            sun.intensity = 1.05f;                     // web sun 1.2 (−tonemap headroom)
+            sun.intensity = 1.0f;                      // r2 1.05 → eased (sand highlight)
             sun.transform.rotation = Quaternion.Euler(52f, -35f, 0f); // high, angled — web pos (60,160,70)
+            sun.shadows = LightShadows.Soft;
+            sun.shadowStrength = 0.5f;                 // was 1.0 — soften the wreck's self-shadow band
             RenderSettings.sun = sun;
 
             // Fill light: cool bounce from the far side so the wreck's shadowed hull reads
@@ -114,8 +134,26 @@ namespace DiveMap.Runtime
                 fill.shadows = LightShadows.None;
             }
             fill.color = new Color(0.247f, 0.471f, 0.659f); // 0x3f78a8
-            fill.intensity = 0.55f;
+            fill.intensity = 0.65f;                          // r2 0.55 → a touch more lift on the shadowed hull
             fill.transform.rotation = Quaternion.Euler(-14f, 145f, 0f); // opposite/low — web pos (-90,40,-70)
+        }
+
+        // A tiny uniform-colour cubemap used as the scene's custom reflection. Built-in RP
+        // has no reflection probe in Main.unity, so metallic surfaces (the wreck) would
+        // otherwise reflect black. Cached so Retry/rebuild doesn't leak a new cubemap.
+        private static Cubemap _reflectionCube;
+        private static Cubemap AmbientReflectionCube(Color c)
+        {
+            if (_reflectionCube != null) return _reflectionCube;
+            const int n = 4;
+            var cube = new Cubemap(n, TextureFormat.RGBA32, false);
+            var px = new Color[n * n];
+            for (int i = 0; i < px.Length; i++) px[i] = c;
+            for (var f = CubemapFace.PositiveX; f <= CubemapFace.NegativeZ; f++)
+                cube.SetPixels(px, f);
+            cube.Apply(false);
+            _reflectionCube = cube;
+            return cube;
         }
 
         private void SetupBuilder()
