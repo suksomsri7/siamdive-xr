@@ -68,27 +68,35 @@ namespace DiveMap.Runtime
             => !string.IsNullOrEmpty(assetId) &&
                assetId.StartsWith("msh:", StringComparison.OrdinalIgnoreCase);
 
-        // Fish per school by species — sized so a real reef map clears the ≥300 DoD
-        // (Htms Chang: 7×scad + barracuda + 2×yellowtail = 315+60+40 = 415 fish).
+        // Fish per school by species. The web packs a scad shoal with 500 fish so each item
+        // reads as a dense "cloud"; a mobile Burst boids scan can't afford 500×7, but 45 was
+        // far too thin (QC r5 showed ~10 dots). Bump toward the web's density budget the
+        // orchestrator signed off on (~70/scad, ~650 total: 7×70 + 70 barracuda + 2×20 pods
+        // = 600) so each school renders as a visible mass, not a sprinkle.
         private static int SpeciesCount(string assetId)
         {
             string a = assetId.ToLowerInvariant();
-            if (a.StartsWith("school:scad")) return 45;
-            if (a.StartsWith("school:barracuda")) return 60;
-            if (a.StartsWith("school:batfish")) return 40;
+            if (a.StartsWith("school:scad")) return 70;
+            if (a.StartsWith("school:barracuda")) return 70;
+            if (a.StartsWith("school:batfish")) return 55;
             if (a.StartsWith("pod:")) return 20;   // pods are fewer, larger animals
-            if (a.StartsWith("school:")) return 40;
-            return 30;
+            if (a.StartsWith("school:")) return 55;
+            return 40;
         }
 
+        // Bright, high-key albedo so the fish separate from the deep-blue water column and the
+        // sand floor in the QC shot. The old silvery-blue (0.62,0.74,0.86) sat only a hair
+        // above the water tone and vanished; the web's scad flash near-white silver with a
+        // yellow-green cast, so we push toward a luminous silver-cyan / silver-gold that reads
+        // at distance without needing a runtime _EMISSION keyword (which the build strips → magenta).
         private static Color SpeciesColor(string assetId)
         {
             string a = assetId.ToLowerInvariant();
-            if (a.StartsWith("school:scad")) return new Color(0.62f, 0.74f, 0.86f);       // silvery blue
-            if (a.StartsWith("school:barracuda")) return new Color(0.52f, 0.58f, 0.62f);  // steel grey
-            if (a.StartsWith("pod:yellowtail")) return new Color(0.90f, 0.80f, 0.32f);    // yellow
-            if (a.StartsWith("pod:")) return new Color(0.45f, 0.55f, 0.60f);
-            return new Color(0.30f, 0.70f, 0.95f); // generic school blue
+            if (a.StartsWith("school:scad")) return new Color(0.86f, 0.92f, 0.80f);       // bright silver-green (yellowstripe scad)
+            if (a.StartsWith("school:barracuda")) return new Color(0.74f, 0.80f, 0.84f);  // bright steel
+            if (a.StartsWith("pod:yellowtail")) return new Color(0.96f, 0.86f, 0.34f);    // vivid yellow
+            if (a.StartsWith("pod:")) return new Color(0.68f, 0.76f, 0.80f);
+            return new Color(0.60f, 0.82f, 0.98f); // generic school bright blue
         }
 
         private static FishSchoolSystem.SchoolReg MakeSchoolReg(string assetId, Transform tr)
@@ -110,7 +118,7 @@ namespace DiveMap.Runtime
             {
                 Anchor = tr.position,
                 Size = Mathf.Max(1f, tr.localScale.x),
-                Color = new Color(0.55f, 0.60f, 0.66f),
+                Color = new Color(0.64f, 0.70f, 0.76f), // brighter blue-grey so the whaleshark reads mid-water
             };
         }
 

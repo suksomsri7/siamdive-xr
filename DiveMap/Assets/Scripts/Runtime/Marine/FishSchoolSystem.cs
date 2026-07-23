@@ -130,8 +130,13 @@ namespace DiveMap.Runtime.Marine
             {
                 SchoolReg s = schools[si];
                 float fl = Mathf.Max(0.3f, s.FishLen);
-                float R = fl * Mathf.Max(2.8f, s.Count * 0.07f); // formation radius (builder.html 1495)
-                float homeR = R * 3.2f;                          // safety radius (builder.html 1611)
+                // Formation radius. The old (2.8..count·0.07) formula was calibrated for the
+                // web's 500-fish shoal; with ~70 fish it spread them into a thin 44 m-wide disc
+                // (QC r5 "โหรงเหรง"). Tighten the scatter AND — the real culprit — shrink the
+                // home radius from 3.2R to 1.7R so the weak anchor pull can't let the school
+                // bleed out to a 22 m sparse cloud. Result: a compact, visibly dense ball.
+                float R = fl * Mathf.Max(2.5f, s.Count * 0.04f); // formation radius (builder.html 1495, retuned for ~70)
+                float homeR = R * 1.7f;                          // safety radius — keep the shoal tight
                 float maxSpeed = fl * 4.0f;                      // cruise (units/sec)
 
                 _schools[si] = new SchoolParams
@@ -152,8 +157,11 @@ namespace DiveMap.Runtime.Marine
                 Material mat = baseMat != null ? new Material(baseMat) : new Material(Shader.Find("Standard"));
                 mat.color = s.Color;
                 mat.enableInstancing = true;
-                if (mat.HasProperty("_Glossiness")) mat.SetFloat("_Glossiness", 0.15f);
-                if (mat.HasProperty("_Metallic"))   mat.SetFloat("_Metallic", 0.1f);
+                // Matte, non-metallic so the bright albedo shows as a flat luminous body from
+                // every angle (a metallic fish reads dark unless it happens to catch a specular
+                // highlight — the "dark dots" half of the QC r5 visibility miss).
+                if (mat.HasProperty("_Glossiness")) mat.SetFloat("_Glossiness", 0.1f);
+                if (mat.HasProperty("_Metallic"))   mat.SetFloat("_Metallic", 0f);
 
                 for (int k = 0; k < s.Count; k++)
                 {

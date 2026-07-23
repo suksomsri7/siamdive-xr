@@ -28,16 +28,19 @@ namespace DiveMap.Runtime.Marine
         private static Mesh BuildFish()
         {
             // Stretched octahedron body (nose at +Z, tail at −Z) + a vertical tail fin.
+            // Body widened (±0.12→±0.18 X, ±0.15→±0.18 Y) so a fish presenting its head/tail
+            // to the camera is still a readable blob, not a 1-px sliver — the other half of the
+            // QC r5 "tiny dots" miss (a 4.5:1 needle was invisible edge-on).
             var v = new[]
             {
                 new Vector3( 0f,    0f,    0.50f), // 0 nose
-                new Vector3( 0f,    0.15f, 0.00f), // 1 top
-                new Vector3(-0.12f, 0f,    0.00f), // 2 left
-                new Vector3( 0f,   -0.15f, 0.00f), // 3 bottom
-                new Vector3( 0.12f, 0f,    0.00f), // 4 right
+                new Vector3( 0f,    0.18f, 0.00f), // 1 top
+                new Vector3(-0.18f, 0f,    0.00f), // 2 left
+                new Vector3( 0f,   -0.18f, 0.00f), // 3 bottom
+                new Vector3( 0.18f, 0f,    0.00f), // 4 right
                 new Vector3( 0f,    0f,   -0.40f), // 5 tail base
-                new Vector3( 0f,    0.26f,-0.58f), // 6 tail fin top
-                new Vector3( 0f,   -0.26f,-0.58f), // 7 tail fin bottom
+                new Vector3( 0f,    0.30f,-0.58f), // 6 tail fin top
+                new Vector3( 0f,   -0.30f,-0.58f), // 7 tail fin bottom
             };
 
             var t = new[]

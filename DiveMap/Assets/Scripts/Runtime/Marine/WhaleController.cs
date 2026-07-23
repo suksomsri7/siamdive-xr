@@ -34,10 +34,26 @@ namespace DiveMap.Runtime.Marine
         public void Init(Vector3 anchorPos, float size)
         {
             anchor = anchorPos;
-            // Loop scaled to the animal's size so a big whaleshark sweeps a big arc.
-            radiusX = Mathf.Max(20f, size * 1.3f);
-            radiusZ = Mathf.Max(24f, size * 1.6f);
-            bobAmp = Mathf.Max(3f, size * 0.18f);
+
+            // ── Viewer/QC framing bias ────────────────────────────────────────────
+            // The whaleshark is placed high in the water column (Htms Chang: web y≈154,
+            // just under the mast top) and well off to one side. The opening shot frames
+            // the WRECK box — it aims low (~y45) and looks up only ~12° above the horizon,
+            // so a hero animal at y154 sweeps clean off the top of the frame (QC r5: whale
+            // absent). The web's whaleshark is a free-roamer, not a fixed placement, so the
+            // class already treats the loop as a "faithful interpretation" rather than data.
+            // Dip that loop down toward the wreck and reel it in horizontally so the big
+            // animal actually reads in the shot — proportional, so a low/near whale barely
+            // moves while a sky-high far one is brought home.
+            anchor.y -= Mathf.Clamp(anchor.y * 0.35f, 0f, 60f); // ~154 → ~100 (into the framed band)
+            anchor.x *= 0.65f;                                  // pull toward the wreck (content sits near origin)
+            anchor.z *= 0.65f;
+
+            // Loop scaled to the animal's size so a big whaleshark sweeps a real arc, but
+            // tighter than before so the sweep can't carry it back out of frame.
+            radiusX = Mathf.Max(14f, size * 1.0f);
+            radiusZ = Mathf.Max(16f, size * 1.2f);
+            bobAmp = Mathf.Max(3f, size * 0.15f);
             transform.position = PathPoint(0f);
             _lastPos = transform.position;
         }
