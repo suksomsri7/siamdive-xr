@@ -37,6 +37,7 @@ namespace DiveMap.Runtime
             if (string.IsNullOrEmpty(_shortId)) _shortId = defaultShortId;
 
             SetupCamera();
+            SetupLighting();
             SetupBuilder();
             BuildUi();
 
@@ -56,10 +57,65 @@ namespace DiveMap.Runtime
                 camGo.AddComponent<AudioListener>();
             }
             cam.clearFlags = CameraClearFlags.SolidColor;
-            cam.backgroundColor = new Color(0.02f, 0.08f, 0.15f, 1f); // deep-sea blue
+            // Mid ocean-blue backdrop (web waterBg gradient reads ~this at frame centre).
+            // The old near-black (0.02,0.08,0.15) sank the whole shot into darkness (QC r2).
+            cam.backgroundColor = new Color(0.30f, 0.52f, 0.66f, 1f);
 
             _orbit = cam.GetComponent<OrbitCamera>();
             if (_orbit == null) _orbit = cam.gameObject.AddComponent<OrbitCamera>();
+        }
+
+        // ── Lighting (web builder.html parity) ───────────────────────────────────────
+        // The scene rendered near-black — the wreck a bare silhouette — because the only
+        // light was a lone directional over Unity's dark default ambient (sky 0.21 grey),
+        // so bright-albedo sand showed but the wreck's darker texture read as black.
+        //
+        // Web builder.html (underwater default) lights with:
+        //   HemisphereLight(sky 0xbfe6ff, ground 0x123040, 1.05)
+        //   DirectionalLight sun 0xfff3df @1.2 from (60,160,70)
+        //   DirectionalLight fill 0x3f78a8 @0.5 from (-90,40,-70)
+        //   ACESFilmic tonemap, exposure 1.05 (lifts midtones)
+        // Unity built-in has no tonemap, so we port the hemisphere as a bright gradient
+        // ambient (Trilight) + a warm key + a cool fill. Pulled back from full web values
+        // so the bright sand doesn't blow out without the ACES highlight rolloff.
+        private void SetupLighting()
+        {
+            RenderSettings.ambientMode         = UnityEngine.Rendering.AmbientMode.Trilight;
+            RenderSettings.ambientSkyColor     = new Color(0.48f, 0.64f, 0.76f); // 0xbfe6ff, pulled back
+            RenderSettings.ambientEquatorColor = new Color(0.38f, 0.52f, 0.60f);
+            RenderSettings.ambientGroundColor  = new Color(0.20f, 0.28f, 0.31f); // 0x123040 lifted (no black undersides)
+            RenderSettings.fog = false; // web daylight = no fog; underwater fog is 400-9000u (negligible near)
+
+            // Key light (sun): reuse the scene's directional if there is one, else make it.
+            Light sun = null;
+            foreach (var l in UnityEngine.Object.FindObjectsByType<Light>(FindObjectsSortMode.None))
+                if (l.type == LightType.Directional && l.gameObject.name != "FillLight") { sun = l; break; }
+            if (sun == null)
+            {
+                var sunGo = new GameObject("Sun");
+                sun = sunGo.AddComponent<Light>();
+                sun.type = LightType.Directional;
+            }
+            sun.color = new Color(1f, 0.957f, 0.839f); // 0xfff3df
+            sun.intensity = 1.05f;                     // web sun 1.2 (−tonemap headroom)
+            sun.transform.rotation = Quaternion.Euler(52f, -35f, 0f); // high, angled — web pos (60,160,70)
+            RenderSettings.sun = sun;
+
+            // Fill light: cool bounce from the far side so the wreck's shadowed hull reads
+            // as olive-green instead of black (idempotent by name across Retry/rebuilds).
+            const string fillName = "FillLight";
+            var existing = GameObject.Find(fillName);
+            Light fill = existing != null ? existing.GetComponent<Light>() : null;
+            if (fill == null)
+            {
+                var fillGo = new GameObject(fillName);
+                fill = fillGo.AddComponent<Light>();
+                fill.type = LightType.Directional;
+                fill.shadows = LightShadows.None;
+            }
+            fill.color = new Color(0.247f, 0.471f, 0.659f); // 0x3f78a8
+            fill.intensity = 0.55f;
+            fill.transform.rotation = Quaternion.Euler(-14f, 145f, 0f); // opposite/low — web pos (-90,40,-70)
         }
 
         private void SetupBuilder()

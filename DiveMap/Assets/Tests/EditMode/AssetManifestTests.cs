@@ -83,7 +83,7 @@ namespace DiveMap.Tests
 
         private const string XrManifestJson = @"{
   ""baseUrl"": ""https://maps.siamdive.com/"",
-  ""count"": 3,
+  ""count"": 4,
   ""modules"": [
     { ""id"": ""msh:tiger_shark"", ""kind"": ""MARINE_LIFE"", ""name"": ""ฉลามเสือ"",
       ""glbUrl"": ""models/marine/tiger_shark.glb"",
@@ -92,6 +92,10 @@ namespace DiveMap.Tests
     { ""id"": ""cc0:statue_singha"", ""kind"": ""WRECK"", ""name"": ""รูปปั้นสิงห์"",
       ""glbUrl"": ""/models/special/statue_singha.glb"",
       ""xrGlbUrl"": ""/models/xr/Singha_Statue_Underwater_xr0.glb"" },
+    { ""id"": ""school:scad"", ""kind"": ""SCHOOL"", ""name"": ""ฝูงปลาข้างเหลือง"",
+      ""glbUrl"": ""models/marine/scad_school.glb"",
+      ""xrGlbUrl"": ""https://maps.siamdive.com/models/xr/Scad_School_xr0.glb"",
+      ""xrGlbUrlLod1"": ""https://maps.siamdive.com/models/xr/Scad_School_xr1.glb"" },
     { ""id"": ""rock:0"", ""kind"": ""ROCK"", ""name"": ""กลม"", ""glbUrl"": ""/models/rock_0.glb"" }
   ]
 }";
@@ -121,6 +125,18 @@ namespace DiveMap.Tests
             var m = LoadXr();
             // A module with no xrGlbUrl resolves exactly as before.
             Assert.AreEqual("https://maps.siamdive.com/models/rock_0.glb", m.ResolveUrl("rock:0"));
+        }
+
+        [Test]
+        public void ResolveUrl_SchoolKind_PrefersXrGlbUrl()
+        {
+            // SCHOOL / pod modules (whose XR GLB was added in set 2) resolve their XR url
+            // exactly like scenery — the swimmer/kind logic never touches URL resolution.
+            var m = LoadXr();
+            Assert.AreEqual("https://maps.siamdive.com/models/xr/Scad_School_xr0.glb",
+                m.ResolveUrl("school:scad"));
+            Assert.AreEqual("https://maps.siamdive.com/models/xr/Scad_School_xr1.glb",
+                m.Get("school:scad").XrGlbUrlLod1);
         }
 
         [Test]
