@@ -1,9 +1,11 @@
 using System;
 using System.Collections;
+using System.IO;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.UI;
 using DiveMap.Core;
+using DiveMap.Runtime.Marine;
 
 namespace DiveMap.Runtime
 {
@@ -220,7 +222,13 @@ namespace DiveMap.Runtime
             // ── QC screenshot mode (CI): -qcshot <path> → รอเฟรม settle → แคป → ปิดตัวเอง ──
             // ใช้ใน headless CI (xvfb) เพื่อให้ orchestrator เห็นภาพจริงทุก build (QC_PLAN ชั้น 2)
             string qcPath = GetArg("-qcshot");
-            if (!string.IsNullOrEmpty(qcPath)) StartCoroutine(QcShot(qcPath));
+            if (!string.IsNullOrEmpty(qcPath))
+            {
+                // FishSchoolSystem sits on the Map root (added by SceneBuilder when there are
+                // schools); the close-up angle-2 uses it to find the scad shoal nearest the wreck.
+                var marine = _mapRoot != null ? _mapRoot.GetComponent<FishSchoolSystem>() : null;
+                StartCoroutine(QcShot(qcPath, marine, result.FrameCenter));
+            }
         }
 
         private static string GetArg(string name)
@@ -231,13 +239,53 @@ namespace DiveMap.Runtime
             return null;
         }
 
-        private IEnumerator QcShot(string path)
+        private IEnumerator QcShot(string path, FishSchoolSystem marine, Vector3 boatCenter)
         {
+            // ── มุมที่ 1: wide framing (เดิม) ────────────────────────────────────────
             // รอให้ render settle 2 วิ (GLB วาง เฟรมแรกๆ อาจยังไม่ครบ)
             yield return new WaitForSeconds(2f);
             ScreenCapture.CaptureScreenshot(path);
             Debug.Log($"[QC] screenshot -> {path}");
             yield return new WaitForSeconds(1f); // ให้ไฟล์เขียนเสร็จ
+
+            // ── มุมที่ 2: โคลสอัพฝูง scad ที่ใกล้เรือที่สุด (เห็นทั้งฝูง + เรือเป็นฉากหลัง) ──
+            // path2 = qc_screenshot.png → qc_screenshot2.png (โฟลเดอร์เดียวกัน)
+            string dir = Path.GetDirectoryName(path);
+            string path2 = Path.Combine(
+                string.IsNullOrEmpty(dir) ? "." : dir,
+                Path.GetFileNameWithoutExtension(path) + "2" + Path.GetExtension(path));
+
+            if (marine != null &&
+                marine.TryGetNearestSchool(boatCenter, "scad", out Vector3 anchor, out float homeR))
+            {
+                Camera cam = Camera.main;
+                // Deterministic pose — disable the orbit controller so its Update() can't
+                // re-drive the transform back to the wide-framing yaw/pitch each frame.
+                if (_orbit != null) _orbit.enabled = false;
+
+                // Look from BEYOND the shoal (far side from the wreck) back toward it, so the
+                // wreck sits behind the fish as a backdrop. Distance ~25-30 m to frame the ball.
+                Vector3 fwd = anchor - boatCenter; fwd.y = 0f;
+                if (fwd.sqrMagnitude < 1e-3f) fwd = Vector3.forward;
+                fwd.Normalize();
+                float dist = Mathf.Clamp(homeR * 2.4f, 25f, 30f);
+                Vector3 camPos = anchor + fwd * dist + Vector3.up * (dist * 0.28f);
+                cam.transform.position = camPos;
+                cam.transform.LookAt(anchor);
+                Debug.Log($"[QC] angle2 anchor={anchor} camPos={camPos} dist={dist:F1} homeR={homeR:F1}");
+
+                // รอ 4 เฟรม + เศษเวลา ให้ boids เดินต่อและ transform นิ่ง
+                yield return null; yield return null; yield return null; yield return null;
+                yield return new WaitForSeconds(0.25f);
+                ScreenCapture.CaptureScreenshot(path2);
+                Debug.Log($"[QC] screenshot2 -> {path2}");
+                yield return new WaitForSeconds(1f);
+            }
+            else
+            {
+                Debug.LogWarning($"[QC] no scad school for angle2 (marine={(marine != null)}) — skipping {path2}");
+            }
+
             Application.Quit(0);
         }
 

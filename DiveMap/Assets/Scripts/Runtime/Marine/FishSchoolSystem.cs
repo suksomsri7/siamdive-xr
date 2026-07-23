@@ -62,8 +62,12 @@ namespace DiveMap.Runtime.Marine
             public Matrix4x4[]  Matrices;
             public int          Start;
             public int          Count;
-            public float        FishLen;
+            public float        FishLen;     // sim length unit (item scale) — spacing/speed
+            public float        DrawScale;   // uniform TRS scale to draw the fish at web size
             public int          PhaseOffset; // spreads the LOD frame-skip load
+            public Vector3      Anchor;      // school centre (for QC nearest-school framing)
+            public float        HomeR;       // shoal radius (for QC framing distance)
+            public string       Species;     // asset id, e.g. "school:scad"
         }
         private readonly List<SchoolRender> _render = new List<SchoolRender>();
 
@@ -182,6 +186,16 @@ namespace DiveMap.Runtime.Marine
                     cursor++;
                 }
 
+                // Scale fix (QC r6): the ~1.08 procedural mesh × item scale drew fish ~57% of
+                // the web's size (the web sizes each fish flen≈1.9 × item scale). Grow the DRAW
+                // scale to the 1.9-unit GLB norm so a fish reads at web size, WITHOUT touching
+                // the sim's length unit (fl) — formation radius / speed / the r5 density tuning
+                // stay exactly as calibrated.
+                float drawScale = fl * FishMeshFactory.WebScaleFactor;
+                float worldLen  = FishMeshFactory.BaseLen * drawScale; // = WebNormLen × fl
+                Debug.Log($"[Marine] school={si} species={s.Species} " +
+                          $"fishLen={worldLen:F1}m meshBaseLen={FishMeshFactory.BaseLen:F2} finalScale={drawScale:F2}");
+
                 _render.Add(new SchoolRender
                 {
                     Mat = mat,
@@ -189,7 +203,11 @@ namespace DiveMap.Runtime.Marine
                     Start = _schools[si].Start,
                     Count = s.Count,
                     FishLen = fl,
+                    DrawScale = drawScale,
                     PhaseOffset = (si * 37) % 101, // spread frame-skip load (builder.html _lodPh)
+                    Anchor = s.Anchor,
+                    HomeR = homeR,
+                    Species = s.Species,
                 });
             }
 
@@ -275,7 +293,7 @@ namespace DiveMap.Runtime.Marine
                     // Transform-level wiggle: side-to-side waggle about local up.
                     float wig = Mathf.Sin(t * WiggleRate + f.Phase) * WiggleAmp * Mathf.Rad2Deg;
                     rot *= Quaternion.Euler(0f, wig, 0f);
-                    mats[k] = Matrix4x4.TRS(pos, rot, Vector3.one * sr.FishLen);
+                    mats[k] = Matrix4x4.TRS(pos, rot, Vector3.one * sr.DrawScale);
                 }
 
                 if (sr.Count <= 0) continue;
@@ -285,7 +303,7 @@ namespace DiveMap.Runtime.Marine
                     var rp = new RenderParams(sr.Mat)
                     {
                         worldBounds = new Bounds(ToV3(_schools[si].Anchor),
-                                                 Vector3.one * (_schools[si].HomeR * 2f + sr.FishLen * 6f)),
+                                                 Vector3.one * (_schools[si].HomeR * 2f + sr.DrawScale * 6f)),
                         shadowCastingMode = ShadowCastingMode.Off,
                         receiveShadows = false,
                     };
@@ -332,6 +350,31 @@ namespace DiveMap.Runtime.Marine
             if (_schools.IsCreated) _schools.Dispose();
             if (_obstacles.IsCreated) _obstacles.Dispose();
             _alloc = false;
+        }
+
+        // ── QC / camera helpers ─────────────────────────────────────────────────────
+        /// <summary>
+        /// Centre + shoal radius of the school NEAREST <paramref name="from"/> whose species id
+        /// contains <paramref name="speciesContains"/> (case-insensitive; null/empty = any).
+        /// Deterministic — reads the fixed per-school anchors set at Configure. Used by the QC
+        /// screenshot to frame a close-up on the scad shoal nearest the wreck.
+        /// </summary>
+        public bool TryGetNearestSchool(Vector3 from, string speciesContains, out Vector3 anchor, out float homeR)
+        {
+            anchor = Vector3.zero;
+            homeR = 0f;
+            float best = float.MaxValue;
+            bool found = false;
+            string filt = string.IsNullOrEmpty(speciesContains) ? null : speciesContains.ToLowerInvariant();
+            for (int i = 0; i < _render.Count; i++)
+            {
+                SchoolRender sr = _render[i];
+                if (filt != null && (string.IsNullOrEmpty(sr.Species) || !sr.Species.ToLowerInvariant().Contains(filt)))
+                    continue;
+                float d = (sr.Anchor - from).sqrMagnitude;
+                if (d < best) { best = d; anchor = sr.Anchor; homeR = sr.HomeR; found = true; }
+            }
+            return found;
         }
 
         // ── conversions ───────────────────────────────────────────────────────────

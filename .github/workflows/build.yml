@@ -256,6 +256,7 @@ jobs:
           name: qc-screenshot
           path: |
             qc_screenshot.png
+            qc_screenshot2.png
             qc_player.log
           retention-days: 14
           if-no-files-found: warn

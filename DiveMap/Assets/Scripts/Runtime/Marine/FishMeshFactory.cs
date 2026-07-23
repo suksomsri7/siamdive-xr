@@ -16,7 +16,7 @@ namespace DiveMap.Runtime.Marine
     /// </summary>
     public static class FishMeshFactory
     {
-        /// <summary>A unit-length fish pointing +Z, centred near origin. Cached & shared.</summary>
+        /// <summary>A ~1.9-unit fish pointing +Z, centred near origin. Cached & shared.</summary>
         public static Mesh Fish()
         {
             if (_fish != null) return _fish;
@@ -24,6 +24,26 @@ namespace DiveMap.Runtime.Marine
             return _fish;
         }
         private static Mesh _fish;
+
+        /// <summary>The procedural mesh's true nose→tail length at scale 1 (max AABB
+        /// dimension). The old doc called this "unit length" but the raw octahedron below is
+        /// only ~1.08 long — callers need the REAL value to size fish against the marine-GLB
+        /// pipeline (<see cref="WebNormLen"/>), which was the QC-r6 "fish half too small" bug.</summary>
+        public static float BaseLen { get { Fish(); return _baseLen; } }
+        private static float _baseLen = 1f;
+
+        /// <summary>Marine-GLB asset-pipeline normalization. Every marine GLB the web renders
+        /// — scad 1.911, barracuda 1.897, whaleshark 1.908, sharks/rays/whales all ≈1.9 —
+        /// is normalized so its longest axis measures ≈1.9 units (verified from each GLB's
+        /// POSITION accessor min/max). The web sizes a fish as flen(≈1.9)×itemScale, so the
+        /// procedural fish must reach the same 1.9-unit base to match the web's on-screen size
+        /// at a given item scale. (Was: raw ~1.08 mesh × itemScale ⇒ fish ~57% of web size.)</summary>
+        public const float WebNormLen = 1.9f;
+
+        /// <summary>Uniform factor that grows the ~1.08-unit procedural mesh to the web's
+        /// 1.9-unit fish norm, so world length = BaseLen×(WebScaleFactor×itemScale) =
+        /// WebNormLen×itemScale — matching the web's flen×itemScale sizing.</summary>
+        public static float WebScaleFactor { get { Fish(); return WebNormLen / _baseLen; } }
 
         private static Mesh BuildFish()
         {
@@ -58,6 +78,11 @@ namespace DiveMap.Runtime.Marine
             m.triangles = t;
             m.RecalculateNormals();
             m.RecalculateBounds();
+            // Record the true base length (max AABB dimension) so the school renderer can grow
+            // the fish to the web's 1.9-unit GLB norm instead of drawing this ~1.08 mesh raw.
+            Vector3 sz = m.bounds.size;
+            _baseLen = Mathf.Max(sz.x, Mathf.Max(sz.y, sz.z));
+            if (_baseLen < 1e-4f) _baseLen = 1f;
             return m;
         }
     }
