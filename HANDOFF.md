@@ -58,9 +58,23 @@ tools/                          (สคริปต์ XR-LOD pipeline)
 ### 5.1 ✅ ปิดแล้ว — WO-XR-03 (2026-07-28)
 formation ตามสูตรเว็บ + วาฬ GLB จริง + QC fixes (ครีบดำ/gloss/heading log) · commit `a7d12f8` → `f31d9fc`
 
-### 5.2 merge branch `wo-xr-05` เข้า main (คิวแรกเมื่อ resume)
-UI shell + เมนู + รายการแมพ + ค้นหา เขียนเสร็จแล้ว (`dc2a954`) — เมื่อ CI branch เขียว: `git merge wo-xr-05` บน main → push → CI → QC ภาพ `qc_ui_menu.png` / `qc_ui_maps.png` / `qc_ui_search.png` (มาจากโหมด `-qcui` ที่เพิ่มใน workflow)
-worktree อยู่ที่ `/root/projects/siamdive-xr-ui` (ลบด้วย `git worktree remove` เมื่อ merge เสร็จ)
+### 5.2 ▶️ RESUME ตรงนี้ — ตรวจผล CI 2 รอบที่ค้างอยู่ แล้ว merge `wo-xr-05`
+รอบทำงาน 2026-07-28 จบลงตอน CI ทั้งสองยังรันไม่เสร็จ (user สั่งหยุดก่อนชน limit) **ผลยังไม่มีใครดู**
+
+| run id | branch / sha | คืออะไร |
+|---|---|---|
+| `30359233289` | main `f31d9fc` | QC r8 fixes — ครีบหางแยก vertex (แก้ปลาดำ) + gloss 0.3→0.1 + log ทิศหัววาฬ |
+| `30359032908` | wo-xr-05 `dc2a954` | UI shell + เมนู + รายการแมพ + ค้นหา (05.1+05.2) รอบก่อนตก 1 เทส แก้แล้ว (87/88 ผ่านตั้งแต่รอบแรก คอมไพล์ผ่าน) |
+
+ขั้นตอน resume:
+1. ดูผล 2 run ข้างบน (`curl .../actions/runs/<id>/jobs`) — ถ้าตก อ่าน `EditMode-test-results` artifact ก่อน (parse XML หา test-case ที่ result != Passed)
+2. **main**: โหลด `qc-screenshot` → ดู `qc_screenshot2.png` ว่าครีบหางปลาหายดำหรือยัง + grep log `[Marine] whale heading dot(forward,vel)` ต้อง ≈ +1.0
+3. **branch เขียว** → `cd /root/projects/siamdive-xr && git merge wo-xr-05` → push → CI → QC ภาพชุดใหม่ `qc_ui_menu.png` / `qc_ui_maps.png` / `qc_ui_search.png` (จากโหมด `-qcui` ที่เพิ่มใน workflow) → เช็ค layout+ฟอนต์ไทย ไม่ใช่สี (llvmpipe เพี้ยนสีปกติ)
+4. ส่ง APK+exe รุ่นมีเมนูให้ user (ดู §5 เดิม: วาง `/var/www/dive3d/dl/`)
+5. `git worktree remove /root/projects/siamdive-xr-ui` เมื่อ merge เสร็จ
+
+ไฟล์เทสที่ส่ง user ไปแล้วรอบนี้ (รุ่น `a7d12f8` — ยังไม่มีเมนู, ยังมีปลาดำ):
+`dive3d.suksomsri.cloud/dl/DiveMap-r8-026e26f8fb.apk` · `.../DiveMap-win-r8-026e26f8fb.zip`
 
 ### 5.3 ทำต่อจากแผน WO-XR-05 (`/root/projects/siamdive-xr-docs/WO-XR-05.md`)
 05.3 การ์ดข้อมูล (แตะวัตถุ → ชื่อ/ชนิด/ความลึก) → 05.4 ตั้งค่า + i18n ไทย/EN เต็มระบบ
