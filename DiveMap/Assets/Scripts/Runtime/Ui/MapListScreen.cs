@@ -1,0 +1,389 @@
+using System;
+using System.Collections;
+using System.Collections.Generic;
+using UnityEngine;
+using UnityEngine.Networking;
+using UnityEngine.UI;
+using DiveMap.Core;
+
+namespace DiveMap.Runtime.Ui
+{
+    /// <summary>
+    /// "รายการแมพ" screen (WO-XR-05.2): a scrollable list of public dive-site maps with
+    /// server-side search, pagination and thumbnails.
+    ///
+    /// Data: <c>GET /api/dive-sites/public?q=&amp;take=30&amp;skip=0</c> (see
+    /// <see cref="MapDirectory"/> for the verified contract). Search is debounced ~0.4 s
+    /// and re-queries the server — we never filter client-side, otherwise page 2+ would
+    /// silently disagree with the server's ordering (likeCount → updatedAt).
+    ///
+    /// Cards are positioned by hand inside the ScrollRect content (no LayoutGroup): the
+    /// row height is fixed, so manual placement is both cheaper and deterministic —
+    /// which matters for the headless QC screenshots.
+    /// </summary>
+    [DisallowMultipleComponent]
+    public sealed class MapListScreen : MonoBehaviour
+    {
+        private const float CardHeight = 168f;
+        private const float CardGap = 14f;
+        private const float DebounceSeconds = 0.4f;
+        private const float HeaderHeight = 104f;
+        private const float SearchHeight = 92f;
+        private const float SidePad = 24f;
+        private const float ListTop = 244f;
+        private const int RequestTimeout = 20;
+
+        /// <summary>Raised with the chosen shortId.</summary>
+        public event Action<string> MapSelected;
+
+        /// <summary>Raised by the header close button (the shell decides what "back" means).</summary>
+        public event Action CloseRequested;
+
+        private RectTransform _content;
+        private ScrollRect _scroll;
+        private InputField _search;
+        private Text _status;
+        private GameObject _retryButton;
+        private ThumbnailCache _thumbs;
+
+        private readonly List<MapCard> _cards = new List<MapCard>();
+        private readonly List<GameObject> _cardViews = new List<GameObject>();
+
+        private string _query = "";
+        private int _total = -1;
+        private bool _loading;
+        private bool _built;
+        private Coroutine _debounce;
+        private Coroutine _fetch;
+
+        // ── QC / test surface ────────────────────────────────────────────────────
+        public int CardCount => _cards.Count;
+        public int Total => _total;
+        public bool IsLoading => _loading;
+        public string Query => _query;
+        public string LastError { get; private set; }
+        public int ThumbnailsLoaded => _thumbs != null ? _thumbs.LoadedCount : 0;
+
+        // ── build ────────────────────────────────────────────────────────────────
+
+        public void Build(ThumbnailCache thumbs)
+        {
+            if (_built) return;
+            _built = true;
+            _thumbs = thumbs;
+
+            var root = GetComponent<RectTransform>();
+            if (root == null) root = gameObject.AddComponent<RectTransform>();
+            UiKit.Stretch(root);
+
+            UiKit.MakePanel(transform, "Bg", UiKit.ScreenBg);
+
+            // Header: title + close.
+            Text title = UiKit.MakeText(transform, "Title", UiStrings.Tr("รายการแมพ"), 44,
+                                        TextAnchor.MiddleLeft, UiKit.TextMain);
+            UiKit.TopRow(title.rectTransform, 20f, HeaderHeight - 20f, SidePad, 220f);
+
+            Button close = UiKit.MakeButton(transform, "CloseButton", UiStrings.Tr("ปิด"), 32,
+                                            UiKit.TealDim, UiKit.TextMain,
+                                            () => CloseRequested?.Invoke());
+            UiKit.Anchor(close.GetComponent<RectTransform>(), new Vector2(1f, 1f),
+                         new Vector2(170f, 76f), new Vector2(-SidePad, -22f));
+
+            // Search box (debounced, server-side).
+            _search = UiKit.MakeInput(transform, "Search", UiStrings.Tr("ค้นหาแมพ"), 32);
+            UiKit.TopRow(_search.GetComponent<RectTransform>(), HeaderHeight + 16f, SearchHeight,
+                         SidePad, SidePad);
+            _search.onValueChanged.AddListener(OnSearchChanged);
+
+            // Scrollable card list.
+            _scroll = UiKit.MakeScroll(transform, "List", out _content);
+            var srt = _scroll.GetComponent<RectTransform>();
+            srt.anchorMin = Vector2.zero;
+            srt.anchorMax = Vector2.one;
+            srt.pivot = new Vector2(0.5f, 0.5f);
+            srt.offsetMin = new Vector2(SidePad, SidePad);
+            srt.offsetMax = new Vector2(-SidePad, -ListTop);
+            _scroll.onValueChanged.AddListener(OnScrolled);
+
+            // Status (loading / empty / error) + retry, centred over the list area.
+            _status = UiKit.MakeText(transform, "Status", "", 34, TextAnchor.MiddleCenter, UiKit.TextDim);
+            var strt = _status.rectTransform;
+            strt.anchorMin = new Vector2(0.5f, 0.5f);
+            strt.anchorMax = new Vector2(0.5f, 0.5f);
+            strt.pivot = new Vector2(0.5f, 0.5f);
+            strt.sizeDelta = new Vector2(880f, 120f);
+            strt.anchoredPosition = new Vector2(0f, 40f);
+
+            Button retry = UiKit.MakeButton(transform, "RetryButton", UiStrings.Tr("ลองใหม่"), 32,
+                                            UiKit.TealDim, UiKit.TextMain, () => Reload(_query));
+            _retryButton = retry.gameObject;
+            var rrt = retry.GetComponent<RectTransform>();
+            rrt.anchorMin = new Vector2(0.5f, 0.5f);
+            rrt.anchorMax = new Vector2(0.5f, 0.5f);
+            rrt.pivot = new Vector2(0.5f, 0.5f);
+            rrt.sizeDelta = new Vector2(280f, 84f);
+            rrt.anchoredPosition = new Vector2(0f, -60f);
+            _retryButton.SetActive(false);
+        }
+
+        // ── public API ───────────────────────────────────────────────────────────
+
+        /// <summary>Load the first page once (no-op if the list already has rows).</summary>
+        public void EnsureLoaded()
+        {
+            if (_cards.Count == 0 && !_loading) Reload(_query);
+        }
+
+        /// <summary>Set the search box programmatically (used by the -qcui capture run).</summary>
+        public void SetSearch(string q)
+        {
+            q = q ?? "";
+            if (_search != null && _search.text != q) _search.text = q;
+            OnSearchChanged(q);
+        }
+
+        public void Reload(string q)
+        {
+            _query = q ?? "";
+            _total = -1;
+            LastError = null;
+            ClearCards();
+            StartFetch(_query, 0, true);
+        }
+
+        private void OnDisable()
+        {
+            // Deactivating the layer kills every running coroutine on this GameObject.
+            // Clear the in-flight flags so re-opening the screen starts a fresh request
+            // instead of waiting forever on a fetch that Unity already killed.
+            _loading = false;
+            _fetch = null;
+            _debounce = null;
+        }
+
+        // ── input handlers ───────────────────────────────────────────────────────
+
+        private void OnSearchChanged(string value)
+        {
+            if (_debounce != null) StopCoroutine(_debounce);
+            _debounce = StartCoroutine(DebounceSearch(value ?? ""));
+        }
+
+        private IEnumerator DebounceSearch(string value)
+        {
+            yield return new WaitForSecondsRealtime(DebounceSeconds);
+            _debounce = null;
+            if (value == _query && _cards.Count > 0) yield break; // nothing changed
+            Reload(value);
+        }
+
+        private void OnScrolled(Vector2 pos)
+        {
+            // ScrollRect normalizedPosition.y: 1 = top, 0 = bottom.
+            if (pos.y > 0.08f) return;
+            TryLoadMore();
+        }
+
+        private void TryLoadMore()
+        {
+            if (_loading || _total < 0) return;
+            if (_cards.Count >= _total) return;
+            StartFetch(_query, _cards.Count, false);
+        }
+
+        // ── networking ───────────────────────────────────────────────────────────
+
+        private void StartFetch(string q, int skip, bool replace)
+        {
+            if (_fetch != null)
+            {
+                StopCoroutine(_fetch);
+                _fetch = null;
+                _loading = false;
+            }
+            _fetch = StartCoroutine(FetchPage(q, skip, replace));
+        }
+
+        private IEnumerator FetchPage(string q, int skip, bool replace)
+        {
+            _loading = true;
+            LastError = null;
+            if (replace)
+            {
+                ShowStatus(UiStrings.Tr("กำลังโหลด…"), false);
+            }
+
+            string url = MapDirectory.BuildListUrl(q, MapDirectory.DefaultTake, skip);
+            Debug.Log($"[UI] maps fetch {url}");
+
+            string body = null;
+            string httpErr = null;
+
+            using (UnityWebRequest req = UnityWebRequest.Get(url))
+            {
+                req.timeout = RequestTimeout;
+                yield return req.SendWebRequest();
+
+                if (req.result != UnityWebRequest.Result.Success)
+                    httpErr = $"({(long)req.responseCode}) {req.error}";
+                else
+                    body = req.downloadHandler != null ? req.downloadHandler.text : null;
+            }
+
+            if (httpErr != null || string.IsNullOrEmpty(body))
+            {
+                _loading = false;
+                _fetch = null;
+                LastError = httpErr ?? "empty response";
+                Debug.LogWarning("[UI] maps fetch failed: " + LastError);
+                if (replace) ShowStatus(UiStrings.Tr("โหลดรายการแมพไม่สำเร็จ"), true);
+                yield break;
+            }
+
+            MapPage page = null;
+            string parseErr = null;
+            try { page = MapDirectory.ParseList(body); }
+            catch (Exception e) { parseErr = e.Message; }
+
+            if (page == null)
+            {
+                _loading = false;
+                _fetch = null;
+                LastError = parseErr ?? "parse failed";
+                Debug.LogWarning("[UI] maps parse failed: " + LastError);
+                if (replace) ShowStatus(UiStrings.Tr("โหลดรายการแมพไม่สำเร็จ"), true);
+                yield break;
+            }
+
+            if (replace) ClearCards();
+
+            _total = page.Total;
+            for (int i = 0; i < page.Cards.Count; i++)
+            {
+                _cards.Add(page.Cards[i]);
+                AddCardView(page.Cards[i], _cards.Count - 1);
+            }
+            LayoutContent();
+
+            Debug.Log($"[UI] maps page q='{q}' skip={skip} got={page.Cards.Count} total={page.Total}");
+
+            if (_cards.Count == 0) ShowStatus(UiStrings.Tr("ไม่พบแมพ"), false);
+            else HideStatus();
+
+            _loading = false;
+            _fetch = null;
+        }
+
+        // ── view ─────────────────────────────────────────────────────────────────
+
+        private void ClearCards()
+        {
+            _cards.Clear();
+            for (int i = 0; i < _cardViews.Count; i++)
+                if (_cardViews[i] != null) Destroy(_cardViews[i]);
+            _cardViews.Clear();
+            if (_content != null)
+            {
+                _content.sizeDelta = new Vector2(0f, 0f);
+                _content.anchoredPosition = Vector2.zero;
+            }
+        }
+
+        private void LayoutContent()
+        {
+            if (_content == null) return;
+            float h = _cards.Count * (CardHeight + CardGap);
+            _content.sizeDelta = new Vector2(0f, h);
+        }
+
+        private void AddCardView(MapCard card, int index)
+        {
+            Button btn = UiKit.MakeButton(_content, "Card_" + card.ShortId, null, 0,
+                                          UiKit.CardBg, UiKit.TextMain, null);
+            string shortId = card.ShortId;
+            btn.onClick.AddListener(() =>
+            {
+                Debug.Log("[UI] map selected " + shortId);
+                MapSelected?.Invoke(shortId);
+            });
+
+            var rt = btn.GetComponent<RectTransform>();
+            rt.anchorMin = new Vector2(0f, 1f);
+            rt.anchorMax = new Vector2(1f, 1f);
+            rt.pivot = new Vector2(0.5f, 1f);
+            rt.sizeDelta = new Vector2(0f, CardHeight);
+            rt.anchoredPosition = new Vector2(0f, -index * (CardHeight + CardGap));
+
+            // Thumbnail (placeholder colour until the CDN image arrives).
+            RawImage thumb = UiKit.MakeRaw(btn.transform, "Thumb", new Color(0.13f, 0.22f, 0.27f, 1f));
+            var trt = thumb.rectTransform;
+            trt.anchorMin = new Vector2(0f, 1f);
+            trt.anchorMax = new Vector2(0f, 1f);
+            trt.pivot = new Vector2(0f, 1f);
+            trt.sizeDelta = new Vector2(224f, 140f);
+            trt.anchoredPosition = new Vector2(14f, -14f);
+
+            if (_thumbs != null && !string.IsNullOrEmpty(card.ThumbUrl))
+            {
+                _thumbs.Request(card.ThumbUrl, tex =>
+                {
+                    if (thumb == null || tex == null) return;
+                    thumb.texture = tex;
+                    thumb.color = Color.white;
+                });
+            }
+
+            // Name.
+            Text name = UiKit.MakeText(btn.transform, "Name", MapDirectory.DisplayName(card), 36,
+                                       TextAnchor.UpperLeft, UiKit.TextMain);
+            StretchRow(name.rectTransform, 260f, 26f, 20f, 52f);
+
+            // Owner · likes.
+            string owner = string.IsNullOrEmpty(card.OwnerName)
+                ? UiStrings.Tr("ไม่ทราบผู้สร้าง")
+                : card.OwnerName;
+            string sub = owner + "   ·   " + UiStrings.Tr("ถูกใจ") + " " + card.LikeCount;
+            Text meta = UiKit.MakeText(btn.transform, "Meta", sub, 26, TextAnchor.UpperLeft, UiKit.TextDim);
+            StretchRow(meta.rectTransform, 260f, 92f, 20f, 40f);
+
+            // Teal accent bar on the left edge.
+            Image accent = UiKit.MakePanel(btn.transform, "Accent", UiKit.Teal);
+            var art = accent.rectTransform;
+            art.anchorMin = new Vector2(0f, 0f);
+            art.anchorMax = new Vector2(0f, 1f);
+            art.pivot = new Vector2(0f, 0.5f);
+            art.sizeDelta = new Vector2(6f, 0f);
+            art.anchoredPosition = Vector2.zero;
+            accent.raycastTarget = false;
+
+            _cardViews.Add(btn.gameObject);
+        }
+
+        /// <summary>Left-anchored, right-stretched row inside a card (pivot top-left).</summary>
+        private static void StretchRow(RectTransform rt, float x, float y, float rightPad, float height)
+        {
+            rt.anchorMin = new Vector2(0f, 1f);
+            rt.anchorMax = new Vector2(1f, 1f);
+            rt.pivot = new Vector2(0f, 1f);
+            rt.sizeDelta = new Vector2(-(x + rightPad), height);
+            rt.anchoredPosition = new Vector2(x, -y);
+        }
+
+        private void ShowStatus(string text, bool withRetry)
+        {
+            if (_status != null)
+            {
+                _status.text = text;
+                _status.color = withRetry ? UiKit.Danger : UiKit.TextDim;
+                _status.gameObject.SetActive(true);
+            }
+            if (_retryButton != null) _retryButton.SetActive(withRetry);
+        }
+
+        private void HideStatus()
+        {
+            if (_status != null) _status.gameObject.SetActive(false);
+            if (_retryButton != null) _retryButton.SetActive(false);
+        }
+    }
+}

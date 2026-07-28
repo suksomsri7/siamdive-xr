@@ -250,6 +250,19 @@ jobs:
           ls -la qc_screenshot.png || { echo "::warning::no screenshot produced"; cp ~/.config/unity3d/SiamDive/DiveMap/Player.log qc_player.log 2>/dev/null || true; }
           cp ~/.config/unity3d/SiamDive/DiveMap/Player.log qc_player.log 2>/dev/null || true
 
+      # Second, SEPARATE run for the UI shots (WO-XR-05). It must not share a process
+      # with -qcshot: that mode ends in Application.Quit(0) inside AppBoot.QcShot, so
+      # queueing UI captures behind it would race the shutdown. In -qcshot mode the UI
+      # shell refuses to build at all, keeping qc_screenshot*.png byte-comparable.
+      - name: Run app headless and capture UI screenshots
+        run: |
+          BIN=$(find . -path '*/build/*' -name 'DiveMap' -type f | head -1)
+          echo "BIN=$BIN"; chmod +x "$BIN"
+          timeout 180 xvfb-run -a -s "-screen 0 1280x720x24" \
+            "$BIN" -qcui "$PWD/qc_ui" -screen-width 1280 -screen-height 720 -force-glcore || true
+          ls -la qc_ui_menu.png qc_ui_maps.png qc_ui_search.png || echo "::warning::UI screenshots incomplete"
+          cp ~/.config/unity3d/SiamDive/DiveMap/Player.log qc_ui_player.log 2>/dev/null || true
+
       - name: Upload QC artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -258,6 +271,8 @@ jobs:
             qc_screenshot.png
             qc_screenshot2.png
             qc_player.log
+            qc_ui*.png
+            qc_ui_player.log
           retention-days: 14
           if-no-files-found: warn
 
