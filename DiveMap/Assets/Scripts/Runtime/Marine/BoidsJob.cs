@@ -27,6 +27,8 @@ namespace DiveMap.Runtime.Marine
         public float  NeighborR;  // alignment/cohesion perception radius
         public float  SepR;       // separation radius
         public float  MaxSpeed;   // cruise speed (units/sec)
+        public float  VertHalf;   // half-height of the flat formation slab (web schools are pancakes)
+        public float  CapY;       // hard ceiling: waterLevel − fishLen (builder.html capY, line 1725)
         public int    Start;      // first fish index for this school
         public int    Count;      // fish in this school
         public byte   Think;      // 1 = run full boids this frame, 0 = dead-reckon
@@ -77,8 +79,11 @@ namespace DiveMap.Runtime.Marine
             if (s.Think == 0)
             {
                 float3 dp = f.Pos + f.Vel * Dt;
+                float3 dv = f.Vel;
                 ClampHome(ref dp, s);
+                ClampVertical(ref dp, ref dv, s);
                 f.Pos = dp;
+                f.Vel = dv;
                 Dst[i] = f;
                 return;
             }
@@ -125,6 +130,15 @@ namespace DiveMap.Runtime.Marine
             float wph = f.Phase + Time * 0.7f;
             steer += new float3(math.cos(wph), math.sin(wph * 0.5f) * 0.4f, math.sin(wph)) * WWander;
 
+            // Pancake pull: the web's schools are FLAT (shoal milling box y ∈ ±0.4·SR,
+            // cluster scatter ±0.275·R). Without this the boids' free vertical ease turns
+            // a 66-unit shoal into a 66-unit ball, which reads nothing like the web.
+            if (s.VertHalf > 1e-4f)
+            {
+                float dyA = f.Pos.y - s.Anchor.y;
+                if (math.abs(dyA) > s.VertHalf) steer.y -= math.sign(dyA) * 2.0f;
+            }
+
             // Desired heading in the XZ plane (dir = (cos h, sin h) → (x, z)).
             float3 desiredVel = f.Vel + steer * Dt;
             float curH = math.atan2(f.Vel.z, f.Vel.x);
@@ -158,6 +172,7 @@ namespace DiveMap.Runtime.Marine
 
             float3 np = f.Pos + nv * Dt;
             ClampHome(ref np, s);
+            ClampVertical(ref np, ref nv, s);
 
             f.Pos = np;
             f.Vel = nv;
@@ -176,6 +191,34 @@ namespace DiveMap.Runtime.Marine
                 float kk = s.HomeR / rr;
                 p.x = s.Anchor.x + dx * kk;
                 p.z = s.Anchor.z + dz * kk;
+            }
+        }
+
+        /// <summary>
+        /// Keep a fish inside its school's flat slab (|y − anchor.y| ≤ VertHalf) and below
+        /// the surface ceiling (CapY = waterLevel − fishLen, builder.html line 1725). Both
+        /// zero the offending vertical velocity so a fish parked on a limit stops pushing.
+        /// </summary>
+        private static void ClampVertical(ref float3 p, ref float3 v, in SchoolParams s)
+        {
+            if (s.VertHalf > 1e-4f)
+            {
+                float dy = p.y - s.Anchor.y;
+                if (dy > s.VertHalf)
+                {
+                    p.y = s.Anchor.y + s.VertHalf;
+                    if (v.y > 0f) v.y = 0f;
+                }
+                else if (dy < -s.VertHalf)
+                {
+                    p.y = s.Anchor.y - s.VertHalf;
+                    if (v.y < 0f) v.y = 0f;
+                }
+            }
+            if (p.y > s.CapY)
+            {
+                p.y = s.CapY;
+                if (v.y > 0f) v.y = 0f;
             }
         }
 

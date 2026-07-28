@@ -50,9 +50,12 @@ namespace DiveMap.Runtime.Marine
             anchor.z *= 0.65f;
 
             // Loop scaled to the animal's size so a big whaleshark sweeps a real arc, but
-            // tighter than before so the sweep can't carry it back out of frame.
-            radiusX = Mathf.Max(14f, size * 1.0f);
-            radiusZ = Mathf.Max(16f, size * 1.2f);
+            // tighter than before so the sweep can't carry it back out of frame. WO-XR-03b
+            // made the whaleshark its true world length (1.908×34.2 ≈ 65 u instead of the old
+            // [8..16] clamp), so the old 1.0/1.2 multipliers would have quadrupled the lap and
+            // swung the animal off-screen — 0.6/0.72 keeps the same on-screen sweep.
+            radiusX = Mathf.Max(14f, size * 0.60f);
+            radiusZ = Mathf.Max(16f, size * 0.72f);
             bobAmp = Mathf.Max(3f, size * 0.15f);
             transform.position = PathPoint(0f);
             _lastPos = transform.position;

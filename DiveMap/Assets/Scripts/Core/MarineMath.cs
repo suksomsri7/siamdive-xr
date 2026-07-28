@@ -192,6 +192,216 @@ namespace DiveMap.Core
             return new Vec3(wx, wy, wz);
         }
 
+        // ── School formation geometry (builder.html buildSchool, lines 1490-1526) ──
+        //
+        // The web builds a school by loading a GLB that contains ONE fish, measuring its
+        // max AABB dimension (flen, "local" web units), then laying N=asset.school copies
+        // out around the group origin. The GROUP is then scaled by item.s straight from the
+        // saved map (loadMap line 3264-3266: buildSchool(gltf,a) → g.scale.fromArray(it.s)),
+        // so every span below is  local formula × item.s  in world units.
+        //
+        //   shoal   SR   = flen × (3 + ∛N × 1.6)                       (line 1497)
+        //   cluster R    = flen × max(2.8, N×0.07) × formR             (line 1496)
+        //   pod     podR = animalW × 0.72 × √N,  animalW = 16×defaultScale (1499-1502)
+        //
+        // Vertical extents (the web schools are flat pancakes, never spheres):
+        //   shoal   y ∈ ±0.4·SR   (runtime milling box, line 1727-1735)
+        //   cluster y ∈ ±0.275·R  (initial scatter, line 1524)
+        //   pod     y ∈ ±0.25·podR (golden-disc slot, line 1523)
+        //
+        // Speed caps are per-FRAME in the web (_fwdSwim), so ×60 gives units/second:
+        //   shoal      flen × 0.04  × swimMul  (line 1738)
+        //   formation  flen × 0.065 × swimMul  (line 1765)
+        //
+        // Unity holds fewer boids than the web holds fish (mobile Burst budget), but the
+        // SPAN must still use the WEB N — otherwise the shoal shrinks to a marble.
+
+        public const double SchoolFrameRate        = 60.0;  // web per-frame caps → per-second
+        public const double ShoalSpeedPerFrame     = 0.04;
+        public const double FormationSpeedPerFrame = 0.065;
+        public const double PodSpeedPerFrame       = 0.02;  // pods hold slots + bob, they don't dash
+        public const double ShoalVertFactor        = 0.40;
+        public const double ClusterVertFactor      = 0.275;
+        public const double PodVertFactor          = 0.25;
+        public const double SchoolRadiusFloorMul   = 8.0;   // school:* floor = 8 × fish length
+        public const double PodRadiusFloorMul      = 3.0;   // pod:*    floor = 3 × animal length
+        public const double PodAnimalLenMul        = 16.0;  // animalW = 16 × defaultScale (line 1499)
+
+        public enum SchoolFormation
+        {
+            Cluster = 0, // default vortex/ball formation (barracuda)
+            Shoal   = 1, // loose flat aggregation (scad, batfish)
+            Pod     = 2, // few big animals on a golden-disc (yellowtail, dolphins)
+        }
+
+        /// <summary>shoal radius SR = flen × (3 + ∛N × 1.6) — builder.html line 1497 (local units).</summary>
+        public static double ShoalRadius(double fishLenLocal, int webCount)
+        {
+            if (webCount < 1) webCount = 1;
+            return fishLenLocal * (3.0 + Math.Pow(webCount, 1.0 / 3.0) * 1.6);
+        }
+
+        /// <summary>formation radius R = flen × max(2.8, N×0.07) × formR — line 1496 (local units).</summary>
+        public static double FormationRadius(double fishLenLocal, int webCount, double formR)
+        {
+            if (webCount < 1) webCount = 1;
+            double f = formR > 0.0 ? formR : 1.0;
+            return fishLenLocal * Math.Max(2.8, webCount * 0.07) * f;
+        }
+
+        /// <summary>One pod animal's LOCAL length: animalW = 16 × defaultScale — line 1499-1501.</summary>
+        public static double PodAnimalLocalLen(double defaultScale)
+            => PodAnimalLenMul * (defaultScale > 0.0 ? defaultScale : 1.0);
+
+        /// <summary>golden-disc pod radius = animalW × 0.72 × √N — line 1502 (local units).</summary>
+        public static double PodRadius(double animalLocalLen, int webCount)
+        {
+            if (webCount < 1) webCount = 1;
+            return animalLocalLen * 0.72 * Math.Sqrt(webCount);
+        }
+
+        /// <summary>Web per-frame swim cap → units/second (×60), before the item scale.</summary>
+        public static double SpeedCapPerSecond(double lenLocal, double perFrameFactor, double swimMul)
+            => lenLocal * perFrameFactor * (swimMul > 0.0 ? swimMul : 1.0) * SchoolFrameRate;
+
+        /// <summary>
+        /// World length of a big animal placed as a single GLB: the model's own max AABB
+        /// dimension × the saved item scale. NO clamp — the map's item.s is authoritative
+        /// (a whaleshark at s=34.2 on a 1.908-unit GLB really is ~65 units long).
+        /// </summary>
+        public static double WhaleWorldLen(double glbMaxDim, double itemScale)
+            => (glbMaxDim > 0.0 ? glbMaxDim : 1.0) * (itemScale > 0.0 ? itemScale : 1.0);
+
+        /// <summary>Per-species web catalog row (builder.html MODULES lines 1098-1109).</summary>
+        public readonly struct SpeciesSpec
+        {
+            public readonly string          AssetId;
+            /// <summary>Max AABB dimension of ONE fish inside the species GLB (web/local units).</summary>
+            public readonly double          FishLenLocal;
+            /// <summary>asset.school — the web's fish-per-school count; drives the SPAN.</summary>
+            public readonly int             WebCount;
+            /// <summary>Boids the Unity player actually simulates (mobile budget).</summary>
+            public readonly int             UnityCount;
+            public readonly SchoolFormation Formation;
+            public readonly double          FormR;
+            public readonly double          SwimMul;
+            public readonly double          DefaultScale;
+            /// <summary>Per-fish size jitter (web: 0.85-1.15 for schools, podMin/podMax for pods).</summary>
+            public readonly double          SizeMin;
+            public readonly double          SizeMax;
+
+            public SpeciesSpec(string assetId, double fishLenLocal, int webCount, int unityCount,
+                               SchoolFormation formation, double formR, double swimMul,
+                               double defaultScale, double sizeMin, double sizeMax)
+            {
+                AssetId = assetId;
+                FishLenLocal = fishLenLocal;
+                WebCount = webCount;
+                UnityCount = unityCount;
+                Formation = formation;
+                FormR = formR;
+                SwimMul = swimMul;
+                DefaultScale = defaultScale;
+                SizeMin = sizeMin;
+                SizeMax = sizeMax;
+            }
+        }
+
+        /// <summary>
+        /// Species table. flen values are measured from the real XR GLBs on the CDN
+        /// (scad 1.911, barracuda 1.862, trevally 1.899); the rest of each row is the
+        /// web catalog verbatim. UnityCount is the mobile boids budget — the demo map
+        /// (7 scad + 1 barracuda + 2 pods) sums to 7×120 + 160 + 2×50 = 1,100 fish.
+        /// </summary>
+        public static SpeciesSpec SpeciesFor(string assetId)
+        {
+            string a = string.IsNullOrEmpty(assetId) ? "" : assetId.ToLowerInvariant();
+
+            if (a.StartsWith("school:scad", StringComparison.Ordinal))
+                return new SpeciesSpec(a, 1.911, 500, 120, SchoolFormation.Shoal, 1.0, 1.0, 3.5, 0.85, 1.15);
+            if (a.StartsWith("school:barracuda", StringComparison.Ordinal))
+                return new SpeciesSpec(a, 1.862, 200, 160, SchoolFormation.Cluster, 0.6, 0.06, 8.0, 0.85, 1.15);
+            if (a.StartsWith("school:batfish", StringComparison.Ordinal))
+                return new SpeciesSpec(a, 1.900, 100, 90, SchoolFormation.Shoal, 1.0, 1.0, 3.0, 0.85, 1.15);
+            if (a.StartsWith("pod:yellowtail", StringComparison.Ordinal))
+                return new SpeciesSpec(a, 1.899, 50, 50, SchoolFormation.Pod, 1.0, 1.0, 1.3, 0.55, 1.35);
+            if (a.StartsWith("pod:", StringComparison.Ordinal))
+                return new SpeciesSpec(a, 1.900, 10, 10, SchoolFormation.Pod, 1.0, 1.0, 1.5, 0.70, 1.20);
+            if (a.StartsWith("school:", StringComparison.Ordinal))
+                return new SpeciesSpec(a, 1.900, 100, 90, SchoolFormation.Shoal, 1.0, 1.0, 3.0, 0.85, 1.15);
+
+            return new SpeciesSpec(a, 1.900, 60, 60, SchoolFormation.Shoal, 1.0, 1.0, 2.5, 0.85, 1.15);
+        }
+
+        /// <summary>Everything the runtime needs to place + drive one school, in WORLD units.</summary>
+        public readonly struct SchoolGeometry
+        {
+            public readonly SpeciesSpec Spec;
+            /// <summary>One fish's world length (u) = local length × item.s.</summary>
+            public readonly double FishWorldLen;
+            /// <summary>Formation/shoal/pod radius (u), floors applied.</summary>
+            public readonly double RadiusWorld;
+            /// <summary>Half-height of the flat formation slab (u).</summary>
+            public readonly double VertHalfWorld;
+            /// <summary>Cruise speed cap (u/s).</summary>
+            public readonly double SpeedCap;
+            public bool IsPod => Spec.Formation == SchoolFormation.Pod;
+
+            public SchoolGeometry(SpeciesSpec spec, double fishWorldLen, double radiusWorld,
+                                  double vertHalfWorld, double speedCap)
+            {
+                Spec = spec;
+                FishWorldLen = fishWorldLen;
+                RadiusWorld = radiusWorld;
+                VertHalfWorld = vertHalfWorld;
+                SpeedCap = speedCap;
+            }
+        }
+
+        /// <summary>
+        /// Resolve a placed school item (assetId + saved item.s) into world-unit geometry.
+        /// This is the ONE place the web formulas turn into the numbers the boids use, so a
+        /// test can pin every species against builder.html.
+        /// </summary>
+        public static SchoolGeometry SchoolGeometryFor(string assetId, double itemScale)
+        {
+            SpeciesSpec sp = SpeciesFor(assetId);
+            double s = itemScale > 0.0 ? itemScale : 1.0;
+
+            double fishWorld, radius, vertHalf, speed;
+
+            if (sp.Formation == SchoolFormation.Pod)
+            {
+                double animalLocal = PodAnimalLocalLen(sp.DefaultScale);
+                fishWorld = animalLocal * s;
+                radius    = PodRadius(animalLocal, sp.WebCount) * s;
+                double floor = PodRadiusFloorMul * fishWorld;   // pods: 3×, NEVER the 8× school floor
+                if (radius < floor) radius = floor;
+                vertHalf  = radius * PodVertFactor;
+                speed     = SpeedCapPerSecond(animalLocal, PodSpeedPerFrame, sp.SwimMul) * s;
+            }
+            else if (sp.Formation == SchoolFormation.Shoal)
+            {
+                fishWorld = sp.FishLenLocal * s;
+                radius    = ShoalRadius(sp.FishLenLocal, sp.WebCount) * s;
+                double floor = SchoolRadiusFloorMul * fishWorld;
+                if (radius < floor) radius = floor;
+                vertHalf  = radius * ShoalVertFactor;
+                speed     = SpeedCapPerSecond(sp.FishLenLocal, ShoalSpeedPerFrame, sp.SwimMul) * s;
+            }
+            else
+            {
+                fishWorld = sp.FishLenLocal * s;
+                radius    = FormationRadius(sp.FishLenLocal, sp.WebCount, sp.FormR) * s;
+                double floor = SchoolRadiusFloorMul * fishWorld;
+                if (radius < floor) radius = floor;
+                vertHalf  = radius * ClusterVertFactor;
+                speed     = SpeedCapPerSecond(sp.FishLenLocal, FormationSpeedPerFrame, sp.SwimMul) * s;
+            }
+
+            return new SchoolGeometry(sp, fishWorld, radius, vertHalf, speed);
+        }
+
         // ── util ─────────────────────────────────────────────────────────────────
         public static double Clamp(double v, double lo, double hi)
             => v < lo ? lo : (v > hi ? hi : v);

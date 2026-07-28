@@ -264,11 +264,13 @@ namespace DiveMap.Runtime
                 if (_orbit != null) _orbit.enabled = false;
 
                 // Look from BEYOND the shoal (far side from the wreck) back toward it, so the
-                // wreck sits behind the fish as a backdrop. Distance ~25-30 m to frame the ball.
+                // wreck sits behind the fish as a backdrop. The web-accurate scad shoal now
+                // spans SR≈66 u (homeR≈79), so the old 25-30 u stand-off put the camera INSIDE
+                // the swarm — pull back proportionally instead.
                 Vector3 fwd = anchor - boatCenter; fwd.y = 0f;
                 if (fwd.sqrMagnitude < 1e-3f) fwd = Vector3.forward;
                 fwd.Normalize();
-                float dist = Mathf.Clamp(homeR * 2.4f, 25f, 30f);
+                float dist = Mathf.Clamp(homeR * 1.6f, 40f, 220f);
                 Vector3 camPos = anchor + fwd * dist + Vector3.up * (dist * 0.28f);
                 cam.transform.position = camPos;
                 cam.transform.LookAt(anchor);

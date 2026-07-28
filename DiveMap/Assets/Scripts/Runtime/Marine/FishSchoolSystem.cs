@@ -28,21 +28,25 @@ namespace DiveMap.Runtime.Marine
     public sealed class FishSchoolSystem : MonoBehaviour
     {
         // ── Registration inputs (filled by SceneBuilder) ──────────────────────────
+        /// <summary>
+        /// One placed school, already resolved into WORLD units by
+        /// <see cref="DiveMap.Core.MarineMath.SchoolGeometryFor"/> (web formulas × item.s).
+        /// Nothing here is re-derived from item.scale inside this class — that conflation
+        /// was the QC-r6/r7 bug chain.
+        /// </summary>
         public struct SchoolReg
         {
             public Vector3 Anchor;
-            public float   ClusterScale; // item.scale — the school CLUSTER size (formation), NOT the fish
-            public float   FishMeters;   // per-fish real world length (metres): scad≈0.35 … barracuda≈1.5
+            public float   FishWorldLen;    // ONE fish's world length (u): scad 4.20, barracuda 17.1
+            public float   FormRadiusWorld; // shoal SR / cluster R / pod podR in world units
+            public float   VertHalfWorld;   // half-height of the flat formation slab (u)
+            public float   SpeedCap;        // cruise cap (u/s) from the web per-frame cap ×60
+            public float   SizeMin;         // per-fish size jitter (0.85 school / podMin pod)
+            public float   SizeMax;         // …                    (1.15 school / podMax pod)
+            public bool    IsPod;           // pods space out (SepR 1.0×) instead of packing (1.5×)
             public int     Count;
             public Color   Color;
             public string  Species;
-        }
-
-        public struct WhaleReg
-        {
-            public Vector3 Anchor;
-            public float   Size;
-            public Color   Color;
         }
 
         // Boids weights (tuned; the web uses formation targets rather than pure Reynolds,
@@ -63,8 +67,8 @@ namespace DiveMap.Runtime.Marine
             public Matrix4x4[]  Matrices;
             public int          Start;
             public int          Count;
-            public float        FishLen;     // sim length unit (item scale) — spacing/speed
             public float        DrawScale;   // uniform TRS scale to draw the fish at web size
+            public float[]      SizeMul;     // per-fish size jitter (web: 0.85-1.15 / podMin-podMax)
             public int          PhaseOffset; // spreads the LOD frame-skip load
             public Vector3      Anchor;      // school centre (for QC nearest-school framing)
             public float        HomeR;       // shoal radius (for QC framing distance)
@@ -100,17 +104,16 @@ namespace DiveMap.Runtime.Marine
         private const float WiggleRate = 7.0f;   // builder.html wiggle default
         private const float WiggleAmp  = 0.18f;  // radians (~10°), transform-level approximation
 
-        // Cluster/formation size vs item.scale. The web normalises a school GLB to a fixed
-        // cluster bbox; here item.scale carries that cluster scale and the blob DIAMETER is
-        // ≈1.9×item.scale (scad≈4.2 m, barracuda≈17.5 m). This is the CORRECT home for the
-        // "1.9" that QC-r6 mis-applied to per-fish size (the kite bug).
-        private const float ClusterDiamPerItemScale = 1.9f;
-
         // ── Setup ─────────────────────────────────────────────────────────────────
 
+        /// <summary>
+        /// Spin up every school. All spans/speeds arrive PRE-RESOLVED in world units from
+        /// <see cref="DiveMap.Core.MarineMath.SchoolGeometryFor"/>; big animals (whaleshark)
+        /// are real GLBs built by SceneBuilder, so this class only reports their count.
+        /// </summary>
         public void Configure(
-            List<SchoolReg> schools, List<WhaleReg> whales, List<ObstacleBox> obstacles,
-            Camera cam, Material baseMat)
+            List<SchoolReg> schools, List<ObstacleBox> obstacles,
+            Camera cam, Material baseMat, float waterLevel, int whaleCount)
         {
             _cam = cam != null ? cam : Camera.main;
             _fishMesh = FishMeshFactory.Fish();
@@ -140,30 +143,30 @@ namespace DiveMap.Runtime.Marine
             for (int si = 0; si < schools.Count; si++)
             {
                 SchoolReg s = schools[si];
-                // Two INDEPENDENT scales (the QC-r6 kite bug conflated them):
-                //   • clusterScale = item.scale — the size of the whole school CLUSTER. The web
-                //     normalises each school GLB to a fixed cluster bbox and every fish is a
-                //     SMALL fraction of it; it does NOT size a fish as flen×itemScale. So we
-                //     read item.scale as the cluster/formation scale: blob DIAMETER ≈
-                //     1.9×item.scale (scad≈4.2 m, barracuda≈17.5 m) ⇒ radius = 0.95×.
-                //   • fishLen = a small per-species REAL length (metres), set in SceneBuilder.
-                float clusterScale = Mathf.Max(0.3f, s.ClusterScale);
-                float fishLen      = Mathf.Max(0.05f, s.FishMeters);
-                float R     = clusterScale * (ClusterDiamPerItemScale * 0.5f); // formation radius (blob diameter = 1.9×item.scale)
-                float homeR = R * 1.7f;                                        // safety radius — keep the shoal tight
-                float maxSpeed = clusterScale * 4.0f;                          // cruise (units/sec) — UNCHANGED motion feel
-                // Boids spacing tracks the FISH size (as the web does), not the cluster: with
-                // small fish the flock packs tight into a dense cloud instead of a sparse dusting.
-                // (natural pack radius ≈ SepR·count^⅓ ≈ R, so anchor & separation agree.)
+                // Everything below is ALREADY in world units (MarineMath.SchoolGeometryFor =
+                // the web formula × the saved item.s). Nothing is re-derived from item.scale
+                // here — that is exactly what produced the Ø4.2-unit scad marble in QC r7.
+                //   scad  s=2.2 → fish 4.20 u, SR 66.0 u, ±26.4 u, 10.1 u/s
+                //   barra s=9.2 → fish 17.1 u, R  143.9 u, ±39.6 u,  4.0 u/s (calm, swimMul 0.06)
+                float fishWorld = Mathf.Max(0.05f, s.FishWorldLen);
+                float R         = Mathf.Max(fishWorld * 2f, s.FormRadiusWorld);
+                float vertHalf  = Mathf.Max(fishWorld, s.VertHalfWorld);
+                float homeR     = R * 1.2f;   // soft outer wall just past the formation span
+                float maxSpeed  = Mathf.Max(0.2f, s.SpeedCap);
+                // Pods are SPACED animals (golden disc ≈1.3 body-lengths apart), schools pack.
+                float sepR      = fishWorld * (s.IsPod ? 1.0f : 1.5f);
+                float capY      = waterLevel - fishWorld;   // never poke through the surface
 
                 _schools[si] = new SchoolParams
                 {
                     Anchor    = ToF3(s.Anchor),
-                    FishLen   = clusterScale,   // sim length unit → speed/turn (cluster-scaled, unchanged)
+                    FishLen   = fishWorld,
                     HomeR     = homeR,
-                    NeighborR = fishLen * 4.0f,
-                    SepR      = fishLen * 1.5f,
+                    NeighborR = fishWorld * 4.0f,
+                    SepR      = sepR,
                     MaxSpeed  = maxSpeed,
+                    VertHalf  = vertHalf,
+                    CapY      = capY,
                     Start     = cursor,
                     Count     = s.Count,
                     Think     = 1,
@@ -182,13 +185,19 @@ namespace DiveMap.Runtime.Marine
                 if (mat.HasProperty("_Glossiness")) mat.SetFloat("_Glossiness", 0.3f);
                 if (mat.HasProperty("_Metallic"))   mat.SetFloat("_Metallic", 0f);
 
+                // Per-fish size jitter, exactly as the web scatters it (0.85+rand·0.3 for a
+                // school, podMin..podMax for a pod) so a shoal is not 120 identical clones.
+                float sizeMin = s.SizeMin > 0.01f ? s.SizeMin : 1f;
+                float sizeMax = s.SizeMax > sizeMin ? s.SizeMax : sizeMin;
+                var sizeMul = new float[Mathf.Max(0, s.Count)];
+
                 for (int k = 0; k < s.Count; k++)
                 {
-                    float ang = rng.NextFloat(0f, math.PI * 2f);
-                    float rad = rng.NextFloat(0f, R);
-                    float3 off = new float3(math.cos(ang) * rad,
-                                            rng.NextFloat(-R * 0.55f, R * 0.55f),
-                                            math.sin(ang) * rad);
+                    // Web scatter (builder.html 1523-1525): a flat BOX x,z ∈ ±span,
+                    // y ∈ ±vertHalf — a pancake, not a ball.
+                    float3 off = new float3(rng.NextFloat(-R, R),
+                                            rng.NextFloat(-vertHalf, vertHalf),
+                                            rng.NextFloat(-R, R));
                     float head = rng.NextFloat(0f, math.PI * 2f);
                     float3 vel = new float3(math.cos(head), 0f, math.sin(head)) * maxSpeed;
                     _cur[cursor] = new FishState
@@ -198,16 +207,17 @@ namespace DiveMap.Runtime.Marine
                         School = si,
                         Phase = rng.NextFloat(0f, math.PI * 2f),
                     };
+                    sizeMul[k] = rng.NextFloat(sizeMin, sizeMax);
                     cursor++;
                 }
 
-                // Draw scale (QC r7): size each fish to its small per-species REAL length, NOT
-                // to item.scale. The QC-r6 fix drew fish at 1.9×item.scale (scad 4.2 m,
-                // barracuda 17.5 m — kites); item.scale is the CLUSTER size, and the web's fish
-                // are a small fraction of it. worldLen = BaseLen × drawScale = fishLen (metres).
-                float drawScale = fishLen / FishMeshFactory.BaseLen;
-                Debug.Log($"[Marine] school={si} species={s.Species} " +
-                          $"clusterR={R:F1}m fishLen={fishLen:F1}m count={s.Count}");
+                // Draw scale: worldLen = BaseLen × drawScale = the fish's real world length
+                // (flen_local × item.s) — the web's own per-fish size, no invented "metres".
+                float drawScale = fishWorld / FishMeshFactory.BaseLen;
+                Debug.Log($"[Marine] school={si} species={s.Species} count={s.Count} " +
+                          $"clusterR={R:F1} fishLen={fishWorld:F2} vertHalf={vertHalf:F1} " +
+                          $"speedCap={maxSpeed:F1} homeR={homeR:F1} sepR={sepR:F2} capY={capY:F1} " +
+                          $"anchor={s.Anchor}");
 
                 _render.Add(new SchoolRender
                 {
@@ -215,8 +225,8 @@ namespace DiveMap.Runtime.Marine
                     Matrices = new Matrix4x4[s.Count],
                     Start = _schools[si].Start,
                     Count = s.Count,
-                    FishLen = clusterScale,
                     DrawScale = drawScale,
+                    SizeMul = sizeMul,
                     PhaseOffset = (si * 37) % 101, // spread frame-skip load (builder.html _lodPh)
                     Anchor = s.Anchor,
                     HomeR = homeR,
@@ -224,34 +234,12 @@ namespace DiveMap.Runtime.Marine
                 });
             }
 
-            // Whales (one looping GameObject each).
-            if (whales != null)
-            {
-                foreach (WhaleReg w in whales)
-                {
-                    var go = new GameObject("Whale");
-                    go.transform.SetParent(transform, false);
-                    var mf = go.AddComponent<MeshFilter>();
-                    var mr = go.AddComponent<MeshRenderer>();
-                    mf.sharedMesh = _fishMesh;
-                    Material wm = baseMat != null ? new Material(baseMat) : new Material(Shader.Find("Standard"));
-                    wm.color = w.Color;
-                    mr.sharedMaterial = wm;
-                    // Whaleshark = a BIG animal. The item scale (~3.2 web default) applied to
-                    // the ~1 m procedural mesh gives a 3 m dot — far smaller than the web's
-                    // whaleshark GLB. Bridge the mesh-size gap (×2.5) and clamp to a believable
-                    // whaleshark length [8..16 m] so it reads large in the QC shot whether the
-                    // DB item ships 3.2 or 34.2.
-                    float whaleWorld = Mathf.Clamp(Mathf.Max(1f, w.Size) * 2.5f, 8f, 16f);
-                    go.transform.localScale = Vector3.one * whaleWorld;
-                    var wc = go.AddComponent<WhaleController>();
-                    wc.Init(w.Anchor, whaleWorld);
-                    Debug.Log($"[Marine] whale item.scale={w.Size:F1} → world≈{whaleWorld:F1}m at {w.Anchor}");
-                    _whaleCount++;
-                }
-            }
+            // Big animals (whaleshark) are REAL GLBs placed by SceneBuilder — this system
+            // only reports the count so the [Marine] summary stays the QC oracle.
+            _whaleCount = Mathf.Max(0, whaleCount);
 
-            Debug.Log($"[Marine] configured schools={schools.Count} fish={_fishCount} whale={_whaleCount} obstacles={obN}");
+            Debug.Log($"[Marine] configured schools={schools.Count} fish={_fishCount} " +
+                      $"whale={_whaleCount} obstacles={obN} waterLevel={waterLevel:F1}");
         }
 
         // ── Per-frame sim + render ────────────────────────────────────────────────
@@ -306,7 +294,8 @@ namespace DiveMap.Runtime.Marine
                     // Transform-level wiggle: side-to-side waggle about local up.
                     float wig = Mathf.Sin(t * WiggleRate + f.Phase) * WiggleAmp * Mathf.Rad2Deg;
                     rot *= Quaternion.Euler(0f, wig, 0f);
-                    mats[k] = Matrix4x4.TRS(pos, rot, Vector3.one * sr.DrawScale);
+                    float sc = sr.DrawScale * (sr.SizeMul != null && k < sr.SizeMul.Length ? sr.SizeMul[k] : 1f);
+                    mats[k] = Matrix4x4.TRS(pos, rot, Vector3.one * sc);
                 }
 
                 if (sr.Count <= 0) continue;
@@ -316,7 +305,7 @@ namespace DiveMap.Runtime.Marine
                     var rp = new RenderParams(sr.Mat)
                     {
                         worldBounds = new Bounds(ToV3(_schools[si].Anchor),
-                                                 Vector3.one * (_schools[si].HomeR * 2f + sr.DrawScale * 6f)),
+                                                 Vector3.one * (_schools[si].HomeR * 2.5f + _schools[si].FishLen * 8f)),
                         shadowCastingMode = ShadowCastingMode.Off,
                         receiveShadows = false,
                     };

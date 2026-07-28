@@ -68,22 +68,6 @@ namespace DiveMap.Runtime
             => !string.IsNullOrEmpty(assetId) &&
                assetId.StartsWith("msh:", StringComparison.OrdinalIgnoreCase);
 
-        // Fish per school by species. The web packs a scad shoal with 500 fish so each item
-        // reads as a dense "cloud"; a mobile Burst boids scan can't afford 500×7, but 45 was
-        // far too thin (QC r5 showed ~10 dots). Bump toward the web's density budget the
-        // orchestrator signed off on (~70/scad, ~650 total: 7×70 + 70 barracuda + 2×20 pods
-        // = 600) so each school renders as a visible mass, not a sprinkle.
-        private static int SpeciesCount(string assetId)
-        {
-            string a = assetId.ToLowerInvariant();
-            if (a.StartsWith("school:scad")) return 70;
-            if (a.StartsWith("school:barracuda")) return 70;
-            if (a.StartsWith("school:batfish")) return 55;
-            if (a.StartsWith("pod:")) return 20;   // pods are fewer, larger animals
-            if (a.StartsWith("school:")) return 55;
-            return 40;
-        }
-
         // Mid silver-grey albedo (QC r7). The old near-white (0.86,0.92,0.80) drew each fish as
         // a blazing-white kite with a pitch-black shadow side (max lit/shadow contrast). A mid
         // silver-grey — a real fish's countershaded silver — drops the lit side so the shadow
@@ -99,45 +83,29 @@ namespace DiveMap.Runtime
             return new Color(0.55f, 0.62f, 0.66f); // generic school silver-grey
         }
 
-        // Per-fish REAL length (metres). The web sizes a fish as a SMALL fraction of the school
-        // cluster (item.scale), NOT flen×item.scale — that conflation was the QC-r6 "kite" bug
-        // (scad 4.2 m, barracuda 17.5 m). Absolute lengths are anchored to the web's per-species
-        // size intent (defaultScale: barracuda 8.0 = biggest ≫ scad 3.5 > batfish 3.0) and real
-        // biology (great barracuda ~1.5 m; bigeye scad ~0.35 m); the barracuda:scad ≈ 4.2× draw
-        // ratio the web produces holds. Small fish also make the flock read DENSE (fixes r5).
-        private static float SpeciesFishLen(string assetId)
+        /// <summary>
+        /// Resolve a placed school/pod item into a runtime registration. ALL geometry comes
+        /// from <see cref="MarineMath.SchoolGeometryFor"/> — the verified builder.html
+        /// formulas (shoal SR, cluster R, pod golden-disc podR) multiplied by the saved
+        /// item.s — so nothing about the school's span is invented here. Public + static so
+        /// the EditMode tests pin the real production numbers, not a copy of them.
+        /// </summary>
+        public static FishSchoolSystem.SchoolReg MakeSchoolReg(string assetId, Vector3 anchor, float itemScale)
         {
-            string a = assetId.ToLowerInvariant();
-            if (a.StartsWith("school:scad")) return 0.35f;       // bigeye/yellowstripe scad ~30 cm
-            if (a.StartsWith("school:barracuda")) return 1.5f;   // great barracuda ~1.5 m (web's biggest defaultScale)
-            if (a.StartsWith("school:batfish")) return 0.50f;    // batfish (Platax) ~0.5 m
-            if (a.StartsWith("pod:yellowtail")) return 0.45f;    // yellowtail scad — small
-            if (a.StartsWith("pod:")) return 0.70f;              // pods = larger animals
-            if (a.StartsWith("school:")) return 0.40f;           // generic small schooling fish
-            return 0.50f;
-        }
-
-        private static FishSchoolSystem.SchoolReg MakeSchoolReg(string assetId, Transform tr)
-        {
-            float scale = tr.localScale.x;
+            MarineMath.SchoolGeometry g = MarineMath.SchoolGeometryFor(assetId, itemScale);
             return new FishSchoolSystem.SchoolReg
             {
-                Anchor = tr.position,
-                ClusterScale = Mathf.Max(0.3f, scale),   // item.scale → school CLUSTER size (formation)
-                FishMeters   = SpeciesFishLen(assetId),  // small per-species fish length (metres)
-                Count = SpeciesCount(assetId),
-                Color = SpeciesColor(assetId),
-                Species = assetId,
-            };
-        }
-
-        private static FishSchoolSystem.WhaleReg MakeWhaleReg(Transform tr)
-        {
-            return new FishSchoolSystem.WhaleReg
-            {
-                Anchor = tr.position,
-                Size = Mathf.Max(1f, tr.localScale.x),
-                Color = new Color(0.64f, 0.70f, 0.76f), // brighter blue-grey so the whaleshark reads mid-water
+                Anchor          = anchor,
+                FishWorldLen    = (float)g.FishWorldLen,
+                FormRadiusWorld = (float)g.RadiusWorld,
+                VertHalfWorld   = (float)g.VertHalfWorld,
+                SpeedCap        = (float)g.SpeedCap,
+                SizeMin         = (float)g.Spec.SizeMin,
+                SizeMax         = (float)g.Spec.SizeMax,
+                IsPod           = g.IsPod,
+                Count           = g.Spec.UnityCount,
+                Color           = SpeciesColor(assetId),
+                Species         = assetId,
             };
         }
 
@@ -149,6 +117,9 @@ namespace DiveMap.Runtime
         private readonly SceneLoadState _loadState = new SceneLoadState();
         private int _loaded;
         private int _failed;
+        // env.waterLevel of the map being built (Htms Chang = 240) — the schools need it for
+        // the surface ceiling (builder.html capY = waterLevel − 8 per fish size).
+        private float _waterLevel = 4f;
 
         private static readonly Dictionary<string, Color> KindColors = new Dictionary<string, Color>(StringComparer.OrdinalIgnoreCase)
         {
@@ -190,7 +161,7 @@ namespace DiveMap.Runtime
             // collect their registrations here and spin up one FishSchoolSystem after the
             // static loads settle (so obstacle bounds — the wreck — are known).
             var schoolRegs = new List<FishSchoolSystem.SchoolReg>();
-            var whaleRegs = new List<FishSchoolSystem.WhaleReg>();
+            int whaleCount = 0;
 
             foreach (SceneItem item in items)
             {
@@ -203,14 +174,31 @@ namespace DiveMap.Runtime
                 string aid = item.AssetId ?? "";
                 if (IsSchoolItem(aid))
                 {
-                    schoolRegs.Add(MakeSchoolReg(aid, itemGo.transform));
+                    schoolRegs.Add(MakeSchoolReg(aid, itemGo.transform.position, itemGo.transform.localScale.x));
                     _loaded++;
                     continue; // no static GLB — the swarm renders itself
                 }
                 if (IsBigAnimalItem(aid))
                 {
-                    whaleRegs.Add(MakeWhaleReg(itemGo.transform));
-                    _loaded++;
+                    // WO-XR-03b: a big animal is a REAL GLB (Whale_Shark_xr0.glb, KTX2+Draco)
+                    // driven by WhaleController — no more procedural "paper kite" mesh, and no
+                    // [8..16] size clamp: the saved item.s is authoritative (1.908×34.2 ≈ 65 u).
+                    // Swimmers are NEVER grounded — they float at their stored Y.
+                    whaleCount++;
+                    string wurl = manifest != null ? manifest.ResolveUrl(aid) : null;
+                    AssetManifest.Module wmod = manifest != null ? manifest.Get(aid) : null;
+                    if (string.IsNullOrEmpty(wurl))
+                    {
+                        Debug.LogWarning($"[Marine] whale asset={aid} has no GLB url — placeholder");
+                        SpawnPlaceholder(itemGo.transform, item, wmod);
+                        AttachWhale(itemGo.transform, aid, null, false, 0f);
+                        _failed++;
+                    }
+                    else
+                    {
+                        _loadState.BeginLoad();
+                        LoadBigAnimalAsync(wurl, itemGo.transform, item, wmod, aid);
+                    }
                     continue;
                 }
 
@@ -248,7 +236,7 @@ namespace DiveMap.Runtime
             // Obstacles = the loaded static decor (the wreck) as world-space AABBs so
             // fish steer around them (warp gates excluded — not solid). Built AFTER the
             // GLB loads settle so renderer bounds are real.
-            if (schoolRegs.Count > 0 || whaleRegs.Count > 0)
+            if (schoolRegs.Count > 0 || whaleCount > 0)
             {
                 var obstacles = new List<ObstacleBox>();
                 foreach (GameObject go in decorGos)
@@ -261,7 +249,7 @@ namespace DiveMap.Runtime
                 }
 
                 var marine = root.AddComponent<FishSchoolSystem>();
-                marine.Configure(schoolRegs, whaleRegs, obstacles, Camera.main, BaseMat(false));
+                marine.Configure(schoolRegs, obstacles, Camera.main, BaseMat(false), _waterLevel, whaleCount);
             }
 
             Vector3 center = bounds.center;
@@ -359,6 +347,84 @@ namespace DiveMap.Runtime
             }
 
             _loadState.CompleteLoad();
+        }
+
+        // ── Big animal (whaleshark) = real GLB + WhaleController (WO-XR-03b) ─────────
+
+        /// <summary>
+        /// Load a <c>msh:*</c> big animal's GLB under its item pivot, centre it on the pivot
+        /// (a swimmer is NOT grounded — it floats at its stored Y), then attach the looping
+        /// <see cref="WhaleController"/>. A failed load falls back to a placeholder + the
+        /// controller so the scene never aborts (the KTX2/Draco risk).
+        /// </summary>
+        private async void LoadBigAnimalAsync(string url, Transform parent, SceneItem item,
+                                              AssetManifest.Module module, string assetId)
+        {
+            bool ok = false;
+            try
+            {
+                var gltf = new GltfImport();
+                ok = await gltf.Load(url);
+                if (ok) ok = await gltf.InstantiateMainSceneAsync(parent);
+            }
+            catch (Exception e)
+            {
+                Debug.LogWarning($"[SceneBuilder] whale GLB load failed for {assetId} ({url}): {e.Message}");
+                ok = false;
+            }
+
+            float worldLen = 0f;
+            if (ok && parent != null)
+            {
+                CenterToPivot(parent);
+                if (TryLocalBounds(parent, out Bounds lb))
+                {
+                    // lb is in the pivot's LOCAL space, so its max dimension IS the GLB's own
+                    // maxd (Whale_Shark_xr0 = 1.908); × item.s gives the true world length.
+                    float localMax = Mathf.Max(lb.size.x, Mathf.Max(lb.size.y, lb.size.z));
+                    float itemScale = Mathf.Max(0.01f, parent.localScale.x);
+                    worldLen = (float)MarineMath.WhaleWorldLen(localMax, itemScale);
+                }
+                _loaded++;
+            }
+            else
+            {
+                if (parent != null) SpawnPlaceholder(parent, item, module);
+                _failed++;
+            }
+
+            AttachWhale(parent, assetId, url, ok, worldLen);
+            _loadState.CompleteLoad();
+        }
+
+        /// <summary>Attach the swim loop and log the QC oracle line for this animal.</summary>
+        private static void AttachWhale(Transform pivot, string assetId, string url, bool ok, float worldLen)
+        {
+            if (pivot == null) return;
+            float itemScale = Mathf.Max(0.01f, pivot.localScale.x);
+            // Fallback estimate only when the GLB never landed (the XR marine models measure
+            // ~1.9 units across, so item.s × 1.9 is the right order of magnitude).
+            if (worldLen <= 0.01f) worldLen = (float)MarineMath.WhaleWorldLen(1.9, itemScale);
+
+            var wc = pivot.gameObject.AddComponent<WhaleController>();
+            wc.Init(pivot.position, worldLen);
+
+            Debug.Log($"[Marine] whale asset={assetId} loaded={ok} url={url ?? "(none)"} " +
+                      $"itemScale={itemScale:F2} worldLen={worldLen:F1} anchor={pivot.position}");
+        }
+
+        /// <summary>
+        /// Recentre a freshly-instantiated GLB on its pivot in all three axes. Unlike
+        /// <see cref="GroundToBase"/> this does NOT drop the base to Y=0 — a swimmer must
+        /// stay at its stored depth and rotate about its own middle.
+        /// </summary>
+        private static void CenterToPivot(Transform pivot)
+        {
+            if (!TryLocalBounds(pivot, out Bounds local)) return;
+            Vector3 offset = -local.center;
+            if (offset.sqrMagnitude < 1e-8f) return;
+            for (int i = 0; i < pivot.childCount; i++)
+                pivot.GetChild(i).localPosition += offset;
         }
 
         // ── Grounding (bakeStatic parity) ─────────────────────────────────────────────
@@ -541,6 +607,7 @@ namespace DiveMap.Runtime
             float slopeX = env != null ? (float)env.AreaSlopeX : 0f;
             float slopeZ = env != null ? (float)env.AreaSlopeZ : 0f;
             float waterLevel = env != null ? (float)env.WaterLevel : 4f;
+            _waterLevel = waterLevel;
 
             float baseR = BaseSeabedRadius * Mathf.Max(0.05f, areaScale);
 
