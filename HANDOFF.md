@@ -2,7 +2,7 @@
 
 > เอกสารนี้เขียนเพื่อให้ AI coding agent ใดๆ (Codex / Kimi / Claude / อื่นๆ) ทำงานต่อได้ทันที
 > อ่านคู่กับ: `DESIGN_DOC.md` (สัญญาหลัก v1.2), `QC_PLAN.md`, `SECURITY_PLAN.md`
-> อัปเดตล่าสุด: 2026-07-23 (checkpoint หลังรอบ QC r8, origin/main = `5fe688e`)
+> อัปเดตล่าสุด: 2026-07-28 (ปิด WO-XR-03 + QC fixes, origin/main = `f31d9fc`, branch `wo-xr-05` รอ merge)
 
 ## 1. โปรเจกต์คืออะไร
 - แอป **DiveMap** (`com.siamdive.divemap`) — Unity 6000.0.79f1 ใน `DiveMap/`
