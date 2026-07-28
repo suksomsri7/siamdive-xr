@@ -80,7 +80,19 @@ namespace DiveMap.Runtime.Marine
                 (float)(o.PitchRad * Mathf.Rad2Deg),
                 (float)(o.YawRad   * Mathf.Rad2Deg),
                 0f); // roll forced 0 — no-roll rule
+
+            // QC oracle (r8): a still screenshot cannot prove the GLB's own forward axis is +Z.
+            // Log the alignment once, a few frames in — dot ≈ +1 means the model swims nose-first,
+            // ≈ −1 means the GLB faces backwards and its child needs a 180° yaw.
+            if (!_headingLogged && _t > 0.5f && vel.sqrMagnitude > 1e-6f)
+            {
+                _headingLogged = true;
+                Debug.Log($"[Marine] whale heading dot(forward,vel)={Vector3.Dot(transform.forward, vel.normalized):F3} " +
+                          "(expect ≈ +1.0)");
+            }
         }
+
+        private bool _headingLogged;
 
         private Vector3 PathPoint(float angle)
         {

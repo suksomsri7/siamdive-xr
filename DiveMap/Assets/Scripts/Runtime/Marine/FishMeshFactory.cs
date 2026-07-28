@@ -55,6 +55,13 @@ namespace DiveMap.Runtime.Marine
                 new Vector3( 0f,    0f,   -0.42f), // 5 tail base
                 new Vector3( 0f,    0.28f,-0.60f), // 6 tail fin top
                 new Vector3( 0f,   -0.28f,-0.60f), // 7 tail fin bottom
+                // QC r8: the fin's back face needs its OWN vertices. Sharing 5/6/7 between two
+                // opposite-winding triangles made RecalculateNormals average +X and −X into a
+                // zero normal — the fin then lit to pure black from every angle (the "black
+                // triangle shards" in qc_screenshot2). Duplicates give each face a real ±X normal.
+                new Vector3( 0f,    0f,   -0.42f), // 8  = 5 (fin back face)
+                new Vector3( 0f,    0.28f,-0.60f), // 9  = 6
+                new Vector3( 0f,   -0.28f,-0.60f), // 10 = 7
             };
 
             var t = new[]
@@ -63,8 +70,8 @@ namespace DiveMap.Runtime.Marine
                 0,1,2,  0,2,3,  0,3,4,  0,4,1,
                 // tail cap
                 5,2,1,  5,3,2,  5,4,3,  5,1,4,
-                // tail fin (double-sided so it reads from both eyes)
-                5,6,7,  5,7,6,
+                // tail fin (double-sided so it reads from both eyes — separate verts per face)
+                5,6,7,  8,10,9,
             };
 
             var m = new Mesh { name = "MarineFish" };

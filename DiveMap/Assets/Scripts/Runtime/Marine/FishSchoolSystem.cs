@@ -182,7 +182,9 @@ namespace DiveMap.Runtime.Marine
                 // bright reflection cube (0.60,0.72,0.82) adds a soft blue-grey sheen on the
                 // shadow side — the "ด้านเงาไม่ดำสนิท" fix. The albedo is now a mid silver-grey
                 // (SceneBuilder), not near-white, so the lit/shadow contrast is a fish, not a kite.
-                if (mat.HasProperty("_Glossiness")) mat.SetFloat("_Glossiness", 0.3f);
+                // QC r8: 0.3 blew out the flat body facets to pure white under the reflection
+                // cubemap. The web fish read as matte green-silver, so keep the highlight low.
+                if (mat.HasProperty("_Glossiness")) mat.SetFloat("_Glossiness", 0.1f);
                 if (mat.HasProperty("_Metallic"))   mat.SetFloat("_Metallic", 0f);
 
                 // Per-fish size jitter, exactly as the web scatters it (0.85+rand·0.3 for a
