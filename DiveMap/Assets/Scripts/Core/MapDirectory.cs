@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.IO;
+using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 
 namespace DiveMap.Core
@@ -70,7 +72,14 @@ namespace DiveMap.Core
             if (string.IsNullOrWhiteSpace(json))
                 throw new ArgumentException("empty directory response", nameof(json));
 
-            JObject root = JObject.Parse(json);
+            // DateParseHandling.None: keep updatedAt as the raw ISO-8601 string the API sent.
+            // JObject.Parse would coerce it to a DateTime and stringify it back in machine locale.
+            JObject root;
+            using (var sr = new StringReader(json))
+            using (var jr = new JsonTextReader(sr) { DateParseHandling = DateParseHandling.None })
+            {
+                root = JObject.Load(jr);
+            }
             var page = new MapPage
             {
                 Total = ReadInt(root["total"], -1),
@@ -120,6 +129,7 @@ namespace DiveMap.Core
         {
             if (t == null || t.Type == JTokenType.Null) return null;
             if (t.Type == JTokenType.String) return t.Value<string>();
+            if (t.Type == JTokenType.Date) return t.Value<DateTime>().ToString("o", CultureInfo.InvariantCulture);
             return t.ToString();
         }
 
