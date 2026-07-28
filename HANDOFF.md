@@ -13,10 +13,19 @@
 ## 2. สถานะปัจจุบัน (อะไรเสร็จแล้ว)
 - ✅ WO-XR-00: CI GameCI 3 targets — Android APK (IL2CPP, ~35 นาที), Windows .exe (Mono), Linux (QC) — เขียวทุก build
 - ✅ WO-XR-01 + เก็บงาน: โหลดแมพเดโม `wl6zwxh1tdgn` (Htms Chang) — เรือ KTX2 2048px ตั้งบนพื้นทราย, แสง/reflection ถูกต้อง, น้ำโปร่งแสง 2 หน้า, กล้อง frame แบบเว็บ, ฟอนต์ไทย bundle (NotoSansThai ใน Resources)
-- 🟡 WO-XR-03 (~85%): ระบบฝูงปลา Burst boids 600 ตัว 10 ฝูง + whaleshark — ทำงานจริง เทสเขียว **เหลือรอบปิด (ดู §5)**
+- ✅ WO-XR-03 **ปิดแล้ว 2026-07-28** (`a7d12f8` + QC fixes `f31d9fc`): boids 1,100 ตัว 10 ฝูง ตามสูตรเว็บจริง (`buildSchool` ใน builder.html) — scad R=66.0 · barracuda R=143.9 speed 4.0 · pod 67.8/29.7 · วาฬเป็น **GLB จริง** `Whale_Shark_xr0.glb` worldLen 65.3 (เดิม clamp [8,16] ทำให้เล็กผิด 4 เท่า) · QC verdict = ผ่านแบบมีเงื่อนไข แล้วแก้ครบ
+- 🟡 WO-XR-05.1+05.2 (UI shell + เมนู + รายการแมพ + ค้นหา): เขียนเสร็จบน branch **`wo-xr-05`** (`dc2a954`) รอ CI เขียวแล้ว merge เข้า main — **แผนเต็มอยู่ที่ `/root/projects/siamdive-xr-docs/WO-XR-05.md`**
 - ✅ ระบบตาอัตโนมัติ: ทุก push → CI job qc-shot → แอปถ่ายรูปตัวเอง 2 มุม → artifact `qc-screenshot`
 - ✅ XR-LOD CDN: `maps.siamdive.com/models/xr/` มี 15 โมเดล (manifest.json count=15) — เรือ/สัตว์หลัก KTX2+Draco
-- ❌ ยังไม่มี: เมนู/UI ทั้งหมด (WO-XR-05), AR (02m), โหมดแก้ไข (06), store (07)
+- ❌ ยังไม่มี: การ์ดข้อมูล+ตั้งค่า (WO-XR-05.3/05.4), AR (02m), ปลา GLB จริงรายตัว (04), โหมดแก้ไข (06), store (07)
+
+### บทเรียนรอบ 2026-07-28 (กันทำซ้ำ)
+- **อ่านสูตรเว็บให้ถูกชั้นก่อนตั้งค่าเสมอ** — span ของฝูง = สูตร local × `item.s` และ N ในสูตรต้องใช้ N ของ**เว็บ** (scad 500) ไม่ใช่ N ที่ Unity วาดจริง (120) ไม่งั้นฝูงหด
+- **โมเดลที่ถูก clamp ขนาด = red flag** — ขนาดจริงมาจาก `maxd × item.s` ห้ามใส่ช่วง magic number
+- **normals หักล้างกัน = ดำสนิท** — แผ่น double-sided ต้องมี vertex ของตัวเองต่อหน้า ไม่งั้น `RecalculateNormals()` เฉลี่ย +X กับ −X ได้ศูนย์ (ครีบหางปลาดำทั้งฝูง)
+- **`JObject.Parse` ของ Newtonsoft แปลง ISO date เป็น DateTime อัตโนมัติ** → ใช้ `JsonTextReader{DateParseHandling=None}` ถ้าต้องการสตริงดิบ
+- **ทำงานขนาน 2 executor ได้ด้วย `git worktree` + branch แยก** · CI trigger เฉพาะ main → ตรวจ compile ของ branch ด้วย `workflow_dispatch` (concurrency group แยกตาม ref จึงไม่ cancel กัน)
+- VPS **ไม่มีคำสั่ง `zip`** — ส่งไฟล์ให้ user ใช้ artifact zip ของ GitHub ตรงๆ หรือ python zipfile
 
 ## 3. โครงสร้างโค้ดสำคัญ
 ```
@@ -46,18 +55,23 @@ tools/                          (สคริปต์ XR-LOD pipeline)
 10. เครื่อง VPS RAM 8GB — ห้ามรันงานหนักขนาน · `sleep` ระดับบนถูก block ในบาง harness → ใช้ curl --retry / background loop
 
 ## 5. งานถัดไปทันที (คิวเรียงแล้ว)
-### 5.1 รอบปิด WO-XR-03 (ค้างกลางคัน — ยังไม่มีโค้ดค้าง เริ่มใหม่ได้เลย)
-a) **formation ฝูงเล็กเกินจริง** (scad Ø4.2m — เว็บแผ่กว้างกว่ามาก):
-   อ่าน `/root/projects/siamdive-maps/public/builder.html` L~2496 `g.scale.setScalar((16*pickScale(asset))/maxd)` + `pickScale()` + catalog SCHOOL L1098-1109 (defaultScale: scad 3.5, barracuda 8.0, yellowtail 1.3) + `N=asset.school` L1493 (เว็บ: scad 500 ตัว/ฝูง)
-   → คำนวณ span จริงเป็นเลขก่อน แล้วตั้ง formation ใน FishSchoolSystem ให้ตรง + เพิ่มปลารวม ~1200 (budget มือถือ) + floor รัศมีขั้นต่ำ ~8×fishLen (กัน yellowtail 20 ตัวอัดใน 0.3m)
-b) **วาฬ**: เลิกใช้ procedural mesh (ดูเป็นว่าวกระดาษ) → โหลด `https://maps.siamdive.com/models/xr/Whale_Shark_xr0.glb` (ตรวจ 200 ก่อน) เป็นตัววาฬ + attach WhaleController · ขนาด world ~16m · swimmer ไม่ต้อง ground
-c) push → CI → QC 2 มุมเทียบเว็บ → ผ่านแล้วปิด WO-XR-03
-### 5.2 ส่งไฟล์ให้ user เทส
-APK + Windows .exe จาก artifact CI ล่าสุด → วาง `/var/www/dive3d/dl/<ชื่อสุ่ม>.zip` → แจ้งลิงก์ `https://dive3d.suksomsri.cloud/dl/...`
-### 5.3 เก็บเล็ก
-ทรายโทนครีมกว่าเว็บนิดหน่อย (AppBoot ambient) · ตรวจ sculpt พื้นใน close-up
-### 5.4 คิวใหญ่ถัดไป (user อาจสลับลำดับ — ถามก่อน)
-WO-XR-05 UI/เมนู (รายการแมพ/ค้นหา/การ์ดข้อมูล/i18n) ↔ WO-XR-02m AR (ARCore) → WO-XR-04 (ปลา GLB จริง + caustics/FX)
+### 5.1 ✅ ปิดแล้ว — WO-XR-03 (2026-07-28)
+formation ตามสูตรเว็บ + วาฬ GLB จริง + QC fixes (ครีบดำ/gloss/heading log) · commit `a7d12f8` → `f31d9fc`
+
+### 5.2 merge branch `wo-xr-05` เข้า main (คิวแรกเมื่อ resume)
+UI shell + เมนู + รายการแมพ + ค้นหา เขียนเสร็จแล้ว (`dc2a954`) — เมื่อ CI branch เขียว: `git merge wo-xr-05` บน main → push → CI → QC ภาพ `qc_ui_menu.png` / `qc_ui_maps.png` / `qc_ui_search.png` (มาจากโหมด `-qcui` ที่เพิ่มใน workflow)
+worktree อยู่ที่ `/root/projects/siamdive-xr-ui` (ลบด้วย `git worktree remove` เมื่อ merge เสร็จ)
+
+### 5.3 ทำต่อจากแผน WO-XR-05 (`/root/projects/siamdive-xr-docs/WO-XR-05.md`)
+05.3 การ์ดข้อมูล (แตะวัตถุ → ชื่อ/ชนิด/ความลึก) → 05.4 ตั้งค่า + i18n ไทย/EN เต็มระบบ
+
+### 5.4 เก็บเล็ก
+- ปลายังเป็นเมช procedural ไม่มี texture (เว็บเป็นปลาเขียว-เงิน) → งานจริงคือ **WO-XR-04** ปลา GLB รายตัว · **อย่ายัดรวมรอบอื่น** (เสี่ยง magenta/KTX2 บน llvmpipe)
+- ตรวจ log `[Marine] whale heading dot(forward,vel)` ควร ≈ +1.0 ถ้าติดลบ = GLB หันกลับ ให้หมุน child yaw 180° (ห้ามแก้ WhaleController)
+- ทรายเป็นวงรีครีมแบน เว็บมี sculpt + ไล่สีน้ำเงิน · hull เรือมีแผ่นดำ (backface ของ wreck GLB)
+
+### 5.5 คิวใหญ่ถัดไป (user อาจสลับลำดับ — ถามก่อน)
+WO-XR-04 (ปลา GLB จริง + caustics/FX) ↔ WO-XR-02m AR (ARCore) → WO-XR-06 โหมดแก้ไข → WO-XR-07 ขึ้น Play
 
 ## 6. เครื่องมือ/การเข้าถึง (บนเครื่อง VPS นี้)
 - **GitHub API** (ดู CI/โหลด artifact): token อยู่ใน `~/.git-credentials` → `GH_TOKEN=$(sed -n 's#https://suksomsri7:\([^@]*\)@github.com#\1#p' ~/.git-credentials)` แล้ว curl `api.github.com/repos/suksomsri7/siamdive-xr/actions/...` (gh CLI ไม่ได้ login)
