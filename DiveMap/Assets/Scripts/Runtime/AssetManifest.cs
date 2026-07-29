@@ -148,6 +148,17 @@ namespace DiveMap.Runtime
             return Normalize(raw);
         }
 
+        /// <summary>
+        /// Absolute URL of the XR LOD1 (lower-poly) GLB for an assetId, or null when the id
+        /// is unknown or ships no LOD1. WO-XR-04.1: a big school of a heavy model instances
+        /// LOD1 instead of LOD0 (see <see cref="DiveMap.Core.FishAssetPick"/>).
+        /// </summary>
+        public string ResolveLod1Url(string assetId)
+        {
+            Module m = Get(assetId);
+            return m == null ? null : Normalize(m.XrGlbUrlLod1);
+        }
+
         private string Normalize(string url)
         {
             if (string.IsNullOrEmpty(url)) return null;

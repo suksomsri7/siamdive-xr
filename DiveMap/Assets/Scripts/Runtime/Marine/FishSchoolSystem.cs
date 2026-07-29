@@ -67,6 +67,15 @@ namespace DiveMap.Runtime.Marine
             public Matrix4x4[]  Matrices;
             public int          Start;
             public int          Count;
+            // WO-XR-04.1: the mesh this school draws. Starts as the procedural
+            // FishMeshFactory fish and is hot-swapped to the species' real GLB mesh by
+            // ApplyGlbTemplate the moment its template lands (a GLB can arrive after
+            // Configure). Bake carries the GLB's node transform, right-multiplied onto
+            // every instance matrix (the web bakes it into the geometry instead — we
+            // cannot, Draco meshes are non-readable).
+            public Mesh         Mesh;
+            public Matrix4x4    Bake;
+            public bool         HasBake;
             public float        DrawScale;   // uniform TRS scale to draw the fish at web size
             public float[]      SizeMul;     // per-fish size jitter (web: 0.85-1.15 / podMin-podMax)
             public int          PhaseOffset; // spreads the LOD frame-skip load
@@ -227,6 +236,9 @@ namespace DiveMap.Runtime.Marine
                     Matrices = new Matrix4x4[s.Count],
                     Start = _schools[si].Start,
                     Count = s.Count,
+                    Mesh = _fishMesh,
+                    Bake = Matrix4x4.identity,
+                    HasBake = false,
                     DrawScale = drawScale,
                     SizeMul = sizeMul,
                     PhaseOffset = (si * 37) % 101, // spread frame-skip load (builder.html _lodPh)
@@ -242,6 +254,48 @@ namespace DiveMap.Runtime.Marine
 
             Debug.Log($"[Marine] configured schools={schools.Count} fish={_fishCount} " +
                       $"whale={_whaleCount} obstacles={obN} waterLevel={waterLevel:F1}");
+        }
+
+        /// <summary>
+        /// WO-XR-04.1 — swap every school of <paramref name="species"/> over to a real GLB
+        /// template (<see cref="FishGlbLibrary"/>). Safe to call before or after the first
+        /// frame; schools of other species are untouched and a species with no template just
+        /// keeps the procedural mesh, so the reef can never end up empty.
+        ///
+        /// The draw scale is RE-DERIVED from the loaded mesh's own baked length, not from
+        /// FishMeshFactory.BaseLen: the fish's world length (web formula × item.s) is the
+        /// oracle, so a 1.911-unit scad GLB and a 1.15-unit procedural fish must both end up
+        /// drawn at 4.20 u. Returns how many schools were swapped.
+        /// </summary>
+        public int ApplyGlbTemplate(string species, Mesh mesh, Material mat, Matrix4x4 bake, float bakedLen)
+        {
+            if (mesh == null || bakedLen < 1e-4f || string.IsNullOrEmpty(species)) return 0;
+
+            int applied = 0;
+            float lastScale = 0f;
+            for (int si = 0; si < _render.Count; si++)
+            {
+                SchoolRender sr = _render[si];
+                if (!string.Equals(sr.Species, species, System.StringComparison.OrdinalIgnoreCase)) continue;
+
+                float fishWorld = si < _schools.Length ? _schools[si].FishLen : 0f;
+                if (fishWorld <= 0f) continue;
+
+                sr.Mesh = mesh;
+                if (mat != null) sr.Mat = mat;
+                sr.Bake = bake;
+                sr.HasBake = true;
+                sr.DrawScale = fishWorld / bakedLen;
+                _render[si] = sr;
+                lastScale = sr.DrawScale;
+                applied++;
+            }
+
+            if (applied > 0)
+                Debug.Log($"[Marine] fishGlb applied species={species} schools={applied} " +
+                          $"bakedLen={bakedLen:F3} drawScale={lastScale:F3} " +
+                          $"submesh0Tris={(mesh.subMeshCount > 0 ? mesh.GetIndexCount(0) / 3 : 0)}");
+            return applied;
         }
 
         // ── Per-frame sim + render ────────────────────────────────────────────────
@@ -298,9 +352,14 @@ namespace DiveMap.Runtime.Marine
                     rot *= Quaternion.Euler(0f, wig, 0f);
                     float sc = sr.DrawScale * (sr.SizeMul != null && k < sr.SizeMul.Length ? sr.SizeMul[k] : 1f);
                     mats[k] = Matrix4x4.TRS(pos, rot, Vector3.one * sc);
+                    // GLB template: bake the mesh node's own transform in AFTER the instance
+                    // TRS, so the fish keeps its authored orientation inside the swim heading.
+                    if (sr.HasBake) mats[k] = mats[k] * sr.Bake;
                 }
 
                 if (sr.Count <= 0) continue;
+                Mesh mesh = sr.Mesh != null ? sr.Mesh : _fishMesh;
+                if (mesh == null) continue;
 
                 if (_useInstancing)
                 {
@@ -311,7 +370,7 @@ namespace DiveMap.Runtime.Marine
                         shadowCastingMode = ShadowCastingMode.Off,
                         receiveShadows = false,
                     };
-                    Graphics.RenderMeshInstanced(rp, _fishMesh, 0, mats, sr.Count);
+                    Graphics.RenderMeshInstanced(rp, mesh, 0, mats, sr.Count);
                 }
                 else
                 {
@@ -324,7 +383,7 @@ namespace DiveMap.Runtime.Marine
                         receiveShadows = false,
                     };
                     for (int k = 0; k < sr.Count; k++)
-                        Graphics.RenderMesh(rp, _fishMesh, 0, mats[k]);
+                        Graphics.RenderMesh(rp, mesh, 0, mats[k]);
                 }
                 drawn += sr.Count;
             }

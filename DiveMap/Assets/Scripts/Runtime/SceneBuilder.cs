@@ -115,6 +115,11 @@ namespace DiveMap.Runtime
         private const float OverallLoadTimeout = 120f;  // whole scene, hard safety
 
         private readonly SceneLoadState _loadState = new SceneLoadState();
+        // WO-XR-04.1: real fish GLB templates. Held in a FIELD, not a local, so the
+        // GltfImport instances behind the meshes/textures we instance every frame stay
+        // referenced for the lifetime of the scene (a collected/disposed import would pull
+        // the mesh out from under RenderMeshInstanced).
+        private FishGlbLibrary _fishGlb;
         private int _loaded;
         private int _failed;
         // env.waterLevel of the map being built (Htms Chang = 240) — the schools need it for
@@ -224,6 +229,40 @@ namespace DiveMap.Runtime
                 }
             }
 
+            // ── Fish GLB templates (WO-XR-04.1) ───────────────────────────────────
+            // One real GLB per school/pod species (Scad_School_xr0 / Barracuda_School_xr0 /
+            // Trevally_xr1), started HERE — before the wait below — so the templates are in
+            // hand by the time the schools draw their first frame and the QC eye never
+            // catches a shoal of procedural lozenges. Fish templates are extra assets, so
+            // they move _loadState only: the "โหลดแล้ว N" item oracle must not budge.
+            _fishGlb = new FishGlbLibrary();
+            if (schoolRegs.Count > 0)
+            {
+                var templates = new GameObject("FishTemplates");
+                templates.transform.SetParent(root.transform, false);
+                templates.SetActive(false);   // a template fish must never render
+
+                // LOD choice is per SPECIES but driven by the biggest school of it.
+                var maxCount = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+                foreach (FishSchoolSystem.SchoolReg reg in schoolRegs)
+                {
+                    if (string.IsNullOrEmpty(reg.Species)) continue;
+                    maxCount.TryGetValue(reg.Species, out int have);
+                    maxCount[reg.Species] = Mathf.Max(have, reg.Count);
+                }
+
+                foreach (KeyValuePair<string, int> kv in maxCount)
+                {
+                    string lod0 = manifest != null ? manifest.ResolveUrl(kv.Key) : null;
+                    string lod1 = manifest != null ? manifest.ResolveLod1Url(kv.Key) : null;
+                    if (FishAssetPick.TryPick(kv.Key, lod0, lod1, kv.Value, out FishAssetPick.Pick pick))
+                        _fishGlb.BeginLoad(pick, templates.transform, _loadState);
+                    else
+                        Debug.Log($"[Marine] fishGlb FALLBACK species={kv.Key} " +
+                                  $"reason=not-surveyed (keeping procedural mesh)");
+                }
+            }
+
             // Wait for all in-flight GLB loads, with a hard safety timeout.
             float t = 0f;
             while (_loadState.PendingCount > 0 && t < OverallLoadTimeout)
@@ -250,6 +289,19 @@ namespace DiveMap.Runtime
 
                 var marine = root.AddComponent<FishSchoolSystem>();
                 marine.Configure(schoolRegs, obstacles, Camera.main, BaseMat(false), _waterLevel, whaleCount);
+
+                // Swap in the real fish (WO-XR-04.1): whatever is already loaded now, plus
+                // anything that lands later — a school that never gets a template keeps the
+                // procedural mesh, so the reef is never empty.
+                foreach (FishGlbLibrary.Template tpl in _fishGlb.Ready)
+                    marine.ApplyGlbTemplate(tpl.Species, tpl.Mesh, tpl.Mat, tpl.Bake, tpl.BakedLen);
+
+                FishSchoolSystem marineRef = marine;
+                _fishGlb.OnReady = tpl =>
+                {
+                    if (marineRef != null)
+                        marineRef.ApplyGlbTemplate(tpl.Species, tpl.Mesh, tpl.Mat, tpl.Bake, tpl.BakedLen);
+                };
             }
 
             Vector3 center = bounds.center;
