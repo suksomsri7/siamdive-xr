@@ -135,7 +135,7 @@ namespace DiveMap.Tests
             Assert.AreEqual((0.949f + 0.831f) * 0.5f, mid.G, 0.002f);
             Assert.AreEqual((0.973f + 0.910f) * 0.5f, mid.B, 0.002f);
 
-            float prev = 2f;
+            float prev = float.MaxValue;   // the top stop is the brightest (lum 2.812)
             for (float v = 0f; v <= 1.0001f; v += 0.05f)
             {
                 SeabedGeom.Rgb c = SeabedGeom.GradientStop(v);
