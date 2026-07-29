@@ -1109,6 +1109,14 @@ namespace DiveMap.Runtime
             const float speckleUnits = SeabedGeom.SandRadius / SeabedGeom.Rings;
             float freq = unitsPerTexel / speckleUnits;
 
+            // One boundary distance per ANGLE, not per texel: the superellipse only depends on
+            // the direction, so a 2,048-entry table turns a million trig+root evaluations into
+            // a lookup (this bakes on the main thread during the scene load).
+            const int angleSteps = 2048;
+            var bdTable = new float[angleSteps];
+            for (int i = 0; i < angleSteps; i++)
+                bdTable[i] = SeabedGeom.BoundaryDist(Mathf.PI * 2f * i / angleSteps);
+
             var px = new Color32[SandTexSize * SandTexSize];
             for (int y = 0; y < SandTexSize; y++)
             {
@@ -1120,7 +1128,9 @@ namespace DiveMap.Runtime
                     float ang = Mathf.Atan2(dz, dx);
                     // The web's rad = hypot(x,z)/SAND_R — so the corners of the squircle sit
                     // past 1.0 and are fully hazed, while the axis edges reach 1.0 exactly.
-                    float radNorm = frac * SeabedGeom.BoundaryDist(ang) / SeabedGeom.SandRadius;
+                    int ai = (int)((ang < 0f ? ang + Mathf.PI * 2f : ang) * angleSteps / (Mathf.PI * 2f));
+                    if (ai < 0) ai = 0; else if (ai >= angleSteps) ai = angleSteps - 1;
+                    float radNorm = frac * bdTable[ai] / SeabedGeom.SandRadius;
 
                     float n = 0.82f + (Mathf.PerlinNoise(x * freq, y * freq) - 0.5f) * 0.18f;
                     SeabedGeom.Rgb c = SeabedGeom.SandColor(1f, radNorm, n);

@@ -54,11 +54,15 @@ namespace DiveMap.Core
         /// </summary>
         public static float BoundaryDist(float angleRad)
         {
-            double ca = Math.Abs(Math.Cos(angleRad));
-            double sa = Math.Abs(Math.Sin(angleRad));
-            double p = Math.Pow(ca, ShapeN) + Math.Pow(sa, ShapeN);
+            // n is fixed at 4, so square-twice / sqrt-twice replaces both Math.Pow calls —
+            // the web takes the same shortcut ("fast ^4/^¼ path", builder.html:530). This runs
+            // a million times while baking the sand texture, where two pow() per texel cost
+            // real seconds of startup.
+            double ca = Math.Cos(angleRad); ca *= ca; ca *= ca;
+            double sa = Math.Sin(angleRad); sa *= sa; sa *= sa;
+            double p = ca + sa;
             if (p <= 1e-12) return SandRadius;
-            return (float)(SandRadius / Math.Pow(p, 1.0 / ShapeN));
+            return (float)(SandRadius / Math.Sqrt(Math.Sqrt(p)));
         }
 
         /// <summary>
