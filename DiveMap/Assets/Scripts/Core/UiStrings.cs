@@ -87,6 +87,8 @@ namespace DiveMap.Core
                 { "อื่นๆ",                         "Other" },
                 { "นักดำน้ำ",                      "Diver" },
                 { "พิเศษ",                         "Special" },
+                // kind SPECIAL / assetId warp:* — same wording the web uses (builder.html L796).
+                { "ประตูวาป",                      "Warp gate" },
 
                 // ชื่อ asset จาก asset_manifest.json — EN จาก builder.html TR (L742-1022); 15 คีย์ท้ายที่เว็บยังไม่มี แปลเพิ่มที่นี่
                 { "กลม",                           "Round" },
