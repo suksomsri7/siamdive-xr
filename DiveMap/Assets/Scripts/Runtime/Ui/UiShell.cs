@@ -40,7 +40,9 @@ namespace DiveMap.Runtime.Ui
         private RectTransform _menuPanel;
         private GameObject _mapsLayer;
         private MapListScreen _mapList;
-        private GameObject _soonLayer;
+        private GameObject _settingsLayer;
+        private SettingsScreen _settings;
+        private InfoCardController _card;
 
         private OrbitCamera _orbit;
         private float _nextOrbitLookup;
@@ -83,16 +85,26 @@ namespace DiveMap.Runtime.Ui
             Instance = this;
 
             EnsureEventSystem();
+
+            // Saved graphics preset must be live before the first frame is presented.
+            // "high" is a no-op by construction (it restores the captured defaults), so
+            // a default install renders exactly as it did before WO-XR-05.4.
+            if (SettingsStore.Gfx != SettingsStore.High)
+                SettingsScreen.ApplyGraphics(SettingsStore.Gfx);
+
             BuildCanvas();
             BuildHamburger();
             BuildMenu();
             BuildMapsScreen();
-            BuildSoonScreen();
+            BuildSettingsScreen();
+            BuildInfoCard();
 
             _nav = gameObject.AddComponent<UiNav>();
             _nav.StackChanged += OnStackChanged;
+            if (_card != null) _card.Build(_safe, _nav);
 
-            Debug.Log($"[UI] shell ready (lang={UiStrings.Lang}, strings={UiStrings.Count})");
+            Debug.Log($"[UI] shell ready (lang={UiStrings.Lang}, gfx={SettingsStore.Gfx}, " +
+                      $"strings={UiStrings.Count})");
         }
 
         private IEnumerator Start()
@@ -207,7 +219,7 @@ namespace DiveMap.Runtime.Ui
             UiKit.TopRow(title.rectTransform, 34f, 80f, 36f, 36f);
 
             MenuItem(0, UiStrings.Tr("รายการแมพ"), OpenMapList);
-            MenuItem(1, UiStrings.Tr("ตั้งค่า"), OpenSettingsPlaceholder);
+            MenuItem(1, UiStrings.Tr("ตั้งค่า"), OpenSettings);
 
             Button close = UiKit.MakeButton(_menuPanel, "MenuClose", UiStrings.Tr("ปิด"), 32,
                                             UiKit.TealDim, UiKit.TextMain, CloseTop);
@@ -237,37 +249,25 @@ namespace DiveMap.Runtime.Ui
             _mapsLayer.SetActive(false);
         }
 
-        /// <summary>Placeholder until WO-XR-05.4 builds the real settings screen.</summary>
-        private void BuildSoonScreen()
+        /// <summary>Settings screen (WO-XR-05.4) — replaces the 05.1 "coming soon" card.</summary>
+        private void BuildSettingsScreen()
         {
-            _soonLayer = UiKit.MakeNode(_safe, "SoonLayer").gameObject;
+            _settingsLayer = UiKit.MakeNode(_safe, "SettingsLayer").gameObject;
+            _settings = _settingsLayer.AddComponent<SettingsScreen>();
+            _settings.Build();
+            _settings.CloseRequested += CloseTop;
+            _settings.LanguageChanged += ApplyLanguage;
+            _settingsLayer.SetActive(false);
+        }
 
-            Button scrim = UiKit.MakeButton(_soonLayer.transform, "Scrim", null, 0, UiKit.Scrim,
-                                            UiKit.TextMain, CloseTop);
-            UiKit.Stretch(scrim.GetComponent<RectTransform>());
-
-            Image card = UiKit.MakePanel(_soonLayer.transform, "Card", UiKit.PanelBg);
-            var crt = card.rectTransform;
-            crt.anchorMin = new Vector2(0.5f, 0.5f);
-            crt.anchorMax = new Vector2(0.5f, 0.5f);
-            crt.pivot = new Vector2(0.5f, 0.5f);
-            crt.sizeDelta = new Vector2(820f, 420f);
-            crt.anchoredPosition = Vector2.zero;
-
-            Text title = UiKit.MakeText(crt, "Title", UiStrings.Tr("ตั้งค่า"), 46,
-                                        TextAnchor.MiddleCenter, UiKit.Teal);
-            UiKit.TopRow(title.rectTransform, 48f, 80f, 40f, 40f);
-
-            Text body = UiKit.MakeText(crt, "Body", UiStrings.Tr("เร็วๆ นี้"), 36,
-                                       TextAnchor.MiddleCenter, UiKit.TextDim);
-            UiKit.TopRow(body.rectTransform, 160f, 80f, 40f, 40f);
-
-            Button close = UiKit.MakeButton(crt, "Close", UiStrings.Tr("ปิด"), 32,
-                                            UiKit.TealDim, UiKit.TextMain, CloseTop);
-            UiKit.Anchor(close.GetComponent<RectTransform>(), new Vector2(0.5f, 0f),
-                         new Vector2(240f, 84f), new Vector2(0f, 40f));
-
-            _soonLayer.SetActive(false);
+        /// <summary>
+        /// Info card (WO-XR-05.3). It lives on the shell GameObject rather than on a
+        /// screen layer because it is NOT a screen: it never enters the nav stack, so the
+        /// orbit camera keeps responding while the card is open.
+        /// </summary>
+        private void BuildInfoCard()
+        {
+            _card = gameObject.AddComponent<InfoCardController>();
         }
 
         // ── navigation ───────────────────────────────────────────────────────────
@@ -287,10 +287,53 @@ namespace DiveMap.Runtime.Ui
             if (_mapList != null) _mapList.EnsureLoaded();
         }
 
-        public void OpenSettingsPlaceholder()
+        public void OpenSettings()
         {
-            if (_nav == null || _soonLayer == null) return;
-            _nav.Push("settings", _soonLayer);
+            if (_nav == null || _settingsLayer == null) return;
+            if (_settings != null) _settings.Refresh();
+            _nav.Push("settings", _settingsLayer);
+        }
+
+        /// <summary>The info card controller (QC + deep links).</summary>
+        public InfoCardController Card => _card;
+
+        /// <summary>
+        /// Re-render the whole UI in the current language, without rebuilding a single
+        /// screen. Every live <see cref="Text"/> is passed through
+        /// <see cref="UiStrings.ToLang"/>, which maps a displayed string back to its Thai
+        /// source and forward into the target language; strings that are not in the table
+        /// (map names, owner names, numbers) are returned untouched.
+        ///
+        /// This is why screens owned by other work orders — MapListScreen and AppBoot's
+        /// own BootCanvas status/error lines — follow the language switch even though
+        /// neither file is edited here.
+        /// </summary>
+        public void ApplyLanguage()
+        {
+            string lang = UiStrings.Lang;
+            int touched = 0;
+
+            foreach (Text t in UnityEngine.Object.FindObjectsByType<Text>(
+                         FindObjectsInactive.Include, FindObjectsSortMode.None))
+            {
+                if (t == null || string.IsNullOrEmpty(t.text)) continue;
+
+                // Never rewrite what the user typed into a text field.
+                InputField field = t.GetComponentInParent<InputField>(true);
+                if (field != null && field.textComponent == t) continue;
+
+                string next = UiStrings.ToLang(t.text, lang);
+                if (!string.Equals(next, t.text, StringComparison.Ordinal))
+                {
+                    t.text = next;
+                    touched++;
+                }
+            }
+
+            if (_card != null) _card.Render();
+            if (_settings != null) _settings.Refresh();
+
+            Debug.Log($"[UI] language={lang} retranslated={touched} texts");
         }
 
         public void CloseTop()
@@ -398,6 +441,12 @@ namespace DiveMap.Runtime.Ui
         {
             Debug.Log("[UI] qcui start prefix=" + prefix);
 
+            // 0) Deterministic language. The CI player reports SystemLanguage.English, so
+            // without this the Thai shots would silently come out in English and the
+            // th→en comparison at the end would prove nothing.
+            UiStrings.Lang = UiStrings.Thai;
+            ApplyLanguage();
+
             // 1) wait for the map to exist (SceneBuilder's root is named "Map").
             float t0 = Time.realtimeSinceStartup;
             while (GameObject.Find("Map") == null && Time.realtimeSinceStartup - t0 < 30f)
@@ -447,6 +496,41 @@ namespace DiveMap.Runtime.Ui
             yield return new WaitForSecondsRealtime(0.8f);
             ScreenCapture.CaptureScreenshot(prefix + "_search.png");
             Debug.Log("[UI] qcui shot -> " + prefix + "_search.png");
+            yield return new WaitForSecondsRealtime(1.5f);
+
+            // 5) info card (WO-XR-05.3). Shown directly by assetId — simulating a touch
+            // in a headless player is not reproducible, and the pick math already has
+            // unit tests (ItemPickerTests); what this shot proves is the CARD.
+            CloseAll();
+            yield return new WaitForSecondsRealtime(0.5f);
+            bool card = _card != null && _card.ShowCardFor("cc0:wreck_chang");
+            Debug.Log($"[UI] qcui card shown={card} name={(_card != null ? _card.CurrentName : null)} " +
+                      $"kind={(_card != null ? _card.CurrentKind : null)} " +
+                      $"depth={(_card != null ? _card.CurrentDepth : -1):F1}");
+            yield return new WaitForSecondsRealtime(0.8f);
+            ScreenCapture.CaptureScreenshot(prefix + "_card.png");
+            Debug.Log("[UI] qcui shot -> " + prefix + "_card.png");
+            yield return new WaitForSecondsRealtime(1.5f);
+
+            // 6) settings (WO-XR-05.4)
+            OpenSettings();
+            yield return new WaitForSecondsRealtime(0.8f);
+            ScreenCapture.CaptureScreenshot(prefix + "_settings.png");
+            Debug.Log("[UI] qcui shot -> " + prefix + "_settings.png");
+            yield return new WaitForSecondsRealtime(1.5f);
+
+            // 7) English: the menu + the still-open card must come back with no Thai left.
+            UiStrings.Lang = UiStrings.English;
+            ApplyLanguage();
+            CloseAll();
+            OpenMenu();
+            yield return new WaitForSecondsRealtime(1.0f);
+            ScreenCapture.CaptureScreenshot(prefix + "_en.png");
+            Debug.Log("[UI] qcui shot -> " + prefix + "_en.png (card name=" +
+                      (_card != null ? _card.CurrentName : null) + ")");
+
+            // Leave the preference as we found it — the QC player writes real PlayerPrefs.
+            UiStrings.Lang = UiStrings.Thai;
 
             yield return new WaitForSecondsRealtime(2f);
             Debug.Log("[UI] qcui done");
