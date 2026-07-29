@@ -2,7 +2,7 @@
 
 > เอกสารนี้เขียนเพื่อให้ AI coding agent ใดๆ (Codex / Kimi / Claude / อื่นๆ) ทำงานต่อได้ทันที
 > อ่านคู่กับ: `DESIGN_DOC.md` (สัญญาหลัก v1.2), `QC_PLAN.md`, `SECURITY_PLAN.md`
-> อัปเดตล่าสุด: 2026-07-29 (WO-XR-05 ครบทั้ง 4 ก้อน merge เข้า main = `06f88ce`, รอ build ตัวเต็ม)
+> อัปเดตล่าสุด: 2026-07-29 เย็น (WO-XR-04 ครบ 3 ก้อน merge เข้า main = `8cd2c17` — ปลา GLB จริง + พื้นทราย/ฉากหลังแบบเว็บ + god rays/caustics/fog)
 
 ## 1. โปรเจกต์คืออะไร
 - แอป **DiveMap** (`com.siamdive.divemap`) — Unity 6000.0.79f1 ใน `DiveMap/`
@@ -18,7 +18,11 @@
 - ✅ WO-XR-05.3+05.4 **merge เข้า main แล้ว** (`06f88ce`): แตะวัตถุ → การ์ด ชื่อ/ชนิด/ความลึก (AABB slab test, ฝูงปลา fallback ทรงกลม) · หน้าตั้งค่า + สลับ ไทย/English ทั้งแอปทันที (UiStrings 260 คีย์ port จาก `TR` ของเว็บ) + โหมดกราฟิกประหยัด — **WO-XR-05 ครบทั้ง 4 ก้อน**
 - ✅ ระบบตาอัตโนมัติ: ทุก push → CI job qc-shot → แอปถ่ายรูปตัวเอง 2 มุม → artifact `qc-screenshot`
 - ✅ XR-LOD CDN: `maps.siamdive.com/models/xr/` มี 15 โมเดล (manifest.json count=15) — เรือ/สัตว์หลัก KTX2+Draco
-- ❌ ยังไม่มี: AR (WO-XR-02m), ปลา GLB จริงรายตัว + caustics (04), โหมดแก้ไข (06), onboarding + ขึ้น Play (07)
+- ✅ WO-XR-04 **ครบ 3 ก้อน merge เข้า main แล้ว 2026-07-29 เย็น** (`3506319` 04.1 → `41a0cab` 04.2 → `f98bb05` 04.3, merge `8cd2c17`):
+  - **04.1 ปลา GLB จริง** — ฝูงวาดโมเดลจริงจาก CDN (Scad_School_xr0 670 tris / Barracuda_School_xr0 450 / Trevally_xr1 3,999) แบบ static instancing เหมือน `buildSchool()` ของเว็บ · QC run `30488826434` ยืนยัน `tex=OK` ครบ 3 สายพันธุ์, `baseLen` ตรงเป๊ะ (1.911/1.899/1.862), `schools=10 fish=1100 whale=1`, `whale dot=1.000`
+  - **04.2 พื้นทราย + ฉากหลัง** — superellipse slab 340u (แมพเดโม 306×374) + skirt + ก้นแบน, สีทราย+ขอบ haze เบคเป็น texture 1024², ฉากหลังไล่สี 4 stop แบบ screen-space, far plane 1000→9000
+  - **04.3 god rays + caustics + fog** — 10 ลำแสงขนานดวงอาทิตย์, caustics additive บนผิวบนของพื้น, fog เชิงเส้น 500-9000 (0x123a55)
+- ❌ ยังไม่มี: AR (WO-XR-02m), โหมดแก้ไข (06), onboarding + ขึ้น Play (07)
 
 ### บทเรียนรอบ 2026-07-28 (กันทำซ้ำ)
 - **อ่านสูตรเว็บให้ถูกชั้นก่อนตั้งค่าเสมอ** — span ของฝูง = สูตร local × `item.s` และ N ในสูตรต้องใช้ N ของ**เว็บ** (scad 500) ไม่ใช่ N ที่ Unity วาดจริง (120) ไม่งั้นฝูงหด
@@ -59,17 +63,18 @@ tools/                          (สคริปต์ XR-LOD pipeline)
 ### 5.1 ✅ ปิดแล้ว — WO-XR-03 (2026-07-28)
 formation ตามสูตรเว็บ + วาฬ GLB จริง + QC fixes (ครีบดำ/gloss/heading log) · commit `a7d12f8` → `f31d9fc`
 
-### 5.2 ▶️ RESUME — WO-XR-05 ครบทั้ง 4 ก้อนแล้ว รอ build ตัวเต็ม
-สถานะ 2026-07-29 14:25 UTC: **main = `06f88ce`** merge ครบทั้ง `wo-xr-05` (05.1/05.2) และ `wo-xr-05b` (05.3/05.4) · CI ของ merge commit นี้กำลังรัน → เมื่อเขียว **ดาวน์โหลด artifact `DiveMap-apk` + `DiveMap-windows` วาง `/var/www/dive3d/dl/` แล้วแจ้ง user** (นี่คือ build แรกที่มีครบ: เมนู + รายการแมพ + ค้นหา + การ์ดข้อมูล + ตั้งค่า/ภาษา + ฝูงปลา/วาฬ + แก้ครีบดำ)
-
-QC ที่ผ่านแล้ว (run 30453283839 บน branch): การ์ด "HTMS ช้าง / ซากเรือ / ความลึก 40.0 ม." ตรงสูตรเว็บ (`U_PER_M=6`, builder.html:600) · สลับ EN ได้ทั้งเมนูและการ์ด ("HTMS Chang / Wreck / Depth 40.0 m") · รายการแมพ 6 อัน + ค้นหา "Chang" → 1
-**หมายเหตุ**: ภาพ QC ของ branch `wo-xr-05b` ยังเห็นปลาดำ เพราะ branch แตกก่อนคอมมิตแก้ครีบ (`f31d9fc`) — หลัง merge เข้า main หายแล้ว ตรวจซ้ำจาก `qc_screenshot2.png` ของ run บน main
-
-เก็บกวาดเมื่อยืนยันแล้ว: `git worktree remove /root/projects/siamdive-xr-ui` และ `-ui2`
+### 5.2 ✅ ปิดแล้ว — WO-XR-05 ครบ 4 ก้อน + build ตัวเต็มส่ง user แล้ว
+`06f88ce` (CI run `30456759388` เขียว) → APK `dive3d.suksomsri.cloud/dl/DiveMap-full-16704d4e60.apk` + Windows zip เดียวกัน
 
 **บทเรียนห้ามลืม: legacy `Text` + `VerticalWrapMode.Truncate` "ทิ้งทั้งบรรทัด" ถ้ากล่องเตี้ยกว่า fontSize × 1.511** (NotoSansThai-Regular: ascender 1061 / descender 450 / unitsPerEm 1000, USE_TYPO_METRICS) — ใช้ `UiKit.RowHeight(size, lines)` เสมอ อย่าใส่ความสูงเป็นเลขดิบ
 
-ไฟล์เทสที่ส่ง user แล้ว: `dive3d.suksomsri.cloud/dl/DiveMap-menu-977231d605.apk` (มีเมนู) · `.../DiveMap-r9-6f5298db2d.apk` (ไม่มีเมนู)
+### 5.2b ▶️ RESUME — WO-XR-04 รอผล QC ของ `8cd2c17`
+CI run **`30490180208`** (main = `8cd2c17`) → เมื่อเขียว: โหลด `qc-screenshot` เทียบ `/tmp/qc041/qc_screenshot.png` (ก่อน 04.2) แล้วเช็ค 5 ข้อ
+1. ขอบพื้นละลายเป็นน้ำเงินเข้ม ไม่ใช่ขอบครีมตัดคม (สังเกต: **สีทรายที่เห็นจะเป็นวงกลม r=340** มุม squircle จมในน้ำเงิน — เว็บก็เป็นแบบนี้ เพราะ haze ใช้ `hypot(x,z)/340` ไม่ใช่ระยะถึงขอบ)
+2. footprint 0.9:1.1 (306×374) · 3. เห็น speckle · 4. ฉากหลังบนอ่อน-ล่างเข้ม · 5. เรือ/ปลา/วาฬ/เมนู/การ์ด ไม่ regress
+บรรทัด log ที่เป็น oracle: `[Scene] seabed rx=306.0 rz=374.0 rings=28 seg=96 …` · `[Scene] sand texture 1024² …` · `[Scene] backdrop ready via=…` (ถ้าเห็น `backdrop DISABLED` = หา texture property ของ unlit shader ไม่ได้ → ฉากหลังกลับไปเป็นสีเดียว ต้องหา property name จาก log) · `[Scene] godrays beams=10 …`
+
+**ค่า frame cost ที่ต้องเฝ้า**: `[Marine] avgFrameMs` บน llvmpipe — 04.1 ทำให้ 135.6 → 300.2 (ปลา GLB tris เยอะขึ้น) แก้ด้วยเกณฑ์ LOD ตามงบ (`c0a5af5`, trevally 8,800→3,999) ควรลงมาบ้าง · ถ้า QC job ใกล้ timeout **ให้ลด settle frames ไม่ใช่ลดจำนวนปลา** (1,100 คือ oracle)
 
 ### 5.3 ✅ ปิดแล้ว — WO-XR-05 ทั้ง 4 ก้อน (แผนเดิม `/root/projects/siamdive-xr-docs/WO-XR-05.md`)
 งานต่อยอดที่ยังค้าง: ป้ายสถานะบนหัวจอของ AppBoot เป็นสตริงประกอบ (`"{ชื่อ} · โหลดแล้ว N · แทนที่ M"`) ยังไม่แปลตามภาษา · โหมดประหยัดยังไม่ลดจำนวนปลา (ต้องแตะ FishSchoolSystem) · การ์ดยังไม่โชว์รูปจาก pin (SceneBuilder ยังไม่สร้าง pin ในฉาก)
