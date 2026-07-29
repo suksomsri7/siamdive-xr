@@ -38,6 +38,9 @@ namespace DiveMap.Runtime
             public float FrameSizeY;
             public float FrameSizeZ;
             public float FrameMinY;
+
+            /// <summary>env.waterLevel of this map — the surface the sun shafts start from.</summary>
+            public float WaterLevel;
         }
 
         // Kinds that swim (drift through the water column) — excluded from the opening-shot
@@ -328,6 +331,7 @@ namespace DiveMap.Runtime
                 FrameSizeY = frameBox.size.y,
                 FrameSizeZ = frameBox.size.z,
                 FrameMinY = frameBox.min.y,
+                WaterLevel = _waterLevel,
             });
         }
 
@@ -711,9 +715,27 @@ namespace DiveMap.Runtime
             seabed.transform.SetParent(root, false);
             var mf = seabed.AddComponent<MeshFilter>();
             var mr = seabed.AddComponent<MeshRenderer>();
-            mf.sharedMesh = BuildPolarGrid(rings, seg, sx, sz, slopeX, slopeZ, sculpt, thickness);
+            mf.sharedMesh = BuildPolarGrid(rings, seg, sx, sz, slopeX, slopeZ, sculpt, thickness,
+                                           out Mesh topSurface);
             mr.sharedMaterial = SandMaterial();
             seabed.AddComponent<MeshCollider>().sharedMesh = mf.sharedMesh;
+
+            // ── Caustics (WO-XR-04.3) ─────────────────────────────────────────────
+            // Rippling light on the sand: the top surface again, 0.4 u up (an offset, never
+            // ZWrite tricks — that is how you get flickering z-fighting), drawn additively
+            // with the caustic noise slowly drifting across it.
+            if (topSurface != null)
+            {
+                var caustics = new GameObject("Caustics");
+                caustics.transform.SetParent(root, false);
+                caustics.transform.localPosition = new Vector3(0f, 0.4f, 0f);
+                caustics.AddComponent<MeshFilter>().sharedMesh = topSurface;
+                var cmr = caustics.AddComponent<MeshRenderer>();
+                cmr.sharedMaterial = CausticsMaterial();
+                cmr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+                cmr.receiveShadows = false;
+                caustics.AddComponent<WaterScroll>().speed = new Vector2(0.004f, 0.003f);
+            }
 
             // Water disc at env.waterLevel.
             var water = new GameObject("Water");
@@ -768,7 +790,8 @@ namespace DiveMap.Runtime
         ///     web sculpts still land on the right vertices.
         /// </summary>
         private static Mesh BuildPolarGrid(int rings, int seg, float sx, float sz,
-                                           float slopeX, float slopeZ, float[] sculpt, float thickness)
+                                           float slopeX, float slopeZ, float[] sculpt, float thickness,
+                                           out Mesh topSurface)
         {
             int topN = 1 + rings * seg;
             int skirtN = seg * 8;             // 4 verts × (outward + inward) per segment
@@ -869,12 +892,17 @@ namespace DiveMap.Runtime
             }
 
 
+            // Top-surface triangles are collected separately as well: the caustics overlay
+            // (WO-XR-04.3) is the top surface alone, raised a hair — it must not glow on the
+            // slab's sides or under its bottom.
+            var topTris = new List<int>(rings * seg * 6);
+
             // Inner fan: center → first ring.
             for (int j = 0; j < seg; j++)
             {
                 int b = 1 + j;
                 int c = 1 + (j + 1) % seg;
-                tris.Add(0); tris.Add(b); tris.Add(c);
+                topTris.Add(0); topTris.Add(b); topTris.Add(c);
             }
 
             // Ring quads.
@@ -889,10 +917,12 @@ namespace DiveMap.Runtime
                     int v01 = ringStart + j2;
                     int v10 = nextStart + j;
                     int v11 = nextStart + j2;
-                    tris.Add(v00); tris.Add(v10); tris.Add(v11);
-                    tris.Add(v00); tris.Add(v11); tris.Add(v01);
+                    topTris.Add(v00); topTris.Add(v10); topTris.Add(v11);
+                    topTris.Add(v00); topTris.Add(v11); topTris.Add(v01);
                 }
             }
+
+            tris.AddRange(topTris);
 
             var mesh = new Mesh { name = "SeabedPolarGrid" };
             if (vertCount > 65000) mesh.indexFormat = UnityEngine.Rendering.IndexFormat.UInt32;
@@ -905,6 +935,7 @@ namespace DiveMap.Runtime
             // Winding verification: the TOP SURFACE must face up. Averaged over the whole
             // mesh this test is now meaningless (the bottom fan's normals are −Y by design),
             // so it only looks at the top vertices.
+            bool flipped = false;
             if (AverageNormalY(mesh, topN) < 0f)
             {
                 int[] t = mesh.triangles;
@@ -914,6 +945,7 @@ namespace DiveMap.Runtime
                 }
                 mesh.triangles = t;
                 mesh.RecalculateNormals();
+                flipped = true;
             }
 
             // Skirt + bottom normals are assigned, not derived: the skirt is drawn from both
@@ -925,6 +957,27 @@ namespace DiveMap.Runtime
                 for (int i = topN; i < vertCount; i++) final[i] = norms[i];
                 mesh.normals = final;
             }
+
+            // Top surface on its own, for the caustics overlay: same vertices, same (possibly
+            // flipped) winding, so the two meshes can never disagree about which way is up.
+            topSurface = new Mesh { name = "SeabedTopSurface" };
+            var tv = new Vector3[topN];
+            var tu = new Vector2[topN];
+            var tn = new Vector3[topN];
+            Array.Copy(verts, tv, topN);
+            Array.Copy(uvs, tu, topN);
+            if (final != null && final.Length >= topN) Array.Copy(final, tn, topN);
+            int[] tt = topTris.ToArray();
+            if (flipped)
+            {
+                for (int i = 0; i < tt.Length; i += 3) (tt[i + 1], tt[i + 2]) = (tt[i + 2], tt[i + 1]);
+            }
+            if (topN > 65000) topSurface.indexFormat = UnityEngine.Rendering.IndexFormat.UInt32;
+            topSurface.vertices = tv;
+            topSurface.uv = tu;
+            topSurface.triangles = tt;
+            topSurface.normals = tn;
+            topSurface.RecalculateBounds();
 
             return mesh;
         }
@@ -1107,6 +1160,31 @@ namespace DiveMap.Runtime
             var tex = GenerateCausticTexture(64);
             mat.mainTexture = tex;
             mat.mainTextureScale = new Vector2(4f, 4f);
+            return mat;
+        }
+
+        /// <summary>
+        /// WO-XR-04.3 — additive caustics on the sand. Same transparent base + blend override
+        /// as the god rays (no new shader keyword), one queue slot BEFORE them so the shafts
+        /// read as being in front of the floor glow, and a low alpha: this is meant to be
+        /// noticed as light on sand, not as a second texture.
+        /// </summary>
+        private static Material CausticsMaterial()
+        {
+            var mat = BaseMat(true);
+            if (mat.HasProperty("_Mode")) mat.SetFloat("_Mode", 3f);
+            if (mat.HasProperty("_SrcBlend")) mat.SetFloat("_SrcBlend", (float)(int)UnityEngine.Rendering.BlendMode.SrcAlpha);
+            if (mat.HasProperty("_DstBlend")) mat.SetFloat("_DstBlend", (float)(int)UnityEngine.Rendering.BlendMode.One);
+            if (mat.HasProperty("_ZWrite")) mat.SetFloat("_ZWrite", 0f);
+            mat.DisableKeyword("_ALPHATEST_ON");
+            mat.EnableKeyword("_ALPHABLEND_ON");
+            mat.DisableKeyword("_ALPHAPREMULTIPLY_ON");
+            if (mat.HasProperty("_Glossiness")) mat.SetFloat("_Glossiness", 0f);
+            if (mat.HasProperty("_Metallic")) mat.SetFloat("_Metallic", 0f);
+            mat.renderQueue = 3050;
+            mat.color = new Color(0.78f, 0.92f, 1f, 0.13f);
+            mat.mainTexture = GenerateCausticTexture(128);
+            mat.mainTextureScale = new Vector2(8f, 8f);
             return mat;
         }
 
