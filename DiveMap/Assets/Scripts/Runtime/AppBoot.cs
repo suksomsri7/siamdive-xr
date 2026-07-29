@@ -297,6 +297,20 @@ namespace DiveMap.Runtime
             StartCoroutine(Boot());
         }
 
+        /// <summary>
+        /// Switch to another dive-site map (WO-XR-05.2 map list). Persisting the id also
+        /// gives "remember the last map" for free, because Start() already reads the
+        /// PlayerPrefs "shortId" before falling back to the demo site.
+        /// </summary>
+        public void LoadMap(string shortId)
+        {
+            if (string.IsNullOrEmpty(shortId)) return;
+            _shortId = shortId;
+            PlayerPrefs.SetString("shortId", shortId);
+            PlayerPrefs.Save();
+            Retry();
+        }
+
         // ── UI (built in code) ────────────────────────────────────────────────────────
 
         private void BuildUi()
