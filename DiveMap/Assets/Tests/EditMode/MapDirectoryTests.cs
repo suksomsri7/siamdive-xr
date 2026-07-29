@@ -199,5 +199,70 @@ namespace DiveMap.Tests
             Assert.Throws<ArgumentException>(() => MapDirectory.ParseList(""));
             Assert.Throws<ArgumentException>(() => MapDirectory.ParseList(null));
         }
+
+        // ── CardLabel / Ellipsize ────────────────────────────────────────────────
+        // The card name is drawn on ONE non-wrapping line, so the label must be capped
+        // in code rather than left to the text component (which used to drop the whole
+        // line when it did not fit — the "map name is invisible" bug).
+
+        [Test]
+        public void CardLabel_KeepsEveryRealProdNameIntact()
+        {
+            MapPage page = MapDirectory.ParseList(RealListJson);
+
+            Assert.AreEqual("Hanuman", MapDirectory.CardLabel(page.Cards[0]));
+            Assert.AreEqual("Htms Chang", MapDirectory.CardLabel(page.Cards[3]));
+            Assert.AreEqual("T-13 (ต.13)", MapDirectory.CardLabel(page.Cards[4]));
+            Assert.AreEqual("Dive Site Tu -1", MapDirectory.CardLabel(page.Cards[5]));
+
+            foreach (MapCard c in page.Cards)
+            {
+                string label = MapDirectory.CardLabel(c);
+                Assert.IsNotEmpty(label, "a card label must never be blank — " + c.ShortId);
+                Assert.LessOrEqual(label.Length, MapDirectory.MaxCardNameChars);
+            }
+        }
+
+        [Test]
+        public void CardLabel_FallsBackToShortIdAndNeverReturnsNull()
+        {
+            Assert.AreEqual("yh7hbkdmzur8",
+                            MapDirectory.CardLabel(new MapCard { ShortId = "yh7hbkdmzur8", Name = "  " }));
+            Assert.AreEqual("", MapDirectory.CardLabel(null));
+        }
+
+        [Test]
+        public void CardLabel_ElidesAnOverlongName()
+        {
+            var card = new MapCard { ShortId = "x", Name = new string('A', 80) };
+            string label = MapDirectory.CardLabel(card);
+
+            Assert.AreEqual(MapDirectory.MaxCardNameChars, label.Length);
+            StringAssert.EndsWith("…", label);
+        }
+
+        [Test]
+        public void Ellipsize_LeavesShortStringsAloneAndTrims()
+        {
+            Assert.AreEqual("Hanuman", MapDirectory.Ellipsize("Hanuman", 34));
+            Assert.AreEqual("Hanuman", MapDirectory.Ellipsize("  Hanuman  ", 34));
+            Assert.AreEqual("Hanuman", MapDirectory.Ellipsize("Hanuman", 7)); // exact fit, no cut
+        }
+
+        [Test]
+        public void Ellipsize_CutsAtTheLimitWithoutATrailingSpace()
+        {
+            Assert.AreEqual("Htms…", MapDirectory.Ellipsize("Htms Chang", 5));
+            Assert.AreEqual("…", MapDirectory.Ellipsize("Htms Chang", 1));
+        }
+
+        [Test]
+        public void Ellipsize_HandlesNullEmptyAndNonPositiveLimits()
+        {
+            Assert.AreEqual("", MapDirectory.Ellipsize(null, 34));
+            Assert.AreEqual("", MapDirectory.Ellipsize("", 34));
+            Assert.AreEqual("", MapDirectory.Ellipsize("Hanuman", 0));
+            Assert.AreEqual("", MapDirectory.Ellipsize("Hanuman", -3));
+        }
     }
 }

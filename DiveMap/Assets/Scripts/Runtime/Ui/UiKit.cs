@@ -24,7 +24,9 @@ namespace DiveMap.Runtime.Ui
         public static readonly Color Teal     = new Color(0.310f, 0.820f, 0.771f, 1f); // #4FD1C5
         public static readonly Color TealDim  = new Color(0.176f, 0.478f, 0.451f, 1f);
         public static readonly Color PanelBg  = new Color(0.043f, 0.090f, 0.118f, 0.96f);
-        public static readonly Color ScreenBg = new Color(0.027f, 0.067f, 0.094f, 0.99f);
+        // Fully opaque: at 0.99 the screen underneath (the slide-in menu, the 3D scene)
+        // bled through as a ghost image in the QC screenshots.
+        public static readonly Color ScreenBg = new Color(0.027f, 0.067f, 0.094f, 1f);
         public static readonly Color CardBg   = new Color(0.086f, 0.157f, 0.196f, 1f);
         public static readonly Color Scrim    = new Color(0f, 0f, 0f, 0.55f);
         public static readonly Color TextMain = new Color(0.925f, 0.961f, 0.973f, 1f);
@@ -33,6 +35,45 @@ namespace DiveMap.Runtime.Ui
 
         /// <summary>The bundled NotoSansThai face — the only font that renders Thai in CI.</summary>
         public static Font Face => UiFont.Get();
+
+        // ── text metrics ─────────────────────────────────────────────────────────
+
+        /// <summary>
+        /// Height of ONE line of text as a multiple of <c>fontSize</c>, for the bundled
+        /// NotoSansThai-Regular face.
+        ///
+        /// Measured from the TTF itself (unitsPerEm 1000, hhea/OS-2 ascender 1061,
+        /// descender -450, lineGap 0, USE_TYPO_METRICS set) ⇒ 1511/1000 = 1.511.
+        /// Thai needs that much room: two levels of tone/vowel marks above the base
+        /// glyph and a below-vowel under it, so the face is far taller than a Latin-only
+        /// font (~1.2).
+        ///
+        /// WHY THIS CONSTANT EXISTS — the WO-XR-05.2 "map name is invisible" bug:
+        /// legacy <see cref="Text"/> with <see cref="VerticalWrapMode.Truncate"/> does not
+        /// clip a line that is too tall, it DROPS it. A 36 px name in a 52 px row needs
+        /// 36 × 1.511 = 54.4 px, so the single line was discarded and the card rendered
+        /// nothing at all — while the 26 px meta line (39.3 px in a 40 px row) survived by
+        /// 0.7 px. Size every text row through <see cref="RowHeight"/> and never below it.
+        /// </summary>
+        public const float LineHeightRatio = 1.511f;
+
+        /// <summary>Pixel height of one rendered line at <paramref name="fontSize"/>.</summary>
+        public static float LineHeight(int fontSize)
+        {
+            if (fontSize <= 0) return 0f;
+            return Mathf.Ceil(fontSize * LineHeightRatio);
+        }
+
+        /// <summary>
+        /// Minimum safe RectTransform height for <paramref name="lines"/> lines at
+        /// <paramref name="fontSize"/>, with a small slack so rounding inside Unity's
+        /// TextGenerator can never push the last line out of the rect.
+        /// </summary>
+        public static float RowHeight(int fontSize, int lines = 1)
+        {
+            if (lines < 1) lines = 1;
+            return LineHeight(fontSize) * lines + 6f;
+        }
 
         // ── primitives ───────────────────────────────────────────────────────────
 
@@ -70,9 +111,27 @@ namespace DiveMap.Runtime.Ui
             t.color = color;
             t.text = content ?? "";
             t.horizontalOverflow = HorizontalWrapMode.Wrap;
-            t.verticalOverflow = VerticalWrapMode.Truncate;
+            // Overflow, NOT Truncate. Truncate silently DELETES any line taller than the
+            // rect instead of clipping it, which is how the map-card name managed to
+            // disappear completely (see LineHeightRatio). Overflow means the worst case
+            // is text that spills a few pixels — never text that vanishes.
+            t.verticalOverflow = VerticalWrapMode.Overflow;
             t.raycastTarget = false;
             t.supportRichText = false;
+            return t;
+        }
+
+        /// <summary>
+        /// Single-line text: never wraps, never truncates. Long content simply runs past
+        /// the rect and is clipped by the nearest RectMask2D (the scroll viewport for a
+        /// list card), so a long map name can degrade but can never blank the row.
+        /// </summary>
+        public static Text MakeLine(Transform parent, string name, string content, int size,
+                                    TextAnchor anchor, Color color)
+        {
+            Text t = MakeText(parent, name, content, size, anchor, color);
+            t.horizontalOverflow = HorizontalWrapMode.Overflow;
+            t.verticalOverflow = VerticalWrapMode.Overflow;
             return t;
         }
 

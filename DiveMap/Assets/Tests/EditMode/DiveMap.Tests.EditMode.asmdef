@@ -4,6 +4,7 @@
   "references": [
     "DiveMap.Core",
     "DiveMap.Runtime",
+    "UnityEngine.UI",
     "UnityEngine.TestRunner",
     "UnityEditor.TestRunner"
   ],
