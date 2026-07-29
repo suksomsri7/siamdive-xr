@@ -58,23 +58,17 @@ tools/                          (สคริปต์ XR-LOD pipeline)
 ### 5.1 ✅ ปิดแล้ว — WO-XR-03 (2026-07-28)
 formation ตามสูตรเว็บ + วาฬ GLB จริง + QC fixes (ครีบดำ/gloss/heading log) · commit `a7d12f8` → `f31d9fc`
 
-### 5.2 ▶️ RESUME ตรงนี้ — ตรวจผล CI 2 รอบที่ค้างอยู่ แล้ว merge `wo-xr-05`
-รอบทำงาน 2026-07-28 จบลงตอน CI ทั้งสองยังรันไม่เสร็จ (user สั่งหยุดก่อนชน limit) **ผลยังไม่มีใครดู**
+### 5.2 ▶️ RESUME — รอผล CI ของ `wo-xr-05b` แล้ว merge
+สถานะ ณ 2026-07-29 13:15 UTC:
+- **main = `0d93c48`** (merge `wo-xr-05` เข้ามาแล้ว) = WO-XR-03 + QC fixes + **UI 05.1/05.2** (เมนู + รายการแมพ + ค้นหา) · CI ของ merge commit กำลังรัน
+- **branch `wo-xr-05b` = `e137941`** = 05.3 การ์ดข้อมูล + 05.4 ตั้งค่า/i18n 259 คีย์ (merge ตัวแก้ชื่อแมพเข้ามาแล้ว) · **CI ยิงไว้แล้ว รอผล** → ถ้าเขียว: `git merge wo-xr-05b` บน main → push → ส่ง build ให้ user
+- worktree: `/root/projects/siamdive-xr-ui` (wo-xr-05) + `/root/projects/siamdive-xr-ui2` (wo-xr-05b) — `git worktree remove` ทั้งคู่เมื่อ merge ครบ
 
-| run id | branch / sha | คืออะไร |
-|---|---|---|
-| `30359233289` | main `f31d9fc` | QC r8 fixes — ครีบหางแยก vertex (แก้ปลาดำ) + gloss 0.3→0.1 + log ทิศหัววาฬ |
-| `30359032908` | wo-xr-05 `dc2a954` | UI shell + เมนู + รายการแมพ + ค้นหา (05.1+05.2) รอบก่อนตก 1 เทส แก้แล้ว (87/88 ผ่านตั้งแต่รอบแรก คอมไพล์ผ่าน) |
+**บทเรียนสำคัญรอบนี้ (ห้ามลืม): legacy `Text` + `VerticalWrapMode.Truncate` จะ "ทิ้งทั้งบรรทัด" ถ้าความสูงกล่อง < fontSize × 1.511** (metric จริงของ NotoSansThai-Regular: ascender 1061 / descender 450 / unitsPerEm 1000, USE_TYPO_METRICS) — เป็นเหตุให้ชื่อแมพหายทั้งที่ข้อมูลถูกทุกอย่าง · ตอนนี้ `UiKit.MakeText` ใช้ `Overflow` แล้ว + มี `UiKit.RowHeight(size, lines)` ให้เรียกแทนการใส่เลขดิบ **ใช้ทุกครั้งที่สร้างแถวข้อความใหม่**
 
-ขั้นตอน resume:
-1. ดูผล 2 run ข้างบน (`curl .../actions/runs/<id>/jobs`) — ถ้าตก อ่าน `EditMode-test-results` artifact ก่อน (parse XML หา test-case ที่ result != Passed)
-2. **main**: โหลด `qc-screenshot` → ดู `qc_screenshot2.png` ว่าครีบหางปลาหายดำหรือยัง + grep log `[Marine] whale heading dot(forward,vel)` ต้อง ≈ +1.0
-3. **branch เขียว** → `cd /root/projects/siamdive-xr && git merge wo-xr-05` → push → CI → QC ภาพชุดใหม่ `qc_ui_menu.png` / `qc_ui_maps.png` / `qc_ui_search.png` (จากโหมด `-qcui` ที่เพิ่มใน workflow) → เช็ค layout+ฟอนต์ไทย ไม่ใช่สี (llvmpipe เพี้ยนสีปกติ)
-4. ส่ง APK+exe รุ่นมีเมนูให้ user (ดู §5 เดิม: วาง `/var/www/dive3d/dl/`)
-5. `git worktree remove /root/projects/siamdive-xr-ui` เมื่อ merge เสร็จ
-
-ไฟล์เทสที่ส่ง user ไปแล้วรอบนี้ (รุ่น `a7d12f8` — ยังไม่มีเมนู, ยังมีปลาดำ):
-`dive3d.suksomsri.cloud/dl/DiveMap-r8-026e26f8fb.apk` · `.../DiveMap-win-r8-026e26f8fb.zip`
+ไฟล์เทสที่ส่ง user แล้ว:
+- รุ่นมีเมนู (main `8d76e76`): `dive3d.suksomsri.cloud/dl/DiveMap-menu-977231d605.apk` · `.../DiveMap-win-menu-977231d605.zip`
+- รุ่นก่อนหน้า (แก้ปลาดำ ไม่มีเมนู): `.../DiveMap-r9-6f5298db2d.apk`
 
 ### 5.3 ทำต่อจากแผน WO-XR-05 (`/root/projects/siamdive-xr-docs/WO-XR-05.md`)
 05.3 การ์ดข้อมูล (แตะวัตถุ → ชื่อ/ชนิด/ความลึก) → 05.4 ตั้งค่า + i18n ไทย/EN เต็มระบบ
