@@ -25,9 +25,15 @@ namespace DiveMap.Core
     /// </summary>
     public static class FishAssetPick
     {
-        /// <summary>A school this big pays for the LOD1 swap…</summary>
-        public const int Lod1MinCount = 100;
-        /// <summary>…when its LOD0 is heavier than this.</summary>
+        /// <summary>
+        /// Per-school triangle budget: count × LOD0 tris above this takes LOD1. Budget-based
+        /// rather than count-based because the real demo map showed why — the trevally pods
+        /// are 50 fish each, under any sane "big school" count, yet at 8,800 tris apiece they
+        /// were 880k triangles between them (more than every other fish in the map combined,
+        /// and the QC frame cost went 136 → 300 ms). 200k is roughly one heavy pod's worth.
+        /// </summary>
+        public const int Lod1TriBudget = 200_000;
+        /// <summary>A model lighter than this is never worth swapping down.</summary>
         public const int Lod1MinTris = 2000;
 
         public struct Pick
@@ -84,9 +90,9 @@ namespace DiveMap.Core
             string lod1 = string.IsNullOrWhiteSpace(xrGlbUrlLod1) ? null : xrGlbUrlLod1.Trim();
             if (lod0 == null && lod1 == null) return false;
 
-            // Heavy LOD0 × a big school = the triangle budget blows up (trevally would be
-            // 100 × 8,800 = 880k tris on its own), so those schools take LOD1.
-            bool wantLod1 = count >= Lod1MinCount && spec.Tris0 > Lod1MinTris && lod1 != null;
+            // Heavy LOD0 × a whole school = the triangle budget blows up, so those take LOD1.
+            long load = (long)Math.Max(1, count) * spec.Tris0;
+            bool wantLod1 = load > Lod1TriBudget && spec.Tris0 > Lod1MinTris && lod1 != null;
             if (lod0 == null) wantLod1 = true;   // only LOD1 shipped
             if (lod1 == null) wantLod1 = false;  // only LOD0 shipped
 
