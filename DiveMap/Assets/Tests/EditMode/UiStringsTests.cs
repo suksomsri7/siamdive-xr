@@ -88,6 +88,75 @@ namespace DiveMap.Tests
             Assert.AreEqual("", UiStrings.Tr("", UiStrings.English));
         }
 
+        [Test]
+        public void Tr_CoversTheInfoCardAndSettingsVocabulary()
+        {
+            // WO-XR-05.3 / 05.4 — every string the new screens render.
+            string[] keys =
+            {
+                "ความลึก", "ม.", "ชนิด", "ไม่ทราบชนิด",
+                "ภาษา", "ไทย", "คุณภาพกราฟิก", "คุณภาพสูง", "ประหยัดพลังงาน",
+                "เวอร์ชันแอป", "เว็บไซต์", "เปิดเว็บไซต์",
+            };
+
+            foreach (string k in keys)
+            {
+                string en = UiStrings.Tr(k, UiStrings.English);
+                Assert.AreNotEqual(k, en, $"'{k}' has no English rendering");
+                Assert.IsFalse(UiStrings.ContainsThai(en), $"'{k}' → '{en}' still contains Thai");
+            }
+        }
+
+        [Test]
+        public void Tr_CoversTheAssetNamesTheInfoCardShows()
+        {
+            // Names come straight out of asset_manifest.json; these are the ones on the
+            // demo map, i.e. exactly what the QC screenshot must be able to render in EN.
+            Assert.AreEqual("HTMS Chang", UiStrings.Tr("HTMS ช้าง", UiStrings.English));
+            Assert.AreEqual("Whale shark", UiStrings.Tr("ฉลามวาฬ", UiStrings.English));
+        }
+
+        // ── ToLang (live re-render) ──────────────────────────────────────────────
+
+        [Test]
+        public void ToLang_TranslatesThaiForward()
+        {
+            Assert.AreEqual("Settings", UiStrings.ToLang("ตั้งค่า", UiStrings.English));
+            Assert.AreEqual("ตั้งค่า", UiStrings.ToLang("ตั้งค่า", UiStrings.Thai));
+        }
+
+        [Test]
+        public void ToLang_TranslatesAnAlreadyEnglishStringBackToThai()
+        {
+            // This is the one that makes "switch back to Thai" work without a rebuild.
+            Assert.AreEqual("ตั้งค่า", UiStrings.ToLang("Settings", UiStrings.Thai));
+            Assert.AreEqual("รายการแมพ", UiStrings.ToLang("Maps", UiStrings.Thai));
+        }
+
+        [Test]
+        public void ToLang_IsIdempotent()
+        {
+            foreach (KeyValuePair<string, string> kv in UiStrings.Table)
+            {
+                string once = UiStrings.ToLang(kv.Key, UiStrings.English);
+                Assert.AreEqual(once, UiStrings.ToLang(once, UiStrings.English), kv.Key);
+
+                string back = UiStrings.ToLang(once, UiStrings.Thai);
+                Assert.AreEqual(kv.Key, back, kv.Key);
+            }
+        }
+
+        [Test]
+        public void ToLang_LeavesDynamicContentAlone()
+        {
+            // Map names, owner names and composed lines must survive untouched.
+            Assert.AreEqual("Htms Chang", UiStrings.ToLang("Htms Chang", UiStrings.English));
+            Assert.AreEqual("Htms Chang", UiStrings.ToLang("Htms Chang", UiStrings.Thai));
+            Assert.AreEqual("ลึก 40.0 ม.", UiStrings.ToLang("ลึก 40.0 ม.", UiStrings.English));
+            Assert.IsNull(UiStrings.ToLang(null, UiStrings.Thai));
+            Assert.AreEqual("", UiStrings.ToLang("", UiStrings.English));
+        }
+
         // ── language normalisation ───────────────────────────────────────────────
 
         [Test]
