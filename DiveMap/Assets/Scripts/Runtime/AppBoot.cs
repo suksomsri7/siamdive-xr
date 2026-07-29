@@ -61,7 +61,21 @@ namespace DiveMap.Runtime
             cam.clearFlags = CameraClearFlags.SolidColor;
             // Mid ocean-blue backdrop (web waterBg gradient reads ~this at frame centre).
             // The old near-black (0.02,0.08,0.15) sank the whole shot into darkness (QC r2).
+            // Still set: it is the fallback if the gradient backdrop cannot be built.
             cam.backgroundColor = new Color(0.30f, 0.52f, 0.66f, 1f);
+
+            // The seabed is now the web's full 340 u footprint (WO-XR-04.2), and the orbit
+            // camera pulls back to 950 u — with Main.unity's 1000 u far plane the far half of
+            // the sand would be sliced off mid-shot. The web scales its view range to the map
+            // (updateViewRange); 9,000 u matches its underwater far range and still leaves
+            // ample depth precision at this scene scale.
+            cam.nearClipPlane = 0.5f;
+            cam.farClipPlane = 9000f;
+
+            // WO-XR-04.2: the real thing — a screen-space vertical gradient like the web's
+            // scene.background (bright surface haze on top → deep blue below). This, not fog,
+            // is what gives the web its sense of depth.
+            Backdrop.Attach(cam);
 
             _orbit = cam.GetComponent<OrbitCamera>();
             if (_orbit == null) _orbit = cam.gameObject.AddComponent<OrbitCamera>();
@@ -95,7 +109,16 @@ namespace DiveMap.Runtime
             RenderSettings.ambientSkyColor     = new Color(0.348f, 0.478f, 0.574f); // r4 −13% (sand still cream vs web); boat lit by reflection cube, ~unaffected
             RenderSettings.ambientEquatorColor = new Color(0.278f, 0.392f, 0.461f); // r4 −13% down (sand faces up = sky+equator ambient)
             RenderSettings.ambientGroundColor  = new Color(0.20f, 0.28f, 0.31f); // 0x123040 lifted (no black undersides)
-            RenderSettings.fog = false; // web daylight = no fog; underwater fog is 400-9000u (negligible near)
+            // WO-XR-04.3: the web's underwater fog — THREE.Fog(0x123a55, near, far) with
+            // near = max(500, reach·1.1) and far = max(9000, maxD·3.4). At orbit distance this
+            // is only a 3-7% wash (Fable's survey), and that is the point: it must colour the
+            // far rim of a big map, not haze over the wreck. The scene's RenderSettings also
+            // ship with fog enabled so the linear-fog shader variants survive build stripping.
+            RenderSettings.fog = true;
+            RenderSettings.fogMode = FogMode.Linear;
+            RenderSettings.fogColor = new Color(0.071f, 0.227f, 0.333f); // 0x123a55
+            RenderSettings.fogStartDistance = 500f;
+            RenderSettings.fogEndDistance = 9000f;
 
             // Custom reflection so the metallic wreck reflects a lit underwater environment
             // instead of black. Uniform bright blue-white cubemap; a metal surface's spec
@@ -218,6 +241,16 @@ namespace DiveMap.Runtime
 
             if (_orbit != null)
                 _orbit.FrameBox(result.FrameCenter, result.FrameSizeX, result.FrameSizeY, result.FrameSizeZ, result.FrameMinY);
+
+            // ── Sun shafts (WO-XR-04.3) ─────────────────────────────────────────────
+            // Scattered around the content, from the water surface down to just under the
+            // seabed, all parallel to the sun set in SetupLighting.
+            if (result.Root != null && result.WaterLevel > result.FrameMinY + 5f)
+            {
+                float spread = Mathf.Clamp(result.Radius * 0.45f, 60f, 220f);
+                float length = Mathf.Clamp(result.WaterLevel - result.FrameMinY + 20f, 60f, 400f);
+                GodRays.Attach(result.Root.transform, result.FrameCenter, spread, result.WaterLevel, length);
+            }
 
             // ── QC screenshot mode (CI): -qcshot <path> → รอเฟรม settle → แคป → ปิดตัวเอง ──
             // ใช้ใน headless CI (xvfb) เพื่อให้ orchestrator เห็นภาพจริงทุก build (QC_PLAN ชั้น 2)

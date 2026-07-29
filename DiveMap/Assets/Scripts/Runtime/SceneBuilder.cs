@@ -38,6 +38,9 @@ namespace DiveMap.Runtime
             public float FrameSizeY;
             public float FrameSizeZ;
             public float FrameMinY;
+
+            /// <summary>env.waterLevel of this map — the surface the sun shafts start from.</summary>
+            public float WaterLevel;
         }
 
         // Kinds that swim (drift through the water column) — excluded from the opening-shot
@@ -328,6 +331,7 @@ namespace DiveMap.Runtime
                 FrameSizeY = frameBox.size.y,
                 FrameSizeZ = frameBox.size.z,
                 FrameMinY = frameBox.min.y,
+                WaterLevel = _waterLevel,
             });
         }
 
@@ -661,9 +665,15 @@ namespace DiveMap.Runtime
             float waterLevel = env != null ? (float)env.WaterLevel : 4f;
             _waterLevel = waterLevel;
 
-            float baseR = BaseSeabedRadius * Mathf.Max(0.05f, areaScale);
+            // WO-XR-04.2: the footprint is the web's own — a 340 u superellipse scaled by
+            // areaScale × areaScaleX/Z (demo map ⇒ 306 × 374), not the old 15 u disc.
+            float thickness = env != null && env.AreaThickness > 0.01 ? (float)env.AreaThickness : 1f;
+            float sx = Mathf.Max(0.05f, areaScale) * Mathf.Max(0.05f, scaleX);
+            float sz = Mathf.Max(0.05f, areaScale) * Mathf.Max(0.05f, scaleZ);
 
-            // Grow the seabed to comfortably contain the items' horizontal spread.
+            // Items must still stand ON the sand: if anything is placed outside the web
+            // footprint (hand-edited map, or a scale the web never had), grow rather than
+            // leave a wreck floating over open water — and say so in the log.
             float itemMaxR = 0f;
             if (scene != null)
             {
@@ -677,11 +687,21 @@ namespace DiveMap.Runtime
                 }
             }
 
-            float rx = Mathf.Max(baseR * Mathf.Max(0.05f, scaleX), itemMaxR * 1.2f);
-            float rz = Mathf.Max(baseR * Mathf.Max(0.05f, scaleZ), itemMaxR * 1.2f);
+            float rx = SeabedGeom.SandRadius * sx;
+            float rz = SeabedGeom.SandRadius * sz;
+            float need = itemMaxR * 1.05f;
+            float inner = Mathf.Min(rx, rz);
+            if (need > inner && inner > 0.01f)
+            {
+                float grow = need / inner;
+                sx *= grow; sz *= grow;
+                rx *= grow; rz *= grow;
+                Debug.LogWarning($"[Scene] seabed grown ×{grow:F2} — an item sits {itemMaxR:F1} u out, " +
+                                 $"past the web footprint ({inner:F1} u)");
+            }
             float radius = Mathf.Max(rx, rz);
 
-            int rings = 16, seg = 48;
+            int rings = SeabedGeom.Rings, seg = SeabedGeom.Segments;
             int[] dim = env?.SculptDimensions();
             if (dim != null && dim.Length >= 2 && dim[0] > 1 && dim[1] > 2)
             {
@@ -695,9 +715,27 @@ namespace DiveMap.Runtime
             seabed.transform.SetParent(root, false);
             var mf = seabed.AddComponent<MeshFilter>();
             var mr = seabed.AddComponent<MeshRenderer>();
-            mf.sharedMesh = BuildPolarGrid(rings, seg, rx, rz, slopeX, slopeZ, sculpt);
+            mf.sharedMesh = BuildPolarGrid(rings, seg, sx, sz, slopeX, slopeZ, sculpt, thickness,
+                                           out Mesh topSurface);
             mr.sharedMaterial = SandMaterial();
             seabed.AddComponent<MeshCollider>().sharedMesh = mf.sharedMesh;
+
+            // ── Caustics (WO-XR-04.3) ─────────────────────────────────────────────
+            // Rippling light on the sand: the top surface again, 0.4 u up (an offset, never
+            // ZWrite tricks — that is how you get flickering z-fighting), drawn additively
+            // with the caustic noise slowly drifting across it.
+            if (topSurface != null)
+            {
+                var caustics = new GameObject("Caustics");
+                caustics.transform.SetParent(root, false);
+                caustics.transform.localPosition = new Vector3(0f, 0.4f, 0f);
+                caustics.AddComponent<MeshFilter>().sharedMesh = topSurface;
+                var cmr = caustics.AddComponent<MeshRenderer>();
+                cmr.sharedMaterial = CausticsMaterial();
+                cmr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+                cmr.receiveShadows = false;
+                caustics.AddComponent<WaterScroll>().speed = new Vector2(0.004f, 0.003f);
+            }
 
             // Water disc at env.waterLevel.
             var water = new GameObject("Water");
@@ -708,11 +746,17 @@ namespace DiveMap.Runtime
             // Double-sided disc: the orbit camera commonly sits BELOW the water level
             // (looking up at a tall wreck), and a single-sided (Cull Back) plane would be
             // invisible from underneath — the "no water in the QC shot" bug.
-            wmf.sharedMesh = BuildDisc(radius * 1.02f, 64, doubleSided: true);
+            // Squircle, like the seabed (builder.html 654-659 reshapes the round surf plane
+            // onto the same rounded-square boundary) so the water edge does not cut a circle
+            // out of a rounded-square floor.
+            wmf.sharedMesh = BuildDisc(sx * 1.02f, sz * 1.02f, 72, doubleSided: true);
             wmr.sharedMaterial = WaterMaterial();
             water.AddComponent<WaterScroll>();
 
             bounds = new Bounds(Vector3.zero, new Vector3(rx * 2f, Mathf.Max(waterLevel, 2f) * 2f, rz * 2f));
+            Debug.Log($"[Scene] seabed rx={rx:F1} rz={rz:F1} rings={rings} seg={seg} " +
+                      $"thickness={SeabedGeom.SandThickness * thickness:F1} skirt=OK " +
+                      $"waterLevel={waterLevel:F1} itemMaxR={itemMaxR:F1}");
             return radius;
         }
 
@@ -730,19 +774,41 @@ namespace DiveMap.Runtime
         }
 
         /// <summary>
-        /// Radial (polar) grid centred at origin. Verifies normals face UP after
-        /// triangulation and flips winding if not — the seabed winding gotcha carried
-        /// over from the web headless test (DESIGN_DOC §1.2 rule 3).
+        /// The seabed as the web builds it (builder.html 538-558): a superellipse-footprint
+        /// radial grid for the sculptable TOP surface, plus a side skirt and a flat bottom so
+        /// the sand is a real slab with visible thickness instead of a floating oval.
+        ///
+        /// Three details are load-bearing:
+        ///   • The skirt and bottom get their OWN vertices. Sharing the top rim would make
+        ///     RecalculateNormals average an up normal with a sideways one (and, for the
+        ///     double-sided skirt, +radial with −radial → zero = solid black; the fish-fin
+        ///     lesson from QC r8). Their normals are therefore assigned explicitly.
+        ///   • The up-facing winding guard only averages the TOP surface's normals — with the
+        ///     bottom's −Y normals in the mix the average is meaningless and the guard would
+        ///     flip a perfectly good seabed upside down.
+        ///   • The sculpt height array is indexed exactly as before ((r−1)·seg+j), so saved
+        ///     web sculpts still land on the right vertices.
         /// </summary>
-        private static Mesh BuildPolarGrid(int rings, int seg, float rx, float rz, float slopeX, float slopeZ, float[] sculpt)
+        private static Mesh BuildPolarGrid(int rings, int seg, float sx, float sz,
+                                           float slopeX, float slopeZ, float[] sculpt, float thickness,
+                                           out Mesh topSurface)
         {
-            int vertCount = 1 + rings * seg;
+            int topN = 1 + rings * seg;
+            int skirtN = seg * 8;             // 4 verts × (outward + inward) per segment
+            int botN = 1 + seg;
+            int vertCount = topN + skirtN + botN;
+
             var verts = new Vector3[vertCount];
             var uvs = new Vector2[vertCount];
+            var norms = new Vector3[vertCount];
 
-            // Center vertex.
+            // ── Top surface ───────────────────────────────────────────────────────
+            // Heights come from the UNSCALED (base) coords, exactly like the web's
+            // applyArea(): the slope is a property of the map, not of its stretch.
+            float minTop = float.MaxValue;
             verts[0] = new Vector3(0f, HeightAt(0f, 0f, slopeX, slopeZ, sculpt, seg, 0, 0), 0f);
             uvs[0] = new Vector2(0.5f, 0.5f);
+            minTop = Mathf.Min(minTop, verts[0].y);
 
             for (int r = 1; r <= rings; r++)
             {
@@ -750,23 +816,93 @@ namespace DiveMap.Runtime
                 for (int j = 0; j < seg; j++)
                 {
                     float ang = (Mathf.PI * 2f) * j / seg;
-                    float x = Mathf.Cos(ang) * rx * frac;
-                    float z = Mathf.Sin(ang) * rz * frac;
-                    float y = HeightAt(x, z, slopeX, slopeZ, sculpt, seg, r, j);
+                    float bd = SeabedGeom.BoundaryDist(ang) * frac;
+                    float bx = Mathf.Cos(ang) * bd;      // base (unscaled) coords
+                    float bz = Mathf.Sin(ang) * bd;
+                    float y = HeightAt(bx, bz, slopeX, slopeZ, sculpt, seg, r, j);
                     int idx = 1 + (r - 1) * seg + j;
-                    verts[idx] = new Vector3(x, y, z);
-                    uvs[idx] = new Vector2(0.5f + 0.5f * frac * Mathf.Cos(ang), 0.5f + 0.5f * frac * Mathf.Sin(ang));
+                    verts[idx] = new Vector3(bx * sx, y, bz * sz);
+                    uvs[idx] = new Vector2(0.5f + 0.5f * frac * Mathf.Cos(ang),
+                                           0.5f + 0.5f * frac * Mathf.Sin(ang));
+                    if (y < minTop) minTop = y;
                 }
             }
 
-            var tris = new List<int>((rings * seg) * 6);
+            // ── Slab bottom + skirt ───────────────────────────────────────────────
+            // Flat bottom kept below the deepest sculpted pit (builder.html:606).
+            float bottomY = minTop - SeabedGeom.SandThickness * Mathf.Max(0.05f, thickness);
+
+            int botC = topN + skirtN;               // bottom centre
+            int botR = botC + 1;                    // bottom rim ring
+            verts[botC] = new Vector3(0f, bottomY, 0f);
+            uvs[botC] = new Vector2(1f, 0.5f);      // rim UV → hazed, never lit sand
+            norms[botC] = Vector3.down;
+            for (int j = 0; j < seg; j++)
+            {
+                float ang = (Mathf.PI * 2f) * j / seg;
+                float bd = SeabedGeom.BoundaryDist(ang);
+                verts[botR + j] = new Vector3(Mathf.Cos(ang) * bd * sx, bottomY, Mathf.Sin(ang) * bd * sz);
+                uvs[botR + j] = new Vector2(0.5f + 0.5f * Mathf.Cos(ang), 0.5f + 0.5f * Mathf.Sin(ang));
+                norms[botR + j] = Vector3.down;
+            }
+
+            var tris = new List<int>((rings * seg) * 6 + seg * 12 + seg * 3);
+
+            // Skirt: own verts, drawn from both sides (the web's seabed material is
+            // DoubleSide so the sand wall shows from inside the map too).
+            for (int j = 0; j < seg; j++)
+            {
+                int j2 = (j + 1) % seg;
+                int topA = 1 + (rings - 1) * seg + j;
+                int topB = 1 + (rings - 1) * seg + j2;
+                Vector3 tA = verts[topA], tB = verts[topB];
+                Vector3 bA = new Vector3(verts[botR + j].x, bottomY, verts[botR + j].z);
+                Vector3 bB = new Vector3(verts[botR + j2].x, bottomY, verts[botR + j2].z);
+
+                // Outward normal of this segment: horizontal, away from the centre.
+                Vector3 mid = (tA + tB) * 0.5f;
+                Vector3 outward = new Vector3(mid.x, 0f, mid.z);
+                outward = outward.sqrMagnitude > 1e-6f ? outward.normalized : Vector3.right;
+
+                int o = topN + j * 8;               // 4 outward verts, then 4 inward
+                verts[o + 0] = tA; verts[o + 1] = tB; verts[o + 2] = bA; verts[o + 3] = bB;
+                verts[o + 4] = tA; verts[o + 5] = tB; verts[o + 6] = bA; verts[o + 7] = bB;
+                for (int k = 0; k < 4; k++)
+                {
+                    // Rim UVs: fully hazed, matching the web (rad ≥ 1 at the boundary).
+                    uvs[o + k] = uvs[botR + (k == 1 || k == 3 ? j2 : j)];
+                    uvs[o + 4 + k] = uvs[o + k];
+                    norms[o + k] = outward;
+                    norms[o + 4 + k] = -outward;
+                }
+
+                // Both windings, so whichever one Unity treats as front-facing, the wall is
+                // never an invisible or black band.
+                tris.Add(o + 0); tris.Add(o + 2); tris.Add(o + 3);
+                tris.Add(o + 0); tris.Add(o + 3); tris.Add(o + 1);
+                tris.Add(o + 4); tris.Add(o + 7); tris.Add(o + 6);
+                tris.Add(o + 4); tris.Add(o + 5); tris.Add(o + 7);
+            }
+
+            // Bottom fan (single-sided, faces down — it is under the sand).
+            for (int j = 0; j < seg; j++)
+            {
+                int j2 = (j + 1) % seg;
+                tris.Add(botC); tris.Add(botR + j); tris.Add(botR + j2);
+            }
+
+
+            // Top-surface triangles are collected separately as well: the caustics overlay
+            // (WO-XR-04.3) is the top surface alone, raised a hair — it must not glow on the
+            // slab's sides or under its bottom.
+            var topTris = new List<int>(rings * seg * 6);
 
             // Inner fan: center → first ring.
             for (int j = 0; j < seg; j++)
             {
                 int b = 1 + j;
                 int c = 1 + (j + 1) % seg;
-                tris.Add(0); tris.Add(b); tris.Add(c);
+                topTris.Add(0); topTris.Add(b); topTris.Add(c);
             }
 
             // Ring quads.
@@ -781,10 +917,12 @@ namespace DiveMap.Runtime
                     int v01 = ringStart + j2;
                     int v10 = nextStart + j;
                     int v11 = nextStart + j2;
-                    tris.Add(v00); tris.Add(v10); tris.Add(v11);
-                    tris.Add(v00); tris.Add(v11); tris.Add(v01);
+                    topTris.Add(v00); topTris.Add(v10); topTris.Add(v11);
+                    topTris.Add(v00); topTris.Add(v11); topTris.Add(v01);
                 }
             }
+
+            tris.AddRange(topTris);
 
             var mesh = new Mesh { name = "SeabedPolarGrid" };
             if (vertCount > 65000) mesh.indexFormat = UnityEngine.Rendering.IndexFormat.UInt32;
@@ -794,9 +932,11 @@ namespace DiveMap.Runtime
             mesh.RecalculateNormals();
             mesh.RecalculateBounds();
 
-            // Winding verification: seabed must face UP. If the average normal points
-            // down, reverse every triangle and recompute.
-            if (AverageNormalY(mesh) < 0f)
+            // Winding verification: the TOP SURFACE must face up. Averaged over the whole
+            // mesh this test is now meaningless (the bottom fan's normals are −Y by design),
+            // so it only looks at the top vertices.
+            bool flipped = false;
+            if (AverageNormalY(mesh, topN) < 0f)
             {
                 int[] t = mesh.triangles;
                 for (int i = 0; i < t.Length; i += 3)
@@ -805,7 +945,39 @@ namespace DiveMap.Runtime
                 }
                 mesh.triangles = t;
                 mesh.RecalculateNormals();
+                flipped = true;
             }
+
+            // Skirt + bottom normals are assigned, not derived: the skirt is drawn from both
+            // sides off shared positions, so RecalculateNormals would cancel +radial against
+            // −radial and light the whole sand wall black.
+            Vector3[] final = mesh.normals;
+            if (final != null && final.Length == vertCount)
+            {
+                for (int i = topN; i < vertCount; i++) final[i] = norms[i];
+                mesh.normals = final;
+            }
+
+            // Top surface on its own, for the caustics overlay: same vertices, same (possibly
+            // flipped) winding, so the two meshes can never disagree about which way is up.
+            topSurface = new Mesh { name = "SeabedTopSurface" };
+            var tv = new Vector3[topN];
+            var tu = new Vector2[topN];
+            var tn = new Vector3[topN];
+            Array.Copy(verts, tv, topN);
+            Array.Copy(uvs, tu, topN);
+            if (final != null && final.Length >= topN) Array.Copy(final, tn, topN);
+            int[] tt = topTris.ToArray();
+            if (flipped)
+            {
+                for (int i = 0; i < tt.Length; i += 3) (tt[i + 1], tt[i + 2]) = (tt[i + 2], tt[i + 1]);
+            }
+            if (topN > 65000) topSurface.indexFormat = UnityEngine.Rendering.IndexFormat.UInt32;
+            topSurface.vertices = tv;
+            topSurface.uv = tu;
+            topSurface.triangles = tt;
+            topSurface.normals = tn;
+            topSurface.RecalculateBounds();
 
             return mesh;
         }
@@ -821,16 +993,24 @@ namespace DiveMap.Runtime
             return y;
         }
 
-        private static float AverageNormalY(Mesh mesh)
+        /// <summary>Average Y of the first <paramref name="count"/> normals (all of them when
+        /// count ≤ 0). Bounded so the seabed's up-facing check ignores its own slab bottom.</summary>
+        private static float AverageNormalY(Mesh mesh, int count = 0)
         {
             Vector3[] n = mesh.normals;
             if (n == null || n.Length == 0) return 1f;
+            int take = count > 0 ? Mathf.Min(count, n.Length) : n.Length;
             float sum = 0f;
-            for (int i = 0; i < n.Length; i++) sum += n[i].y;
-            return sum / n.Length;
+            for (int i = 0; i < take; i++) sum += n[i].y;
+            return sum / take;
         }
 
-        private static Mesh BuildDisc(float radius, int seg, bool doubleSided = false)
+        /// <summary>
+        /// Flat disc on the XZ plane. <paramref name="sx"/>/<paramref name="sz"/> scale the
+        /// same superellipse boundary the seabed uses (builder.html reshapes the water plane
+        /// onto the squircle, 654-659), so water and sand share one footprint.
+        /// </summary>
+        private static Mesh BuildDisc(float sx, float sz, int seg, bool doubleSided = false)
         {
             var verts = new Vector3[seg + 1];
             var uvs = new Vector2[seg + 1];
@@ -839,8 +1019,9 @@ namespace DiveMap.Runtime
             for (int j = 0; j < seg; j++)
             {
                 float ang = (Mathf.PI * 2f) * j / seg;
-                float x = Mathf.Cos(ang) * radius;
-                float z = Mathf.Sin(ang) * radius;
+                float bd = SeabedGeom.BoundaryDist(ang);
+                float x = Mathf.Cos(ang) * bd * sx;
+                float z = Mathf.Sin(ang) * bd * sz;
                 verts[1 + j] = new Vector3(x, 0f, z);
                 uvs[1 + j] = new Vector2(0.5f + 0.5f * Mathf.Cos(ang), 0.5f + 0.5f * Mathf.Sin(ang));
             }
@@ -895,10 +1076,67 @@ namespace DiveMap.Runtime
         private static Material SandMaterial()
         {
             var mat = BaseMat(false);
-            mat.color = new Color(0.82f, 0.74f, 0.58f);
+            // WHITE, deliberately: the sand's colour now lives in the texture (bottom-to-top
+            // gradient × speckle × haze rim). Leaving the old cream tint here would multiply
+            // it in twice and wash the deep-water rim back to sand.
+            mat.color = Color.white;
             mat.SetFloat("_Glossiness", 0.1f);
             mat.SetFloat("_Metallic", 0f);
+            mat.mainTexture = SandTexture();
             return mat;
+        }
+
+        // Baked from SeabedGeom.SandColor because the built-in Standard shader ignores mesh
+        // vertex colours (the web's mechanism) and a custom vertex-colour shader would be
+        // stripped out of the build → magenta. The seabed's UVs are radial, so a texel's
+        // distance from the texture centre IS its distance along the boundary ray.
+        private const int SandTexSize = 1024;
+        private static Texture2D _sandTex;
+        private static Texture2D SandTexture()
+        {
+            if (_sandTex != null) return _sandTex;
+
+            var tex = new Texture2D(SandTexSize, SandTexSize, TextureFormat.RGBA32, true)
+            {
+                name = "SeabedSand",
+                wrapMode = TextureWrapMode.Clamp,
+                filterMode = FilterMode.Bilinear,
+            };
+
+            // Speckle grain ≈ one sculpt cell (340/28 ≈ 12 u) so the sand reads as sand at
+            // the orbit distance instead of as noise or as a flat plate.
+            const float unitsPerTexel = 2f * SeabedGeom.SandRadius / SandTexSize;
+            const float speckleUnits = SeabedGeom.SandRadius / SeabedGeom.Rings;
+            float freq = unitsPerTexel / speckleUnits;
+
+            var px = new Color32[SandTexSize * SandTexSize];
+            for (int y = 0; y < SandTexSize; y++)
+            {
+                float dz = 2f * ((y + 0.5f) / SandTexSize - 0.5f);
+                for (int x = 0; x < SandTexSize; x++)
+                {
+                    float dx = 2f * ((x + 0.5f) / SandTexSize - 0.5f);
+                    float frac = Mathf.Sqrt(dx * dx + dz * dz);
+                    float ang = Mathf.Atan2(dz, dx);
+                    // The web's rad = hypot(x,z)/SAND_R — so the corners of the squircle sit
+                    // past 1.0 and are fully hazed, while the axis edges reach 1.0 exactly.
+                    float radNorm = frac * SeabedGeom.BoundaryDist(ang) / SeabedGeom.SandRadius;
+
+                    float n = 0.82f + (Mathf.PerlinNoise(x * freq, y * freq) - 0.5f) * 0.18f;
+                    SeabedGeom.Rgb c = SeabedGeom.SandColor(1f, radNorm, n);
+                    px[y * SandTexSize + x] = new Color32(
+                        (byte)Mathf.Clamp(Mathf.RoundToInt(c.R * 255f), 0, 255),
+                        (byte)Mathf.Clamp(Mathf.RoundToInt(c.G * 255f), 0, 255),
+                        (byte)Mathf.Clamp(Mathf.RoundToInt(c.B * 255f), 0, 255),
+                        255);
+                }
+            }
+            tex.SetPixels32(px);
+            tex.Apply(true, false);
+            _sandTex = tex;
+            Debug.Log($"[Scene] sand texture {SandTexSize}² baked speckle={speckleUnits:F1}u/cell " +
+                      $"haze=0.55→1.00 rim=({SeabedGeom.WaterTint.R:F2},{SeabedGeom.WaterTint.G:F2},{SeabedGeom.WaterTint.B:F2})");
+            return tex;
         }
 
         private static Material WaterMaterial()
@@ -913,14 +1151,40 @@ namespace DiveMap.Runtime
             mat.EnableKeyword("_ALPHABLEND_ON");
             mat.DisableKeyword("_ALPHAPREMULTIPLY_ON");
             mat.renderQueue = (int)UnityEngine.Rendering.RenderQueue.Transparent;
-            // Clearer, more saturated tropical blue with a higher alpha — the old (0.28)
-            // wash was nearly invisible over the deep-blue background in the QC shot.
-            mat.color = new Color(0.10f, 0.52f, 0.78f, 0.55f);
+            // The web's own surface colour + opacity (builder.html:651, 0x4aa8da @ 0.5). The
+            // r2-era hand-picked blue was compensating for a flat backdrop; with the gradient
+            // backdrop in place (WO-XR-04.2) the web value reads correctly.
+            mat.color = new Color(0.290f, 0.659f, 0.855f, 0.5f);
             mat.SetFloat("_Glossiness", 0.85f);
 
             var tex = GenerateCausticTexture(64);
             mat.mainTexture = tex;
             mat.mainTextureScale = new Vector2(4f, 4f);
+            return mat;
+        }
+
+        /// <summary>
+        /// WO-XR-04.3 — additive caustics on the sand. Same transparent base + blend override
+        /// as the god rays (no new shader keyword), one queue slot BEFORE them so the shafts
+        /// read as being in front of the floor glow, and a low alpha: this is meant to be
+        /// noticed as light on sand, not as a second texture.
+        /// </summary>
+        private static Material CausticsMaterial()
+        {
+            var mat = BaseMat(true);
+            if (mat.HasProperty("_Mode")) mat.SetFloat("_Mode", 3f);
+            if (mat.HasProperty("_SrcBlend")) mat.SetFloat("_SrcBlend", (float)(int)UnityEngine.Rendering.BlendMode.SrcAlpha);
+            if (mat.HasProperty("_DstBlend")) mat.SetFloat("_DstBlend", (float)(int)UnityEngine.Rendering.BlendMode.One);
+            if (mat.HasProperty("_ZWrite")) mat.SetFloat("_ZWrite", 0f);
+            mat.DisableKeyword("_ALPHATEST_ON");
+            mat.EnableKeyword("_ALPHABLEND_ON");
+            mat.DisableKeyword("_ALPHAPREMULTIPLY_ON");
+            if (mat.HasProperty("_Glossiness")) mat.SetFloat("_Glossiness", 0f);
+            if (mat.HasProperty("_Metallic")) mat.SetFloat("_Metallic", 0f);
+            mat.renderQueue = 3050;
+            mat.color = new Color(0.78f, 0.92f, 1f, 0.13f);
+            mat.mainTexture = GenerateCausticTexture(128);
+            mat.mainTextureScale = new Vector2(8f, 8f);
             return mat;
         }
 
