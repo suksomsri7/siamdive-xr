@@ -2,7 +2,7 @@
 
 > เอกสารนี้เขียนเพื่อให้ AI coding agent ใดๆ (Codex / Kimi / Claude / อื่นๆ) ทำงานต่อได้ทันที
 > อ่านคู่กับ: `DESIGN_DOC.md` (สัญญาหลัก v1.2), `QC_PLAN.md`, `SECURITY_PLAN.md`
-> อัปเดตล่าสุด: 2026-07-29 (main มี UI 05.1/05.2 แล้ว = `0d93c48`, branch `wo-xr-05b` (05.3/05.4) รอผล CI)
+> อัปเดตล่าสุด: 2026-07-29 (WO-XR-05 ครบทั้ง 4 ก้อน merge เข้า main = `06f88ce`, รอ build ตัวเต็ม)
 
 ## 1. โปรเจกต์คืออะไร
 - แอป **DiveMap** (`com.siamdive.divemap`) — Unity 6000.0.79f1 ใน `DiveMap/`
@@ -15,7 +15,7 @@
 - ✅ WO-XR-01 + เก็บงาน: โหลดแมพเดโม `wl6zwxh1tdgn` (Htms Chang) — เรือ KTX2 2048px ตั้งบนพื้นทราย, แสง/reflection ถูกต้อง, น้ำโปร่งแสง 2 หน้า, กล้อง frame แบบเว็บ, ฟอนต์ไทย bundle (NotoSansThai ใน Resources)
 - ✅ WO-XR-03 **ปิดแล้ว 2026-07-28** (`a7d12f8` + QC fixes `f31d9fc`): boids 1,100 ตัว 10 ฝูง ตามสูตรเว็บจริง (`buildSchool` ใน builder.html) — scad R=66.0 · barracuda R=143.9 speed 4.0 · pod 67.8/29.7 · วาฬเป็น **GLB จริง** `Whale_Shark_xr0.glb` worldLen 65.3 (เดิม clamp [8,16] ทำให้เล็กผิด 4 เท่า) · QC verdict = ผ่านแบบมีเงื่อนไข แล้วแก้ครบ
 - ✅ WO-XR-05.1+05.2 **merge เข้า main แล้ว 2026-07-29** (`0d93c48`): ปุ่ม ☰ + เมนู + navigation stack + Android back + safe area · **รายการแมพจาก `/api/dive-sites/public` จริง** พร้อม thumbnail จาก Bunny CDN + ค้นหา server-side + pagination + จำแมพล่าสุด (PlayerPrefs `shortId`) · QC ภาพยืนยันชื่อแมพไทย/อังกฤษเรนเดอร์ครบ
-- 🟡 WO-XR-05.3+05.4 (การ์ดข้อมูล + ตั้งค่า + i18n 259 คีย์): branch **`wo-xr-05b`** (`e137941`) รอผล CI — **แผนเต็ม `/root/projects/siamdive-xr-docs/WO-XR-05.md`**
+- ✅ WO-XR-05.3+05.4 **merge เข้า main แล้ว** (`06f88ce`): แตะวัตถุ → การ์ด ชื่อ/ชนิด/ความลึก (AABB slab test, ฝูงปลา fallback ทรงกลม) · หน้าตั้งค่า + สลับ ไทย/English ทั้งแอปทันที (UiStrings 260 คีย์ port จาก `TR` ของเว็บ) + โหมดกราฟิกประหยัด — **WO-XR-05 ครบทั้ง 4 ก้อน**
 - ✅ ระบบตาอัตโนมัติ: ทุก push → CI job qc-shot → แอปถ่ายรูปตัวเอง 2 มุม → artifact `qc-screenshot`
 - ✅ XR-LOD CDN: `maps.siamdive.com/models/xr/` มี 15 โมเดล (manifest.json count=15) — เรือ/สัตว์หลัก KTX2+Draco
 - ❌ ยังไม่มี: การ์ดข้อมูล+ตั้งค่า (WO-XR-05.3/05.4), AR (02m), ปลา GLB จริงรายตัว (04), โหมดแก้ไข (06), store (07)
@@ -59,20 +59,20 @@ tools/                          (สคริปต์ XR-LOD pipeline)
 ### 5.1 ✅ ปิดแล้ว — WO-XR-03 (2026-07-28)
 formation ตามสูตรเว็บ + วาฬ GLB จริง + QC fixes (ครีบดำ/gloss/heading log) · commit `a7d12f8` → `f31d9fc`
 
-### 5.2 ▶️ RESUME — รอผล CI ของ `wo-xr-05b` แล้ว merge
-สถานะ ณ 2026-07-29 13:15 UTC:
-- **main = `0d93c48`** (merge `wo-xr-05` เข้ามาแล้ว) = WO-XR-03 + QC fixes + **UI 05.1/05.2** (เมนู + รายการแมพ + ค้นหา) · CI ของ merge commit กำลังรัน
-- **branch `wo-xr-05b` = `e137941`** = 05.3 การ์ดข้อมูล + 05.4 ตั้งค่า/i18n 259 คีย์ (merge ตัวแก้ชื่อแมพเข้ามาแล้ว) · **CI ยิงไว้แล้ว รอผล** → ถ้าเขียว: `git merge wo-xr-05b` บน main → push → ส่ง build ให้ user
-- worktree: `/root/projects/siamdive-xr-ui` (wo-xr-05) + `/root/projects/siamdive-xr-ui2` (wo-xr-05b) — `git worktree remove` ทั้งคู่เมื่อ merge ครบ
+### 5.2 ▶️ RESUME — WO-XR-05 ครบทั้ง 4 ก้อนแล้ว รอ build ตัวเต็ม
+สถานะ 2026-07-29 14:25 UTC: **main = `06f88ce`** merge ครบทั้ง `wo-xr-05` (05.1/05.2) และ `wo-xr-05b` (05.3/05.4) · CI ของ merge commit นี้กำลังรัน → เมื่อเขียว **ดาวน์โหลด artifact `DiveMap-apk` + `DiveMap-windows` วาง `/var/www/dive3d/dl/` แล้วแจ้ง user** (นี่คือ build แรกที่มีครบ: เมนู + รายการแมพ + ค้นหา + การ์ดข้อมูล + ตั้งค่า/ภาษา + ฝูงปลา/วาฬ + แก้ครีบดำ)
 
-**บทเรียนสำคัญรอบนี้ (ห้ามลืม): legacy `Text` + `VerticalWrapMode.Truncate` จะ "ทิ้งทั้งบรรทัด" ถ้าความสูงกล่อง < fontSize × 1.511** (metric จริงของ NotoSansThai-Regular: ascender 1061 / descender 450 / unitsPerEm 1000, USE_TYPO_METRICS) — เป็นเหตุให้ชื่อแมพหายทั้งที่ข้อมูลถูกทุกอย่าง · ตอนนี้ `UiKit.MakeText` ใช้ `Overflow` แล้ว + มี `UiKit.RowHeight(size, lines)` ให้เรียกแทนการใส่เลขดิบ **ใช้ทุกครั้งที่สร้างแถวข้อความใหม่**
+QC ที่ผ่านแล้ว (run 30453283839 บน branch): การ์ด "HTMS ช้าง / ซากเรือ / ความลึก 40.0 ม." ตรงสูตรเว็บ (`U_PER_M=6`, builder.html:600) · สลับ EN ได้ทั้งเมนูและการ์ด ("HTMS Chang / Wreck / Depth 40.0 m") · รายการแมพ 6 อัน + ค้นหา "Chang" → 1
+**หมายเหตุ**: ภาพ QC ของ branch `wo-xr-05b` ยังเห็นปลาดำ เพราะ branch แตกก่อนคอมมิตแก้ครีบ (`f31d9fc`) — หลัง merge เข้า main หายแล้ว ตรวจซ้ำจาก `qc_screenshot2.png` ของ run บน main
 
-ไฟล์เทสที่ส่ง user แล้ว:
-- รุ่นมีเมนู (main `8d76e76`): `dive3d.suksomsri.cloud/dl/DiveMap-menu-977231d605.apk` · `.../DiveMap-win-menu-977231d605.zip`
-- รุ่นก่อนหน้า (แก้ปลาดำ ไม่มีเมนู): `.../DiveMap-r9-6f5298db2d.apk`
+เก็บกวาดเมื่อยืนยันแล้ว: `git worktree remove /root/projects/siamdive-xr-ui` และ `-ui2`
 
-### 5.3 ทำต่อจากแผน WO-XR-05 (`/root/projects/siamdive-xr-docs/WO-XR-05.md`)
-05.3 การ์ดข้อมูล (แตะวัตถุ → ชื่อ/ชนิด/ความลึก) → 05.4 ตั้งค่า + i18n ไทย/EN เต็มระบบ
+**บทเรียนห้ามลืม: legacy `Text` + `VerticalWrapMode.Truncate` "ทิ้งทั้งบรรทัด" ถ้ากล่องเตี้ยกว่า fontSize × 1.511** (NotoSansThai-Regular: ascender 1061 / descender 450 / unitsPerEm 1000, USE_TYPO_METRICS) — ใช้ `UiKit.RowHeight(size, lines)` เสมอ อย่าใส่ความสูงเป็นเลขดิบ
+
+ไฟล์เทสที่ส่ง user แล้ว: `dive3d.suksomsri.cloud/dl/DiveMap-menu-977231d605.apk` (มีเมนู) · `.../DiveMap-r9-6f5298db2d.apk` (ไม่มีเมนู)
+
+### 5.3 ✅ ปิดแล้ว — WO-XR-05 ทั้ง 4 ก้อน (แผนเดิม `/root/projects/siamdive-xr-docs/WO-XR-05.md`)
+งานต่อยอดที่ยังค้าง: ป้ายสถานะบนหัวจอของ AppBoot เป็นสตริงประกอบ (`"{ชื่อ} · โหลดแล้ว N · แทนที่ M"`) ยังไม่แปลตามภาษา · โหมดประหยัดยังไม่ลดจำนวนปลา (ต้องแตะ FishSchoolSystem) · การ์ดยังไม่โชว์รูปจาก pin (SceneBuilder ยังไม่สร้าง pin ในฉาก)
 
 ### 5.4 เก็บเล็ก
 - ปลายังเป็นเมช procedural ไม่มี texture (เว็บเป็นปลาเขียว-เงิน) → งานจริงคือ **WO-XR-04** ปลา GLB รายตัว · **อย่ายัดรวมรอบอื่น** (เสี่ยง magenta/KTX2 บน llvmpipe)
