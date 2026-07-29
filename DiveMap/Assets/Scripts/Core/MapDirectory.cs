@@ -120,7 +120,33 @@ namespace DiveMap.Core
         public static string DisplayName(MapCard card)
         {
             if (card == null) return "";
-            return string.IsNullOrWhiteSpace(card.Name) ? (card.ShortId ?? "") : card.Name;
+            string name = string.IsNullOrWhiteSpace(card.Name) ? (card.ShortId ?? "") : card.Name;
+            return name.Trim();
+        }
+
+        /// <summary>
+        /// Characters a list card shows before the name is elided. The card name row is a
+        /// single non-wrapping line, so the cap keeps a pathological name from running off
+        /// the card instead of letting the text component wrap (or drop) it.
+        /// </summary>
+        public const int MaxCardNameChars = 34;
+
+        /// <summary>Single-line label for a list card: <see cref="DisplayName"/>, elided.</summary>
+        public static string CardLabel(MapCard card) => Ellipsize(DisplayName(card), MaxCardNameChars);
+
+        /// <summary>
+        /// Trim <paramref name="s"/> to at most <paramref name="maxChars"/> characters,
+        /// appending U+2026 (present in NotoSansThai-Regular, gid 315) when it is cut.
+        /// Pure — unit-tested in DiveMap.Tests.EditMode.
+        /// </summary>
+        public static string Ellipsize(string s, int maxChars)
+        {
+            if (string.IsNullOrEmpty(s)) return "";
+            s = s.Trim();
+            if (maxChars <= 0) return "";
+            if (s.Length <= maxChars) return s;
+            if (maxChars == 1) return "…";
+            return s.Substring(0, maxChars - 1).TrimEnd() + "…";
         }
 
         // ── token readers (null / wrong-type tolerant) ───────────────────────────

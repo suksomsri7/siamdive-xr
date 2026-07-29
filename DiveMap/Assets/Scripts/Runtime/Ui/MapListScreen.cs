@@ -33,6 +33,14 @@ namespace DiveMap.Runtime.Ui
         private const float ListTop = 244f;
         private const int RequestTimeout = 20;
 
+        // Card text block. Rows are sized through UiKit.RowHeight(fontSize) — never with
+        // a literal, see UiKit.LineHeightRatio for what a too-short row does to Text.
+        private const int NameSize = 36;
+        private const int MetaSize = 26;
+        private const float TextLeft = 260f; // right of the 224 px thumbnail + its 14 px inset
+        private const float NameTop = 22f;
+        private const float MetaTop = 94f;
+
         /// <summary>Raised with the chosen shortId.</summary>
         public event Action<string> MapSelected;
 
@@ -48,6 +56,7 @@ namespace DiveMap.Runtime.Ui
 
         private readonly List<MapCard> _cards = new List<MapCard>();
         private readonly List<GameObject> _cardViews = new List<GameObject>();
+        private readonly List<Text> _cardNames = new List<Text>();
 
         private string _query = "";
         private int _total = -1;
@@ -272,6 +281,44 @@ namespace DiveMap.Runtime.Ui
 
             _loading = false;
             _fetch = null;
+
+            if (_cards.Count > 0) StartCoroutine(LogNameDiagnostics());
+        }
+
+        /// <summary>
+        /// One-shot post-layout dump of what the name row ACTUALLY rendered. There is no
+        /// Unity Editor on this machine, so a CI player log is the only way to tell a
+        /// data problem from a text-layout problem: <c>chars=0</c> with a non-empty
+        /// <c>text</c> means the TextGenerator threw the line away (rect too short),
+        /// while an empty <c>text</c> means the data never arrived.
+        /// </summary>
+        private IEnumerator LogNameDiagnostics()
+        {
+            yield return null; // let uGUI rebuild the layout
+            yield return null; // …and generate the mesh
+
+            int n = Mathf.Min(3, _cardNames.Count);
+            for (int i = 0; i < n; i++)
+            {
+                Text t = _cardNames[i];
+                if (t == null) continue;
+                Rect r = t.rectTransform.rect;
+                TextGenerator g = t.cachedTextGenerator;
+                Debug.Log($"[UI] name{i} text='{t.text}' font={(t.font != null ? t.font.name : "NULL")} " +
+                          $"size={t.fontSize} fontLine={(t.font != null ? t.font.lineHeight : -1)} " +
+                          $"need={UiKit.LineHeight(t.fontSize):F0} rect={r.width:F0}x{r.height:F0} " +
+                          $"chars={g.characterCountVisible} lines={g.lineCount} verts={g.vertexCount} " +
+                          $"alpha={t.color.a:F2} active={t.isActiveAndEnabled} " +
+                          $"h={t.horizontalOverflow} v={t.verticalOverflow}");
+            }
+        }
+
+        /// <summary>Last path segment of a URL — keeps the QC log readable.</summary>
+        private static string Tail(string url)
+        {
+            if (string.IsNullOrEmpty(url)) return "(none)";
+            int i = url.LastIndexOf('/');
+            return i >= 0 && i < url.Length - 1 ? "…/" + url.Substring(i + 1) : url;
         }
 
         // ── view ─────────────────────────────────────────────────────────────────
@@ -279,6 +326,7 @@ namespace DiveMap.Runtime.Ui
         private void ClearCards()
         {
             _cards.Clear();
+            _cardNames.Clear();
             for (int i = 0; i < _cardViews.Count; i++)
                 if (_cardViews[i] != null) Destroy(_cardViews[i]);
             _cardViews.Clear();
@@ -333,18 +381,29 @@ namespace DiveMap.Runtime.Ui
                 });
             }
 
-            // Name.
-            Text name = UiKit.MakeText(btn.transform, "Name", MapDirectory.DisplayName(card), 36,
+            // Name. Row height comes from UiKit.RowHeight — a hard-coded 52 px was too
+            // short for one 36 px NotoSansThai line (54.4 px) and the legacy Text
+            // component DROPPED the line instead of clipping it, so every card rendered
+            // a blank where its name should be (fixed in UiKit: Overflow + RowHeight).
+            string label = MapDirectory.CardLabel(card);
+            Text name = UiKit.MakeLine(btn.transform, "Name", label, NameSize,
                                        TextAnchor.UpperLeft, UiKit.TextMain);
-            StretchRow(name.rectTransform, 260f, 26f, 20f, 52f);
+            StretchRow(name.rectTransform, TextLeft, NameTop, 20f, UiKit.RowHeight(NameSize));
 
             // Owner · likes.
             string owner = string.IsNullOrEmpty(card.OwnerName)
                 ? UiStrings.Tr("ไม่ทราบผู้สร้าง")
                 : card.OwnerName;
             string sub = owner + "   ·   " + UiStrings.Tr("ถูกใจ") + " " + card.LikeCount;
-            Text meta = UiKit.MakeText(btn.transform, "Meta", sub, 26, TextAnchor.UpperLeft, UiKit.TextDim);
-            StretchRow(meta.rectTransform, 260f, 92f, 20f, 40f);
+            Text meta = UiKit.MakeLine(btn.transform, "Meta", sub, MetaSize, TextAnchor.UpperLeft, UiKit.TextDim);
+            StretchRow(meta.rectTransform, TextLeft, MetaTop, 20f, UiKit.RowHeight(MetaSize));
+
+            _cardNames.Add(name);
+            if (index < 3)
+            {
+                Debug.Log($"[UI] card{index} name='{label}' raw='{card.Name}' short={card.ShortId} " +
+                          $"thumb={Tail(card.ThumbUrl)} likes={card.LikeCount} owner='{card.OwnerName}'");
+            }
 
             // Teal accent bar on the left edge.
             Image accent = UiKit.MakePanel(btn.transform, "Accent", UiKit.Teal);
