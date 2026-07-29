@@ -61,7 +61,21 @@ namespace DiveMap.Runtime
             cam.clearFlags = CameraClearFlags.SolidColor;
             // Mid ocean-blue backdrop (web waterBg gradient reads ~this at frame centre).
             // The old near-black (0.02,0.08,0.15) sank the whole shot into darkness (QC r2).
+            // Still set: it is the fallback if the gradient backdrop cannot be built.
             cam.backgroundColor = new Color(0.30f, 0.52f, 0.66f, 1f);
+
+            // The seabed is now the web's full 340 u footprint (WO-XR-04.2), and the orbit
+            // camera pulls back to 950 u — with Main.unity's 1000 u far plane the far half of
+            // the sand would be sliced off mid-shot. The web scales its view range to the map
+            // (updateViewRange); 9,000 u matches its underwater far range and still leaves
+            // ample depth precision at this scene scale.
+            cam.nearClipPlane = 0.5f;
+            cam.farClipPlane = 9000f;
+
+            // WO-XR-04.2: the real thing — a screen-space vertical gradient like the web's
+            // scene.background (bright surface haze on top → deep blue below). This, not fog,
+            // is what gives the web its sense of depth.
+            Backdrop.Attach(cam);
 
             _orbit = cam.GetComponent<OrbitCamera>();
             if (_orbit == null) _orbit = cam.gameObject.AddComponent<OrbitCamera>();
