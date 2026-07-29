@@ -2,7 +2,7 @@
 
 > เอกสารนี้เขียนเพื่อให้ AI coding agent ใดๆ (Codex / Kimi / Claude / อื่นๆ) ทำงานต่อได้ทันที
 > อ่านคู่กับ: `DESIGN_DOC.md` (สัญญาหลัก v1.2), `QC_PLAN.md`, `SECURITY_PLAN.md`
-> อัปเดตล่าสุด: 2026-07-29 เย็น (WO-XR-04 ครบ 3 ก้อน merge เข้า main = `8cd2c17` — ปลา GLB จริง + พื้นทราย/ฉากหลังแบบเว็บ + god rays/caustics/fog)
+> อัปเดตล่าสุด: 2026-07-29 กลางคืน (**WO-XR-04 ปิดครบ 3 ก้อน · CI `30490750535` เขียวทุก job · QC ผ่าน 5/5** · main = `27e0568`)
 
 ## 1. โปรเจกต์คืออะไร
 - แอป **DiveMap** (`com.siamdive.divemap`) — Unity 6000.0.79f1 ใน `DiveMap/`
@@ -68,13 +68,34 @@ formation ตามสูตรเว็บ + วาฬ GLB จริง + QC fi
 
 **บทเรียนห้ามลืม: legacy `Text` + `VerticalWrapMode.Truncate` "ทิ้งทั้งบรรทัด" ถ้ากล่องเตี้ยกว่า fontSize × 1.511** (NotoSansThai-Regular: ascender 1061 / descender 450 / unitsPerEm 1000, USE_TYPO_METRICS) — ใช้ `UiKit.RowHeight(size, lines)` เสมอ อย่าใส่ความสูงเป็นเลขดิบ
 
-### 5.2b ▶️ RESUME — WO-XR-04 รอผล QC ของ `8cd2c17`
-CI run **`30490180208`** (main = `8cd2c17`) → เมื่อเขียว: โหลด `qc-screenshot` เทียบ `/tmp/qc041/qc_screenshot.png` (ก่อน 04.2) แล้วเช็ค 5 ข้อ
-1. ขอบพื้นละลายเป็นน้ำเงินเข้ม ไม่ใช่ขอบครีมตัดคม (สังเกต: **สีทรายที่เห็นจะเป็นวงกลม r=340** มุม squircle จมในน้ำเงิน — เว็บก็เป็นแบบนี้ เพราะ haze ใช้ `hypot(x,z)/340` ไม่ใช่ระยะถึงขอบ)
-2. footprint 0.9:1.1 (306×374) · 3. เห็น speckle · 4. ฉากหลังบนอ่อน-ล่างเข้ม · 5. เรือ/ปลา/วาฬ/เมนู/การ์ด ไม่ regress
-บรรทัด log ที่เป็น oracle: `[Scene] seabed rx=306.0 rz=374.0 rings=28 seg=96 …` · `[Scene] sand texture 1024² …` · `[Scene] backdrop ready via=…` (ถ้าเห็น `backdrop DISABLED` = หา texture property ของ unlit shader ไม่ได้ → ฉากหลังกลับไปเป็นสีเดียว ต้องหา property name จาก log) · `[Scene] godrays beams=10 …`
+### 5.2b ✅ ปิดแล้ว — WO-XR-04 ทั้ง 3 ก้อน (QC run `30490750535`, main `dc5c92d0`)
+oracle จาก `qc_player.log` ผ่านครบ:
+```
+[Scene] backdrop ready via=baseColorTexture stops=4 tex=8x256
+[Scene] sand texture 1024² baked speckle=12.1u/cell haze=0.55→1.00 rim=(0.05,0.20,0.33)
+[Scene] seabed rx=306.0 rz=374.0 rings=28 seg=96 thickness=40.0 skirt=OK waterLevel=240.0 itemMaxR=256.7
+[Scene] godrays beams=10 spread=220 len=260 dir=(-0.353,-0.788,0.504) width=16.5 opacity=0.30
+[Marine] fishGlb species=school:scad … tex=OK baseLen=1.911 expected=1.911
+[Marine] fishGlb species=school:barracuda … tex=OK baseLen=1.862 expected=1.862
+[Marine] fishGlb species=pod:yellowtail … Trevally_xr1.glb lod1=True tris=3999 tex=OK baseLen=1.869
+[Marine] configured schools=10 fish=1100 whale=1 · whale heading dot=1.000
+```
+ภาพ: ฉากหลังไล่สีจริง · ลำแสง 10 ลำขนานดวงอาทิตย์ · ขอบทรายละลายเป็นน้ำเงิน · ปลามี texture ครบ 3 · การ์ด/เมนู/ตั้งค่าไม่ regress
+ไฟล์เทสที่ส่ง user: `dive3d.suksomsri.cloud/dl/DiveMap-fish-dc5c92d0fb.apk` + `DiveMap-win-fish-dc5c92d0fb.zip` · ภาพเทียบ `xr04-before-after.png`, `xr04-closeup-before-after.png`
 
-**ค่า frame cost ที่ต้องเฝ้า**: `[Marine] avgFrameMs` บน llvmpipe — 04.1 ทำให้ 135.6 → 300.2 (ปลา GLB tris เยอะขึ้น) แก้ด้วยเกณฑ์ LOD ตามงบ (`c0a5af5`, trevally 8,800→3,999) ควรลงมาบ้าง · ถ้า QC job ใกล้ timeout **ให้ลด settle frames ไม่ใช่ลดจำนวนปลา** (1,100 คือ oracle)
+**ยังไม่ได้เคาะ (รอ user ตัดสินสายตา — ห้ามเดาเอง)**: ทรายในช็อตกว้างดู "ขาวสว่าง" กว่าเว็บ (caustics additive alpha 0.13 + ambient) · ลำแสงค่อนข้างทึบ (opacity 0.30) → ถ้า user บอกว่าแรงไป ลด `CausticsMaterial` alpha 0.13→0.08 และ `GodRays.Opacity` 0.30→0.22 (แก้ 2 บรรทัด)
+
+**perf**: llvmpipe avgFrameMs 135.6 (ก่อน 04) → 300.6 (หลัง) — เป็นเลข software renderer ที่วาดทีละตัว 1,100 ครั้ง ไม่ใช่ตัวแทนมือถือ (มือถือใช้ instanced path) · เกณฑ์ LOD ที่ใช้จริง = `count × tris > 200k` (pod จริง 50 ตัว/ฝูง → count-based ของแผนเดิมพลาด)
+
+**บทเรียนรอบนี้**
+- `asset_manifest.json` **ไม่มี tris** → การเลือก LOD ต้องมีตารางจาก survey ใน `Core/FishAssetPick.cs` (species ที่ไม่อยู่ในตาราง = ใช้เมชโพรซีดิวรัลต่อ ไม่เดา GLB)
+- mesh จาก Draco เป็น **non-readable** → ห้าม `mesh.vertices`; bake node matrix เป็น `Matrix4x4` คูณท้าย instance TRS แทน `geo.applyMatrix4` ของเว็บ · วัดขนาดจากมุม `mesh.bounds`
+- glTFast unlit/PBR shader ใช้ชื่อ property **`baseColorTexture`** (ยืนยันจาก log ทั้ง fish material และ backdrop) — `_MainTex` ไม่มี
+- ฉากหลังของเว็บเป็น **screen-space** (canvas texture ใน `scene.background`) ไม่ใช่ sky dome → ใน Unity ใช้ quad ลูกกล้อง + queue Background + วางที่ 0.95×far (กันกรณี shader เขียน depth แล้วบังพื้นไกล)
+- **far plane 1000 ไม่พอ** เมื่อพื้นเป็น 340u เต็ม (zoom out 950u) → ตั้ง 9000 (near 0.5)
+- fog: ต้องเปิดใน `Main.unity` RenderSettings ด้วย ไม่ใช่แค่ runtime ไม่งั้น shader variant ถูก strip
+- `Mathf.PerlinNoise`/`Math.Pow` ในลูป texture 1024² = ล้านครั้ง → ทำตาราง per-angle + sqrt-สองชั้น (เว็บก็ทำ)
+- เขียนเทสเอง**พลาดเอง**ได้: `prev=2f` แต่ luminance stop บนสุด 2.812 → CI แดงทั้งรอบเพราะเทส ไม่ใช่โค้ด (166/167 ผ่าน) — ตรวจค่าเริ่มต้นของ monotonic test ให้เป็น `float.MaxValue`
 
 ### 5.3 ✅ ปิดแล้ว — WO-XR-05 ทั้ง 4 ก้อน (แผนเดิม `/root/projects/siamdive-xr-docs/WO-XR-05.md`)
 งานต่อยอดที่ยังค้าง: ป้ายสถานะบนหัวจอของ AppBoot เป็นสตริงประกอบ (`"{ชื่อ} · โหลดแล้ว N · แทนที่ M"`) ยังไม่แปลตามภาษา · โหมดประหยัดยังไม่ลดจำนวนปลา (ต้องแตะ FishSchoolSystem) · การ์ดยังไม่โชว์รูปจาก pin (SceneBuilder ยังไม่สร้าง pin ในฉาก)
