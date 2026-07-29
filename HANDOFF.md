@@ -2,7 +2,7 @@
 
 > เอกสารนี้เขียนเพื่อให้ AI coding agent ใดๆ (Codex / Kimi / Claude / อื่นๆ) ทำงานต่อได้ทันที
 > อ่านคู่กับ: `DESIGN_DOC.md` (สัญญาหลัก v1.2), `QC_PLAN.md`, `SECURITY_PLAN.md`
-> อัปเดตล่าสุด: 2026-07-28 (ปิด WO-XR-03 + QC fixes, origin/main = `f31d9fc`, branch `wo-xr-05` รอ merge)
+> อัปเดตล่าสุด: 2026-07-29 (main มี UI 05.1/05.2 แล้ว = `0d93c48`, branch `wo-xr-05b` (05.3/05.4) รอผล CI)
 
 ## 1. โปรเจกต์คืออะไร
 - แอป **DiveMap** (`com.siamdive.divemap`) — Unity 6000.0.79f1 ใน `DiveMap/`
@@ -14,7 +14,8 @@
 - ✅ WO-XR-00: CI GameCI 3 targets — Android APK (IL2CPP, ~35 นาที), Windows .exe (Mono), Linux (QC) — เขียวทุก build
 - ✅ WO-XR-01 + เก็บงาน: โหลดแมพเดโม `wl6zwxh1tdgn` (Htms Chang) — เรือ KTX2 2048px ตั้งบนพื้นทราย, แสง/reflection ถูกต้อง, น้ำโปร่งแสง 2 หน้า, กล้อง frame แบบเว็บ, ฟอนต์ไทย bundle (NotoSansThai ใน Resources)
 - ✅ WO-XR-03 **ปิดแล้ว 2026-07-28** (`a7d12f8` + QC fixes `f31d9fc`): boids 1,100 ตัว 10 ฝูง ตามสูตรเว็บจริง (`buildSchool` ใน builder.html) — scad R=66.0 · barracuda R=143.9 speed 4.0 · pod 67.8/29.7 · วาฬเป็น **GLB จริง** `Whale_Shark_xr0.glb` worldLen 65.3 (เดิม clamp [8,16] ทำให้เล็กผิด 4 เท่า) · QC verdict = ผ่านแบบมีเงื่อนไข แล้วแก้ครบ
-- 🟡 WO-XR-05.1+05.2 (UI shell + เมนู + รายการแมพ + ค้นหา): เขียนเสร็จบน branch **`wo-xr-05`** (`dc2a954`) รอ CI เขียวแล้ว merge เข้า main — **แผนเต็มอยู่ที่ `/root/projects/siamdive-xr-docs/WO-XR-05.md`**
+- ✅ WO-XR-05.1+05.2 **merge เข้า main แล้ว 2026-07-29** (`0d93c48`): ปุ่ม ☰ + เมนู + navigation stack + Android back + safe area · **รายการแมพจาก `/api/dive-sites/public` จริง** พร้อม thumbnail จาก Bunny CDN + ค้นหา server-side + pagination + จำแมพล่าสุด (PlayerPrefs `shortId`) · QC ภาพยืนยันชื่อแมพไทย/อังกฤษเรนเดอร์ครบ
+- 🟡 WO-XR-05.3+05.4 (การ์ดข้อมูล + ตั้งค่า + i18n 259 คีย์): branch **`wo-xr-05b`** (`e137941`) รอผล CI — **แผนเต็ม `/root/projects/siamdive-xr-docs/WO-XR-05.md`**
 - ✅ ระบบตาอัตโนมัติ: ทุก push → CI job qc-shot → แอปถ่ายรูปตัวเอง 2 มุม → artifact `qc-screenshot`
 - ✅ XR-LOD CDN: `maps.siamdive.com/models/xr/` มี 15 โมเดล (manifest.json count=15) — เรือ/สัตว์หลัก KTX2+Draco
 - ❌ ยังไม่มี: การ์ดข้อมูล+ตั้งค่า (WO-XR-05.3/05.4), AR (02m), ปลา GLB จริงรายตัว (04), โหมดแก้ไข (06), store (07)
