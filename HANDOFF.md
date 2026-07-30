@@ -82,6 +82,16 @@ WO ใน DESIGN_DOC **ไม่ครอบคลุม** ทัวร์โด
 - APK: `dive3d.suksomsri.cloud/dl/DiveMap-webui-7cc289a78d.apk`
 - **งาน parity ที่เหลือ (เรียงตามที่ผู้ใช้เห็น)**: 1) **bottom sheet** — รายการแมพ/ตั้งค่า/การ์ด ต้องเป็นแผ่นเลื่อนขึ้นทับแมพ ยังเป็นหน้าเต็มจอ (ต้องทำ `UiKit.RoundedSprite()` 9-slice ก่อน) 2) modal สเปกเว็บ 3) `#backBtn` ซ้ายบน + `#hint` pill 4) chip หมวด
 
+## 4.8 ▶️ RESUME 2026-07-30 เช้า — UI/UX parity 9 pass (main `23cd181d`)
+🔴 **user สั่ง: "ตำแหน่งการวางต้องถูกต้องไม่ใช่แค่มี"** → อ่าน **`UI_PARITY.md` §1.5 ก่อนแตะ UI ทุกครั้ง**
+- **หน่วยวัด**: เว็บใช้ CSS px · แอปใช้ canvas 1080×1920 สเกล `√(w/1080·h/1920)` → **ทุกตัวเลข UI ต้องผ่าน `UiKit.Css()` / `CssFont()`** (ห้าม hard-code หน่วย canvas อีก) · QC log ยืนยัน `dpr=1.00 canvasScale=0.667 48css=72u`
+- **HUD ทัวร์เดิมผิดที่แทบทุกชิ้น** → แก้ครบตาม builder.html 231-277 (ตารางใน UI_PARITY §3.5): exit ซ้ายบน 44 · depth ขวาบน pill 19px/800 #9fe0ff · hint กลางบน · lamp ซ้าย 104 (ติดไฟ=อำพัน) · mute ซ้าย 174 · camera ขวา 104 · stick 138/knob 60 + ป้าย 4 ทิศ · minimap กลางล่าง 118 · **compass ตอนทัวร์ย้ายไปขวาบน right 138/top 15** (เว็บไม่ซ่อน แต่ย้าย) · ซ่อน #count
+- **bottom sheet** (`UiKit.MakeSheet`) แทนหน้าเต็มจอ: รายการแมพ/ตั้งค่า · **การ์ดข้อมูล = pill กลางจอแบบ #seltool** (เดิมเป็นแถบเต็มกว้างทับ ☰+เข็มทิศ)
+- **`UiKit.RoundedSprite()`** 9-slice ทำมุมโค้งตาม CSS (pill 14 · modal 20 · sheet 24 · ปุ่ม 13)
+- `IconPainter` 16 ไอคอน · `MinimapWidget` (พื้น/สิ่งกีดขวาง/ฝูง/สัตว์/ทิศ) · `PhotoSaver` (MediaStore → Pictures/DiveMap, fallback โฟลเดอร์แอป — **เทสได้เฉพาะบนเครื่องจริง**)
+- APK: `dive3d.suksomsri.cloud/dl/DiveMap-css-4147131ff8.apk`
+- **บทเรียน**: UiStringsTests บังคับ **ค่าอังกฤษห้ามซ้ำ** (ToLang ต้อง idempotent) — "ถอย" ใช้ "Rev" เพราะ "Back" เป็นของ "ย้อนกลับ"
+
 ## 5. งานถัดไปทันที (คิวเรียงแล้ว)
 ### 5.1 ✅ ปิดแล้ว — WO-XR-03 (2026-07-28)
 formation ตามสูตรเว็บ + วาฬ GLB จริง + QC fixes (ครีบดำ/gloss/heading log) · commit `a7d12f8` → `f31d9fc`
