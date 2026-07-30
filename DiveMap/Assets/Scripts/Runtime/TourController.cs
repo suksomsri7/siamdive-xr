@@ -168,6 +168,23 @@ namespace DiveMap.Runtime
             Debug.Log($"[Tour] begin pos=({start.x:F1},{start.y:F1},{start.z:F1}) " +
                       $"solids={_solids.Length} water={_waterLevel:F1} " +
                       $"scale=({_scaleX:F2},{_scaleZ:F2})");
+
+            // D10 — coach a first dive, once per device. Delayed like the web (700 ms) because the
+            // HUD is still fading in and a spotlight needs something laid out to point at.
+            StartCoroutine(CoachFirstDive());
+        }
+
+        private System.Collections.IEnumerator CoachFirstDive()
+        {
+            if (Ui.TutorialGuide.Seen(Ui.TutorialGuide.TourKey)) yield break;
+            // Retry while the HUD settles — the web does the same for up to 20 tries, and marking
+            // the tutorial "seen" against a HUD that was not ready yet would silently burn it.
+            for (int i = 0; i < 20 && _active; i++)
+            {
+                yield return new WaitForSecondsRealtime(i == 0 ? 0.7f : 0.9f);
+                if (!_active) yield break;
+                if (Ui.TutorialGuide.StartTour()) yield break;
+            }
         }
 
         /// <summary>

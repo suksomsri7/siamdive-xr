@@ -679,6 +679,9 @@ namespace DiveMap.Runtime.Ui
             if (TourController.Start())
             {
                 yield return new WaitForSecondsRealtime(1.2f);
+                // D10 auto-starts a spotlight guide on a first dive. Every other tour shot needs
+                // it gone, so it is dismissed here and photographed deliberately further down.
+                TutorialGuide.CloseAny();
                 ScreenCapture.CaptureScreenshot(prefix + "_tour.png");
                 Debug.Log("[UI] qcui shot -> " + prefix + "_tour.png");
 
@@ -707,6 +710,27 @@ namespace DiveMap.Runtime.Ui
                     tour.QcStopCharge();
                 }
                 else Debug.LogWarning("[UI] qcui could not find a scad shoal to charge");
+
+                // 6.9) E5 — the shop sheet, over the tour where a player actually meets it.
+                ShopSheet.Open();
+                yield return new WaitForSecondsRealtime(0.8f);
+                ScreenCapture.CaptureScreenshot(prefix + "_shop.png");
+                Debug.Log("[UI] qcui shot -> " + prefix + "_shop.png");
+                yield return new WaitForSecondsRealtime(1.2f);
+                ShopSheet.Close();
+                yield return new WaitForSecondsRealtime(0.4f);
+
+                // 6.95) D10 — the first-dive spotlight. Forced, because the automatic path marks
+                // itself seen on the first CI player run and would never appear in the second.
+                TutorialGuide.Forget(TutorialGuide.TourKey);
+                bool tut = TutorialGuide.StartTour(force: true);
+                Debug.Log($"[UI] qcui tutorial started={tut}");
+                yield return new WaitForSecondsRealtime(1.0f);
+                ScreenCapture.CaptureScreenshot(prefix + "_tutorial.png");
+                Debug.Log("[UI] qcui shot -> " + prefix + "_tutorial.png");
+                yield return new WaitForSecondsRealtime(1.2f);
+                TutorialGuide.CloseAny();
+                yield return new WaitForSecondsRealtime(0.4f);
                 if (ModeManager.Instance != null) ModeManager.Instance.Exit();
                 yield return new WaitForSecondsRealtime(0.8f);
             }

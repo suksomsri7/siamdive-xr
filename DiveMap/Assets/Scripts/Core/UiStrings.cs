@@ -80,6 +80,27 @@ namespace DiveMap.Core
                 { "ซื้อแล้ว",               "Purchased" },
                 { "ปล่อยลงแมพแล้ว — กำลังโหลดใหม่", "Released — reloading" },
 
+                // first-dive tutorial (D10)
+                { "ข้าม",                  "Skip" },
+                { "ถัดไป",                 "Next" },
+                { "เริ่มเลย!",              "Start!" },
+                { "จอยซ้าย",               "Left stick" },
+                { "จอยขวา",                "Right stick" },
+                { "กล้อง",                 "Camera" },
+                { "ไฟฉาย",                 "Lamp" },
+                { "เหรียญของคุณ",           "Your coins" },
+                { "ลาก ขึ้น/ลง เพื่อลอย-ดำลง · ซ้าย/ขวา เพื่อหันกล้อง",
+                  "Drag up/down to rise and dive; left/right to turn" },
+                { "ลาก หน้า/ถอย เพื่อว่ายไป · ซ้าย/ขวา เพื่อสไลด์ข้าง",
+                  "Drag forward/back to swim; left/right to strafe" },
+                { "ปุ่มกล้อง: ถ่ายภาพเก็บลงเครื่อง", "Shutter: save a photo to your phone" },
+                { "เปิดไฟหน้าโดรน มองเห็นตอนดำลึก", "Turn on the headlight for deeper water" },
+                { "เก็บขยะและเหรียญทองที่ตกลงมา = ได้เหรียญ เอาไว้ซื้อสัตว์ทะเลในร้านค้า",
+                  "Collect the litter and gold coins that fall, then spend them in the shop" },
+                { "ใช้เหรียญซื้อสัตว์ทะเลมาปล่อยลงแมพของคุณ",
+                  "Spend coins on sea life and release it into your map" },
+                { "กลับไปหน้าแมพเมื่อเที่ยวเสร็จ", "Back to the map when you are done" },
+
                 // map list / search
                 { "ค้นหาแมพ",              "Search maps" },
                 { "กำลังโหลด…",            "Loading…" },
