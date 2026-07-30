@@ -226,13 +226,14 @@ namespace DiveMap.Runtime.Ui
             _actions.anchorMax = new Vector2(1f, 0f);
             _actions.pivot = new Vector2(1f, 0f);
             // The column sits directly above the toggle: 48 px buttons with the web's 10 px gap.
-            _actions.sizeDelta = new Vector2(UiKit.Css(48f), UiKit.Css(48f * 4f + 30f));
+            _actions.sizeDelta = new Vector2(UiKit.Css(48f), UiKit.Css(48f * 5f + 40f));
             _actions.anchoredPosition = new Vector2(-UiKit.Css(12f), UiKit.Css(20f + 48f + 10f));
 
             ActionButton(0, "list", OpenMapList);
             ActionButton(1, "mask", StartTour);
             ActionButton(2, "depth", ToggleDepthView);   // the web's #depthViewBtn
-            ActionButton(3, "gear", OpenSettings);
+            ActionButton(3, "wave", ToggleEnv);          // the web's #env (☀️ / 💧)
+            ActionButton(4, "gear", OpenSettings);
             _actions.gameObject.SetActive(false);
         }
 
@@ -338,6 +339,18 @@ namespace DiveMap.Runtime.Ui
             bool on = SeabedView.Toggle();
             if (DepthLegend.Instance != null) DepthLegend.Instance.SetVisible(on);
             Toast.ShowTr(on ? "แสดงความลึก (สี)" : "แสดงพื้นทรายปกติ");
+        }
+
+        /// <summary>
+        /// Daylight ☀️ / underwater 💧, the web's #env button — which swaps its own icon between
+        /// the sun and the waves to show what the NEXT press gives you.
+        /// </summary>
+        public void ToggleEnv()
+        {
+            bool daylight = EnvMode.Toggle();
+            Button b = _actions != null ? _actions.Find("Action_wave")?.GetComponent<Button>() : null;
+            if (b != null) UiKit.SetIcon(b, daylight ? "wave" : "sun");
+            Toast.ShowTr(daylight ? "โหมดกลางวัน" : "โหมดใต้น้ำ");
         }
 
         public void OpenMapList()
@@ -619,6 +632,24 @@ namespace DiveMap.Runtime.Ui
             ScreenCapture.CaptureScreenshot(prefix + "_settings.png");
             Debug.Log("[UI] qcui shot -> " + prefix + "_settings.png");
             yield return new WaitForSecondsRealtime(1.5f);
+
+            // 6.2) depth heat-map (P2a) and 6.3) daylight (P2b): both are one-press view changes
+            // that no unit test can show, so the QC eye takes them.
+            CloseAll();
+            yield return new WaitForSecondsRealtime(0.4f);
+            ToggleDepthView();
+            yield return new WaitForSecondsRealtime(1.0f);
+            ScreenCapture.CaptureScreenshot(prefix + "_depth.png");
+            Debug.Log("[UI] qcui shot -> " + prefix + "_depth.png");
+            yield return new WaitForSecondsRealtime(1.2f);
+            ToggleDepthView();          // back to sand
+
+            ToggleEnv();
+            yield return new WaitForSecondsRealtime(1.0f);
+            ScreenCapture.CaptureScreenshot(prefix + "_daylight.png");
+            Debug.Log("[UI] qcui shot -> " + prefix + "_daylight.png");
+            yield return new WaitForSecondsRealtime(1.2f);
+            ToggleEnv();                // back underwater
 
             // 6.5) toast (P0). Proves the new transient line renders — and renders THAI — before
             // the tour/game work starts leaning on it. Captured with the map visible, not over a

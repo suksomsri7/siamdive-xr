@@ -246,6 +246,7 @@ namespace DiveMap.Runtime
             // Hand the drone its world: what to collide with, where the surface is, how the
             // seabed is stretched, and where "home" is for the exit re-frame.
             TourController.Configure(result);
+            EnvMode.Reset();   // new scene, new lights/water to capture
 
             // ── Sun shafts (WO-XR-04.3) ─────────────────────────────────────────────
             // Scattered around the content, from the water surface down to just under the

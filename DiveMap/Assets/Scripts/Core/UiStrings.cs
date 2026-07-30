@@ -44,6 +44,8 @@ namespace DiveMap.Core
                 { "บันทึกภาพในแอปแล้ว",      "Photo saved in the app" },
                 { "แสดงความลึก (สี)",        "Depth colours on" },
                 { "แสดงพื้นทรายปกติ",        "Depth colours off" },
+                { "โหมดกลางวัน",            "Daylight view" },
+                { "โหมดใต้น้ำ",             "Underwater view" },
                 { "บันทึกภาพไม่สำเร็จ",      "Could not save the photo" },
                 { "จอยซ้าย = ขึ้น/ลง + หัน · จอยขวา = เดินหน้า",
                   "Left stick rises and turns · right stick moves you" },

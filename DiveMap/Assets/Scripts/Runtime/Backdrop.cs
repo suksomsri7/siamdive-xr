@@ -85,6 +85,12 @@ namespace DiveMap.Runtime
             return true;
         }
 
+        /// <summary>Hide the gradient (daylight mode uses a flat sky, like the web).</summary>
+        public void SetVisible(bool visible)
+        {
+            if (_quad != null) _quad.gameObject.SetActive(visible);
+        }
+
         private void LateUpdate()
         {
             if (_cam == null || _quad == null) return;
