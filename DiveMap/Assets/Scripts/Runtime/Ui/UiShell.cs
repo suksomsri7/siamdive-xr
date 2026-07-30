@@ -829,8 +829,18 @@ namespace DiveMap.Runtime.Ui
         /// <summary>QC helper — the shop row that sells <paramref name="assetId"/>.</summary>
         private static Button FindRowButton(string assetId)
         {
-            RectTransform layer = HudLayer.For(AppMode.Tour) ?? HudLayer.For(AppMode.View);
-            if (layer == null) return null;
+            // BOTH layers, not the first non-null one: the tour layer exists even when the shop
+            // was opened over the map, so "?? view" silently searched the wrong tree and the QC
+            // buy test reported "could not find the shop row" on a shop that was on screen.
+            Transform sheet = null;
+            foreach (AppMode m in new[] { ModeManager.Current, AppMode.Tour, AppMode.View })
+            {
+                RectTransform l = HudLayer.For(m);
+                if (l == null) continue;
+                sheet = FindDeep(l, "ShopSheet");
+                if (sheet != null) break;
+            }
+            if (sheet == null) return null;
             // IReadOnlyList has no IndexOf.
             int index = -1;
             var cat = DiveMap.Core.Shop.Catalogue;
@@ -838,8 +848,6 @@ namespace DiveMap.Runtime.Ui
                 if (cat[i] == assetId) { index = i; break; }
             if (index < 0) return null;
 
-            Transform sheet = FindDeep(layer, "ShopSheet");
-            if (sheet == null) return null;
             Transform row = FindDeep(sheet, "Row" + index);
             return row != null ? row.GetComponent<Button>() : null;
         }
