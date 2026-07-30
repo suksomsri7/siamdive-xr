@@ -256,6 +256,7 @@ namespace DiveMap.Runtime.Ui
             bool open = !_actions.gameObject.activeSelf;
             _actions.gameObject.SetActive(open);
             UiKit.SetIcon(_menuToggleBtn, open ? "close" : "menu");
+            if (CompassWidget.Instance != null) CompassWidget.Instance.SetVisible(!open);
         }
 
         public void CloseActions()
@@ -263,6 +264,7 @@ namespace DiveMap.Runtime.Ui
             if (_actions == null || !_actions.gameObject.activeSelf) return;
             _actions.gameObject.SetActive(false);
             UiKit.SetIcon(_menuToggleBtn, "menu");
+            if (CompassWidget.Instance != null) CompassWidget.Instance.SetVisible(true);
         }
 
         // (The slide-in menu panel from WO-XR-05.1 is gone: the web has no menu panel, it has the

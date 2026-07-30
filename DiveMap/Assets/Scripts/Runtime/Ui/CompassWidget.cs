@@ -89,6 +89,16 @@ namespace DiveMap.Runtime.Ui
         }
 
         /// <summary>
+        /// Hide while the ☰ column is expanded: both live on the right rail (the web puts
+        /// #viewbtns at bottom 20 and #compass at bottom 80, so an open column runs straight
+        /// through it) and the column is the transient one.
+        /// </summary>
+        public void SetVisible(bool visible)
+        {
+            if (_rt != null) _rt.gameObject.SetActive(visible);
+        }
+
+        /// <summary>
         /// The web does NOT hide the compass in the tour — it MOVES it (builder.html:234):
         /// <c>body.tour #compass{right:138px; top:max(15px,safe); 44×44; bg rgba(7,26,42,.5);
         /// border:2px rgba(255,255,255,.8)}</c>, i.e. up beside the depth pill, 138 px in from the
