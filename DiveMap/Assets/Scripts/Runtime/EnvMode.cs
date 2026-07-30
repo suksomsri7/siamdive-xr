@@ -48,10 +48,14 @@ namespace DiveMap.Runtime
             if (daylight)
             {
                 RenderSettings.fog = false;                       // the web drops fog entirely
-                RenderSettings.ambientSkyColor = AirHemi * 1.2f;
-                RenderSettings.ambientEquatorColor = Color.Lerp(AirHemi, AirGround, 0.5f) * 1.2f;
-                RenderSettings.ambientGroundColor = AirGround * 1.2f;
-                if (_sun != null) { _sun.color = AirSun; _sun.intensity = 1.6f; }
+                // The web's 1.2 hemi / 1.6 sun are THREE.js HemisphereLight values. Unity's
+                // Trilight ambient adds from three directions at once, so the same numbers blew
+                // the cream sand out to pure white (first daylight QC shot). Scaled to match the
+                // web's LOOK — bright, flat, shadowless — rather than its numbers.
+                RenderSettings.ambientSkyColor = AirHemi * 0.72f;
+                RenderSettings.ambientEquatorColor = Color.Lerp(AirHemi, AirGround, 0.5f) * 0.72f;
+                RenderSettings.ambientGroundColor = AirGround * 0.72f;
+                if (_sun != null) { _sun.color = AirSun; _sun.intensity = 1.15f; }
                 if (cam != null) cam.backgroundColor = AirSky;
                 if (backdrop != null) backdrop.SetVisible(false);  // flat sky, not the gradient
             }
@@ -67,6 +71,10 @@ namespace DiveMap.Runtime
 
             SetWaterVisible(!daylight);
             SetFishVisible(!daylight);
+            // Sun shafts and caustics are underwater phenomena — and additively lighting an
+            // already-bright daylight scene is what pushed the sand to white.
+            SetNamedActive("GodRays", !daylight);
+            SetNamedActive("Caustics", !daylight);
 
             Debug.Log($"[Scene] env={(daylight ? "daylight" : "underwater")} fog={RenderSettings.fog}");
             return _daylight;
@@ -96,6 +104,15 @@ namespace DiveMap.Runtime
         {
             _saved = false;
             _daylight = false;
+        }
+
+        /// <summary>Show/hide a child of the map root by name (GodRays, Caustics, Water…).</summary>
+        private static void SetNamedActive(string name, bool active)
+        {
+            GameObject map = GameObject.Find("Map");
+            if (map == null) return;
+            Transform t = map.transform.Find(name);
+            if (t != null) t.gameObject.SetActive(active);
         }
 
         private static void SetWaterVisible(bool visible)
