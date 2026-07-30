@@ -84,6 +84,12 @@ namespace DiveMap.Runtime
             _combo = 0;
             _comboKind = null;
             _running = true;
+
+            // Seed a few pieces so a fresh dive has something in it. The web's field persists
+            // across a session, so its 5 s cadence is enough there; ours starts empty every time
+            // and an empty first minute reads as "the game is not working".
+            for (int i = 0; i < 3; i++) Spawn(false);
+
             CoinCounter.Ensure();
             CoinCounter.Show(Coins);
             Debug.Log($"[Game] begin coins={Coins} water={waterLevel:F0}");

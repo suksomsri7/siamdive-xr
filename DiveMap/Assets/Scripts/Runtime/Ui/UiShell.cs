@@ -670,6 +670,12 @@ namespace DiveMap.Runtime.Ui
                 yield return new WaitForSecondsRealtime(1.2f);
                 ScreenCapture.CaptureScreenshot(prefix + "_tour.png");
                 Debug.Log("[UI] qcui shot -> " + prefix + "_tour.png");
+
+                // Stay long enough for the litter to fall into view (28 u/s from just under the
+                // surface): the first game shot was taken 2 s in and caught an empty ocean.
+                yield return new WaitForSecondsRealtime(6f);
+                ScreenCapture.CaptureScreenshot(prefix + "_game.png");
+                Debug.Log("[UI] qcui shot -> " + prefix + "_game.png");
                 yield return new WaitForSecondsRealtime(1.2f);
                 if (ModeManager.Instance != null) ModeManager.Instance.Exit();
                 yield return new WaitForSecondsRealtime(0.8f);
