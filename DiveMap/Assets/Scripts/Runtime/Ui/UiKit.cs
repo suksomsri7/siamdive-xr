@@ -21,17 +21,30 @@ namespace DiveMap.Runtime.Ui
     /// </summary>
     public static class UiKit
     {
-        public static readonly Color Teal     = new Color(0.310f, 0.820f, 0.771f, 1f); // #4FD1C5
-        public static readonly Color TealDim  = new Color(0.176f, 0.478f, 0.451f, 1f);
-        public static readonly Color PanelBg  = new Color(0.043f, 0.090f, 0.118f, 0.96f);
+        // ── the web's design tokens (builder.html :39) ─────────────────────────
+        //   --bg #071a2b · --panel rgba(11,26,42,.72) + blur(18) · --accent #39b0e8
+        //   --txt #eaf4fb · --mut #9fb6c9 · --line rgba(255,255,255,.1)
+        // The app must look like the same product as the web, so these are THE colours.
+        // Teal/TealDim stay as aliases of the accent because 05.x built its screens against
+        // them — one rename would touch every screen without changing a pixel of intent.
+        public static readonly Color Accent   = new Color(0.224f, 0.690f, 0.910f, 1f); // #39b0e8
+        public static readonly Color OnAccent = new Color(0.016f, 0.071f, 0.122f, 1f); // #04121f
+        public static readonly Color Teal     = new Color(0.224f, 0.690f, 0.910f, 1f); // = Accent
+        public static readonly Color TealDim  = new Color(0.224f, 0.690f, 0.910f, 0.32f); // accent @32% (web .pub)
+        /// <summary>Glass surface. uGUI cannot blur what is behind it, so the web's 0.72 alpha is
+        /// raised — without the blur, 0.72 over a busy reef is unreadable.</summary>
+        public static readonly Color Glass    = new Color(0.043f, 0.102f, 0.165f, 0.88f);
+        /// <summary>The web's 1px hairline border (rgba(255,255,255,.1)).</summary>
+        public static readonly Color Line     = new Color(1f, 1f, 1f, 0.10f);
+        public static readonly Color PanelBg  = new Color(0.043f, 0.102f, 0.165f, 0.94f); // --panel, opaque enough to read
         // Fully opaque: at 0.99 the screen underneath (the slide-in menu, the 3D scene)
         // bled through as a ghost image in the QC screenshots.
-        public static readonly Color ScreenBg = new Color(0.027f, 0.067f, 0.094f, 1f);
-        public static readonly Color CardBg   = new Color(0.086f, 0.157f, 0.196f, 1f);
+        public static readonly Color ScreenBg = new Color(0.027f, 0.102f, 0.169f, 1f); // --bg #071a2b
+        public static readonly Color CardBg   = new Color(1f, 1f, 1f, 0.06f);          // web list/chip fill
         public static readonly Color Scrim    = new Color(0f, 0f, 0f, 0.55f);
-        public static readonly Color TextMain = new Color(0.925f, 0.961f, 0.973f, 1f);
-        public static readonly Color TextDim  = new Color(0.647f, 0.737f, 0.780f, 1f);
-        public static readonly Color Danger   = new Color(1f, 0.702f, 0.702f, 1f);
+        public static readonly Color TextMain = new Color(0.918f, 0.957f, 0.984f, 1f); // --txt #eaf4fb
+        public static readonly Color TextDim  = new Color(0.624f, 0.714f, 0.788f, 1f); // --mut #9fb6c9
+        public static readonly Color Danger   = new Color(0.690f, 0.204f, 0.290f, 0.92f); // web #leaveDiscard
 
         /// <summary>The bundled NotoSansThai face — the only font that renders Thai in CI.</summary>
         public static Font Face => UiFont.Get();
@@ -130,6 +143,56 @@ namespace DiveMap.Runtime.Ui
         }
         private static readonly System.Collections.Generic.Dictionary<int, Sprite> _circles =
             new System.Collections.Generic.Dictionary<int, Sprite>();
+
+        /// <summary>
+        /// The web's chrome button: a 48 px glass circle with a hairline rim and a stroke icon
+        /// (builder.html #backBtn / #playBtn / #viewbtns button). <paramref name="accent"/> fills
+        /// it with the accent instead of glass, like the web's #menuToggle.
+        /// </summary>
+        public static Button MakeIconButton(Transform parent, string name, string icon,
+                                            UnityEngine.Events.UnityAction onClick,
+                                            bool accent = false, float size = 96f)
+        {
+            var go = new GameObject(name);
+            go.transform.SetParent(parent, false);
+            var rt = go.AddComponent<RectTransform>();
+            rt.sizeDelta = new Vector2(size, size);
+
+            var bg = go.AddComponent<Image>();
+            bg.sprite = CircleSprite();
+            bg.color = accent ? new Color(0.184f, 0.560f, 0.839f, 0.96f) : Glass; // #2f8fd6-ish
+            var btn = go.AddComponent<Button>();
+            btn.targetGraphic = bg;
+            if (onClick != null) btn.onClick.AddListener(onClick);
+
+            Image rim = MakeCircle(rt, "Rim", Line, 0.035f);
+            rim.raycastTarget = false;
+            Stretch(rim.rectTransform);
+
+            if (!string.IsNullOrEmpty(icon))
+            {
+                Image ic = MakePanel(rt, "Icon", TextMain);
+                ic.raycastTarget = false;
+                ic.sprite = IconPainter.Get(icon);
+                ic.type = Image.Type.Simple;
+                RectTransform irt = ic.rectTransform;
+                irt.anchorMin = new Vector2(0.5f, 0.5f);
+                irt.anchorMax = new Vector2(0.5f, 0.5f);
+                irt.pivot = new Vector2(0.5f, 0.5f);
+                irt.sizeDelta = new Vector2(size * 0.46f, size * 0.46f);   // web: 22/48 px
+                irt.anchoredPosition = Vector2.zero;
+            }
+            return btn;
+        }
+
+        /// <summary>Swap the icon on a button built by <see cref="MakeIconButton"/>.</summary>
+        public static void SetIcon(Button btn, string icon)
+        {
+            if (btn == null) return;
+            Transform t = btn.transform.Find("Icon");
+            Image img = t != null ? t.GetComponent<Image>() : null;
+            if (img != null) img.sprite = IconPainter.Get(icon);
+        }
 
         /// <summary>Round panel — same as <see cref="MakePanel"/> but with a circle sprite.</summary>
         public static Image MakeCircle(Transform parent, string name, Color color,

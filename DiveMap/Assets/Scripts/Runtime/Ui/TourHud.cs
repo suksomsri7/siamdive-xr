@@ -23,9 +23,7 @@ namespace DiveMap.Runtime.Ui
         private Text _depth;
         private float _shownDepth = -999f;
         private Button _light;
-        private Text _lightLabel;
         private Button _mute;
-        private Text _muteLabel;
         private Image _vignette;
 
         public static TourHud Ensure()
@@ -67,24 +65,20 @@ namespace DiveMap.Runtime.Ui
 
             BuildVignette(root);
 
-            Button exit = UiKit.MakeButton(root, "TourExit", UiStrings.Tr("ออกทัวร์"), 30,
-                                           UiKit.TealDim, UiKit.TextMain, ExitTour);
+            // Chrome as round 48 px glass circles with stroke icons, exactly the web's tour
+            // furniture (#viewbtns / #backBtn): text buttons in a first-person view are an app-ism
+            // the web does not have, and the icons carry across languages.
+            Button exit = UiKit.MakeIconButton(root, "TourExit", "exit", ExitTour);
             UiKit.Anchor(exit.GetComponent<RectTransform>(), new Vector2(1f, 1f),
-                         new Vector2(220f, 84f), new Vector2(-28f, -28f));
+                         new Vector2(96f, 96f), new Vector2(-26f, -26f));
 
-            // Headlamp toggle, under the exit button. Labelled with the state it will produce,
-            // like the web's lightBtn highlight.
-            _light = UiKit.MakeButton(root, "TourLight", UiStrings.Tr("ไฟหน้า"), 30,
-                                      UiKit.TealDim, UiKit.TextMain, ToggleLight);
+            _light = UiKit.MakeIconButton(root, "TourLight", "lamp", ToggleLight);
             UiKit.Anchor(_light.GetComponent<RectTransform>(), new Vector2(1f, 1f),
-                         new Vector2(220f, 84f), new Vector2(-28f, -124f));
-            _lightLabel = _light.GetComponentInChildren<Text>(true);
+                         new Vector2(96f, 96f), new Vector2(-26f, -134f));
 
-            // Mute, under the headlamp. State lives in PlayerPrefs so it survives the app.
-            _mute = UiKit.MakeButton(root, "TourMute", "", 30, UiKit.TealDim, UiKit.TextMain, ToggleMute);
+            _mute = UiKit.MakeIconButton(root, "TourMute", "sound", ToggleMute);
             UiKit.Anchor(_mute.GetComponent<RectTransform>(), new Vector2(1f, 1f),
-                         new Vector2(220f, 84f), new Vector2(-28f, -220f));
-            _muteLabel = _mute.GetComponentInChildren<Text>(true);
+                         new Vector2(96f, 96f), new Vector2(-26f, -242f));
             RenderMute();
         }
 
@@ -142,14 +136,12 @@ namespace DiveMap.Runtime.Ui
             if (tc != null) tc.ToggleHeadlight();
         }
 
-        /// <summary>Reflect the lamp state on the button (dim = off).</summary>
+        /// <summary>Reflect the lamp state: the web tints its active tool button with the accent.</summary>
         public void SetHeadlight(bool on)
         {
             if (_light == null) return;
             Image bg = _light.GetComponent<Image>();
-            if (bg != null) bg.color = on ? UiKit.Teal : UiKit.TealDim;
-            if (_lightLabel != null)
-                _lightLabel.color = on ? new Color(0.043f, 0.090f, 0.118f) : UiKit.TextMain;
+            if (bg != null) bg.color = on ? new Color(0.224f, 0.690f, 0.910f, 0.60f) : UiKit.Glass;
         }
 
         private void ToggleMute()
@@ -160,12 +152,11 @@ namespace DiveMap.Runtime.Ui
 
         private void RenderMute()
         {
-            if (_muteLabel == null) return;
+            if (_mute == null) return;
             bool muted = AudioBank.Muted;
-            _muteLabel.text = UiStrings.Tr(muted ? "เปิดเสียง" : "ปิดเสียง");
-            Image bg = _mute != null ? _mute.GetComponent<Image>() : null;
-            if (bg != null) bg.color = muted ? UiKit.TealDim : UiKit.Teal;
-            _muteLabel.color = muted ? UiKit.TextMain : new Color(0.043f, 0.090f, 0.118f);
+            UiKit.SetIcon(_mute, muted ? "mute" : "sound");
+            Image bg = _mute.GetComponent<Image>();
+            if (bg != null) bg.color = muted ? UiKit.Glass : new Color(0.224f, 0.690f, 0.910f, 0.60f);
         }
 
         private static void ExitTour()

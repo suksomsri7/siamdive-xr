@@ -185,23 +185,15 @@ namespace DiveMap.Runtime.Ui
         /// </summary>
         private void BuildHamburger()
         {
-            Button btn = UiKit.MakeButton(_safe, "MenuButton", null, 0, UiKit.PanelBg,
-                                          UiKit.TextMain, OpenMenu);
+            // The web's ☰ lives at the BOTTOM-RIGHT (#viewbtns > #menuToggle) as a blue-filled
+            // 48 px circle, not top-right as a square — someone moving between web and app must
+            // find the menu under the same thumb.
+            Button btn = UiKit.MakeIconButton(_safe, "MenuButton", "menu", OpenMenu, accent: true);
             _hamburger = btn.gameObject;
-            UiKit.Anchor(btn.GetComponent<RectTransform>(), new Vector2(1f, 1f),
-                         new Vector2(104f, 104f), new Vector2(-24f, -24f));
+            UiKit.Anchor(btn.GetComponent<RectTransform>(), new Vector2(1f, 0f),
+                         new Vector2(104f, 104f), new Vector2(-26f, 44f));
 
-            for (int i = 0; i < 3; i++)
-            {
-                Image bar = UiKit.MakePanel(btn.transform, "Bar" + i, UiKit.Teal);
-                bar.raycastTarget = false;
-                var rt = bar.rectTransform;
-                rt.anchorMin = new Vector2(0.5f, 0.5f);
-                rt.anchorMax = new Vector2(0.5f, 0.5f);
-                rt.pivot = new Vector2(0.5f, 0.5f);
-                rt.sizeDelta = new Vector2(52f, 7f);
-                rt.anchoredPosition = new Vector2(0f, 17f - i * 17f);
-            }
+            // (The three hand-built Image bars are gone: IconPainter draws the web's own ☰ path.)
         }
 
         private void BuildMenu()

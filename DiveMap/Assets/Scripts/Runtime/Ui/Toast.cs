@@ -25,10 +25,10 @@ namespace DiveMap.Runtime.Ui
         private const int FontSize = 30;
         private const float HoldSeconds = 2.2f;
         private const float FadeSeconds = 0.35f;
-        // TOP-centre, under the status header. The web puts its toast at the bottom, but on this
-        // app the bottom belongs to the info card (a bottom sheet) and, from P1, to the joysticks
-        // — the first QC shot showed the toast landing on top of the card.
-        private const float TopMargin = 96f;
+        // Dead CENTRE, like the web (#toast — left/top 50%, translate −50%, radius 14, padding
+        // 13/22, 14px/600). Earlier passes tried the bottom (the info card covered it) and then the
+        // top; matching the web is the point — someone moving between web and app should find the
+        // same message in the same place.
 
         private static Toast _instance;
 
@@ -64,13 +64,13 @@ namespace DiveMap.Runtime.Ui
             if (host == null) return null;
 
             RectTransform node = UiKit.MakeNode(host, "Toast");
-            node.anchorMin = new Vector2(0.5f, 1f);
-            node.anchorMax = new Vector2(0.5f, 1f);
-            node.pivot = new Vector2(0.5f, 1f);
-            node.anchoredPosition = new Vector2(0f, -TopMargin);
-            node.sizeDelta = new Vector2(900f, UiKit.RowHeight(FontSize, 2) + 28f);
+            node.anchorMin = new Vector2(0.5f, 0.5f);
+            node.anchorMax = new Vector2(0.5f, 0.5f);
+            node.pivot = new Vector2(0.5f, 0.5f);
+            node.anchoredPosition = Vector2.zero;
+            node.sizeDelta = new Vector2(860f, UiKit.RowHeight(FontSize, 2) + 26f);
 
-            Image bg = UiKit.MakePanel(node, "Bg", UiKit.PanelBg);
+            Image bg = UiKit.MakePanel(node, "Bg", UiKit.Glass);
             bg.rectTransform.anchorMin = Vector2.zero;
             bg.rectTransform.anchorMax = Vector2.one;
             bg.rectTransform.offsetMin = Vector2.zero;
