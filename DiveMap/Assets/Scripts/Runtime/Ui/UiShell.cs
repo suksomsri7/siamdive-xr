@@ -200,6 +200,7 @@ namespace DiveMap.Runtime.Ui
             // The web's compass lives in the MAP VIEW (#compass: right 12, bottom 80), not in the
             // tour — the tour has the minimap instead. Same here.
             CompassWidget.Create(_safe);
+            DepthLegend.Create(_safe);
 
             // #backBtn: left 12, top max(16,safe), 48 px glass circle with the chevron. Shown only
             // while something is open, which is exactly when the web shows it.
@@ -225,12 +226,13 @@ namespace DiveMap.Runtime.Ui
             _actions.anchorMax = new Vector2(1f, 0f);
             _actions.pivot = new Vector2(1f, 0f);
             // The column sits directly above the toggle: 48 px buttons with the web's 10 px gap.
-            _actions.sizeDelta = new Vector2(UiKit.Css(48f), UiKit.Css(48f * 3f + 20f));
+            _actions.sizeDelta = new Vector2(UiKit.Css(48f), UiKit.Css(48f * 4f + 30f));
             _actions.anchoredPosition = new Vector2(-UiKit.Css(12f), UiKit.Css(20f + 48f + 10f));
 
             ActionButton(0, "list", OpenMapList);
             ActionButton(1, "mask", StartTour);
-            ActionButton(2, "gear", OpenSettings);
+            ActionButton(2, "depth", ToggleDepthView);   // the web's #depthViewBtn
+            ActionButton(3, "gear", OpenSettings);
             _actions.gameObject.SetActive(false);
         }
 
@@ -324,6 +326,18 @@ namespace DiveMap.Runtime.Ui
             CloseActions();
             CloseAll();
             if (!TourController.Start()) Toast.ShowTr("ยังเข้าทัวร์ไม่ได้");
+        }
+
+        /// <summary>
+        /// Depth heat-map (the web's #depthViewBtn): recolours the seabed by how deep it is and
+        /// shows the legend. Stays on while you fly the map, off in the tour — where the web
+        /// hides its legend too.
+        /// </summary>
+        public void ToggleDepthView()
+        {
+            bool on = SeabedView.Toggle();
+            if (DepthLegend.Instance != null) DepthLegend.Instance.SetVisible(on);
+            Toast.ShowTr(on ? "แสดงความลึก (สี)" : "แสดงพื้นทรายปกติ");
         }
 
         public void OpenMapList()
@@ -448,6 +462,9 @@ namespace DiveMap.Runtime.Ui
 
             if (CompassWidget.Instance != null)
                 CompassWidget.Instance.SetTourLayout(ModeRules.IsFirstPerson(mode));
+
+            // The web hides #depthLegend in the tour/AR/preview.
+            if (DepthLegend.Instance != null && !mapView) DepthLegend.Instance.SetVisible(false);
 
             AppBoot boot = UnityEngine.Object.FindFirstObjectByType<AppBoot>();
             if (boot != null) boot.SetStatusVisible(mapView);   // the web hides #count in the tour

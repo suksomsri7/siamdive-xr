@@ -772,7 +772,9 @@ namespace DiveMap.Runtime
             var mr = seabed.AddComponent<MeshRenderer>();
             mf.sharedMesh = BuildPolarGrid(rings, seg, sx, sz, slopeX, slopeZ, sculpt, thickness,
                                            out Mesh topSurface);
-            mr.sharedMaterial = SandMaterial();
+            Material sandMat = SandMaterial();
+            mr.sharedMaterial = sandMat;
+            SeabedView.Register(sandMat, sculpt, slopeX, slopeZ, waterLevel, sx, sz, rings, seg);
             seabed.AddComponent<MeshCollider>().sharedMesh = mf.sharedMesh;
 
             // ── Caustics (WO-XR-04.3) ─────────────────────────────────────────────

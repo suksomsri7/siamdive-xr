@@ -134,6 +134,12 @@ namespace DiveMap.Runtime.Ui
                     }
                     break;
 
+                case "depth":  // depth heat-map: layered contours
+                    strokes.Add(new[] { P(3.5f, 8f), P(12f, 4f), P(20.5f, 8f), P(12f, 12f), P(3.5f, 8f) });
+                    strokes.Add(new[] { P(3.5f, 13f), P(12f, 17f), P(20.5f, 13f) });
+                    strokes.Add(new[] { P(3.5f, 17.5f), P(12f, 21.5f), P(20.5f, 17.5f) });
+                    break;
+
                 case "needle": // one half of the compass needle (the caller tints + rotates it)
                     fills.Add(new[] { P(12, 1.6f), P(17.2f, 23f), P(6.8f, 23f) });
                     break;
