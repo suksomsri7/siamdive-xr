@@ -776,10 +776,85 @@ namespace DiveMap.Runtime.Ui
 
             // Leave the preference as we found it — the QC player writes real PlayerPrefs.
             UiStrings.Lang = UiStrings.Thai;
+            yield return new WaitForSecondsRealtime(1f);
 
-            yield return new WaitForSecondsRealtime(2f);
+            // 8) E5 — actually BUY something. This is the one path in the shop that had never run:
+            // spend → write the stock → reload the map → the animal is rebuilt by the normal item
+            // pipeline. It is also the path where a bug costs the player real coins, so it is worth
+            // a QC round of its own. Runs LAST because it reloads the map underneath everything.
+            {
+                AppBoot boot = FindFirstObjectByType<AppBoot>();
+                string mapId = boot != null ? boot.CurrentMapId : "";
+                int before = TrashGameSystem.Coins;
+                string want = DiveMap.Core.Shop.Catalogue[0];          // cheapest, always affordable
+                int price = DiveMap.Core.Shop.PriceOf(want);
+                int stockBefore = DiveMap.Core.ShopStock.Load(mapId).Count;
+
+                Debug.Log($"[QC] buy test map={mapId} item={want} price={price} " +
+                          $"coins={before} stock={stockBefore}");
+
+                ShopSheet.Open();
+                yield return new WaitForSecondsRealtime(0.6f);
+                // Press the row itself rather than calling the internal method, so the button
+                // wiring is part of what is tested.
+                Button row = FindRowButton(want);
+                if (row != null) row.onClick.Invoke();
+                else Debug.LogWarning("[QC] buy test — could not find the shop row to press");
+
+                yield return new WaitForSecondsRealtime(2f);
+                int after = TrashGameSystem.Coins;
+                int stockAfter = DiveMap.Core.ShopStock.Load(mapId).Count;
+                Debug.Log($"[QC] buy result coins {before}→{after} (expected {before - price}) · " +
+                          $"stock {stockBefore}→{stockAfter} (expected {stockBefore + 1})");
+
+                // Give the reload time to rebuild, then photograph the map with the purchase in it.
+                yield return new WaitForSecondsRealtime(8f);
+                ScreenCapture.CaptureScreenshot(prefix + "_bought.png");
+                Debug.Log("[UI] qcui shot -> " + prefix + "_bought.png");
+                yield return new WaitForSecondsRealtime(1.5f);
+
+                // Put the player back where they started: a QC run must not leave a bought animal
+                // and a spent balance behind for the next one to trip over.
+                TrashGameSystem.Coins = before;
+                PlayerPrefs.DeleteKey(DiveMap.Core.ShopStock.KeyFor(mapId));
+                PlayerPrefs.Save();
+                Debug.Log("[QC] buy test cleaned up");
+            }
+
+            yield return new WaitForSecondsRealtime(1f);
             Debug.Log("[UI] qcui done");
             Application.Quit(0);
+        }
+
+        /// <summary>QC helper — the shop row that sells <paramref name="assetId"/>.</summary>
+        private static Button FindRowButton(string assetId)
+        {
+            RectTransform layer = HudLayer.For(AppMode.Tour) ?? HudLayer.For(AppMode.View);
+            if (layer == null) return null;
+            // IReadOnlyList has no IndexOf.
+            int index = -1;
+            var cat = DiveMap.Core.Shop.Catalogue;
+            for (int i = 0; i < cat.Count; i++)
+                if (cat[i] == assetId) { index = i; break; }
+            if (index < 0) return null;
+
+            Transform sheet = FindDeep(layer, "ShopSheet");
+            if (sheet == null) return null;
+            Transform row = FindDeep(sheet, "Row" + index);
+            return row != null ? row.GetComponent<Button>() : null;
+        }
+
+        private static Transform FindDeep(Transform where, string name)
+        {
+            if (where == null) return null;
+            for (int i = 0; i < where.childCount; i++)
+            {
+                Transform c = where.GetChild(i);
+                if (c.name == name) return c;
+                Transform hit = FindDeep(c, name);
+                if (hit != null) return hit;
+            }
+            return null;
         }
     }
 }

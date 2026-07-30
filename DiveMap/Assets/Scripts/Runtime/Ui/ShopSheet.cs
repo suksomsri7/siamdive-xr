@@ -59,7 +59,9 @@ namespace DiveMap.Runtime.Ui
         {
             if (_open != null) { _open.Refresh(); return; }
 
-            RectTransform layer = HudLayer.For(AppMode.Tour);
+            // The shop lives in the tour, but the QC harness (and a future map-screen entry
+            // point) opens it from the view mode too — take whichever layer is actually showing.
+            RectTransform layer = HudLayer.For(ModeManager.Current) ?? HudLayer.For(AppMode.Tour);
             if (layer == null) return;
 
             RectTransform root = UiKit.MakeNode(layer, "ShopSheet");
