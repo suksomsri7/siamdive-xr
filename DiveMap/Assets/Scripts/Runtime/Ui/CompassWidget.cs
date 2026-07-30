@@ -31,7 +31,9 @@ namespace DiveMap.Runtime.Ui
             RectTransform rt = dial.rectTransform;
             rt.anchorMin = new Vector2(1f, 0f);
             rt.anchorMax = new Vector2(1f, 0f);
-            rt.pivot = new Vector2(0.5f, 0.5f);
+            // Pivot AT the corner, like UiKit.Anchor: with a centred pivot the 96 px circle hung
+            // half off the right edge (the first QC shot showed a clipped needle).
+            rt.pivot = new Vector2(1f, 0f);
             rt.sizeDelta = new Vector2(96f, 96f);
             rt.anchoredPosition = new Vector2(-26f, 268f);   // clear of ☰ (44) and the actions column
 
