@@ -34,17 +34,14 @@ namespace DiveMap.Runtime.Ui
         /// </summary>
         public RectTransform OverlayRoot => _safe;
 
-        private const float MenuWidth = 620f;
-        private const float SlideSeconds = 0.18f;
-
         private Canvas _canvas;
         private RectTransform _safe;
         private UiNav _nav;
         private ThumbnailCache _thumbs;
 
         private GameObject _hamburger;
-        private GameObject _menuLayer;
-        private RectTransform _menuPanel;
+        private Button _menuToggleBtn;
+        private RectTransform _actions;
         private GameObject _mapsLayer;
         private MapListScreen _mapList;
         private GameObject _settingsLayer;
@@ -101,7 +98,6 @@ namespace DiveMap.Runtime.Ui
 
             BuildCanvas();
             BuildHamburger();
-            BuildMenu();
             BuildMapsScreen();
             BuildSettingsScreen();
             BuildInfoCard();
@@ -188,56 +184,70 @@ namespace DiveMap.Runtime.Ui
             // The web's ☰ lives at the BOTTOM-RIGHT (#viewbtns > #menuToggle) as a blue-filled
             // 48 px circle, not top-right as a square — someone moving between web and app must
             // find the menu under the same thumb.
-            Button btn = UiKit.MakeIconButton(_safe, "MenuButton", "menu", OpenMenu, accent: true);
+            Button btn = UiKit.MakeIconButton(_safe, "MenuButton", "menu", ToggleActions, accent: true);
             _hamburger = btn.gameObject;
             UiKit.Anchor(btn.GetComponent<RectTransform>(), new Vector2(1f, 0f),
                          new Vector2(104f, 104f), new Vector2(-26f, 44f));
 
             // (The three hand-built Image bars are gone: IconPainter draws the web's own ☰ path.)
+            _menuToggleBtn = btn;
+            BuildActions();
         }
 
-        private void BuildMenu()
+        /// <summary>
+        /// The web's ☰ does not open a panel — it EXPANDS a column of round icon buttons above
+        /// itself (#actions, builder.html:3432, icon swapping ☰ ↔ ✕). Matching that is most of
+        /// what makes the app feel like the same product, and it keeps the map visible while you
+        /// choose, which a full-screen menu does not.
+        /// </summary>
+        private void BuildActions()
         {
-            _menuLayer = UiKit.MakeNode(_safe, "MenuLayer").gameObject;
+            _actions = UiKit.MakeNode(_safe, "Actions");
+            _actions.anchorMin = new Vector2(1f, 0f);
+            _actions.anchorMax = new Vector2(1f, 0f);
+            _actions.pivot = new Vector2(1f, 0f);
+            _actions.sizeDelta = new Vector2(104f, 360f);
+            _actions.anchoredPosition = new Vector2(-26f, 158f);
 
-            // Scrim: closes the menu and swallows every tap behind the panel.
-            Button scrim = UiKit.MakeButton(_menuLayer.transform, "Scrim", null, 0, UiKit.Scrim,
-                                            UiKit.TextMain, CloseTop);
-            UiKit.Stretch(scrim.GetComponent<RectTransform>());
-
-            Image panel = UiKit.MakePanel(_menuLayer.transform, "MenuPanel", UiKit.PanelBg);
-            _menuPanel = panel.rectTransform;
-            _menuPanel.anchorMin = new Vector2(1f, 0f);
-            _menuPanel.anchorMax = new Vector2(1f, 1f);
-            _menuPanel.pivot = new Vector2(1f, 0.5f);
-            _menuPanel.sizeDelta = new Vector2(MenuWidth, 0f);
-            _menuPanel.anchoredPosition = Vector2.zero;
-
-            Text title = UiKit.MakeText(_menuPanel, "Title", UiStrings.Tr("เมนู"), 46,
-                                        TextAnchor.MiddleLeft, UiKit.Teal);
-            UiKit.TopRow(title.rectTransform, 34f, 80f, 36f, 36f);
-
-            MenuItem(0, UiStrings.Tr("รายการแมพ"), OpenMapList);
-            MenuItem(1, UiStrings.Tr("ทัวร์ดำน้ำ"), StartTour);
-            MenuItem(2, UiStrings.Tr("ตั้งค่า"), OpenSettings);
-
-            Button close = UiKit.MakeButton(_menuPanel, "MenuClose", UiStrings.Tr("ปิด"), 32,
-                                            UiKit.TealDim, UiKit.TextMain, CloseTop);
-            UiKit.Anchor(close.GetComponent<RectTransform>(), new Vector2(0.5f, 0f),
-                         new Vector2(240f, 84f), new Vector2(0f, 48f));
-
-            _menuLayer.SetActive(false);
+            ActionButton(0, "list", OpenMapList);
+            ActionButton(1, "mask", StartTour);
+            ActionButton(2, "gear", OpenSettings);
+            _actions.gameObject.SetActive(false);
         }
 
-        private void MenuItem(int index, string label, UnityEngine.Events.UnityAction action)
+        private void ActionButton(int index, string icon, UnityEngine.Events.UnityAction action)
         {
-            Button b = UiKit.MakeButton(_menuPanel, "Item" + index, label, 38, UiKit.CardBg,
-                                        UiKit.TextMain, action);
-            var rt = b.GetComponent<RectTransform>();
-            UiKit.TopRow(rt, 150f + index * 124f, 104f, 36f, 36f);
-            Text t = b.GetComponentInChildren<Text>();
-            if (t != null) t.alignment = TextAnchor.MiddleLeft;
+            Button b = UiKit.MakeIconButton(_actions, "Action_" + icon, icon, () =>
+            {
+                CloseActions();
+                action?.Invoke();
+            });
+            RectTransform rt = b.GetComponent<RectTransform>();
+            rt.anchorMin = new Vector2(0.5f, 0f);
+            rt.anchorMax = new Vector2(0.5f, 0f);
+            rt.pivot = new Vector2(0.5f, 0f);
+            rt.anchoredPosition = new Vector2(0f, index * 108f);
         }
+
+        /// <summary>Expand/collapse the action column and swap ☰ ↔ ✕, like the web.</summary>
+        public void ToggleActions()
+        {
+            if (_actions == null) return;
+            bool open = !_actions.gameObject.activeSelf;
+            _actions.gameObject.SetActive(open);
+            UiKit.SetIcon(_menuToggleBtn, open ? "close" : "menu");
+        }
+
+        public void CloseActions()
+        {
+            if (_actions == null || !_actions.gameObject.activeSelf) return;
+            _actions.gameObject.SetActive(false);
+            UiKit.SetIcon(_menuToggleBtn, "menu");
+        }
+
+        // (The slide-in menu panel from WO-XR-05.1 is gone: the web has no menu panel, it has the
+        // #actions column built in BuildActions above. Removing it also removes a second place
+        // where menu items had to be kept in sync.)
 
         private void BuildMapsScreen()
         {
@@ -272,12 +282,15 @@ namespace DiveMap.Runtime.Ui
 
         // ── navigation ───────────────────────────────────────────────────────────
 
+        /// <summary>
+        /// Kept for existing callers (QC harness, Android back): the web has no menu PANEL, so this
+        /// expands the action column instead of pushing a screen.
+        /// </summary>
         public void OpenMenu()
         {
-            if (_nav == null || _menuLayer == null) return;
-            if (_nav.IsOpen(_menuLayer)) return;
-            _nav.Push("menu", _menuLayer);
-            StartCoroutine(SlideIn());
+            if (_actions == null) return;
+            if (_actions.gameObject.activeSelf) return;
+            ToggleActions();
         }
 
         /// <summary>
@@ -286,12 +299,14 @@ namespace DiveMap.Runtime.Ui
         /// </summary>
         public void StartTour()
         {
+            CloseActions();
             CloseAll();
             if (!TourController.Start()) Toast.ShowTr("ยังเข้าทัวร์ไม่ได้");
         }
 
         public void OpenMapList()
         {
+            CloseActions();   // opening a screen collapses the column (and keeps QC shots clean)
             if (_nav == null || _mapsLayer == null) return;
             _nav.Push("maps", _mapsLayer);
             if (_mapList != null) _mapList.EnsureLoaded();
@@ -299,6 +314,7 @@ namespace DiveMap.Runtime.Ui
 
         public void OpenSettings()
         {
+            CloseActions();
             if (_nav == null || _settingsLayer == null) return;
             if (_settings != null) _settings.Refresh();
             _nav.Push("settings", _settingsLayer);
@@ -360,21 +376,6 @@ namespace DiveMap.Runtime.Ui
             if (_nav != null) _nav.PopAll();
         }
 
-        private IEnumerator SlideIn()
-        {
-            if (_menuPanel == null) yield break;
-            _menuPanel.anchoredPosition = new Vector2(MenuWidth, 0f); // start off-screen right
-            float t = 0f;
-            while (t < SlideSeconds)
-            {
-                t += Time.unscaledDeltaTime;
-                float k = Mathf.Clamp01(t / SlideSeconds);
-                k = 1f - (1f - k) * (1f - k); // ease-out
-                _menuPanel.anchoredPosition = new Vector2(Mathf.Lerp(MenuWidth, 0f, k), 0f);
-                yield return null;
-            }
-            _menuPanel.anchoredPosition = Vector2.zero;
-        }
 
         private void OnMapSelected(string shortId)
         {
@@ -412,6 +413,7 @@ namespace DiveMap.Runtime.Ui
         {
             if (!visible)
             {
+                CloseActions();
                 CloseAll();
                 // The info card is NOT in the nav stack (by design — it must not block the
                 // orbit camera), so CloseAll misses it. The first tour QC shot caught it sitting

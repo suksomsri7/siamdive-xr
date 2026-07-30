@@ -104,6 +104,36 @@ namespace DiveMap.Runtime.Ui
                     strokes.Add(new[] { P(17, 9), P(20, 12), P(17, 15) });
                     break;
 
+                case "list":   // map list — three rows with bullets
+                    strokes.Add(Line(9, 7, 20, 7));
+                    strokes.Add(Line(9, 12, 20, 12));
+                    strokes.Add(Line(9, 17, 20, 17));
+                    fills.Add(Dot(5f, 7f, 1.4f));
+                    fills.Add(Dot(5f, 12f, 1.4f));
+                    fills.Add(Dot(5f, 17f, 1.4f));
+                    break;
+
+                case "mask":   // dive tour — the web uses a mask image (ai-mask.png)
+                    strokes.Add(new[] { P(4, 9), P(4, 15.5f), P(8, 18.5f), P(16, 18.5f), P(20, 15.5f), P(20, 9), P(4, 9) });
+                    strokes.Add(Circle(9f, 13f, 2.2f));
+                    strokes.Add(Circle(15f, 13f, 2.2f));
+                    strokes.Add(Line(4, 9, 20, 9));
+                    break;
+
+                case "gear":   // settings
+                    strokes.Add(Circle(12f, 12f, 3.2f));
+                    strokes.Add(Circle(12f, 12f, 7.4f));
+                    for (int k = 0; k < 8; k++)
+                    {
+                        float a2 = Mathf.PI * 2f * k / 8f;
+                        strokes.Add(new[]
+                        {
+                            new Vector2(12f + Mathf.Cos(a2) * 7.4f, 12f + Mathf.Sin(a2) * 7.4f),
+                            new Vector2(12f + Mathf.Cos(a2) * 9.6f, 12f + Mathf.Sin(a2) * 9.6f),
+                        });
+                    }
+                    break;
+
                 case "compass": // #compass — two triangles, north red (colour applied by the caller)
                     fills.Add(new[] { P(12, 2.4f), P(16.2f, 12.6f), P(7.8f, 12.6f) });
                     fills.Add(new[] { P(12, 22.8f), P(16.2f, 12.6f), P(7.8f, 12.6f) });
@@ -121,6 +151,9 @@ namespace DiveMap.Runtime.Ui
 
         private static Vector2 P(float x, float y) => new Vector2(x, y);
         private static Vector2[] Line(float x1, float y1, float x2, float y2) => new[] { P(x1, y1), P(x2, y2) };
+
+        /// <summary>Small filled dot (list bullets).</summary>
+        private static Vector2[] Dot(float cx, float cy, float r) => Circle(cx, cy, r, 12);
 
         private static Vector2[] Circle(float cx, float cy, float r, int seg = 40)
         {
