@@ -97,7 +97,7 @@ namespace DiveMap.Runtime
             }
 
             UiShell shell = UiShell.Instance;
-            if (shell != null) shell.SetChromeVisible(ModeRules.AllowsMenu(next));
+            if (shell != null) shell.ApplyModeChrome(next);
         }
     }
 }

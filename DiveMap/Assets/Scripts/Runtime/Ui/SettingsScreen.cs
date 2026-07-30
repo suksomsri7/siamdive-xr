@@ -48,40 +48,40 @@ namespace DiveMap.Runtime.Ui
 
             // Row heights stay well above fontSize × 1.51 (NotoSansThai's line height):
             // legacy Text DROPS a line that does not fit its rect instead of clipping it.
-            _title = UiKit.MakeText(rt, "Title", "", 46, TextAnchor.MiddleLeft, UiKit.Teal);
+            _title = UiKit.MakeText(rt, "Title", "", UiKit.CssFont(16f), TextAnchor.MiddleLeft, UiKit.Teal);
             UiKit.TopRow(_title.rectTransform, 30f, 80f, 40f, 40f);
 
             // ── language ─────────────────────────────────────────────────────────
-            _langLabel = UiKit.MakeText(rt, "LangLabel", "", 34, TextAnchor.MiddleLeft, UiKit.TextDim);
+            _langLabel = UiKit.MakeText(rt, "LangLabel", "", UiKit.CssFont(14f), TextAnchor.MiddleLeft, UiKit.TextDim);
             UiKit.TopRow(_langLabel.rectTransform, 134f, 60f, 40f, 40f);
 
             _langTh = Choice(rt, "LangTh", 200f, 40f, () => SetLang(UiStrings.Thai));
             _langEn = Choice(rt, "LangEn", 200f, 460f, () => SetLang(UiStrings.English));
 
             // ── graphics ─────────────────────────────────────────────────────────
-            _gfxLabel = UiKit.MakeText(rt, "GfxLabel", "", 34, TextAnchor.MiddleLeft, UiKit.TextDim);
+            _gfxLabel = UiKit.MakeText(rt, "GfxLabel", "", UiKit.CssFont(14f), TextAnchor.MiddleLeft, UiKit.TextDim);
             UiKit.TopRow(_gfxLabel.rectTransform, 324f, 60f, 40f, 40f);
 
             _gfxHigh = Choice(rt, "GfxHigh", 390f, 40f, () => SetGfx(SettingsStore.High));
             _gfxLite = Choice(rt, "GfxLite", 390f, 460f, () => SetGfx(SettingsStore.Lite));
 
             // ── version + link ───────────────────────────────────────────────────
-            _versionLabel = UiKit.MakeText(rt, "VersionLabel", "", 32, TextAnchor.MiddleLeft, UiKit.TextDim);
+            _versionLabel = UiKit.MakeText(rt, "VersionLabel", "", UiKit.CssFont(14f), TextAnchor.MiddleLeft, UiKit.TextDim);
             UiKit.TopRow(_versionLabel.rectTransform, 526f, 58f, 40f, 480f);
 
-            _versionValue = UiKit.MakeText(rt, "VersionValue", Application.version, 32,
+            _versionValue = UiKit.MakeText(rt, "VersionValue", Application.version, UiKit.CssFont(14f),
                                            TextAnchor.MiddleRight, UiKit.TextMain);
             UiKit.TopRow(_versionValue.rectTransform, 526f, 58f, 480f, 40f);
 
             // The URL itself is never translated — it is the same in both languages.
-            Text linkLabel = UiKit.MakeText(rt, "LinkLabel", "maps.siamdive.com", 30,
+            Text linkLabel = UiKit.MakeText(rt, "LinkLabel", "maps.siamdive.com", UiKit.CssFont(14f),
                                             TextAnchor.MiddleLeft, UiKit.TextDim);
             UiKit.TopRow(linkLabel.rectTransform, 596f, 54f, 40f, 40f);
 
-            _link = UiKit.MakeButton(rt, "LinkButton", "", 32, UiKit.CardBg, UiKit.TextMain, OpenWeb);
+            _link = UiKit.MakeButton(rt, "LinkButton", "", UiKit.CssFont(14f), UiKit.CardBg, UiKit.TextMain, OpenWeb);
             UiKit.TopRow(_link.GetComponent<RectTransform>(), 660f, 88f, 40f, 40f);
 
-            _close = UiKit.MakeButton(rt, "Close", "", 32, UiKit.TealDim, UiKit.TextMain, RaiseClose);
+            _close = UiKit.MakeButton(rt, "Close", "", UiKit.CssFont(14f), UiKit.TealDim, UiKit.TextMain, RaiseClose);
             UiKit.Anchor(_close.GetComponent<RectTransform>(), new Vector2(0.5f, 0f),
                          new Vector2(280f, 88f), new Vector2(0f, 40f));
 

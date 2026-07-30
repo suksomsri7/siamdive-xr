@@ -24,22 +24,26 @@ namespace DiveMap.Runtime.Ui
     [DisallowMultipleComponent]
     public sealed class MapListScreen : MonoBehaviour
     {
-        private const float CardHeight = 168f;
-        private const float CardGap = 14f;
+        // All of these are CSS px, resolved through UiKit.Css at build time: the web's list rows
+        // are ~72 px tall with 15 px names and 12 px meta, and the app was drawing 168-unit rows
+        // with 36-unit names — the same information at nearly twice the size, which is the most
+        // obvious "this is a different app" signal after colour.
+        private static float CardHeight => UiKit.Css(74f);
+        private static float CardGap => UiKit.Css(8f);
         private const float DebounceSeconds = 0.4f;
-        private const float HeaderHeight = 104f;
-        private const float SearchHeight = 92f;
-        private const float SidePad = 24f;
-        private const float ListTop = 244f;
+        private static float HeaderHeight => UiKit.Css(48f);
+        private static float SearchHeight => UiKit.Css(44f);
+        private static float SidePad => UiKit.Css(16f);
+        private static float ListTop => UiKit.Css(112f);
         private const int RequestTimeout = 20;
 
         // Card text block. Rows are sized through UiKit.RowHeight(fontSize) — never with
         // a literal, see UiKit.LineHeightRatio for what a too-short row does to Text.
-        private const int NameSize = 36;
-        private const int MetaSize = 26;
-        private const float TextLeft = 260f; // right of the 224 px thumbnail + its 14 px inset
-        private const float NameTop = 22f;
-        private const float MetaTop = 94f;
+        private static int NameSize => UiKit.CssFont(15f);
+        private static int MetaSize => UiKit.CssFont(12f);
+        private static float TextLeft => UiKit.Css(108f); // right of the 96 px thumbnail + 8 px inset
+        private static float NameTop => UiKit.Css(12f);
+        private static float MetaTop => UiKit.Css(38f);
 
         /// <summary>Raised with the chosen shortId.</summary>
         public event Action<string> MapSelected;
@@ -91,20 +95,29 @@ namespace DiveMap.Runtime.Ui
                                                  () => CloseRequested?.Invoke());
 
             // Header: title + close.
-            Text title = UiKit.MakeText(host, "Title", UiStrings.Tr("รายการแมพ"), 44,
+            Text title = UiKit.MakeText(host, "Title", UiStrings.Tr("รายการแมพ"), UiKit.CssFont(16f),
                                         TextAnchor.MiddleLeft, UiKit.TextMain);
-            UiKit.TopRow(title.rectTransform, 20f, HeaderHeight - 20f, SidePad, 220f);
+            title.fontStyle = FontStyle.Bold;      // web modal/sheet titles are 600
+            UiKit.TopRow(title.rectTransform, UiKit.Css(6f), HeaderHeight - UiKit.Css(6f),
+                         SidePad, UiKit.Css(110f));
 
-            Button close = UiKit.MakeButton(host, "CloseButton", UiStrings.Tr("ปิด"), 32,
-                                            UiKit.TealDim, UiKit.TextMain,
+            Button close = UiKit.MakeButton(host, "CloseButton", UiStrings.Tr("ปิด"), UiKit.CssFont(14f),
+                                            UiKit.Accent, UiKit.OnAccent,
                                             () => CloseRequested?.Invoke());
+            Image closeBg = close.GetComponent<Image>();
+            if (closeBg != null)
+            {
+                closeBg.sprite = UiKit.RoundedSprite(13f);   // web button radius
+                closeBg.type = Image.Type.Sliced;
+            }
             UiKit.Anchor(close.GetComponent<RectTransform>(), new Vector2(1f, 1f),
-                         new Vector2(170f, 76f), new Vector2(-SidePad, -22f));
+                         new Vector2(UiKit.Css(84f), UiKit.Css(38f)),
+                         new Vector2(-SidePad, -UiKit.Css(6f)));
 
             // Search box (debounced, server-side).
-            _search = UiKit.MakeInput(host, "Search", UiStrings.Tr("ค้นหาแมพ"), 32);
-            UiKit.TopRow(_search.GetComponent<RectTransform>(), HeaderHeight + 16f, SearchHeight,
-                         SidePad, SidePad);
+            _search = UiKit.MakeInput(host, "Search", UiStrings.Tr("ค้นหาแมพ"), UiKit.CssFont(15f));
+            UiKit.TopRow(_search.GetComponent<RectTransform>(), HeaderHeight + UiKit.Css(8f),
+                         SearchHeight, SidePad, SidePad);
             _search.onValueChanged.AddListener(OnSearchChanged);
 
             // Scrollable card list.
@@ -118,23 +131,23 @@ namespace DiveMap.Runtime.Ui
             _scroll.onValueChanged.AddListener(OnScrolled);
 
             // Status (loading / empty / error) + retry, centred over the list area.
-            _status = UiKit.MakeText(host, "Status", "", 34, TextAnchor.MiddleCenter, UiKit.TextDim);
+            _status = UiKit.MakeText(host, "Status", "", UiKit.CssFont(13f), TextAnchor.MiddleCenter, UiKit.TextDim);
             var strt = _status.rectTransform;
             strt.anchorMin = new Vector2(0.5f, 0.5f);
             strt.anchorMax = new Vector2(0.5f, 0.5f);
             strt.pivot = new Vector2(0.5f, 0.5f);
-            strt.sizeDelta = new Vector2(880f, 120f);
-            strt.anchoredPosition = new Vector2(0f, 40f);
+            strt.sizeDelta = new Vector2(UiKit.Css(300f), UiKit.Css(56f));
+            strt.anchoredPosition = new Vector2(0f, UiKit.Css(18f));
 
-            Button retry = UiKit.MakeButton(host, "RetryButton", UiStrings.Tr("ลองใหม่"), 32,
-                                            UiKit.TealDim, UiKit.TextMain, () => Reload(_query));
+            Button retry = UiKit.MakeButton(host, "RetryButton", UiStrings.Tr("ลองใหม่"), UiKit.CssFont(14f),
+                                            UiKit.Accent, UiKit.OnAccent, () => Reload(_query));
             _retryButton = retry.gameObject;
             var rrt = retry.GetComponent<RectTransform>();
             rrt.anchorMin = new Vector2(0.5f, 0.5f);
             rrt.anchorMax = new Vector2(0.5f, 0.5f);
             rrt.pivot = new Vector2(0.5f, 0.5f);
-            rrt.sizeDelta = new Vector2(280f, 84f);
-            rrt.anchoredPosition = new Vector2(0f, -60f);
+            rrt.sizeDelta = new Vector2(UiKit.Css(120f), UiKit.Css(42f));
+            rrt.anchoredPosition = new Vector2(0f, -UiKit.Css(28f));
             _retryButton.SetActive(false);
         }
 
@@ -371,8 +384,8 @@ namespace DiveMap.Runtime.Ui
             trt.anchorMin = new Vector2(0f, 1f);
             trt.anchorMax = new Vector2(0f, 1f);
             trt.pivot = new Vector2(0f, 1f);
-            trt.sizeDelta = new Vector2(224f, 140f);
-            trt.anchoredPosition = new Vector2(14f, -14f);
+            trt.sizeDelta = new Vector2(UiKit.Css(96f), UiKit.Css(60f));
+            trt.anchoredPosition = new Vector2(UiKit.Css(8f), -UiKit.Css(7f));
 
             if (_thumbs != null && !string.IsNullOrEmpty(card.ThumbUrl))
             {

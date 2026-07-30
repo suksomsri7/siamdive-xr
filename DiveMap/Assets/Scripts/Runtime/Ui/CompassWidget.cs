@@ -20,6 +20,11 @@ namespace DiveMap.Runtime.Ui
 
         private RectTransform _needle;
         private Camera _cam;
+        private RectTransform _rt;
+        private Image _dial;
+        private Image _rim;
+
+        public static CompassWidget Instance { get; private set; }
 
         /// <summary>Add the compass to <paramref name="parent"/> at the web's position.</summary>
         public static CompassWidget Create(RectTransform parent)
@@ -55,6 +60,11 @@ namespace DiveMap.Runtime.Ui
 
             var c = dial.gameObject.AddComponent<CompassWidget>();
             c._needle = needle;
+            c._rt = rt;
+            c._dial = dial;
+            c._rim = rim;
+            Instance = c;
+            c.SetTourLayout(false);
             return c;
         }
 
@@ -71,6 +81,50 @@ namespace DiveMap.Runtime.Ui
             rt.sizeDelta = new Vector2(UiKit.Css(13f), UiKit.Css(14f));
             rt.anchoredPosition = Vector2.zero;
             rt.localRotation = Quaternion.Euler(0f, 0f, flipped ? 180f : 0f);
+        }
+
+        private void OnDestroy()
+        {
+            if (Instance == this) Instance = null;
+        }
+
+        /// <summary>
+        /// The web does NOT hide the compass in the tour — it MOVES it (builder.html:234):
+        /// <c>body.tour #compass{right:138px; top:max(15px,safe); 44×44; bg rgba(7,26,42,.5);
+        /// border:2px rgba(255,255,255,.8)}</c>, i.e. up beside the depth pill, 138 px in from the
+        /// right so it clears it. In the map view it sits at right 12 / bottom 80 at 48 px.
+        /// </summary>
+        public void SetTourLayout(bool tour)
+        {
+            if (_rt == null) return;
+
+            float size = UiKit.Css(tour ? 44f : 48f);
+            _rt.sizeDelta = new Vector2(size, size);
+
+            if (tour)
+            {
+                _rt.anchorMin = _rt.anchorMax = _rt.pivot = new Vector2(1f, 1f);
+                _rt.anchoredPosition = new Vector2(-UiKit.Css(138f), -UiKit.Css(15f));
+            }
+            else
+            {
+                _rt.anchorMin = _rt.anchorMax = _rt.pivot = new Vector2(1f, 0f);
+                _rt.anchoredPosition = new Vector2(-UiKit.Css(12f), UiKit.Css(80f));
+            }
+
+            if (_dial != null)
+                _dial.color = tour ? new Color(0.027f, 0.102f, 0.165f, 0.50f) : UiKit.Glass;
+            if (_rim != null)
+            {
+                // 2 px rim in the tour, hairline in the map view.
+                _rim.color = tour ? new Color(1f, 1f, 1f, 0.80f) : UiKit.Line;
+                _rim.sprite = UiKit.CircleSprite(tour ? Mathf.Clamp(2f / 22f, 0.02f, 0.5f) : 0.035f);
+            }
+            if (_needle != null)
+            {
+                float n = UiKit.Css(tour ? 27f : 30f);
+                _needle.sizeDelta = new Vector2(n, n);
+            }
         }
 
         private void LateUpdate()

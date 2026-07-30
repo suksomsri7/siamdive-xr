@@ -368,18 +368,23 @@ namespace DiveMap.Runtime
             // system font, so the builtin LegacyRuntime.ttf drops every Thai glyph.
             Font font = UiFont.Get();
 
-            // Top-left status line (small).
-            _statusText = MakeText(canvas.transform, "Status", font, 26, TextAnchor.UpperLeft);
+            // Status line — the web's #count slot: CENTRED at top 96, 11 px, muted
+            // (builder.html:90). It used to be a 26-unit line pinned top-left, which is a slot the
+            // web does not use at all.
+            _statusText = MakeText(canvas.transform, "Status", font, Ui.UiKit.CssFont(11f),
+                                   TextAnchor.UpperCenter);
             var sRt = _statusText.rectTransform;
             sRt.anchorMin = new Vector2(0f, 1f);
             sRt.anchorMax = new Vector2(1f, 1f);
-            sRt.pivot = new Vector2(0f, 1f);
-            sRt.anchoredPosition = new Vector2(24f, -20f);
-            sRt.sizeDelta = new Vector2(-48f, 60f);
+            sRt.pivot = new Vector2(0.5f, 1f);
+            sRt.anchoredPosition = new Vector2(0f, -Ui.UiKit.Css(96f));
+            sRt.sizeDelta = new Vector2(-Ui.UiKit.Css(24f), Ui.UiKit.RowHeight(Ui.UiKit.CssFont(11f)));
+            _statusText.color = new Color(0.624f, 0.714f, 0.788f, 1f);   // --mut #9fb6c9
             _statusText.text = "";
 
-            // Centre loading text.
-            _centerText = MakeText(canvas.transform, "Center", font, 44, TextAnchor.MiddleCenter);
+            // Centre loading text (the web's #toast slot uses the same middle-of-screen position).
+            _centerText = MakeText(canvas.transform, "Center", font, Ui.UiKit.CssFont(15f),
+                                   TextAnchor.MiddleCenter);
             var cRt = _centerText.rectTransform;
             cRt.anchorMin = new Vector2(0.5f, 0.5f);
             cRt.anchorMax = new Vector2(0.5f, 0.5f);
@@ -395,15 +400,23 @@ namespace DiveMap.Runtime
             eRt.anchorMax = new Vector2(0.5f, 0.5f);
             eRt.pivot = new Vector2(0.5f, 0.5f);
             eRt.anchoredPosition = Vector2.zero;
-            eRt.sizeDelta = new Vector2(900f, 400f);
+            // The web's modal geometry (#nameModal/#leaveModal, builder.html:67): 86vw capped at
+            // 380 CSS px, 20 px radius, 20 px padding — glass, not a bare label on the scene.
+            float modalW = Mathf.Min(Screen.width / Ui.UiKit.CanvasScale * 0.86f, Ui.UiKit.Css(380f));
+            eRt.sizeDelta = new Vector2(modalW, Ui.UiKit.Css(190f));
 
-            _errorText = MakeText(_errorPanel.transform, "ErrorText", font, 38, TextAnchor.MiddleCenter);
+            Image modalBg = Ui.UiKit.MakeRounded(_errorPanel.transform, "Bg", Ui.UiKit.Glass, 20f);
+            Ui.UiKit.Stretch(modalBg.rectTransform);
+
+            _errorText = MakeText(_errorPanel.transform, "ErrorText", font, Ui.UiKit.CssFont(16f),
+                                  TextAnchor.UpperCenter);
+            _errorText.fontStyle = FontStyle.Bold;      // the web's 600 weight
             var etRt = _errorText.rectTransform;
-            etRt.anchorMin = new Vector2(0f, 0.4f);
+            etRt.anchorMin = new Vector2(0f, 0f);
             etRt.anchorMax = new Vector2(1f, 1f);
-            etRt.offsetMin = Vector2.zero;
-            etRt.offsetMax = Vector2.zero;
-            _errorText.color = new Color(1f, 0.7f, 0.7f, 1f);
+            etRt.offsetMin = new Vector2(Ui.UiKit.Css(20f), Ui.UiKit.Css(70f));
+            etRt.offsetMax = new Vector2(-Ui.UiKit.Css(20f), -Ui.UiKit.Css(20f));
+            _errorText.color = Ui.UiKit.TextMain;
 
             MakeButton(_errorPanel.transform, font, "ลองใหม่", Retry);
 
@@ -441,11 +454,15 @@ namespace DiveMap.Runtime
             rt.anchorMin = new Vector2(0.5f, 0f);
             rt.anchorMax = new Vector2(0.5f, 0f);
             rt.pivot = new Vector2(0.5f, 0f);
-            rt.anchoredPosition = new Vector2(0f, 20f);
-            rt.sizeDelta = new Vector2(300f, 90f);
+            // The web's modal button row: radius 13, padding 13, 14px/600, accent fill with
+            // #04121f text (builder.html:72-75).
+            rt.anchoredPosition = new Vector2(0f, Ui.UiKit.Css(20f));
+            rt.sizeDelta = new Vector2(Ui.UiKit.Css(150f), Ui.UiKit.Css(44f));
 
             var img = go.AddComponent<Image>();
-            img.color = new Color(0.10f, 0.42f, 0.55f, 1f);
+            img.color = Ui.UiKit.Accent;
+            img.sprite = Ui.UiKit.RoundedSprite(13f);
+            img.type = Image.Type.Sliced;
 
             var btn = go.AddComponent<Button>();
             btn.onClick.AddListener(onClick);
@@ -454,9 +471,10 @@ namespace DiveMap.Runtime
             txtGo.transform.SetParent(go.transform, false);
             var txt = txtGo.AddComponent<Text>();
             txt.font = font;
-            txt.fontSize = 34;
+            txt.fontSize = Ui.UiKit.CssFont(14f);
+            txt.fontStyle = FontStyle.Bold;
             txt.alignment = TextAnchor.MiddleCenter;
-            txt.color = Color.white;
+            txt.color = Ui.UiKit.OnAccent;
             txt.text = label;
             var trt = txt.rectTransform;
             trt.anchorMin = Vector2.zero;
@@ -489,6 +507,15 @@ namespace DiveMap.Runtime
             if (_summaryLoaded < 0) return;
             SetStatus($"{_summaryTitle}  ·  {UiStrings.Tr("โหลดแล้ว")} {_summaryLoaded} · " +
                       $"{UiStrings.Tr("แทนที่")} {_summaryFailed}");
+        }
+
+        /// <summary>
+        /// Show/hide the status line. The web hides #count in the tour (builder.html:233) — the
+        /// depth pill and the hint line own the top of the screen there.
+        /// </summary>
+        public void SetStatusVisible(bool visible)
+        {
+            if (_statusText != null) _statusText.enabled = visible;
         }
 
         /// <summary>Called by <c>UiShell.ApplyLanguage</c> after a language switch.</summary>

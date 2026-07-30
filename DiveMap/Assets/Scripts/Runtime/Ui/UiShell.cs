@@ -40,6 +40,7 @@ namespace DiveMap.Runtime.Ui
         private ThumbnailCache _thumbs;
 
         private GameObject _hamburger;
+        private GameObject _backButton;
         private Button _menuToggleBtn;
         private RectTransform _actions;
         private GameObject _mapsLayer;
@@ -199,6 +200,16 @@ namespace DiveMap.Runtime.Ui
             // The web's compass lives in the MAP VIEW (#compass: right 12, bottom 80), not in the
             // tour — the tour has the minimap instead. Same here.
             CompassWidget.Create(_safe);
+
+            // #backBtn: left 12, top max(16,safe), 48 px glass circle with the chevron. Shown only
+            // while something is open, which is exactly when the web shows it.
+            Button back = UiKit.MakeIconButton(_safe, "BackButton", "back", CloseTop,
+                                               false, UiKit.Css(48f));
+            _backButton = back.gameObject;
+            UiKit.Anchor(back.GetComponent<RectTransform>(), new Vector2(0f, 1f),
+                         new Vector2(UiKit.Css(48f), UiKit.Css(48f)),
+                         new Vector2(UiKit.Css(12f), -UiKit.Css(16f)));
+            _backButton.SetActive(false);
         }
 
         /// <summary>
@@ -405,8 +416,10 @@ namespace DiveMap.Runtime.Ui
 
         private void OnStackChanged(int depth)
         {
-            // Hide the ☰ affordance while a screen owns the display (or while a mode hides it).
+            // Hide the ☰ affordance while a screen owns the display (or while a mode hides it),
+            // and show the web's back chevron in its place.
             if (_hamburger != null) _hamburger.SetActive(depth == 0 && _chromeVisible);
+            if (_backButton != null) _backButton.SetActive(depth > 0 && _chromeVisible);
             SetOrbitEnabled(depth == 0);
         }
 
@@ -418,6 +431,23 @@ namespace DiveMap.Runtime.Ui
         /// owns the whole screen (P0.5). Any open screen is closed on the way in, so the user
         /// cannot end up flying the drone with the map list still on top.
         /// </summary>
+        /// <summary>
+        /// Apply one mode's chrome rules in one place, mirroring the web's <c>body.tour</c> block
+        /// (builder.html:233-234): hide #backBtn / #viewbtns / #count, and MOVE the compass up
+        /// beside the depth pill rather than hiding it.
+        /// </summary>
+        public void ApplyModeChrome(AppMode mode)
+        {
+            bool mapView = ModeRules.AllowsMenu(mode);
+            SetChromeVisible(mapView);
+
+            if (CompassWidget.Instance != null)
+                CompassWidget.Instance.SetTourLayout(ModeRules.IsFirstPerson(mode));
+
+            AppBoot boot = UnityEngine.Object.FindFirstObjectByType<AppBoot>();
+            if (boot != null) boot.SetStatusVisible(mapView);   // the web hides #count in the tour
+        }
+
         public void SetChromeVisible(bool visible)
         {
             if (!visible)
@@ -430,6 +460,7 @@ namespace DiveMap.Runtime.Ui
                 if (_card != null) _card.Hide();
             }
             if (_hamburger != null) _hamburger.SetActive(visible && (_nav == null || _nav.Count == 0));
+            if (_backButton != null) _backButton.SetActive(visible && _nav != null && _nav.Count > 0);
             _chromeVisible = visible;
         }
         private bool _chromeVisible = true;

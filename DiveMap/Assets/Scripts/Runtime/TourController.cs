@@ -159,7 +159,8 @@ namespace DiveMap.Runtime
             AudioBank.PlayCue();
             AudioBank.StartAmbience();
 
-            Toast.ShowTr("ลากจอยซ้ายเพื่อเลี้ยว/ขึ้นลง · จอยขวาเพื่อเดินหน้า");
+            // No toast here: the HUD's own hint line (#tourHud) says this permanently, and the web
+            // does not double up. A toast on entry also fought the hint for the same screen space.
             Debug.Log($"[Tour] begin pos=({start.x:F1},{start.y:F1},{start.z:F1}) " +
                       $"solids={_solids.Length} water={_waterLevel:F1} " +
                       $"scale=({_scaleX:F2},{_scaleZ:F2})");
