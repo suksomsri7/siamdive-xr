@@ -376,13 +376,17 @@ namespace DiveMap.Runtime.Marine
             // C5 — how fast the diver is moving. This single number decides whether the reef
             // tolerates them or scatters (FleeMath.DiverPanicSpeed). Smoothed, because one long
             // frame on a phone must not read as a charge.
-            if (_camSeen && Time.deltaTime > 1e-4f)
+            if (_camSeen && dt > 1e-4f)
             {
-                // HORIZONTAL only, matching the web (builder.html:3940 —
-                // hypot(dx,dz)/(0.016·FS)); a diver dropping straight down past a shoal is not
-                // charging it.
+                // HORIZONTAL only, and divided by the SIMULATION step rather than the wall clock —
+                // both straight from the web (builder.html:3940, hypot(dx,dz)/(0.016·FS)). A diver
+                // dropping straight down past a shoal is not charging it, and the sim step is what
+                // makes the reading frame-rate independent: FS is capped at 2.5, so on a slow
+                // device the drone covers less ground per frame. Measured against the wall clock
+                // the QC player (~8 fps) reported 10 u/s for a drone doing 30 — under the 11 u/s
+                // threshold, so C5 looked like it did nothing at all.
                 float mx = camPos.x - _prevCamPos.x, mz = camPos.z - _prevCamPos.z;
-                float inst = Mathf.Sqrt(mx * mx + mz * mz) / Time.deltaTime;
+                float inst = Mathf.Sqrt(mx * mx + mz * mz) / dt;
                 // A TELEPORT is not a charge. Entering the tour moves the camera from the orbit
                 // rig to the dive spawn in one frame; the QC log caught that as camSpeed=467 u/s
                 // (the drone's own top speed is 30) and the whole reef panicked at a diver who had
@@ -609,11 +613,16 @@ namespace DiveMap.Runtime.Marine
             // One line a second while anything is frightened — the QC log is how a reviewer
             // confirms this ran at all, and silence here was exactly how the wallet stayed
             // broken for three rounds.
-            if (panic > 0.05f && t > _panicLogAt)
+            // Also logged when the diver is merely MOVING, not only when something panics: a silent
+            // log was indistinguishable from "the feature is broken" when the real answer was
+            // "the drone measured 10 u/s". A reviewer needs the speed to tell those apart.
+            if (diverActive && (panic > 0.05f || _camSpeed > 4f) && t > _panicLogAt)
             {
                 _panicLogAt = t + 1f;
                 Debug.Log($"[Flee] school={si} panic={panic:F2} src={(predWon ? "predator" : "diver")} " +
-                          $"camSpeed={_camSpeed:F1} homeR={sp.HomeR:F0}/{fx.HomeR0:F0} balled={balled}");
+                          $"camSpeed={_camSpeed:F1}/{FleeMath.DiverPanicSpeed:F0} dist={diverDist:F0} " +
+                          $"R={FleeMath.DiverPanicRadius(fx.HomeR0, sp.FishLen):F0} " +
+                          $"homeR={sp.HomeR:F0}/{fx.HomeR0:F0} balled={balled}");
             }
         }
 
