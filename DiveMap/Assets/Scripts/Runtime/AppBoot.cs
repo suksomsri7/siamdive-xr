@@ -219,6 +219,12 @@ namespace DiveMap.Runtime
                 yield break;
             }
 
+            // E5 — put the player's own purchases back into the map before it is built, so a
+            // bought animal goes through exactly the same pipeline as everything else rather
+            // than down a second spawn path that would drift out of step with this one.
+            int restocked = ShopStock.InjectFromStore(scene, _shortId);
+            if (restocked > 0) Debug.Log($"[Shop] restored {restocked} purchased item(s) for {_shortId}");
+
             string mapName = string.IsNullOrEmpty(scene.Name) ? _shortId : scene.Name;
             SetStatus(mapName + " · " + UiStrings.Tr("กำลังวางวัตถุ…"));
 
@@ -335,6 +341,17 @@ namespace DiveMap.Runtime
             StopAllCoroutines();
             StartCoroutine(Boot());
         }
+
+        /// <summary>The map on screen right now (E5 stores purchases against it).</summary>
+        public string CurrentMapId => _shortId;
+
+        /// <summary>
+        /// E5 — rebuild the map that is already open. Used after a purchase: the animal has been
+        /// written to the stock, and a rebuild is what puts it in the water through the normal
+        /// item pipeline. A few seconds of reload is a fair price for having one build path
+        /// instead of two that can disagree.
+        /// </summary>
+        public void ReloadCurrentMap() => Retry();
 
         /// <summary>
         /// Switch to another dive-site map (WO-XR-05.2 map list). Persisting the id also

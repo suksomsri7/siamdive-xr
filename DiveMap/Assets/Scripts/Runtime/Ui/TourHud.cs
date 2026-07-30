@@ -151,6 +151,13 @@ namespace DiveMap.Runtime.Ui
             RoundButton(root, "TourShot", "camera", Chrome, 56f, 2.5f, new Vector2(1f, 1f),
                         new Vector2(-UiKit.Css(14f), -UiKit.Css(104f)), Photo);
 
+            // ── shop: RIGHT 14 / TOP 174 (E5) ───────────────────────────────────
+            // The web puts #_shopBtn at right 10 / top 82, but that is its BUILDER chrome; here
+            // the same rail already carries the camera at top 104, and a shop button overlapping
+            // the shutter is worse than one slot lower. Mirrors the radar on the left rail.
+            RoundButton(root, "TourShop", "cart", Chrome, 56f, 2.5f, new Vector2(1f, 1f),
+                        new Vector2(-UiKit.Css(14f), -UiKit.Css(174f)), ShopSheet.Open);
+
             // ── minimap: bottom 16, centred, 118 px ─────────────────────────────
             Image mini = UiKit.MakeCircle(root, "Minimap", Chrome);
             mini.raycastTarget = false;

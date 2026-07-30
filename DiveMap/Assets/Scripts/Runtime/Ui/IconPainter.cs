@@ -89,6 +89,12 @@ namespace DiveMap.Runtime.Ui
                     strokes.Add(Line(20.5f, 9.5f, 15, 15));
                     break;
 
+                case "cart":   // 🛒 shop — basket, handle and two wheels
+                    strokes.Add(new[] { P(3, 6), P(6, 6), P(8.4f, 15), P(19, 15), P(21, 8.5f), P(7, 8.5f) });
+                    strokes.Add(Circle(10f, 18.6f, 1.5f));
+                    strokes.Add(Circle(17.6f, 18.6f, 1.5f));
+                    break;
+
                 case "radar":  // #radarBtn — <circle r9/><circle r4.3/><path d="M12 12 17.5 8.5"/>
                     strokes.Add(Circle(12f, 12f, 9f));
                     strokes.Add(Circle(12f, 12f, 4.3f));

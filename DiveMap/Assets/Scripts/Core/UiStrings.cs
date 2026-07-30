@@ -74,6 +74,12 @@ namespace DiveMap.Core
                 { "ย้อนกลับ",              "Back" },
                 { "เร็วๆ นี้",              "Coming soon" },
 
+                // shop (E5)
+                { "ร้านค้า",                "Shop" },
+                { "เหรียญไม่พอ",            "Not enough coins" },
+                { "ซื้อแล้ว",               "Purchased" },
+                { "ปล่อยลงแมพแล้ว — กำลังโหลดใหม่", "Released — reloading" },
+
                 // map list / search
                 { "ค้นหาแมพ",              "Search maps" },
                 { "กำลังโหลด…",            "Loading…" },
