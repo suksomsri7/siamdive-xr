@@ -80,6 +80,12 @@ namespace DiveMap.Core
                 { "ซื้อแล้ว",               "Purchased" },
                 { "ปล่อยลงแมพแล้ว — กำลังโหลดใหม่", "Released — reloading" },
 
+                // pins (G)
+                { "ยังไม่มีรูป/วิดีโอ",       "No photos or video yet" },
+                { "คลิปวิดีโอ — เปิดดูได้ในเว็บ", "Video clip — playable on the web" },
+                { "ไม่สามารถแสดงไฟล์นี้",     "This file cannot be shown" },
+                { "โหลดรูปไม่สำเร็จ",         "The photo could not be loaded" },
+
                 // first-dive tutorial (D10)
                 { "ข้าม",                  "Skip" },
                 { "ถัดไป",                 "Next" },

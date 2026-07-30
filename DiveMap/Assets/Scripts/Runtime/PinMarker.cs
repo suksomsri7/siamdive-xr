@@ -78,8 +78,9 @@ namespace DiveMap.Runtime
                 made++;
             }
 
-            if (made > 0)
-                Debug.Log($"[Pins] placed {made} marker(s), {withMedia} with media");
+            // Logged even when there are none: silence would be indistinguishable from "the pin
+            // code never ran", which is exactly the ambiguity that cost three QC rounds on C5.
+            Debug.Log($"[Pins] placed {made} marker(s), {withMedia} with media");
             return made;
         }
 

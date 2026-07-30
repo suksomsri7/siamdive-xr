@@ -197,6 +197,19 @@ namespace DiveMap.Runtime.Ui
             GameObject mapRoot = GameObject.Find("Map");
             if (cam == null || mapRoot == null) { Hide(); return; }
 
+            Ray pinRay = cam.ScreenPointToRay(screenPos);
+
+            // G1 — pins win over the scenery underneath them. A marker is small and deliberately
+            // floats six units above whatever it is marking, so if the wreck it sits on took the
+            // tap instead, the pin could never be opened at all.
+            PinMarker pin = PinMarker.Pick(pinRay);
+            if (pin != null)
+            {
+                Hide();
+                PinSheet.Open(pin);
+                return;
+            }
+
             var byKey = new Dictionary<string, GameObject>();
             List<ItemPicker.Target> targets = CollectTargets(mapRoot, byKey);
             if (targets.Count == 0) { Hide(); return; }
