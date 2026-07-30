@@ -2,7 +2,14 @@
 
 > เอกสารนี้เขียนเพื่อให้ AI coding agent ใดๆ (Codex / Kimi / Claude / อื่นๆ) ทำงานต่อได้ทันที
 > อ่านคู่กับ: `DESIGN_DOC.md` (สัญญาหลัก v1.2), `QC_PLAN.md`, `SECURITY_PLAN.md`
-> อัปเดตล่าสุด: 2026-07-29 กลางคืน (**WO-XR-04 ปิดครบ 3 ก้อน · CI `30490750535` เขียวทุก job · QC ผ่าน 5/5** · main = `27e0568`)
+> อัปเดตล่าสุด: **2026-07-31 เช้า** · main = `7326d44`
+>
+> # 🔴 อ่าน §4.97 ก่อนทุกอย่าง
+> **§4.97 RESUME 2026-07-31** — user ทักว่า UI/UX ไม่เหมือนเว็บ พร้อมภาพอ้างอิงใน `docs/refs/`
+> (§4.6-§4.96 คือประวัติย้อนหลัง อ่านทีหลังได้ · ตัวเลขความคืบหน้าที่เชื่อได้คือ **`PARITY.md` เท่านั้น** ไม่ใช่ WO ใน DESIGN_DOC)
+>
+> **สถานะย่อ**: PARITY 44.5/86 (52%) · CI เขียวครบทุก job · APK ล่าสุด `dive3d.suksomsri.cloud/dl/DiveMap-v2-3fca1f9c67.apk`
+> **repo เปิด public ชั่วคราว** → cron สลับกลับ private เอง 1 ส.ค. 08:05 น. (ดู §4.96)
 
 ## 1. โปรเจกต์คืออะไร
 - แอป **DiveMap** (`com.siamdive.divemap`) — Unity 6000.0.79f1 ใน `DiveMap/`
@@ -11,6 +18,13 @@
 - **มาตรฐานคุณภาพ: ภาพต้องเทียบเว็บจริงข้างกันแล้วไปทางเดียวกันหรือดีกว่า** (user ตรวจแบบนี้)
 
 ## 2. สถานะปัจจุบัน (อะไรเสร็จแล้ว)
+> ⚠️ **รายการข้างล่างนี้หยุดอยู่ที่ 29 ก.ค.** (WO-XR-00 ถึง 05) — งานวันที่ 30-31 ก.ค. อยู่ใน §4.9/§4.96/§4.97
+> **แหล่งความจริงเรื่องความคืบหน้าคือ `PARITY.md` เท่านั้น** (86 ฟีเจอร์เว็บ · ตอนนี้ 44.5 = 52%)
+> ห้ามประเมินจาก WO ใน DESIGN_DOC — WO ไม่ครอบคลุมฟีเจอร์เว็บจริง (นี่คือเหตุผลที่ PARITY.md ถูกสร้างขึ้น)
+
+**เพิ่มหลัง 29 ก.ค. (สรุปสั้น — รายละเอียดใน §4.9 / §4.96):**
+ทัวร์ดำน้ำโดรน (จอย 2 ตัว/ไฟหน้า/ถ่ายรูป/มินิแมพ/เข็มทิศ/ความลึก/vignette) · เกมเก็บขยะ+เหรียญ+ป้าย ♻️ · wallet ออนไลน์ `/api/wallet` · ร้านค้า 89 ราคา · ประตูวาป · ปลาตกใจหนีผู้เล่น (C5) · หมุด 📍 + ดูรูป · สอนท่าเล่น spotlight · จุดเกิดสุ่ม · heatmap ความลึก · โหมดกลางวัน · ตัวเลขเฟรมเรต · เสียง
+
 - ✅ WO-XR-00: CI GameCI 3 targets — Android APK (IL2CPP, ~35 นาที), Windows .exe (Mono), Linux (QC) — เขียวทุก build
 - ✅ WO-XR-01 + เก็บงาน: โหลดแมพเดโม `wl6zwxh1tdgn` (Htms Chang) — เรือ KTX2 2048px ตั้งบนพื้นทราย, แสง/reflection ถูกต้อง, น้ำโปร่งแสง 2 หน้า, กล้อง frame แบบเว็บ, ฟอนต์ไทย bundle (NotoSansThai ใน Resources)
 - ✅ WO-XR-03 **ปิดแล้ว 2026-07-28** (`a7d12f8` + QC fixes `f31d9fc`): boids 1,100 ตัว 10 ฝูง ตามสูตรเว็บจริง (`buildSchool` ใน builder.html) — scad R=66.0 · barracuda R=143.9 speed 4.0 · pod 67.8/29.7 · วาฬเป็น **GLB จริง** `Whale_Shark_xr0.glb` worldLen 65.3 (เดิม clamp [8,16] ทำให้เล็กผิด 4 เท่า) · QC verdict = ผ่านแบบมีเงื่อนไข แล้วแก้ครบ
@@ -58,6 +72,11 @@ tools/                          (สคริปต์ XR-LOD pipeline)
 8. แก้ workflow CI ได้เฉพาะจำเป็นสุดๆ · `ResolveOutputPath` ต้องบังคับ .apk
 9. repo maps (`/root/projects/siamdive-maps`, branch **master**): แก้แล้ว push GitHub **ไม่ deploy อัตโนมัติ** — ต้อง `vercel deploy --prod --yes --token <ดู memory reference_vercel_credentials>` · commit เฉพาะไฟล์ตัวเอง (additive)
 10. เครื่อง VPS RAM 8GB — ห้ามรันงานหนักขนาน · `sleep` ระดับบนถูก block ในบาง harness → ใช้ curl --retry / background loop
+11. **`Outline` component บนกราฟิกที่โปร่งใส 100% = เส้นโปร่งใส** (มันก๊อป mesh เดิม) → ใช้ `UiKit.RoundedSprite(r, border)` ที่วาดขอบลง sprite จริง
+12. **ป้าย/มาร์กเกอร์ในโลก 3D ต้อง unlit** — ใช้ `DM_GltfUnlit` + ทำเป็นแผ่นกลม**ทึบ** (ตัด transparency ทิ้ง) · ถ้าใช้ shader รับแสงจะกลายเป็นวงกลมเทาใต้น้ำ
+13. **QC harness ต้องรอเป็นเฟรม ไม่ใช่วินาที** เมื่อของที่ทดสอบเดินตามเฟรม — CI ได้ **3 fps** (`realDt=0.333` = Unity `maximumDeltaTime`) และ `DroneFlight.Inertia` เป็นต่อเฟรม → `WaitForSecondsRealtime(5f)` = แค่ 15 เฟรม (เสีย CI ไป 3 รอบกว่าจะรู้) · ใช้ `for (int f=0; f<60; f++) yield return null;`
+14. **log ต้องพูดตอนที่ 'ไม่มีอะไรเกิดขึ้น' ด้วย** — `[Pins] placed 0` / `[Flee] panic=0.00 camSpeed=10.4/11` · ความเงียบแยกไม่ออกระหว่าง 'พัง' กับ 'เงื่อนไขไม่ถึง'
+15. **ชื่อฟังก์ชันที่ตรงคำ ≠ หน้าที่ผู้ใช้ใช้จริง** — พอร์ต `openShop()` เพราะชื่อตรงคำว่า shop แต่ร้านค้าจริงคือ palette (`tryPlace` หักเหรียญตอนวาง) · **เทียบภาพหน้าจอจริงก่อนเสมอ** (`docs/refs/`)
 
 ## 4.5 ⚠️ อ่าน `PARITY.md` ก่อนประเมินความคืบหน้า
 รายการฟีเจอร์เว็บทั้ง 86 ข้อเทียบแอป (ดึงจาก `id=`/`title=`/`function` ใน builder.html จริง) — **ตอนนี้ ~21%**
@@ -250,6 +269,17 @@ WO-XR-04 (ปลา GLB จริง + caustics/FX) ↔ WO-XR-02m AR (ARCore) �
 - **ภาพเว็บอ้างอิง**: `NODE_PATH=/tmp/node_modules node /root/dive3d/qc_web_reference.mjs wl6zwxh1tdgn /tmp/qc_web_reference.png` (puppeteer + swiftshader)
 - Vercel token / Neon / อื่นๆ: อยู่ใน memory dir `/root/.claude/projects/-root/memory/reference_*.md`
 - ส่งไฟล์ใหญ่ให้ user: วาง `/var/www/dive3d/dl/` (Telegram ส่ง >50MB ไม่ได้)
+- **สั่ง build APK/Windows** (push ปกติ**ไม่**สร้างไฟล์ติดตั้ง เพื่อประหยัดโควตา — ดู §4.95):
+  ```bash
+  bash tools/request_build.sh main        # → ได้ run id
+  bash tools/publish_build.sh <run> <tag> # เขียวแล้วเอาขึ้น dive3d.suksomsri.cloud/dl/
+  ```
+  ⚠️ **ห้าม push ระหว่างที่ build ค้างอยู่** — `concurrency: cancel-in-progress` ต่อ ref จะยกเลิกรอบนั้นทิ้ง (พลาดมาแล้ว 3 ครั้ง)
+  ถ้า push ไปแล้วให้ cancel รอบ push ก่อนแล้วค่อย `request_build.sh` ใหม่
+- **ภาพ QC ชุด UI** (`-qcui`): `qc_ui_menu/maps/search/card/settings/perf/depth/daylight/toast/tour/game/flee/shop/tutorial/bought/en.png` + `qc_ui_player.log`
+  grep คีย์ที่มีประโยชน์: `[Flee]` `[Shop]` `[Pins]` `[Wallet]` `[Tutorial]` `[Perf]` `[QC] buy`
+- **ภาพอ้างอิง UI จาก user**: `docs/refs/web-palette.png` · `docs/refs/web-maplist.png` (เทียบก่อนทำ UI ทุกครั้ง)
+- **โมเดลต้นฉบับความละเอียดสูง**: `/root/asset-masters/` (7.6 GB · MANIFEST.md) — ดู §4.97
 
 ## 7. โปรโตคอล QC (ถ้ามี orchestrator/reviewer แยกจาก executor)
 1. executor ทำงานตาม work order → commit → push ครั้งเดียว → **หยุด รายงานสิ่งที่ทำ + จุดเสี่ยง**
