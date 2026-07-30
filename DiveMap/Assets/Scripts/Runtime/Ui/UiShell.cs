@@ -714,7 +714,12 @@ namespace DiveMap.Runtime.Ui
                     tour.QcPlaceNear(shoal, (float)DiveMap.Core.FleeMath.DiverPanicRadius(shoalR, 4.2) * 0.3f);
                     yield return new WaitForSecondsRealtime(0.3f);
                     tour.QcChargeToward(shoal);
-                    yield return new WaitForSecondsRealtime(5f);   // long enough to build up speed
+                    // Wait in FRAMES, not seconds. The drone accelerates by a fixed 9 % per FRAME
+                    // (DroneFlight.Inertia is deliberately not dt-scaled — it is the web's rule),
+                    // so on a 3 fps runner five seconds of wall clock is fifteen frames and the
+                    // drone never reaches the 11 u/s that frightens anything. Sixty frames gets it
+                    // to ~99 % of cruise on any machine; on a phone that is one second.
+                    for (int f = 0; f < 60; f++) yield return null;
                     ScreenCapture.CaptureScreenshot(prefix + "_flee.png");
                     Debug.Log("[UI] qcui shot -> " + prefix + "_flee.png");
                     yield return new WaitForSecondsRealtime(1.2f);

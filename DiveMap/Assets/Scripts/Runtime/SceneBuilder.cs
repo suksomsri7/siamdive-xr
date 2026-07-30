@@ -374,6 +374,10 @@ namespace DiveMap.Runtime
                 frameBox = new Bounds(new Vector3(0f, 0f, 0f), new Vector3(seabedRadius * 2f, 2f, seabedRadius * 2f));
             }
 
+            // G1 — the pins a diver left here. The scene JSON has carried them all along and
+            // nothing drew them, so an annotated map looked exactly like a bare one.
+            PinMarker.BuildAll(scene, root.transform);
+
             onDone?.Invoke(new BuildResult
             {
                 Root = root,
