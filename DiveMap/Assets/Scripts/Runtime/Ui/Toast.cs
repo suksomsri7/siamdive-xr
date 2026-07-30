@@ -6,8 +6,9 @@ using UnityEngine.UI;
 namespace DiveMap.Runtime.Ui
 {
     /// <summary>
-    /// P0 — the web's <c>showToast()</c>: one short line at the bottom of the screen that
-    /// fades away on its own. Built before the tour/game work because every mode from here on
+    /// P0 — the web's <c>showToast()</c>: one short line near the top of the screen that
+    /// fades away on its own (the web puts it at the bottom; here the bottom is the info card
+    /// and, from P1, the joysticks). Built before the tour/game work because every mode from here on
     /// needs to say something transient ("แตะจุดยึดที่ 1", "ออฟไลน์ — เหรียญจะซิงก์ทีหลัง")
     /// and the alternative is another modal, which on a phone in one hand is worse.
     ///
@@ -24,7 +25,10 @@ namespace DiveMap.Runtime.Ui
         private const int FontSize = 30;
         private const float HoldSeconds = 2.2f;
         private const float FadeSeconds = 0.35f;
-        private const float BottomMargin = 150f;   // clear of the joysticks that arrive in P1
+        // TOP-centre, under the status header. The web puts its toast at the bottom, but on this
+        // app the bottom belongs to the info card (a bottom sheet) and, from P1, to the joysticks
+        // — the first QC shot showed the toast landing on top of the card.
+        private const float TopMargin = 96f;
 
         private static Toast _instance;
 
@@ -60,10 +64,10 @@ namespace DiveMap.Runtime.Ui
             if (host == null) return null;
 
             RectTransform node = UiKit.MakeNode(host, "Toast");
-            node.anchorMin = new Vector2(0.5f, 0f);
-            node.anchorMax = new Vector2(0.5f, 0f);
-            node.pivot = new Vector2(0.5f, 0f);
-            node.anchoredPosition = new Vector2(0f, BottomMargin);
+            node.anchorMin = new Vector2(0.5f, 1f);
+            node.anchorMax = new Vector2(0.5f, 1f);
+            node.pivot = new Vector2(0.5f, 1f);
+            node.anchoredPosition = new Vector2(0f, -TopMargin);
             node.sizeDelta = new Vector2(900f, UiKit.RowHeight(FontSize, 2) + 28f);
 
             Image bg = UiKit.MakePanel(node, "Bg", UiKit.PanelBg);

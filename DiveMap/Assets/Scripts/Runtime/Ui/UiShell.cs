@@ -392,19 +392,35 @@ namespace DiveMap.Runtime.Ui
 
         private void OnStackChanged(int depth)
         {
-            // Hide the ☰ affordance while a screen owns the display.
-            if (_hamburger != null) _hamburger.SetActive(depth == 0);
+            // Hide the ☰ affordance while a screen owns the display (or while a mode hides it).
+            if (_hamburger != null) _hamburger.SetActive(depth == 0 && _chromeVisible);
             SetOrbitEnabled(depth == 0);
         }
 
         /// <summary>The shell's own canvas (sortingOrder 10, above AppBoot's BootCanvas).</summary>
         public Canvas ShellCanvas => _canvas;
 
+        /// <summary>
+        /// Show/hide the shell chrome (the ☰ button) for the current mode — a first-person tour
+        /// owns the whole screen (P0.5). Any open screen is closed on the way in, so the user
+        /// cannot end up flying the drone with the map list still on top.
+        /// </summary>
+        public void SetChromeVisible(bool visible)
+        {
+            if (!visible) CloseAll();
+            if (_hamburger != null) _hamburger.SetActive(visible && (_nav == null || _nav.Count == 0));
+            _chromeVisible = visible;
+        }
+        private bool _chromeVisible = true;
+
         private void Update()
         {
             ApplySafeArea(false);
 
+            // Three independent vetoes: an open screen, a finger on a UI element, and the
+            // current mode (a first-person tour must not also orbit — P0.5).
             bool allow = _nav == null || _nav.Count == 0;
+            if (allow && !ModeManager.OrbitAllowed) allow = false;
             if (allow && PointerOverUi()) allow = false;
             SetOrbitEnabled(allow);
         }
