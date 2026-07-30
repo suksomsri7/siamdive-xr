@@ -648,6 +648,18 @@ namespace DiveMap.Runtime.Ui
             Debug.Log("[UI] qcui shot -> " + prefix + "_settings.png");
             yield return new WaitForSecondsRealtime(1.5f);
 
+            // 6.1) A7 — the frame-rate readout, over the map where it actually sits. Captured on
+            // its own and switched back off, so it cannot creep into the parity shots.
+            CloseAll();
+            bool perfWas = PerfHud.Enabled;
+            PerfHud.Enabled = true;
+            yield return new WaitForSecondsRealtime(1.5f);   // it needs a sample window to show a number
+            ScreenCapture.CaptureScreenshot(prefix + "_perf.png");
+            Debug.Log("[UI] qcui shot -> " + prefix + "_perf.png");
+            yield return new WaitForSecondsRealtime(1.2f);
+            PerfHud.Enabled = perfWas;
+            yield return new WaitForSecondsRealtime(0.4f);
+
             // 6.2) depth heat-map (P2a) and 6.3) daylight (P2b): both are one-press view changes
             // that no unit test can show, so the QC eye takes them.
             CloseAll();
