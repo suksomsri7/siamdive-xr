@@ -33,6 +33,14 @@ namespace DiveMap.Runtime.Marine
         public int    Count;      // fish in this school
         public byte   Think;      // 1 = run full boids this frame, 0 = dead-reckon
         public byte   Avoid;      // 1 = run solid-avoidance, 0 = skip (far LOD)
+
+        // ── C5: fear. All four are recomputed on the main thread every frame from
+        // DiveMap.Core.FleeMath; the job only applies them. Panic 0 = the calm path,
+        // bit-for-bit what it was before C5 landed.
+        public float  Panic;      // 0..1 (FleeMath.SchoolPanic)
+        public float3 Threat;     // world position of whatever is frightening them
+        public float  FleeW;      // steering weight straight away from Threat
+        public float  DartMul;    // speed multiplier while fleeing (1 = cruise)
     }
 
     /// <summary>One solid obstacle as a world-space AABB (the wreck/decor fish steer around).</summary>
@@ -139,6 +147,23 @@ namespace DiveMap.Runtime.Marine
                 if (math.abs(dyA) > s.VertHalf) steer.y -= math.sign(dyA) * 2.0f;
             }
 
+            // ── C5: burst away from the threat (the web's schoolFlee, builder.html:1628) ──
+            // Radial, in the XZ plane, weighted by fear. The web offsets the fish's position;
+            // with velocity boids the same read comes from steering hard outward and swimming
+            // faster (SchoolParams.DartMul below), which also keeps the shoal's own separation
+            // and alignment intact so it bursts rather than shatters.
+            if (s.Panic > 0.001f && s.FleeW > 0f)
+            {
+                float ax = f.Pos.x - s.Threat.x;
+                float az = f.Pos.z - s.Threat.z;
+                float ad2 = math.sqrt(ax * ax + az * az);
+                if (ad2 > 1e-4f)
+                {
+                    steer.x += ax / ad2 * s.FleeW;
+                    steer.z += az / ad2 * s.FleeW;
+                }
+            }
+
             // Desired heading in the XZ plane (dir = (cos h, sin h) → (x, z)).
             float3 desiredVel = f.Vel + steer * Dt;
             float curH = math.atan2(f.Vel.z, f.Vel.x);
@@ -155,11 +180,13 @@ namespace DiveMap.Runtime.Marine
                 }
             }
 
-            // Forward-only integration with the per-frame turn-rate cap (·FS).
-            float cap = TurnCap * Fs;
+            // Forward-only integration with the per-frame turn-rate cap (·FS). A frightened fish
+            // may turn harder — at the cruise cap alone a startled fish needs over a second to
+            // come about, which reads as indifference rather than fear (FleeMath.TurnCapScale).
+            float cap = TurnCap * Fs * (1f + 2f * s.Panic);
             float newH = TurnTowardBurst(curH, desH, cap);
 
-            float speed = s.MaxSpeed;
+            float speed = s.MaxSpeed * (s.DartMul > 0f ? s.DartMul : 1f);
             float3 nv;
             nv.x = math.cos(newH) * speed;
             nv.z = math.sin(newH) * speed;

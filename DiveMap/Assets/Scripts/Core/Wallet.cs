@@ -64,5 +64,13 @@ namespace DiveMap.Core
         /// local balance rather than starting them at zero.
         /// </summary>
         public static bool NeedsSeed(bool serverHasWallet) => !serverHasWallet;
+
+        /// <summary>
+        /// The same rule taking the parsed response directly. Prefer this at call sites: the bool
+        /// overload was inverted once already (`NeedsSeed(server.HasValue == false)`), which
+        /// re-seeded known players and threw on unknown ones. A value you cannot negate by
+        /// accident is worth more than a comment telling you not to.
+        /// </summary>
+        public static bool NeedsSeed(int? serverCoins) => !serverCoins.HasValue;
     }
 }

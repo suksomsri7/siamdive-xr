@@ -688,6 +688,25 @@ namespace DiveMap.Runtime.Ui
                 ScreenCapture.CaptureScreenshot(prefix + "_game.png");
                 Debug.Log("[UI] qcui shot -> " + prefix + "_game.png");
                 yield return new WaitForSecondsRealtime(1.2f);
+
+                // 6.8) C5 — charge the scad shoal. Fear only exists above 11 u/s
+                // (FleeMath.DiverPanicSpeed), so a parked drone proves nothing: this is the only
+                // way the QC eye can tell "the fish scatter" from "the fish are indifferent".
+                var reef = FindFirstObjectByType<Marine.FishSchoolSystem>();
+                TourController tour = TourController.Active;
+                if (reef != null && tour != null &&
+                    reef.TryGetNearestSchool(Camera.main != null ? Camera.main.transform.position : Vector3.zero,
+                                             "scad", out Vector3 shoal, out float shoalR))
+                {
+                    Debug.Log($"[UI] qcui charging the scad shoal at ({shoal.x:F0},{shoal.y:F0},{shoal.z:F0}) R={shoalR:F0}");
+                    tour.QcChargeToward(shoal);
+                    yield return new WaitForSecondsRealtime(5f);   // long enough to build up speed
+                    ScreenCapture.CaptureScreenshot(prefix + "_flee.png");
+                    Debug.Log("[UI] qcui shot -> " + prefix + "_flee.png");
+                    yield return new WaitForSecondsRealtime(1.2f);
+                    tour.QcStopCharge();
+                }
+                else Debug.LogWarning("[UI] qcui could not find a scad shoal to charge");
                 if (ModeManager.Instance != null) ModeManager.Instance.Exit();
                 yield return new WaitForSecondsRealtime(0.8f);
             }

@@ -61,6 +61,18 @@ namespace DiveMap.Tests
         }
 
         [Test]
+        public void TheNullableOverloadIsTheOneCallSitesShouldUse()
+        {
+            // Regression, QC run 30552624505: the caller wrote `NeedsSeed(server.HasValue == false)`
+            // — one negation too many. A known player got re-seeded, and an unknown one fell
+            // through to `server.Value` on a null and threw. Taking the int? directly removes the
+            // boolean there was to invert.
+            Assert.IsTrue(Wallet.NeedsSeed((int?)null), "no wallet on the server → seed");
+            Assert.IsFalse(Wallet.NeedsSeed((int?)0), "a balance of zero is still a wallet");
+            Assert.IsFalse(Wallet.NeedsSeed((int?)600));
+        }
+
+        [Test]
         public void APickupThatRacesTheServerReplyIsNotLost()
         {
             // A save goes out with +10; a +5 pickup lands while it is in flight; the server replies

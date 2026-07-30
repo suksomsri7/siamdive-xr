@@ -35,14 +35,14 @@
 | B8 | FX ทองเรืองแสง + หนวดไหว | `_fxGold()`, `_fxBeard()` | ❌ |
 | B9 | vignette + murk ตอนอยู่ในทัวร์ | `vignette`, `murkUI()` | ✅ P1.2a |
 
-## C. สัตว์ / AI (3.5/6)
+## C. สัตว์ / AI (4.5/6)
 | # | ฟีเจอร์เว็บ | หลักฐาน | Unity |
 |---|---|---|---|
 | C1 | ฝูงปลา boids + สัตว์ใหญ่ว่ายวน | `buildSchool()`, `schoolStep()` | ✅ WO-03 |
 | C2 | ปลาเป็นโมเดล GLB จริง | `InstancedMesh` ใน `buildSchool` | ✅ WO-04.1 |
 | C3 | หลบสิ่งกีดขวาง (solid avoidance) | `computeObsR()`, `ejectFromSolids()` | ✅ |
 | C4 | genome ต่อสายพันธุ์ + locomotion จาก animation | `speciesGenome()`, `deriveLocomotion()` | ⚠️ ใช้ตารางค่าคงที่ ไม่ derive จาก clip |
-| C5 | ปลาตกใจ/หนีผู้เล่น + หาที่หลบ | `schoolFlee()`, `shelterSense()`, `senseAgents()` | ❌ |
+| C5 | ปลาตกใจ/หนีผู้เล่น + หาที่หลบ | `schoolFlee()`, `shelterSense()`, `senseAgents()` | ✅ C5 (panic 0..1 · โดรนเร็ว>11 u/s · bait ball · วิ่งเข้าที่กำบัง · genome rank/diet ครบ) |
 | C6 | เสียงสัตว์ตามระยะ | `_animalSfxTick()` | ✅ P1.2b |
 
 ## D. ทัวร์ดำน้ำ (โดรน) — 6/10 (P1.1 + P1.2 เสร็จ)

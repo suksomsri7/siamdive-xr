@@ -246,6 +246,20 @@ namespace DiveMap.Runtime
             Debug.Log("[Tour] end");
         }
 
+        private Vector3? _qcCharge;
+
+        /// <summary>
+        /// QC only — fly at <paramref name="target"/> under full throttle. A headless player has
+        /// no hands on the sticks, so without this the drone hovers and C5 (fish scattering from a
+        /// charging diver) can never be photographed. It drives the SAME
+        /// <see cref="DroneFlight"/> path as a real player rather than teleporting the camera,
+        /// so the speed the reef reacts to is the speed the drone can actually reach.
+        /// </summary>
+        public void QcChargeToward(Vector3 target) => _qcCharge = target;
+
+        /// <summary>QC only — hands off the sticks.</summary>
+        public void QcStopCharge() => _qcCharge = null;
+
         private void Update()
         {
             if (!_active || _cam == null) return;
@@ -259,6 +273,17 @@ namespace DiveMap.Runtime
                 Rx = InputRig.Right.x,
                 Ry = -InputRig.Right.y,
             };
+
+            if (_qcCharge.HasValue)
+            {
+                Vector3 tgt = _qcCharge.Value;
+                float want = Mathf.Atan2(tgt.z - _state.Pos.Z, tgt.x - _state.Pos.X);
+                float err = Mathf.Atan2(Mathf.Sin(want - _state.Yaw), Mathf.Cos(want - _state.Yaw));
+                sticks.Lx = Mathf.Clamp(err * 1.5f, -1f, 1f);   // steer onto the bearing
+                sticks.Ly = 0f;
+                sticks.Rx = 0f;
+                sticks.Ry = -1f;                                 // full ahead (web sign: up = −)
+            }
 
             float fs = (float)MarineMath.RealDeltaScale(Time.deltaTime);
             float dt = (float)MarineMath.BaseStep * fs;

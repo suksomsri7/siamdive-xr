@@ -85,10 +85,38 @@ namespace DiveMap.Runtime.Marine
         }
         private readonly List<SchoolRender> _render = new List<SchoolRender>();
 
+        /// <summary>
+        /// C5 — the fixed facts each school needs in order to be afraid, resolved once at
+        /// Configure. Anchor and HomeR live here as the AUTHORED values because the sim's copies
+        /// are rewritten every frame (the shoal is dragged toward cover and tightened into a bait
+        /// ball); losing the originals would let a shoal wander off after one scare.
+        /// </summary>
+        private struct SchoolFear
+        {
+            public Vector3 Anchor0;
+            public float   HomeR0;
+            public int     Rank;
+            public string  Diet;
+            public bool    IsPod;
+            public bool    HasShelter;
+            public Vector3 Shelter;
+            public float   ShelterR;
+            public float   BallUntil;   // Time.time the bait ball may relax (FleeMath.BallHoldSeconds)
+            public Vector3 HomeNow;     // where the shoal is CURRENTLY centred (eased, never snapped)
+            public bool    HomeInit;
+            public float   HomeRNow;    // its CURRENT radius (eased — a bait ball forms fast, not instantly)
+        }
+        private SchoolFear[] _fear = System.Array.Empty<SchoolFear>();
+
         private Camera _cam;
         // P1.2: the tour's fish-repelling bubble (zero radius = nobody is diving).
         private Vector3 _repulsorPos;
         private float   _repulsorRadius;
+        // C5: the diver's own speed, which is what decides whether the reef tolerates them.
+        private Vector3 _prevCamPos;
+        private float   _camSpeed;
+        private bool    _camSeen;
+        private float   _panicLogAt;
         private Mesh   _fishMesh;
         private int    _fishCount;
         private int    _whaleCount;
@@ -150,6 +178,8 @@ namespace DiveMap.Runtime.Marine
             _schools = new NativeArray<SchoolParams>(schools.Count, Allocator.Persistent);
             _alloc = true;
 
+            _fear = new SchoolFear[schools.Count];
+
             var rng = new Unity.Mathematics.Random(0x51AD5EED);
             int cursor = 0;
             for (int si = 0; si < schools.Count; si++)
@@ -183,7 +213,38 @@ namespace DiveMap.Runtime.Marine
                     Count     = s.Count,
                     Think     = 1,
                     Avoid     = 1,
+                    Panic     = 0f,
+                    DartMul   = 1f,
                 };
+
+                // C5 — who this school is, and where it would hide. The web re-scans for cover
+                // every 1.2 s (shelterSense); here the obstacles are static for the life of the
+                // map, so the nearest one is resolved once and never scanned again.
+                SpeciesGenome.Genome gen = SpeciesGenome.For(s.Species);
+                var fear = new SchoolFear
+                {
+                    Anchor0 = s.Anchor,
+                    HomeR0  = homeR,
+                    Rank    = gen.Rank,
+                    Diet    = gen.Diet,
+                    IsPod   = s.IsPod,
+                };
+                float bestD2 = float.MaxValue;
+                for (int oi = 0; oi < obN; oi++)
+                {
+                    ObstacleBox b = _obstacles[oi];
+                    Vector3 c = new Vector3((b.Min.x + b.Max.x) * 0.5f,
+                                            (b.Min.y + b.Max.y) * 0.5f,
+                                            (b.Min.z + b.Max.z) * 0.5f);
+                    float ddx = c.x - s.Anchor.x, ddz = c.z - s.Anchor.z;
+                    float d2 = ddx * ddx + ddz * ddz;
+                    if (d2 >= bestD2) continue;
+                    bestD2 = d2;
+                    fear.HasShelter = true;
+                    fear.Shelter = c;
+                    fear.ShelterR = b.ObsR;
+                }
+                _fear[si] = fear;
 
                 // Material (clone the proven DM_Standard so instancing renders in the QC shot).
                 Material mat = baseMat != null ? new Material(baseMat) : new Material(Shader.Find("Standard"));
@@ -312,6 +373,22 @@ namespace DiveMap.Runtime.Marine
             float t = Time.time;
             Vector3 camPos = _cam != null ? _cam.transform.position : Vector3.zero;
 
+            // C5 — how fast the diver is moving. This single number decides whether the reef
+            // tolerates them or scatters (FleeMath.DiverPanicSpeed). Smoothed, because one long
+            // frame on a phone must not read as a charge.
+            if (_camSeen && Time.deltaTime > 1e-4f)
+            {
+                // HORIZONTAL only, matching the web (builder.html:3940 —
+                // hypot(dx,dz)/(0.016·FS)); a diver dropping straight down past a shoal is not
+                // charging it.
+                float mx = camPos.x - _prevCamPos.x, mz = camPos.z - _prevCamPos.z;
+                float inst = Mathf.Sqrt(mx * mx + mz * mz) / Time.deltaTime;
+                _camSpeed = Mathf.Lerp(_camSpeed, inst, 0.25f);
+            }
+            _prevCamPos = camPos;
+            _camSeen = true;
+            bool diverActive = _repulsorRadius > 0.01f;   // the tour sets the bubble; nothing else does
+
             // Per-school LOD: decide think/avoid this frame from camera distance.
             for (int si = 0; si < _schools.Length; si++)
             {
@@ -321,6 +398,7 @@ namespace DiveMap.Runtime.Marine
                 int phase = si < _render.Count ? _render[si].PhaseOffset : 0;
                 sp.Think = (byte)(((_frame + phase) % stepEvery == 0) ? 1 : 0);
                 sp.Avoid = (byte)(MarineMath.AvoidanceActiveForDistance(dist) ? 1 : 0);
+                ApplyFear(si, ref sp, camPos, diverActive, t);
                 _schools[si] = sp;
             }
 
@@ -425,6 +503,111 @@ namespace DiveMap.Runtime.Marine
                 float avg = _accumN > 0 ? _accumMs / _accumN : 0f;
                 Debug.Log($"[Marine] schools={_render.Count} fish={_fishCount} whale={_whaleCount} avgFrameMs={avg:F1}");
                 _accumMs = 0f; _accumN = 0;
+            }
+        }
+
+        /// <summary>
+        /// C5 — work out what school <paramref name="si"/> is afraid of this frame and translate
+        /// that into the four fields the job consumes. Everything numeric comes from
+        /// <see cref="FleeMath"/>; this method only decides WHICH threat applies.
+        ///
+        /// Order matters and mirrors the web (builder.html:1688-1702): a real predator is checked
+        /// first, and the diver is only considered when the predator produced no fear at all.
+        /// </summary>
+        private void ApplyFear(int si, ref SchoolParams sp, Vector3 camPos, bool diverActive, float t)
+        {
+            if (si >= _fear.Length) return;
+            SchoolFear fx = _fear[si];
+
+            // Nearest school that actually frightens this one. Schools are few (the demo map has
+            // ten), so the O(n²) scan costs nothing and needs no throttling — unlike the web,
+            // which scans every placed animal and so re-senses only every 0.7 s.
+            bool hasPred = false;
+            float predDist = float.MaxValue;
+            Vector3 predPos = Vector3.zero;
+            for (int oj = 0; oj < _fear.Length; oj++)
+            {
+                if (oj == si) continue;
+                SchoolFear other = _fear[oj];
+                if (!FleeMath.IsThreat(fx.Rank, other.Rank, other.Diet)) continue;
+                // The AUTHORED anchor, not the sim's: that one is dragged toward cover every
+                // frame, so measuring against it would make two frightened schools chase each
+                // other's fear around the map.
+                Vector3 op = other.Anchor0;
+                float d = Mathf.Sqrt((op.x - fx.Anchor0.x) * (op.x - fx.Anchor0.x) +
+                                     (op.z - fx.Anchor0.z) * (op.z - fx.Anchor0.z));
+                if (d >= predDist) continue;
+                predDist = d; predPos = op; hasPred = true;
+            }
+
+            float diverDist = Mathf.Sqrt((camPos.x - fx.Anchor0.x) * (camPos.x - fx.Anchor0.x) +
+                                         (camPos.z - fx.Anchor0.z) * (camPos.z - fx.Anchor0.z));
+
+            float panic = (float)FleeMath.SchoolPanic(
+                predDist, hasPred,
+                diverDist, _camSpeed, diverActive,
+                fx.HomeR0, sp.FishLen);
+
+            // Which of the two is the thing to swim away from — the same test that produced the
+            // panic, so the shoal never bursts away from something that did not scare it.
+            bool predWon = hasPred &&
+                           FleeMath.PanicLevel(predDist, FleeMath.PredatorPanicRadius(fx.HomeR0, sp.FishLen)) > 0.0;
+            sp.Threat = ToF3(predWon ? predPos : camPos);
+
+            sp.Panic   = panic;
+            sp.FleeW   = (float)FleeMath.FleeSteerWeight(panic, fx.HomeR0, sp.FishLen);
+            sp.DartMul = (float)FleeMath.DartSpeedScale(panic);
+
+            // Bait ball: held for a couple of seconds past the scare so the shoal does not
+            // snap back open the instant the diver slows down (web :1697 modeUntil).
+            if (FleeMath.ShouldBallUp(panic, fx.IsPod))
+                fx.BallUntil = t + (float)FleeMath.BallHoldSeconds;
+            bool balled = t < fx.BallUntil;
+            float wantR = balled
+                ? (float)FleeMath.BallHomeRadius(fx.HomeR0, Mathf.Max(panic, (float)FleeMath.BallUpPanic))
+                : fx.HomeR0;
+            // Eased for the same reason as the home itself: ClampHome squeezes every fish inside
+            // this radius, so dropping it 45 % in a single frame would yank the outer ring of the
+            // shoal inward all at once. A bait ball forms fast, not instantly.
+            if (fx.HomeRNow <= 0f) fx.HomeRNow = fx.HomeR0;
+            fx.HomeRNow = Mathf.MoveTowards(fx.HomeRNow, wantR, sp.MaxSpeed * Mathf.Max(Time.deltaTime, 1e-4f));
+            sp.HomeR = fx.HomeRNow;
+
+            // Run for cover: drag the shoal's home toward the nearest structure in proportion to
+            // fear. Fish already at the reef stay put rather than piling into it.
+            Vector3 want = fx.Anchor0;
+            if (fx.HasShelter && panic > 0.001f)
+            {
+                float toCover = Mathf.Sqrt((fx.Shelter.x - want.x) * (fx.Shelter.x - want.x) +
+                                           (fx.Shelter.z - want.z) * (fx.Shelter.z - want.z));
+                if (!FleeMath.AtShelter(toCover, fx.ShelterR))
+                {
+                    float k = (float)FleeMath.ShelterLerp(panic, true);
+                    want.x = Mathf.Lerp(want.x, fx.Shelter.x, k);
+                    want.z = Mathf.Lerp(want.z, fx.Shelter.z, k);
+                }
+            }
+
+            // …but the home is EASED there and back, never snapped. ClampHome pulls every fish
+            // into a circle around this point, so moving it instantly would teleport the whole
+            // shoal — which is precisely what happens the moment a charging diver stops and the
+            // panic falls to zero in a few frames. Capping the home's own speed at the fish's
+            // cruise speed makes that impossible: the shoal can never be dragged faster than it
+            // could have swum.
+            if (!fx.HomeInit) { fx.HomeNow = fx.Anchor0; fx.HomeInit = true; }
+            fx.HomeNow = Vector3.MoveTowards(fx.HomeNow, want, sp.MaxSpeed * Mathf.Max(Time.deltaTime, 1e-4f));
+            sp.Anchor = ToF3(fx.HomeNow);
+
+            _fear[si] = fx;
+
+            // One line a second while anything is frightened — the QC log is how a reviewer
+            // confirms this ran at all, and silence here was exactly how the wallet stayed
+            // broken for three rounds.
+            if (panic > 0.05f && t > _panicLogAt)
+            {
+                _panicLogAt = t + 1f;
+                Debug.Log($"[Flee] school={si} panic={panic:F2} src={(predWon ? "predator" : "diver")} " +
+                          $"camSpeed={_camSpeed:F1} homeR={sp.HomeR:F0}/{fx.HomeR0:F0} balled={balled}");
             }
         }
 

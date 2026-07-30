@@ -151,7 +151,10 @@ namespace DiveMap.Runtime
                 }
 
                 int? server = ReadCoins(req.downloadHandler.text);
-                if (Wallet.NeedsSeed(server.HasValue == false))
+                // Takes the parsed response itself — the bool overload was inverted here once
+                // (`NeedsSeed(server.HasValue == false)`), which re-seeded known players and threw
+                // on unknown ones (QC run 30552624505, InvalidOperationException in Load).
+                if (Wallet.NeedsSeed(server))
                 {
                     // A player this server has never seen: publish the local balance once, as an
                     // absolute, so they do not restart at zero on a new device.
