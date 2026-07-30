@@ -59,6 +59,10 @@ tools/                          (สคริปต์ XR-LOD pipeline)
 9. repo maps (`/root/projects/siamdive-maps`, branch **master**): แก้แล้ว push GitHub **ไม่ deploy อัตโนมัติ** — ต้อง `vercel deploy --prod --yes --token <ดู memory reference_vercel_credentials>` · commit เฉพาะไฟล์ตัวเอง (additive)
 10. เครื่อง VPS RAM 8GB — ห้ามรันงานหนักขนาน · `sleep` ระดับบนถูก block ในบาง harness → ใช้ curl --retry / background loop
 
+## 4.5 ⚠️ อ่าน `PARITY.md` ก่อนประเมินความคืบหน้า
+รายการฟีเจอร์เว็บทั้ง 86 ข้อเทียบแอป (ดึงจาก `id=`/`title=`/`function` ใน builder.html จริง) — **ตอนนี้ ~21%**
+WO ใน DESIGN_DOC **ไม่ครอบคลุม** ทัวร์โดรน/เกมขยะ-เหรียญ/เข็มทิศ/มินิแมพ/ถ่ายรูป/อัดวิดีโอ/เสียง/heatmap/warp/pins/เชือก/บัญชี-สิทธิ์/รายการโปรดออฟไลน์ → ห้ามรายงาน % จาก WO เพียวๆ
+
 ## 5. งานถัดไปทันที (คิวเรียงแล้ว)
 ### 5.1 ✅ ปิดแล้ว — WO-XR-03 (2026-07-28)
 formation ตามสูตรเว็บ + วาฬ GLB จริง + QC fixes (ครีบดำ/gloss/heading log) · commit `a7d12f8` → `f31d9fc`
