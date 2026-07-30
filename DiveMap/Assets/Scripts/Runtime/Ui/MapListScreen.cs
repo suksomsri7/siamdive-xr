@@ -85,27 +85,30 @@ namespace DiveMap.Runtime.Ui
             if (root == null) root = gameObject.AddComponent<RectTransform>();
             UiKit.Stretch(root);
 
-            UiKit.MakePanel(transform, "Bg", UiKit.ScreenBg);
+            // The web shows every list as a bottom SHEET over the live map (#sheet), not as a
+            // full-screen page — you keep seeing where you are while you choose.
+            RectTransform host = UiKit.MakeSheet(root, "MapSheet",
+                                                 () => CloseRequested?.Invoke());
 
             // Header: title + close.
-            Text title = UiKit.MakeText(transform, "Title", UiStrings.Tr("รายการแมพ"), 44,
+            Text title = UiKit.MakeText(host, "Title", UiStrings.Tr("รายการแมพ"), 44,
                                         TextAnchor.MiddleLeft, UiKit.TextMain);
             UiKit.TopRow(title.rectTransform, 20f, HeaderHeight - 20f, SidePad, 220f);
 
-            Button close = UiKit.MakeButton(transform, "CloseButton", UiStrings.Tr("ปิด"), 32,
+            Button close = UiKit.MakeButton(host, "CloseButton", UiStrings.Tr("ปิด"), 32,
                                             UiKit.TealDim, UiKit.TextMain,
                                             () => CloseRequested?.Invoke());
             UiKit.Anchor(close.GetComponent<RectTransform>(), new Vector2(1f, 1f),
                          new Vector2(170f, 76f), new Vector2(-SidePad, -22f));
 
             // Search box (debounced, server-side).
-            _search = UiKit.MakeInput(transform, "Search", UiStrings.Tr("ค้นหาแมพ"), 32);
+            _search = UiKit.MakeInput(host, "Search", UiStrings.Tr("ค้นหาแมพ"), 32);
             UiKit.TopRow(_search.GetComponent<RectTransform>(), HeaderHeight + 16f, SearchHeight,
                          SidePad, SidePad);
             _search.onValueChanged.AddListener(OnSearchChanged);
 
             // Scrollable card list.
-            _scroll = UiKit.MakeScroll(transform, "List", out _content);
+            _scroll = UiKit.MakeScroll(host, "List", out _content);
             var srt = _scroll.GetComponent<RectTransform>();
             srt.anchorMin = Vector2.zero;
             srt.anchorMax = Vector2.one;
@@ -115,7 +118,7 @@ namespace DiveMap.Runtime.Ui
             _scroll.onValueChanged.AddListener(OnScrolled);
 
             // Status (loading / empty / error) + retry, centred over the list area.
-            _status = UiKit.MakeText(transform, "Status", "", 34, TextAnchor.MiddleCenter, UiKit.TextDim);
+            _status = UiKit.MakeText(host, "Status", "", 34, TextAnchor.MiddleCenter, UiKit.TextDim);
             var strt = _status.rectTransform;
             strt.anchorMin = new Vector2(0.5f, 0.5f);
             strt.anchorMax = new Vector2(0.5f, 0.5f);
@@ -123,7 +126,7 @@ namespace DiveMap.Runtime.Ui
             strt.sizeDelta = new Vector2(880f, 120f);
             strt.anchoredPosition = new Vector2(0f, 40f);
 
-            Button retry = UiKit.MakeButton(transform, "RetryButton", UiStrings.Tr("ลองใหม่"), 32,
+            Button retry = UiKit.MakeButton(host, "RetryButton", UiStrings.Tr("ลองใหม่"), 32,
                                             UiKit.TealDim, UiKit.TextMain, () => Reload(_query));
             _retryButton = retry.gameObject;
             var rrt = retry.GetComponent<RectTransform>();

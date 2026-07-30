@@ -284,6 +284,53 @@ namespace DiveMap.Runtime.Ui
         private static readonly System.Collections.Generic.Dictionary<int, Sprite> _rounded =
             new System.Collections.Generic.Dictionary<int, Sprite>();
 
+        /// <summary>
+        /// The web's bottom sheet (#sheet, builder.html:120-127): docked to the bottom edge, full
+        /// width, rounded 24 px top corners, at most 72% of the viewport tall, with a 42×4 grip.
+        /// The map stays visible behind it — that is the whole point of a sheet over a full-screen
+        /// page, and it is how the web presents every list it has.
+        ///
+        /// Returns the node to build content into; the scrim behind it closes the sheet, matching
+        /// the web where a tap outside the sheet dismisses it.
+        /// </summary>
+        public static RectTransform MakeSheet(RectTransform layer, string name,
+                                              UnityEngine.Events.UnityAction onDismiss,
+                                              float maxHeightFraction = 0.72f)
+        {
+            if (layer == null) return null;
+
+            Button scrim = MakeButton(layer, name + "Scrim", null, 0, new Color(0f, 0f, 0f, 0.42f),
+                                      TextMain, onDismiss);
+            Stretch(scrim.GetComponent<RectTransform>());
+
+            Image sheet = MakeRounded(layer, name, PanelBg, 24f);
+            RectTransform rt = sheet.rectTransform;
+            rt.anchorMin = new Vector2(0f, 0f);
+            rt.anchorMax = new Vector2(1f, 0f);
+            rt.pivot = new Vector2(0.5f, 0f);
+            // The sprite's radius is only on the top corners visually because the bottom is off-
+            // screen: the sheet is 24 px taller than its content and anchored below the edge.
+            rt.sizeDelta = new Vector2(0f, Mathf.Max(Css(220f), Screen.height / CanvasScale * maxHeightFraction));
+            rt.anchoredPosition = new Vector2(0f, -Css(24f));
+
+            // Grip: 42×4, radius 3, white 28% (builder.html:131).
+            Image grip = MakeRounded(sheet.transform, "Grip", new Color(1f, 1f, 1f, 0.28f), 3f);
+            grip.raycastTarget = false;
+            RectTransform grt = grip.rectTransform;
+            grt.anchorMin = new Vector2(0.5f, 1f);
+            grt.anchorMax = new Vector2(0.5f, 1f);
+            grt.pivot = new Vector2(0.5f, 1f);
+            grt.sizeDelta = new Vector2(Css(42f), Css(4f));
+            grt.anchoredPosition = new Vector2(0f, -Css(10f));
+
+            // Content lives inside the sheet, below the grip and above the home-gesture area.
+            RectTransform content = MakeNode(sheet.transform, "Content");
+            Stretch(content);
+            content.offsetMin = new Vector2(0f, Css(24f) + Css(20f));   // sheet overshoot + padding
+            content.offsetMax = new Vector2(0f, -Css(22f));             // clear the grip
+            return content;
+        }
+
         /// <summary>Rounded panel (fill) with the web's radius, ready for 9-slicing.</summary>
         public static Image MakeRounded(Transform parent, string name, Color color, float cssRadius)
         {

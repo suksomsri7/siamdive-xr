@@ -50,7 +50,9 @@ namespace DiveMap.Core
                 { "◀ หัน",                 "◀ Turn" },
                 { "หัน ▶",                 "Turn ▶" },
                 { "หน้า",                  "Fwd" },
-                { "ถอย",                   "Back" },
+                { "ถอย",                   "Rev" },   // NOT "Back": ย้อนกลับ already owns that, and
+                                                        // UiStringsTests enforces unique English
+                                                        // values so ToLang stays idempotent
                 { "◀ สไลด์",               "◀ Slide" },
                 { "สไลด์ ▶",               "Slide ▶" },
                 { "เปิดเสียง",             "Unmute" },

@@ -42,17 +42,9 @@ namespace DiveMap.Runtime.Ui
             if (self == null) self = gameObject.AddComponent<RectTransform>();
             UiKit.Stretch(self);
 
-            Button scrim = UiKit.MakeButton(self, "Scrim", null, 0, UiKit.Scrim,
-                                            UiKit.TextMain, RaiseClose);
-            UiKit.Stretch(scrim.GetComponent<RectTransform>());
-
-            Image card = UiKit.MakePanel(self, "Card", UiKit.PanelBg);
-            RectTransform rt = card.rectTransform;
-            rt.anchorMin = new Vector2(0.5f, 0.5f);
-            rt.anchorMax = new Vector2(0.5f, 0.5f);
-            rt.pivot = new Vector2(0.5f, 0.5f);
-            rt.sizeDelta = new Vector2(900f, 900f);
-            rt.anchoredPosition = Vector2.zero;
+            // Settings is a bottom sheet like every other list on the web (#sheet), not a floating
+            // card: same dismiss gesture, same corner radius, map still visible behind it.
+            RectTransform rt = UiKit.MakeSheet(self, "SettingsSheet", RaiseClose, 0.62f);
 
             // Row heights stay well above fontSize × 1.51 (NotoSansThai's line height):
             // legacy Text DROPS a line that does not fit its rect instead of clipping it.

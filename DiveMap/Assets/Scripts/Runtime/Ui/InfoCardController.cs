@@ -79,13 +79,24 @@ namespace DiveMap.Runtime.Ui
             _nav = nav;
             _layer = UiKit.MakeNode(parent, "CardLayer");
 
-            Image card = UiKit.MakePanel(_layer, "Card", UiKit.PanelBg);
+            // Rounded top corners + a grip, like the web's sheet — a square slab pushed up from
+            // the bottom edge is the one thing here that never looked like the same product.
+            Image card = UiKit.MakeRounded(_layer, "Card", UiKit.PanelBg, 24f);
             RectTransform rt = card.rectTransform;
             rt.anchorMin = new Vector2(0f, 0f);
             rt.anchorMax = new Vector2(1f, 0f);
             rt.pivot = new Vector2(0.5f, 0f);
-            rt.sizeDelta = new Vector2(-48f, CardHeight);
-            rt.anchoredPosition = new Vector2(0f, 24f);
+            rt.sizeDelta = new Vector2(0f, CardHeight);
+            rt.anchoredPosition = Vector2.zero;
+
+            Image grip = UiKit.MakeRounded(rt, "Grip", new Color(1f, 1f, 1f, 0.28f), 3f);
+            grip.raycastTarget = false;
+            RectTransform grt = grip.rectTransform;
+            grt.anchorMin = new Vector2(0.5f, 1f);
+            grt.anchorMax = new Vector2(0.5f, 1f);
+            grt.pivot = new Vector2(0.5f, 1f);
+            grt.sizeDelta = new Vector2(UiKit.Css(42f), UiKit.Css(4f));
+            grt.anchoredPosition = new Vector2(0f, -UiKit.Css(10f));
 
             // Row heights: NotoSansThai renders one line at ~1.51 × fontSize (two levels
             // of tone marks above the base glyph plus a below-vowel). Legacy Text does not
