@@ -183,6 +183,74 @@ namespace DiveMap.Tests
             Assert.AreEqual(100f, DroneFlight.DepthMetres(-1000f, Water), 0.01f, "clamped at 100");
         }
 
+        // ── D9: random spawn (builder.html:3722) ─────────────────────────────────
+
+        [Test]
+        public void RandomSpawn_StaysInsideTheWebsAnnulus()
+        {
+            var c = new DroneFlight.Vec3(0f, 0f, 0f);
+            const float R = 200f;
+            for (int i = 0; i <= 20; i++)
+            {
+                float u = i / 20f;
+                DroneFlight.Vec3 p = DroneFlight.RandomSpawn(c, R, 0f, 240f, u, u);
+                float d = (float)System.Math.Sqrt(p.X * p.X + p.Z * p.Z);
+                Assert.GreaterOrEqual(d, R * 0.2f - 0.01f, "never dead centre — that is inside the wreck");
+                Assert.LessOrEqual(d, R * 0.8f + 0.01f, "never out at the empty rim either");
+            }
+        }
+
+        [Test]
+        public void RandomSpawn_NeverStartsYouBuriedInTheSand()
+        {
+            // A spawn at sand level opens the dive with the camera inside the seabed, which reads
+            // as a broken map. The web's floor is seabedTop + 18.
+            var c = new DroneFlight.Vec3(0f, 0f, 0f);
+            DroneFlight.Vec3 p = DroneFlight.RandomSpawn(c, 200f, 100f, 40f, 0.3f, 0.5f);
+            Assert.AreEqual(118f, p.Y, 1e-4f, "seabed 100 + 18 wins over waterLevel/2 = 20");
+
+            DroneFlight.Vec3 q = DroneFlight.RandomSpawn(c, 200f, 0f, 240f, 0.3f, 0.5f);
+            Assert.AreEqual(120f, q.Y, 1e-4f, "…and waterLevel/2 wins when the sand is far below");
+        }
+
+        [Test]
+        public void RandomSpawn_IsDeterministicForTheSameDraw()
+        {
+            var c = new DroneFlight.Vec3(5f, 0f, -7f);
+            DroneFlight.Vec3 a = DroneFlight.RandomSpawn(c, 120f, 10f, 200f, 0.42f, 0.61f);
+            DroneFlight.Vec3 b = DroneFlight.RandomSpawn(c, 120f, 10f, 200f, 0.42f, 0.61f);
+            Assert.AreEqual(a.X, b.X, 1e-6f);
+            Assert.AreEqual(a.Z, b.Z, 1e-6f);
+        }
+
+        [Test]
+        public void RandomSpawn_IsCentredOnTheMap_NotOnTheOrigin()
+        {
+            var c = new DroneFlight.Vec3(1000f, 0f, -500f);
+            DroneFlight.Vec3 p = DroneFlight.RandomSpawn(c, 100f, 0f, 200f, 0f, 0f);
+            float d = (float)System.Math.Sqrt((p.X - c.X) * (p.X - c.X) + (p.Z - c.Z) * (p.Z - c.Z));
+            Assert.AreEqual(20f, d, 0.01f);
+        }
+
+        [Test]
+        public void RandomSpawn_ToleratesADrawOutsideZeroToOne()
+        {
+            var c = new DroneFlight.Vec3(0f, 0f, 0f);
+            DroneFlight.Vec3 p = DroneFlight.RandomSpawn(c, 100f, 0f, 200f, 5f, -3f);
+            float d = (float)System.Math.Sqrt(p.X * p.X + p.Z * p.Z);
+            Assert.GreaterOrEqual(d, 20f - 0.01f);
+            Assert.LessOrEqual(d, 80f + 0.01f);
+        }
+
+        [Test]
+        public void YawToward_PointsAtTheMiddle()
+        {
+            var from = new DroneFlight.Vec3(10f, 0f, 0f);
+            var mid = new DroneFlight.Vec3(0f, 0f, 0f);
+            float yaw = DroneFlight.YawToward(from, mid);
+            Assert.AreEqual((float)System.Math.PI, System.Math.Abs(yaw), 1e-4f, "due −X");
+        }
+
         private static float Mathf90() => (float)(System.Math.PI / 2.0);
     }
 }

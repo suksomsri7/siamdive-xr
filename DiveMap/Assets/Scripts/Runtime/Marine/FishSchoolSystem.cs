@@ -383,7 +383,13 @@ namespace DiveMap.Runtime.Marine
                 // charging it.
                 float mx = camPos.x - _prevCamPos.x, mz = camPos.z - _prevCamPos.z;
                 float inst = Mathf.Sqrt(mx * mx + mz * mz) / Time.deltaTime;
-                _camSpeed = Mathf.Lerp(_camSpeed, inst, 0.25f);
+                // A TELEPORT is not a charge. Entering the tour moves the camera from the orbit
+                // rig to the dive spawn in one frame; the QC log caught that as camSpeed=467 u/s
+                // (the drone's own top speed is 30) and the whole reef panicked at a diver who had
+                // not moved. Anything past a few times the drone's maximum is a jump, so the
+                // history is discarded rather than blended.
+                if (inst > DroneFlight.Speed * 3f) _camSpeed = 0f;
+                else _camSpeed = Mathf.Lerp(_camSpeed, inst, 0.25f);
             }
             _prevCamPos = camPos;
             _camSeen = true;

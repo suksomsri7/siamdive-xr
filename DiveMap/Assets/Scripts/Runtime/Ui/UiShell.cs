@@ -360,6 +360,10 @@ namespace DiveMap.Runtime.Ui
         /// </summary>
         public void OpenWarpPicker()
         {
+            // Remember that this exit was a warp, so arriving at the destination puts the diver
+            // straight back in the water at a random point rather than at a menu — the web's
+            // warp lands you IN the next map, not looking at it.
+            TourController.ArrivingByWarp = true;
             if (ModeManager.Instance != null) ModeManager.Instance.Exit();
             OpenMapList();
         }

@@ -138,11 +138,14 @@ namespace DiveMap.Runtime.Ui
             _left = MakeDim(root, "DimLeft");
             _right = MakeDim(root, "DimRight");
 
-            _ring = UiKit.MakeRounded(root, "Spotlight", new Color(0f, 0f, 0f, 0f), 16f);
+            // A real RING, not an Outline component: Outline duplicates the graphic's own mesh, so
+            // on a fully transparent image it draws a transparent copy — the QC shot came back with
+            // the spotlight border missing entirely. RoundedSprite's border argument rasterises the
+            // ring into the sprite, which is visible whatever the fill is.
+            _ring = UiKit.MakePanel(root, "Spotlight", Ring);
+            _ring.sprite = UiKit.RoundedSprite(16f, 2f);
+            _ring.type = Image.Type.Sliced;
             _ring.raycastTarget = false;
-            var outline = _ring.gameObject.AddComponent<Outline>();
-            outline.effectColor = Ring;
-            outline.effectDistance = new Vector2(2f, 2f);
             _ring.rectTransform.anchorMin = new Vector2(0f, 0f);
             _ring.rectTransform.anchorMax = new Vector2(0f, 0f);
             _ring.rectTransform.pivot = new Vector2(0.5f, 0.5f);
@@ -157,12 +160,11 @@ namespace DiveMap.Runtime.Ui
             trt.sizeDelta = new Vector2(w, UiKit.Css(120f));
             _tip = trt;
 
-            Image rim = UiKit.MakeRounded(trt, "TipRim", new Color(0f, 0f, 0f, 0f), 13f);
+            Image rim = UiKit.MakePanel(trt, "TipRim", TipRim);
+            rim.sprite = UiKit.RoundedSprite(13f, 1f);
+            rim.type = Image.Type.Sliced;
             rim.raycastTarget = false;
             UiKit.Stretch(rim.rectTransform);
-            var rimOutline = rim.gameObject.AddComponent<Outline>();
-            rimOutline.effectColor = TipRim;
-            rimOutline.effectDistance = new Vector2(1f, 1f);
 
             float pad = UiKit.Css(13f);
             int tFont = UiKit.CssFont(14f);
@@ -209,9 +211,13 @@ namespace DiveMap.Runtime.Ui
             skrt.pivot = new Vector2(1f, 0f);
             skrt.sizeDelta = new Vector2(UiKit.Css(72f), btnH);
             skrt.anchoredPosition = new Vector2(-(pad + UiKit.Css(86f)), UiKit.Css(12f));
-            var skipOutline = skip.gameObject.AddComponent<Outline>();
-            skipOutline.effectColor = SkipRim;
-            skipOutline.effectDistance = new Vector2(1f, 1f);
+            Image skipImg = skip.GetComponent<Image>();
+            if (skipImg != null)
+            {
+                skipImg.color = SkipRim;
+                skipImg.sprite = UiKit.RoundedSprite(8f, 1f);
+                skipImg.type = Image.Type.Sliced;
+            }
 
             _next = UiKit.MakeButton(trt, "Next", UiStrings.Tr("ถัดไป"), sFont, NextBg, NextTxt, Next);
             RectTransform nrt = _next.GetComponent<RectTransform>();

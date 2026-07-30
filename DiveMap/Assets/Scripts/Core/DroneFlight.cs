@@ -38,6 +38,37 @@ namespace DiveMap.Core
         public const float LookAhead = 12f;     // camera.lookAt distance
         public const float PitchFromLift = 0.14f;
 
+        /// <summary>
+        /// D9 — where a player who did not choose lands. The web's <c>enterTour(randomStart)</c>
+        /// (builder.html:3722) drops them at a random bearing, somewhere between 20 % and 80 % of
+        /// the map radius out, and at least 18 units above the sand:
+        ///
+        ///   <c>rr = mR·(0.2 + rnd·0.6)</c> · <c>y = max(seabedTop + 18, waterLevel·0.5)</c>
+        ///
+        /// The inner 20 % is excluded on purpose — spawning dead centre puts you inside the wreck
+        /// every time — and the outer 20 % because the edge of a map is nothing to look at. The
+        /// height floor matters more than it looks: a spawn at sand level starts the dive with the
+        /// camera buried, which reads as a broken map rather than a deep one.
+        ///
+        /// Pure: the caller supplies the two random numbers, so a QC run can pin them.
+        /// </summary>
+        public static Vec3 RandomSpawn(Vec3 centre, float mapRadius, float seabedTopY, float waterLevel,
+                                       float rndAngle01, float rndRadius01)
+        {
+            float a = Clamp01(rndAngle01) * 6.283185f;
+            float rr = mapRadius * (0.2f + Clamp01(rndRadius01) * 0.6f);
+            float x = centre.X + (float)Math.Cos(a) * rr;
+            float z = centre.Z + (float)Math.Sin(a) * rr;
+            float y = Math.Max(seabedTopY + 18f, waterLevel * 0.5f);
+            return new Vec3(x, y, z);
+        }
+
+        /// <summary>Face the middle of the map from wherever you surfaced.</summary>
+        public static float YawToward(Vec3 from, Vec3 target)
+            => (float)Math.Atan2(target.Z - from.Z, target.X - from.X);
+
+        private static float Clamp01(float v) => v < 0f ? 0f : (v > 1f ? 1f : v);
+
         public struct Vec3
         {
             public float X, Y, Z;

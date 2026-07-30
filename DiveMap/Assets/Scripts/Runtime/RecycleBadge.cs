@@ -44,20 +44,48 @@ namespace DiveMap.Runtime
             return go;
         }
 
+        /// <summary>
+        /// A DISC, not a quad. The badge is round, so cutting the circle out of the mesh rather
+        /// than out of the alpha channel means the material never needs transparency — which in
+        /// turn means it can be the unlit glTF material without touching a blend mode or enabling
+        /// a shader keyword (both of which this project has been bitten by: keywords get stripped
+        /// from the player and the material comes back magenta).
+        /// </summary>
         private static Mesh Quad()
         {
             if (_quad != null) return _quad;
-            float h = WorldSize * 0.5f;
-            _quad = new Mesh { name = "RecycleBadgeQuad" };
-            _quad.vertices = new[]
+            const int seg = 40;
+            float r = WorldSize * 0.5f;
+
+            var verts = new Vector3[seg + 1];
+            var uvs = new Vector2[seg + 1];
+            verts[0] = Vector3.zero;
+            uvs[0] = new Vector2(0.5f, 0.5f);
+            for (int i = 0; i < seg; i++)
             {
-                new Vector3(-h, -h, 0f), new Vector3(h, -h, 0f),
-                new Vector3(h, h, 0f),   new Vector3(-h, h, 0f),
-            };
-            _quad.uv = new[] { new Vector2(0, 0), new Vector2(1, 0), new Vector2(1, 1), new Vector2(0, 1) };
+                float a = i / (float)seg * Mathf.PI * 2f;
+                verts[i + 1] = new Vector3(Mathf.Cos(a) * r, Mathf.Sin(a) * r, 0f);
+                uvs[i + 1] = new Vector2(0.5f + Mathf.Cos(a) * 0.5f, 0.5f + Mathf.Sin(a) * 0.5f);
+            }
+
             // Both faces: Billboard turns it to the camera, but a piece of litter tumbling as it
             // sinks can still present the back for a frame.
-            _quad.triangles = new[] { 0, 2, 1, 0, 3, 2, 0, 1, 2, 0, 2, 3 };
+            var tris = new int[seg * 6];
+            int t = 0;
+            for (int i = 0; i < seg; i++)
+            {
+                int b = 1 + i, c = 1 + (i + 1) % seg;
+                tris[t++] = 0; tris[t++] = b; tris[t++] = c;
+                tris[t++] = 0; tris[t++] = c; tris[t++] = b;
+            }
+
+            _quad = new Mesh { name = "RecycleBadgeDisc" };
+            _quad.vertices = verts;
+            _quad.uv = uvs;
+            _quad.triangles = tris;
+            var n = new Vector3[verts.Length];
+            for (int i = 0; i < n.Length; i++) n[i] = Vector3.back;
+            _quad.normals = n;
             _quad.RecalculateBounds();
             return _quad;
         }
@@ -65,18 +93,23 @@ namespace DiveMap.Runtime
         private static Material BadgeMaterial()
         {
             if (_mat != null) return _mat;
-            Material src = Resources.Load<Material>("DM_StandardTransparent");
+
+            // UNLIT. The first QC round used DM_StandardTransparent and the badge came back a dark
+            // grey disc at depth — a gameplay marker that fades with the fog is not a marker. The
+            // glTF unlit material is already in the build (every model uses this family), so no
+            // new shader can be stripped.
+            Material src = Resources.Load<Material>("DM_GltfUnlit")
+                        ?? Resources.Load<Material>("DM_Standard");
             _mat = src != null ? new Material(src) : new Material(Shader.Find("Standard"));
-            if (_mat.HasProperty("_MainTex")) _mat.SetTexture("_MainTex", BadgeTexture());
+
+            Texture2D tex = BadgeTexture();
+            if (_mat.HasProperty("baseColorTexture")) _mat.SetTexture("baseColorTexture", tex);
+            else if (_mat.HasProperty("_MainTex")) _mat.SetTexture("_MainTex", tex);
+
+            if (_mat.HasProperty("baseColorFactor")) _mat.SetColor("baseColorFactor", Color.white);
             _mat.color = Color.white;
-            // Unlit-ish: a tag that goes dark at depth cannot do its job.
             if (_mat.HasProperty("_Glossiness")) _mat.SetFloat("_Glossiness", 0f);
             if (_mat.HasProperty("_Metallic")) _mat.SetFloat("_Metallic", 0f);
-            if (_mat.HasProperty("_ZWrite")) _mat.SetFloat("_ZWrite", 0f);
-            // The web draws it with depthTest off; the closest safe equivalent here is the overlay
-            // queue, which keeps it in front of the seabed and the wreck without disabling the
-            // depth buffer for everything sharing the material.
-            _mat.renderQueue = 4000;
             return _mat;
         }
 
@@ -103,7 +136,9 @@ namespace DiveMap.Runtime
                 float dy = (Size - fy) - cy, dx = fx - cx;
                 float d = Mathf.Sqrt(dx * dx + dy * dy);
 
-                Color c = new Color(0f, 0f, 0f, 0f);
+                // Outside the disc is never drawn (the MESH ends there), so the corner colour only
+                // matters for the bilinear filter at the rim — green keeps it from fringing black.
+                Color c = Green;
                 if (d <= discR + rimW * 0.5f)
                 {
                     c = d >= discR - rimW * 0.5f ? Color.white : Green;

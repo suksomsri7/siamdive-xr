@@ -254,6 +254,16 @@ namespace DiveMap.Runtime
             TourController.Configure(result);
             EnvMode.Reset();   // new scene, new lights/water to capture
 
+            // D9/E8 — a diver who left through a warp gate lands IN the destination, at a random
+            // point, rather than being handed the map screen. Flag cleared on use, so cancelling a
+            // warp cannot hijack the next map the player opens.
+            if (TourController.ArrivingByWarp)
+            {
+                TourController.ArrivingByWarp = false;
+                Debug.Log("[Tour] warp arrival → entering the tour at a random spawn");
+                TourController.Start(randomStart: true);
+            }
+
             // ── Sun shafts (WO-XR-04.3) ─────────────────────────────────────────────
             // Scattered around the content, from the water surface down to just under the
             // seabed, all parallel to the sun set in SetupLighting.

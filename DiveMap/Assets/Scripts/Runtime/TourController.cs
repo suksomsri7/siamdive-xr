@@ -109,11 +109,25 @@ namespace DiveMap.Runtime
             return _instance;
         }
 
-        /// <summary>Enter the tour (menu item / future warp arrival).</summary>
-        public static bool Start()
+        private bool _randomSpawn;
+
+        /// <summary>
+        /// Set when the diver left through a warp gate: the next map that finishes loading drops
+        /// them straight back into the water at a random point. Cleared as soon as it is used, so
+        /// a warp that the player cancels does not hijack the map they open next.
+        /// </summary>
+        public static bool ArrivingByWarp { get; set; }
+
+        /// <summary>
+        /// Enter the tour. <paramref name="randomStart"/> drops the diver at a random point in the
+        /// map instead of the fixed opening view — the web does this for anyone who arrives by
+        /// "play" or through a warp gate, so a familiar map still opens on something new.
+        /// </summary>
+        public static bool Start(bool randomStart = false)
         {
             TourController tc = Ensure();
             if (tc == null || ModeManager.Instance == null) return false;
+            tc._randomSpawn = randomStart;
             return ModeManager.Instance.Request(AppMode.Tour);
         }
 
@@ -134,12 +148,35 @@ namespace DiveMap.Runtime
             // Start just off the content, facing it, at a comfortable height above the sand.
             Vector3 start = _homeCenter - new Vector3(0f, 0f, _startBack);
             start.y = Mathf.Clamp(_homeCenter.y + 12f, SeabedY(start) + 10f, _waterLevel - 12f);
+            float startYaw = 0f;   // +Z, i.e. looking at the content we just backed away from
+
+            // D9 — a player who arrived by "play", or through a warp gate, is dropped somewhere
+            // random instead (the web's enterTour(randomStart), builder.html:3722) so the same map
+            // is not the same dive twice. The two draws come from here so the maths stays pure.
+            if (_randomSpawn)
+            {
+                _randomSpawn = false;
+                float mapR = SeabedGeom.SandRadius * Mathf.Max(_scaleX, _scaleZ);
+                var centre = new DroneFlight.Vec3(_homeCenter.x, _homeCenter.y, _homeCenter.z);
+                DroneFlight.Vec3 pick = DroneFlight.RandomSpawn(
+                    centre, mapR,
+                    SeabedY(_homeCenter), _waterLevel,
+                    UnityEngine.Random.value, UnityEngine.Random.value);
+                // Re-read the seabed UNDER the chosen point: the map is sculpted, so the height
+                // above the middle says nothing about the height over a reef 100 units away.
+                var at = new Vector3(pick.X, pick.Y, pick.Z);
+                at.y = Mathf.Max(SeabedY(at) + 18f, _waterLevel * 0.5f);
+                at.y = Mathf.Min(at.y, _waterLevel - 8f);
+                start = at;
+                startYaw = DroneFlight.YawToward(new DroneFlight.Vec3(at.x, at.y, at.z), centre);
+                Debug.Log($"[Tour] random spawn at ({at.x:F0},{at.y:F0},{at.z:F0}) mapR={mapR:F0}");
+            }
 
             _state = new DroneFlight.State
             {
                 Pos = new DroneFlight.Vec3(start.x, start.y, start.z),
                 Vel = new DroneFlight.Vec3(0f, 0f, 0f),
-                Yaw = 0f,   // +Z, i.e. looking at the content we just backed away from
+                Yaw = startYaw,
             };
 
             _hud = TourHud.Ensure();
