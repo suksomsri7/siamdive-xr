@@ -24,6 +24,8 @@ namespace DiveMap.Runtime.Ui
         private float _shownDepth = -999f;
         private Button _light;
         private Text _lightLabel;
+        private Button _mute;
+        private Text _muteLabel;
         private Image _vignette;
 
         public static TourHud Ensure()
@@ -77,6 +79,13 @@ namespace DiveMap.Runtime.Ui
             UiKit.Anchor(_light.GetComponent<RectTransform>(), new Vector2(1f, 1f),
                          new Vector2(220f, 84f), new Vector2(-28f, -124f));
             _lightLabel = _light.GetComponentInChildren<Text>(true);
+
+            // Mute, under the headlamp. State lives in PlayerPrefs so it survives the app.
+            _mute = UiKit.MakeButton(root, "TourMute", "", 30, UiKit.TealDim, UiKit.TextMain, ToggleMute);
+            UiKit.Anchor(_mute.GetComponent<RectTransform>(), new Vector2(1f, 1f),
+                         new Vector2(220f, 84f), new Vector2(-28f, -220f));
+            _muteLabel = _mute.GetComponentInChildren<Text>(true);
+            RenderMute();
         }
 
         /// <summary>
@@ -141,6 +150,22 @@ namespace DiveMap.Runtime.Ui
             if (bg != null) bg.color = on ? UiKit.Teal : UiKit.TealDim;
             if (_lightLabel != null)
                 _lightLabel.color = on ? new Color(0.043f, 0.090f, 0.118f) : UiKit.TextMain;
+        }
+
+        private void ToggleMute()
+        {
+            AudioBank.Muted = !AudioBank.Muted;
+            RenderMute();
+        }
+
+        private void RenderMute()
+        {
+            if (_muteLabel == null) return;
+            bool muted = AudioBank.Muted;
+            _muteLabel.text = UiStrings.Tr(muted ? "เปิดเสียง" : "ปิดเสียง");
+            Image bg = _mute != null ? _mute.GetComponent<Image>() : null;
+            if (bg != null) bg.color = muted ? UiKit.TealDim : UiKit.Teal;
+            _muteLabel.color = muted ? UiKit.TextMain : new Color(0.043f, 0.090f, 0.118f);
         }
 
         private static void ExitTour()

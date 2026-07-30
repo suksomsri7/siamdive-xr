@@ -50,6 +50,11 @@ namespace DiveMap.Runtime
             /// to keep the drone inside the map.</summary>
             public float SeabedScaleX;
             public float SeabedScaleZ;
+
+            /// <summary>Big animals (msh:*) and their asset ids — P1.2b plays their calls when
+            /// the diver comes near.</summary>
+            public List<Transform> Animals;
+            public List<string> AnimalIds;
         }
 
         // Kinds that swim (drift through the water column) — excluded from the opening-shot
@@ -184,6 +189,8 @@ namespace DiveMap.Runtime
             // collect their registrations here and spin up one FishSchoolSystem after the
             // static loads settle (so obstacle bounds — the wreck — are known).
             var schoolRegs = new List<FishSchoolSystem.SchoolReg>();
+            var animals = new List<Transform>();
+            var animalIds = new List<string>();
             int whaleCount = 0;
 
             // P0: the "โหมดกราฟิกประหยัด" setting only scaled the render resolution — the reef
@@ -218,6 +225,8 @@ namespace DiveMap.Runtime
                     // [8..16] size clamp: the saved item.s is authoritative (1.908×34.2 ≈ 65 u).
                     // Swimmers are NEVER grounded — they float at their stored Y.
                     whaleCount++;
+                    animals.Add(itemGo.transform);
+                    animalIds.Add(aid);
                     string wurl = manifest != null ? manifest.ResolveUrl(aid) : null;
                     AssetManifest.Module wmod = manifest != null ? manifest.Get(aid) : null;
                     if (string.IsNullOrEmpty(wurl))
@@ -370,6 +379,8 @@ namespace DiveMap.Runtime
                 Obstacles = obstacles,
                 SeabedScaleX = _seabedScaleX,
                 SeabedScaleZ = _seabedScaleZ,
+                Animals = animals,
+                AnimalIds = animalIds,
             });
         }
 

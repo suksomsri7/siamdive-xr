@@ -32,6 +32,8 @@ namespace DiveMap.Runtime
         private TourHud _hud;
         private DroneLights _lights;
         private FishSchoolSystem _reef;
+        private List<Transform> _animals;
+        private List<string> _animalIds;
 
         private DroneFlight.State _state;
         private DroneFlight.Box[] _solids = new DroneFlight.Box[0];
@@ -76,6 +78,8 @@ namespace DiveMap.Runtime
             tc._waterLevel = waterLevel;
             tc._scaleX = scaleX;
             tc._scaleZ = scaleZ;
+            tc._animals = r.Animals;
+            tc._animalIds = r.AnimalIds;
             tc._homeCenter = r.FrameCenter;
             tc._homeFrame = new Vector3(r.FrameSizeX, r.FrameSizeY, r.FrameSizeZ);
             tc._homeMinY = r.FrameMinY;
@@ -137,6 +141,11 @@ namespace DiveMap.Runtime
             _active = true;
             _frames = 0;
 
+            // Sound: the drone's start cue, then the underwater bed (streamed from the CDN;
+            // silent if it cannot be fetched).
+            AudioBank.PlayCue();
+            AudioBank.StartAmbience();
+
             Toast.ShowTr("ลากจอยซ้ายเพื่อเลี้ยว/ขึ้นลง · จอยขวาเพื่อเดินหน้า");
             Debug.Log($"[Tour] begin pos=({start.x:F1},{start.y:F1},{start.z:F1}) " +
                       $"solids={_solids.Length} water={_waterLevel:F1} " +
@@ -160,6 +169,7 @@ namespace DiveMap.Runtime
                 _lights.RestoreScene();
                 _lights.gameObject.SetActive(false);
             }
+            AudioBank.StopAmbience();
             // The reef goes back to ignoring us.
             if (_reef != null) _reef.SetRepulsor(Vector3.zero, 0f);
             if (_orbit != null)
@@ -203,6 +213,7 @@ namespace DiveMap.Runtime
             if (_hud != null) _hud.SetDepth(DroneFlight.DepthMetres(pos.y, _waterLevel));
             if (_lights != null) _lights.Track(pos, _state.Yaw, SeabedY(pos + _cam.transform.forward * DiveLightMath.Reach));
             if (_reef != null) _reef.SetRepulsor(pos, DiveLightMath.FishBubble * 2f);
+            AudioBank.ProximityTick(pos, _animals, _animalIds);
 
             _frames++;
             if (_frames == 30 || _frames % 300 == 0)
