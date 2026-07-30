@@ -148,6 +148,17 @@ tools/publish_build.sh <run> <tag>  # พอเขียว เอาไฟล�
 - 🔑 **บทเรียน: การรอใน QC harness ต้องนับเป็นเฟรม ไม่ใช่วินาที** เมื่อสิ่งที่ทดสอบเดินตามเฟรม
   `for (int f = 0; f < 60; f++) yield return null;` — 60 เฟรม = ~99% ของความเร็ว บนทุกเครื่อง
 
+### ✅ ยืนยันแล้วว่าซื้อของในร้านทำงานครบวงจร (QC run 30586596945)
+```
+[QC] buy test map=wl6zwxh1tdgn item=losin:shrimp_acrobat price=50 coins=600 stock=0
+[Shop] bought losin:shrimp_acrobat for 50 → coins=550
+[Shop] released losin:shrimp_acrobat at (1,198,450) on map wl6zwxh1tdgn
+[Shop] restored 1 purchased item(s) for wl6zwxh1tdgn      ← โหลดแมพใหม่แล้วของที่ซื้อกลับมา
+[QC] buy result coins 600→550 (expected 550) · stock 0→1 (expected 1)
+```
+⚠️ จุดที่ยังไม่ได้ทำ: ถ้าเปิดร้านจาก**โหมดดูแมพ** จุดปล่อยจะใช้ตำแหน่งกล้อง orbit ที่ลอยสูง (y=198)
+— ตอนนี้ปุ่มร้านอยู่ใน HUD ทัวร์อย่างเดียว ผู้เล่นจริงจึงไม่เจอ แต่ถ้าเพิ่มทางเข้าร้านในหน้าดูแมพเมื่อไหร่ ต้อง clamp ความสูงก่อน
+
 ## 5. งานถัดไปทันที (คิวเรียงแล้ว)
 ### 5.1 ✅ ปิดแล้ว — WO-XR-03 (2026-07-28)
 formation ตามสูตรเว็บ + วาฬ GLB จริง + QC fixes (ครีบดำ/gloss/heading log) · commit `a7d12f8` → `f31d9fc`
