@@ -184,14 +184,21 @@ namespace DiveMap.Runtime.Ui
             // The web's ☰ lives at the BOTTOM-RIGHT (#viewbtns > #menuToggle) as a blue-filled
             // 48 px circle, not top-right as a square — someone moving between web and app must
             // find the menu under the same thumb.
-            Button btn = UiKit.MakeIconButton(_safe, "MenuButton", "menu", ToggleActions, accent: true);
+            // #menuToggle sits in #viewbtns: right 12, bottom 20 + safe-area, 48×48 (builder.html:105).
+            Button btn = UiKit.MakeIconButton(_safe, "MenuButton", "menu", ToggleActions,
+                                              accent: true, size: UiKit.Css(48f));
             _hamburger = btn.gameObject;
             UiKit.Anchor(btn.GetComponent<RectTransform>(), new Vector2(1f, 0f),
-                         new Vector2(104f, 104f), new Vector2(-26f, 44f));
+                         new Vector2(UiKit.Css(48f), UiKit.Css(48f)),
+                         new Vector2(-UiKit.Css(12f), UiKit.Css(20f)));
 
             // (The three hand-built Image bars are gone: IconPainter draws the web's own ☰ path.)
             _menuToggleBtn = btn;
             BuildActions();
+
+            // The web's compass lives in the MAP VIEW (#compass: right 12, bottom 80), not in the
+            // tour — the tour has the minimap instead. Same here.
+            CompassWidget.Create(_safe);
         }
 
         /// <summary>
@@ -206,8 +213,9 @@ namespace DiveMap.Runtime.Ui
             _actions.anchorMin = new Vector2(1f, 0f);
             _actions.anchorMax = new Vector2(1f, 0f);
             _actions.pivot = new Vector2(1f, 0f);
-            _actions.sizeDelta = new Vector2(104f, 360f);
-            _actions.anchoredPosition = new Vector2(-26f, 158f);
+            // The column sits directly above the toggle: 48 px buttons with the web's 10 px gap.
+            _actions.sizeDelta = new Vector2(UiKit.Css(48f), UiKit.Css(48f * 3f + 20f));
+            _actions.anchoredPosition = new Vector2(-UiKit.Css(12f), UiKit.Css(20f + 48f + 10f));
 
             ActionButton(0, "list", OpenMapList);
             ActionButton(1, "mask", StartTour);
@@ -221,12 +229,13 @@ namespace DiveMap.Runtime.Ui
             {
                 CloseActions();
                 action?.Invoke();
-            });
+            }, false, UiKit.Css(48f));
             RectTransform rt = b.GetComponent<RectTransform>();
             rt.anchorMin = new Vector2(0.5f, 0f);
             rt.anchorMax = new Vector2(0.5f, 0f);
             rt.pivot = new Vector2(0.5f, 0f);
-            rt.anchoredPosition = new Vector2(0f, index * 108f);
+            rt.sizeDelta = new Vector2(UiKit.Css(48f), UiKit.Css(48f));
+            rt.anchoredPosition = new Vector2(0f, index * UiKit.Css(58f));   // 48 + 10 gap
         }
 
         /// <summary>Expand/collapse the action column and swap ☰ ↔ ✕, like the web.</summary>

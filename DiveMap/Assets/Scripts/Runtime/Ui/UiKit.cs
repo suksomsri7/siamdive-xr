@@ -49,6 +49,48 @@ namespace DiveMap.Runtime.Ui
         /// <summary>The bundled NotoSansThai face — the only font that renders Thai in CI.</summary>
         public static Font Face => UiFont.Get();
 
+        // ── CSS px → canvas units ────────────────────────────────────────────────
+        // The web's layout is written in CSS px (48 px buttons, 14 px margins, 19 px numerals)
+        // and the app's canvas is a 1080×1920 reference scaled by
+        //   scaleFactor = √(w/1080 · h/1920)     (ScaleWithScreenSize, match 0.5)
+        // so a hard-coded "96 units" is a different physical size on every device and matches the
+        // web on none of them. Everything positional therefore goes through Css():
+        //
+        //   physical px = cssPx × dpr        (dpr = dpi/160 on a phone, 1 on a desktop/CI window)
+        //   canvas units = physical px / scaleFactor
+        //
+        // Result: a 48 CSS px control is 48 CSS px on the phone AND in a 1280×720 browser, which
+        // is what "the same position as the web" actually means.
+        public static float Css(float cssPx) => cssPx * DevicePixelRatio / CanvasScale;
+
+        /// <summary>Rounded <see cref="Css"/>, for Text.fontSize (which is an int).</summary>
+        public static int CssFont(float cssPx) => Mathf.Max(1, Mathf.RoundToInt(Css(cssPx)));
+
+        /// <summary>
+        /// Device pixel ratio. Screen.dpi is 0 on many desktop/headless players, and a browser on a
+        /// desktop is 1 CSS px per pixel anyway, so 1 is the right fallback there.
+        /// </summary>
+        public static float DevicePixelRatio
+        {
+            get
+            {
+                float dpi = Screen.dpi;
+                if (dpi <= 1f) return 1f;
+                float dpr = dpi / 160f;
+                return Mathf.Clamp(dpr, 1f, 4f);
+            }
+        }
+
+        /// <summary>The CanvasScaler's factor for the current screen (reference 1080×1920, match .5).</summary>
+        public static float CanvasScale
+        {
+            get
+            {
+                float w = Mathf.Max(1, Screen.width), h = Mathf.Max(1, Screen.height);
+                return Mathf.Sqrt(w / 1080f * (h / 1920f));
+            }
+        }
+
         // ── text metrics ─────────────────────────────────────────────────────────
 
         /// <summary>
@@ -192,6 +234,63 @@ namespace DiveMap.Runtime.Ui
             Transform t = btn.transform.Find("Icon");
             Image img = t != null ? t.GetComponent<Image>() : null;
             if (img != null) img.sprite = IconPainter.Get(icon);
+        }
+
+        /// <summary>
+        /// A 9-sliced rounded-rectangle sprite with the web's corner radius (CSS px). Pass
+        /// <paramref name="cssBorder"/> &gt; 0 for a ring (the web's 1-1.5 px panel borders) instead
+        /// of a fill. uGUI has no corner radius of its own, and every panel in builder.html has one
+        /// — 14 px on pills, 20 px on modals, 24 px on the bottom sheet.
+        /// </summary>
+        public static Sprite RoundedSprite(float cssRadius, float cssBorder = 0f)
+        {
+            int key = Mathf.RoundToInt(cssRadius * 10f) * 100 + Mathf.RoundToInt(cssBorder * 10f);
+            if (_rounded.TryGetValue(key, out Sprite cached) && cached != null) return cached;
+
+            // Rasterise at canvas scale so the corner keeps its physical radius, and give the
+            // 9-slice a border of exactly the corner so only the corners are stretched.
+            int r = Mathf.Clamp(Mathf.RoundToInt(Css(cssRadius)), 2, 64);
+            int size = r * 2 + 4;
+            float border = cssBorder > 0f ? Mathf.Max(1f, Css(cssBorder)) : 0f;
+
+            var tex = new Texture2D(size, size, TextureFormat.RGBA32, false)
+            {
+                name = $"UiRounded{key}",
+                wrapMode = TextureWrapMode.Clamp,
+                filterMode = FilterMode.Bilinear,
+            };
+            var px = new Color32[size * size];
+            for (int y = 0; y < size; y++)
+            for (int x = 0; x < size; x++)
+            {
+                // Distance to the rounded-rect outline: inset the box by r, then measure to that box.
+                float dx = Mathf.Max(Mathf.Abs(x + 0.5f - size * 0.5f) - (size * 0.5f - r), 0f);
+                float dy = Mathf.Max(Mathf.Abs(y + 0.5f - size * 0.5f) - (size * 0.5f - r), 0f);
+                float d = Mathf.Sqrt(dx * dx + dy * dy);      // 0 inside the straight part
+                float a = Mathf.Clamp01((r - 0.5f - d) / 1.2f);
+                if (border > 0f) a *= Mathf.Clamp01((d - (r - border - 0.5f)) / 1.2f + 1f) *
+                                      Mathf.Clamp01((border + 0.7f - (r - d)) / 1.2f);
+                px[y * size + x] = new Color32(255, 255, 255, (byte)Mathf.RoundToInt(Mathf.Clamp01(a) * 255f));
+            }
+            tex.SetPixels32(px);
+            tex.Apply();
+
+            var sprite = Sprite.Create(tex, new Rect(0f, 0f, size, size), new Vector2(0.5f, 0.5f),
+                                       100f, 0, SpriteMeshType.FullRect,
+                                       new Vector4(r, r, r, r));
+            _rounded[key] = sprite;
+            return sprite;
+        }
+        private static readonly System.Collections.Generic.Dictionary<int, Sprite> _rounded =
+            new System.Collections.Generic.Dictionary<int, Sprite>();
+
+        /// <summary>Rounded panel (fill) with the web's radius, ready for 9-slicing.</summary>
+        public static Image MakeRounded(Transform parent, string name, Color color, float cssRadius)
+        {
+            Image img = MakePanel(parent, name, color);
+            img.sprite = RoundedSprite(cssRadius);
+            img.type = Image.Type.Sliced;
+            return img;
         }
 
         /// <summary>Round panel — same as <see cref="MakePanel"/> but with a circle sprite.</summary>

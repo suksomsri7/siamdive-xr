@@ -34,6 +34,8 @@ namespace DiveMap.Runtime
         private FishSchoolSystem _reef;
         private List<Transform> _animals;
         private List<string> _animalIds;
+        private List<Vector3> _miniSolids = new List<Vector3>();
+        private List<Vector3> _miniSchools = new List<Vector3>();
 
         private DroneFlight.State _state;
         private DroneFlight.Box[] _solids = new DroneFlight.Box[0];
@@ -80,6 +82,15 @@ namespace DiveMap.Runtime
             tc._scaleZ = scaleZ;
             tc._animals = r.Animals;
             tc._animalIds = r.AnimalIds;
+
+            // The minimap needs the same world the drone flies in: footprint, solids, schools.
+            var solidCentres = new List<Vector3>();
+            for (int i = 0; i < tc._solids.Length; i++)
+                solidCentres.Add(new Vector3((tc._solids[i].MinX + tc._solids[i].MaxX) * 0.5f,
+                                             0f,
+                                             (tc._solids[i].MinZ + tc._solids[i].MaxZ) * 0.5f));
+            tc._miniSolids = solidCentres;
+            tc._miniSchools = r.SchoolAnchors ?? new List<Vector3>();
             tc._homeCenter = r.FrameCenter;
             tc._homeFrame = new Vector3(r.FrameSizeX, r.FrameSizeY, r.FrameSizeZ);
             tc._homeMinY = r.FrameMinY;
@@ -132,6 +143,8 @@ namespace DiveMap.Runtime
             };
 
             _hud = TourHud.Ensure();
+            Ui.MinimapWidget.Configure(_homeCenter, SeabedGeom.SandRadius * Mathf.Max(_scaleX, _scaleZ),
+                                       _miniSolids, _miniSchools, _animals);
             if (_lights == null) _lights = DroneLights.Attach(transform);
             _lights.gameObject.SetActive(true);
             _lights.Set(true);
@@ -150,6 +163,49 @@ namespace DiveMap.Runtime
             Debug.Log($"[Tour] begin pos=({start.x:F1},{start.y:F1},{start.z:F1}) " +
                       $"solids={_solids.Length} water={_waterLevel:F1} " +
                       $"scale=({_scaleX:F2},{_scaleZ:F2})");
+        }
+
+        /// <summary>
+        /// Photo button (#tourShot). Captures the frame WITHOUT the HUD — the web's captureThumb
+        /// hides its UI first, and a souvenir with joysticks across it is not a souvenir. Saved
+        /// into the app's own folder for now; putting it in the phone's gallery needs a MediaStore
+        /// call that can only be verified on a device, so that lands as its own step.
+        /// </summary>
+        public void TakePhoto()
+        {
+            StartCoroutine(CapturePhoto());
+        }
+
+        private System.Collections.IEnumerator CapturePhoto()
+        {
+            RectTransform hud = Ui.HudLayer.For(AppMode.Tour);
+            if (hud != null) hud.gameObject.SetActive(false);
+            yield return new WaitForEndOfFrame();
+
+            Texture2D shot = null;
+            string path = null;
+            try
+            {
+                shot = ScreenCapture.CaptureScreenshotAsTexture();
+                byte[] jpg = shot.EncodeToJPG(92);
+                string name = $"divemap_{Time.frameCount}.jpg";
+                path = System.IO.Path.Combine(Application.persistentDataPath, name);
+                System.IO.File.WriteAllBytes(path, jpg);
+                Debug.Log($"[Tour] photo {path} ({jpg.Length / 1024} KB, {shot.width}×{shot.height})");
+            }
+            catch (System.Exception e)
+            {
+                Debug.LogWarning($"[Tour] photo failed: {e.Message}");
+                path = null;
+            }
+            finally
+            {
+                if (shot != null) Destroy(shot);
+                if (hud != null) hud.gameObject.SetActive(true);
+            }
+
+            Ui.Toast.ShowTr(path != null ? "บันทึกภาพแล้ว" : "บันทึกภาพไม่สำเร็จ");
+            AudioBank.PlaySfx("click");
         }
 
         /// <summary>Toggle the headlamps (HUD button). Also swaps the whole atmosphere.</summary>

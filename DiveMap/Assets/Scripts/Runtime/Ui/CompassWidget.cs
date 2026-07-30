@@ -34,8 +34,9 @@ namespace DiveMap.Runtime.Ui
             // Pivot AT the corner, like UiKit.Anchor: with a centred pivot the 96 px circle hung
             // half off the right edge (the first QC shot showed a clipped needle).
             rt.pivot = new Vector2(1f, 0f);
-            rt.sizeDelta = new Vector2(96f, 96f);
-            rt.anchoredPosition = new Vector2(-26f, 268f);   // clear of ☰ (44) and the actions column
+            rt.sizeDelta = new Vector2(UiKit.Css(48f), UiKit.Css(48f));
+            // #compass: right 12, bottom 80 + safe-area (builder.html:57).
+            rt.anchoredPosition = new Vector2(-UiKit.Css(12f), UiKit.Css(80f));
 
             Image rim = UiKit.MakeCircle(rt, "Rim", UiKit.Line, 0.035f);
             rim.raycastTarget = false;
@@ -46,7 +47,7 @@ namespace DiveMap.Runtime.Ui
             needle.anchorMin = new Vector2(0.5f, 0.5f);
             needle.anchorMax = new Vector2(0.5f, 0.5f);
             needle.pivot = new Vector2(0.5f, 0.5f);
-            needle.sizeDelta = new Vector2(64f, 64f);
+            needle.sizeDelta = new Vector2(UiKit.Css(30f), UiKit.Css(30f));   // web svg 30px
             needle.anchoredPosition = Vector2.zero;
 
             AddHalf(needle, "N", North, false);
@@ -67,7 +68,7 @@ namespace DiveMap.Runtime.Ui
             rt.anchorMin = new Vector2(0.5f, 0.5f);
             rt.anchorMax = new Vector2(0.5f, 0.5f);
             rt.pivot = new Vector2(0.5f, 0f);          // rotate about the dial centre
-            rt.sizeDelta = new Vector2(26f, 28f);
+            rt.sizeDelta = new Vector2(UiKit.Css(13f), UiKit.Css(14f));
             rt.anchoredPosition = Vector2.zero;
             rt.localRotation = Quaternion.Euler(0f, 0f, flipped ? 180f : 0f);
         }

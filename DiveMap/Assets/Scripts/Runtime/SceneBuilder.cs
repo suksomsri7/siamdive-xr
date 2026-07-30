@@ -55,6 +55,9 @@ namespace DiveMap.Runtime
             /// the diver comes near.</summary>
             public List<Transform> Animals;
             public List<string> AnimalIds;
+
+            /// <summary>School anchor points — the tour minimap plots them.</summary>
+            public List<Vector3> SchoolAnchors;
         }
 
         // Kinds that swim (drift through the water column) — excluded from the opening-shot
@@ -381,6 +384,7 @@ namespace DiveMap.Runtime
                 SeabedScaleZ = _seabedScaleZ,
                 Animals = animals,
                 AnimalIds = animalIds,
+                SchoolAnchors = schoolRegs.ConvertAll(r => r.Anchor),
             });
         }
 

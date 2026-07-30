@@ -22,7 +22,8 @@ namespace DiveMap.Runtime.Ui
     [DisallowMultipleComponent]
     public sealed class Toast : MonoBehaviour
     {
-        private const int FontSize = 30;
+        // #toast: 14px/600 text, radius 14, padding 13/22 — in CSS px, converted at build time.
+        private static int FontSize => UiKit.CssFont(14f);
         private const float HoldSeconds = 2.2f;
         private const float FadeSeconds = 0.35f;
         // Dead CENTRE, like the web (#toast — left/top 50%, translate −50%, radius 14, padding
@@ -68,9 +69,9 @@ namespace DiveMap.Runtime.Ui
             node.anchorMax = new Vector2(0.5f, 0.5f);
             node.pivot = new Vector2(0.5f, 0.5f);
             node.anchoredPosition = Vector2.zero;
-            node.sizeDelta = new Vector2(860f, UiKit.RowHeight(FontSize, 2) + 26f);
+            node.sizeDelta = new Vector2(UiKit.Css(320f), UiKit.RowHeight(FontSize, 2) + UiKit.Css(26f));
 
-            Image bg = UiKit.MakePanel(node, "Bg", UiKit.Glass);
+            Image bg = UiKit.MakeRounded(node, "Bg", UiKit.Glass, 14f);
             bg.rectTransform.anchorMin = Vector2.zero;
             bg.rectTransform.anchorMax = Vector2.one;
             bg.rectTransform.offsetMin = Vector2.zero;
@@ -78,11 +79,12 @@ namespace DiveMap.Runtime.Ui
 
             Text label = UiKit.MakeText(node, "Label", "", FontSize, TextAnchor.MiddleCenter,
                                         UiKit.TextMain);
+            label.fontStyle = FontStyle.Bold;   // the web's 600 weight
             RectTransform lrt = label.rectTransform;
             lrt.anchorMin = Vector2.zero;
             lrt.anchorMax = Vector2.one;
-            lrt.offsetMin = new Vector2(24f, 12f);
-            lrt.offsetMax = new Vector2(-24f, -12f);
+            lrt.offsetMin = new Vector2(UiKit.Css(22f), UiKit.Css(13f));
+            lrt.offsetMax = new Vector2(-UiKit.Css(22f), -UiKit.Css(13f));
 
             var group = node.gameObject.AddComponent<CanvasGroup>();
             group.alpha = 0f;

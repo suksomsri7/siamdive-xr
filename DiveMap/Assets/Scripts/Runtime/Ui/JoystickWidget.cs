@@ -36,12 +36,26 @@ namespace DiveMap.Runtime.Ui
         /// </summary>
         public static JoystickWidget Create(RectTransform parent, string name, Vector2 anchor,
                                             Vector2 offset, float size, Action<Vector2> onChange)
+            => Create(parent, name, anchor, offset, size, onChange,
+                      new Color(0.027f, 0.102f, 0.165f, 0.32f),   // web .stick fill
+                      new Color(1f, 1f, 1f, 0.18f),               // web .stick border
+                      new Color(0.298f, 0.702f, 0.878f, 1f),      // web .knob gradient, mid
+                      size * 0.435f);                             // web knob 60 of 138
+
+        /// <summary>
+        /// Full form: the caller supplies the web's colours and knob size so the tour matches
+        /// <c>.stick</c>/<c>.knob</c> exactly (138 px pad, 60 px knob) instead of a guess.
+        /// </summary>
+        public static JoystickWidget Create(RectTransform parent, string name, Vector2 anchor,
+                                            Vector2 offset, float size, Action<Vector2> onChange,
+                                            Color padColor, Color rimColor, Color knobColor,
+                                            float knobSize)
         {
             if (parent == null) return null;
 
             // ROUND, like the web (its pads are CSS circles). A rectangular pad reads as a
             // button you can miss; a circle tells the thumb where the centre is.
-            Image pad = UiKit.MakeCircle(parent, name, new Color(0.043f, 0.102f, 0.165f, 0.55f));
+            Image pad = UiKit.MakeCircle(parent, name, padColor);
             RectTransform prt = pad.rectTransform;
             prt.anchorMin = anchor;
             prt.anchorMax = anchor;
@@ -50,7 +64,7 @@ namespace DiveMap.Runtime.Ui
             prt.anchoredPosition = offset;
 
             // Ring on the pad's rim = the deflection limit, so the stick's range is visible.
-            Image ring = UiKit.MakeCircle(prt, "Ring", new Color(0.224f, 0.690f, 0.910f, 0.32f), 0.06f);
+            Image ring = UiKit.MakeCircle(prt, "Ring", rimColor, 0.022f);
             ring.raycastTarget = false;
             RectTransform rrt = ring.rectTransform;
             rrt.anchorMin = Vector2.zero;
@@ -58,13 +72,13 @@ namespace DiveMap.Runtime.Ui
             rrt.offsetMin = new Vector2(size * 0.08f, size * 0.08f);
             rrt.offsetMax = new Vector2(-size * 0.08f, -size * 0.08f);
 
-            Image knob = UiKit.MakeCircle(prt, "Knob", new Color(0.224f, 0.690f, 0.910f, 0.90f));
+            Image knob = UiKit.MakeCircle(prt, "Knob", knobColor);
             knob.raycastTarget = false;
             RectTransform krt = knob.rectTransform;
             krt.anchorMin = new Vector2(0.5f, 0.5f);
             krt.anchorMax = new Vector2(0.5f, 0.5f);
             krt.pivot = new Vector2(0.5f, 0.5f);
-            krt.sizeDelta = new Vector2(size * 0.42f, size * 0.42f);
+            krt.sizeDelta = new Vector2(knobSize, knobSize);
             krt.anchoredPosition = Vector2.zero;
 
             var stick = pad.gameObject.AddComponent<JoystickWidget>();
