@@ -1,0 +1,194 @@
+using System.Collections.Generic;
+using DiveMap.Core;
+using DiveMap.Runtime.Marine;
+using DiveMap.Runtime.Ui;
+using UnityEngine;
+
+namespace DiveMap.Runtime
+{
+    /// <summary>
+    /// P1.1 — flies the camera through the map in <see cref="AppMode.Tour"/>. All the motion
+    /// rules live in <see cref="DroneFlight"/> (pure + unit-tested); this class is the plumbing:
+    /// take the sticks off <see cref="InputRig"/>, ask the world for the seabed height, hand both
+    /// to the model, and put the camera where it says.
+    ///
+    /// It does NOT own the camera outside the tour: on exit the <see cref="OrbitCamera"/> is
+    /// re-enabled and told to re-frame, so leaving the tour returns you to the view you know
+    /// rather than to wherever the drone happened to stop.
+    ///
+    /// The seabed height comes from a downward raycast against the seabed's MeshCollider, which
+    /// costs one ray per frame and — unlike a formula — is automatically right for sculpted maps.
+    /// </summary>
+    [DisallowMultipleComponent]
+    public sealed class TourController : MonoBehaviour
+    {
+        private static TourController _instance;
+
+        private Camera _cam;
+        private OrbitCamera _orbit;
+        private TourHud _hud;
+
+        private DroneFlight.State _state;
+        private DroneFlight.Box[] _solids = new DroneFlight.Box[0];
+        private float _waterLevel = 240f;
+        private float _scaleX = 1f, _scaleZ = 1f;
+        private Vector3 _homeCenter;
+        private float _homeRadius = 100f;
+        private bool _active;
+        private int _frames;
+
+        /// <summary>
+        /// Told by <c>AppBoot</c> after each map build: the solids to fly around, the surface, and
+        /// the seabed's stretch (for the map boundary).
+        /// </summary>
+        public static void Configure(List<ObstacleBox> obstacles, float waterLevel,
+                                     float scaleX, float scaleZ, Vector3 frameCenter, float radius)
+        {
+            TourController tc = Ensure();
+            if (tc == null)
+            {
+                Debug.LogWarning("[Tour] Configure before ModeManager exists — the tour would " +
+                                 "fly with no solids and no map bound; skipped");
+                return;
+            }
+
+            int n = obstacles != null ? obstacles.Count : 0;
+            tc._solids = new DroneFlight.Box[n];
+            for (int i = 0; i < n; i++)
+            {
+                ObstacleBox o = obstacles[i];
+                tc._solids[i] = new DroneFlight.Box
+                {
+                    MinX = o.Min.x, MinY = o.Min.y, MinZ = o.Min.z,
+                    MaxX = o.Max.x, MaxY = o.Max.y, MaxZ = o.Max.z,
+                };
+            }
+            tc._waterLevel = waterLevel;
+            tc._scaleX = scaleX;
+            tc._scaleZ = scaleZ;
+            tc._homeCenter = frameCenter;
+            tc._homeRadius = Mathf.Max(20f, radius);
+        }
+
+        private static TourController Ensure()
+        {
+            if (_instance != null) return _instance;
+            ModeManager mm = ModeManager.Instance;
+            if (mm == null) return null;
+            _instance = mm.gameObject.AddComponent<TourController>();
+            mm.Changed += _instance.OnModeChanged;
+            return _instance;
+        }
+
+        /// <summary>Enter the tour (menu item / future warp arrival).</summary>
+        public static bool Start()
+        {
+            TourController tc = Ensure();
+            if (tc == null || ModeManager.Instance == null) return false;
+            return ModeManager.Instance.Request(AppMode.Tour);
+        }
+
+        private void OnModeChanged(AppMode prev, AppMode next)
+        {
+            bool wantActive = ModeRules.IsFirstPerson(next);
+            if (wantActive && !_active) Begin();
+            else if (!wantActive && _active) End();
+        }
+
+        private void Begin()
+        {
+            _cam = Camera.main;
+            if (_cam == null) return;
+            _orbit = _cam.GetComponent<OrbitCamera>();
+            if (_orbit != null) _orbit.enabled = false;
+
+            // Start just off the content, facing it, at a comfortable height above the sand.
+            Vector3 start = _homeCenter - new Vector3(0f, 0f, Mathf.Clamp(_homeRadius * 0.9f, 30f, 260f));
+            start.y = Mathf.Clamp(_homeCenter.y + 12f, SeabedY(start) + 10f, _waterLevel - 12f);
+
+            _state = new DroneFlight.State
+            {
+                Pos = new DroneFlight.Vec3(start.x, start.y, start.z),
+                Vel = new DroneFlight.Vec3(0f, 0f, 0f),
+                Yaw = 0f,   // +Z, i.e. looking at the content we just backed away from
+            };
+
+            _hud = TourHud.Ensure();
+            InputRig.Clear();
+            _active = true;
+            _frames = 0;
+
+            Toast.ShowTr("ลากจอยซ้ายเพื่อเลี้ยว/ขึ้นลง · จอยขวาเพื่อเดินหน้า");
+            Debug.Log($"[Tour] begin pos=({start.x:F1},{start.y:F1},{start.z:F1}) " +
+                      $"solids={_solids.Length} water={_waterLevel:F1} " +
+                      $"scale=({_scaleX:F2},{_scaleZ:F2})");
+        }
+
+        private void End()
+        {
+            _active = false;
+            InputRig.Clear();
+            if (_orbit != null)
+            {
+                _orbit.enabled = true;
+                // Put the map back the way the user left it rather than wherever we stopped.
+                _orbit.FrameBox(_homeCenter, _homeRadius * 2f, _homeRadius, _homeRadius * 2f,
+                                _homeCenter.y - _homeRadius);
+            }
+            Debug.Log("[Tour] end");
+        }
+
+        private void Update()
+        {
+            if (!_active || _cam == null) return;
+
+            var sticks = new DroneFlight.Sticks
+            {
+                Lx = InputRig.Left.x,
+                // Screen up is +y on a uGUI stick but the web's ly is negative-up; keep the web's
+                // sign convention so DroneFlight's ported formulas stay literal.
+                Ly = -InputRig.Left.y,
+                Rx = InputRig.Right.x,
+                Ry = -InputRig.Right.y,
+            };
+
+            float fs = (float)MarineMath.RealDeltaScale(Time.deltaTime);
+            float dt = (float)MarineMath.BaseStep * fs;
+
+            Vector3 probe = new Vector3(_state.Pos.X + _state.Vel.X * dt, 0f,
+                                        _state.Pos.Z + _state.Vel.Z * dt);
+            float seabedY = SeabedY(probe);
+
+            _state = DroneFlight.Step(_state, sticks, dt, seabedY, _waterLevel,
+                                      _solids, _scaleX, _scaleZ);
+
+            var pos = new Vector3(_state.Pos.X, _state.Pos.Y, _state.Pos.Z);
+            DroneFlight.Vec3 look = DroneFlight.LookTarget(_state);
+            _cam.transform.position = pos;
+            _cam.transform.LookAt(new Vector3(look.X, look.Y, look.Z), Vector3.up);
+
+            if (_hud != null) _hud.SetDepth(DroneFlight.DepthMetres(pos.y, _waterLevel));
+
+            _frames++;
+            if (_frames == 30 || _frames % 300 == 0)
+                Debug.Log($"[Tour] frame={_frames} pos=({pos.x:F1},{pos.y:F1},{pos.z:F1}) " +
+                          $"yaw={_state.Yaw * Mathf.Rad2Deg:F0}° " +
+                          $"depth={DroneFlight.DepthMetres(pos.y, _waterLevel):F1}m " +
+                          $"seabedY={seabedY:F1}");
+        }
+
+        /// <summary>
+        /// Seabed height under <paramref name="at"/>. A ray from the surface downward hits the
+        /// seabed's MeshCollider (the only collider in the scene), so sculpted maps are handled
+        /// for free; if the ray misses — off the edge of the sand — fall back to y=0, the plane
+        /// the map is authored around.
+        /// </summary>
+        private float SeabedY(Vector3 at)
+        {
+            var from = new Vector3(at.x, _waterLevel + 50f, at.z);
+            if (Physics.Raycast(from, Vector3.down, out RaycastHit hit, _waterLevel + 400f))
+                return hit.point.y;
+            return 0f;
+        }
+    }
+}

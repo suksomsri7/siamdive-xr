@@ -226,7 +226,8 @@ namespace DiveMap.Runtime.Ui
             UiKit.TopRow(title.rectTransform, 34f, 80f, 36f, 36f);
 
             MenuItem(0, UiStrings.Tr("รายการแมพ"), OpenMapList);
-            MenuItem(1, UiStrings.Tr("ตั้งค่า"), OpenSettings);
+            MenuItem(1, UiStrings.Tr("ทัวร์ดำน้ำ"), StartTour);
+            MenuItem(2, UiStrings.Tr("ตั้งค่า"), OpenSettings);
 
             Button close = UiKit.MakeButton(_menuPanel, "MenuClose", UiStrings.Tr("ปิด"), 32,
                                             UiKit.TealDim, UiKit.TextMain, CloseTop);
@@ -285,6 +286,16 @@ namespace DiveMap.Runtime.Ui
             if (_nav.IsOpen(_menuLayer)) return;
             _nav.Push("menu", _menuLayer);
             StartCoroutine(SlideIn());
+        }
+
+        /// <summary>
+        /// Enter the drone tour (P1.1). The menu closes itself: ModeManager hides the chrome on
+        /// the way in, and a menu left open over a first-person mode would eat the joystick.
+        /// </summary>
+        public void StartTour()
+        {
+            CloseAll();
+            if (!TourController.Start()) Toast.ShowTr("ยังเข้าทัวร์ไม่ได้");
         }
 
         public void OpenMapList()
@@ -556,6 +567,20 @@ namespace DiveMap.Runtime.Ui
             ScreenCapture.CaptureScreenshot(prefix + "_toast.png");
             Debug.Log("[UI] qcui shot -> " + prefix + "_toast.png");
             yield return new WaitForSecondsRealtime(1.5f);
+
+            // 6.7) tour HUD (P1.1): joysticks + depth + exit, with the drone parked (no input in
+            // a headless run). Proves the HUD builds and that the mode swap actually hides the
+            // shell chrome, which no unit test can show.
+            if (TourController.Start())
+            {
+                yield return new WaitForSecondsRealtime(1.2f);
+                ScreenCapture.CaptureScreenshot(prefix + "_tour.png");
+                Debug.Log("[UI] qcui shot -> " + prefix + "_tour.png");
+                yield return new WaitForSecondsRealtime(1.2f);
+                if (ModeManager.Instance != null) ModeManager.Instance.Exit();
+                yield return new WaitForSecondsRealtime(0.8f);
+            }
+            else Debug.LogWarning("[UI] qcui could not enter the tour");
 
             // 7) English: the menu + the still-open card must come back with no Thai left.
             UiStrings.Lang = UiStrings.English;

@@ -242,6 +242,13 @@ namespace DiveMap.Runtime
             if (_orbit != null)
                 _orbit.FrameBox(result.FrameCenter, result.FrameSizeX, result.FrameSizeY, result.FrameSizeZ, result.FrameMinY);
 
+            // ── Tour (P1.1) ─────────────────────────────────────────────────────────
+            // Hand the drone its world: what to collide with, where the surface is, how the
+            // seabed is stretched, and where "home" is for the exit re-frame.
+            TourController.Configure(result.Obstacles, result.WaterLevel,
+                                     result.SeabedScaleX, result.SeabedScaleZ,
+                                     result.FrameCenter, result.Radius);
+
             // ── Sun shafts (WO-XR-04.3) ─────────────────────────────────────────────
             // Scattered around the content, from the water surface down to just under the
             // seabed, all parallel to the sun set in SetupLighting.

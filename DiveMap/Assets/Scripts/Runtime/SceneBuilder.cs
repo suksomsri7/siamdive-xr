@@ -41,6 +41,15 @@ namespace DiveMap.Runtime
 
             /// <summary>env.waterLevel of this map — the surface the sun shafts start from.</summary>
             public float WaterLevel;
+
+            /// <summary>Solid decor as world AABBs — the fish steer around these and, from P1.1,
+            /// so does the drone.</summary>
+            public List<ObstacleBox> Obstacles;
+
+            /// <summary>Seabed footprint stretch (areaScale × areaScaleX/Z) — the tour needs it
+            /// to keep the drone inside the map.</summary>
+            public float SeabedScaleX;
+            public float SeabedScaleZ;
         }
 
         // Kinds that swim (drift through the water column) — excluded from the opening-shot
@@ -131,6 +140,9 @@ namespace DiveMap.Runtime
         // env.waterLevel of the map being built (Htms Chang = 240) — the schools need it for
         // the surface ceiling (builder.html capY = waterLevel − 8 per fish size).
         private float _waterLevel = 4f;
+        // Seabed footprint stretch of the map being built (P1.1: the tour clamps the drone to it).
+        private float _seabedScaleX = 1f;
+        private float _seabedScaleZ = 1f;
 
         private static readonly Dictionary<string, Color> KindColors = new Dictionary<string, Color>(StringComparer.OrdinalIgnoreCase)
         {
@@ -299,18 +311,20 @@ namespace DiveMap.Runtime
             // Obstacles = the loaded static decor (the wreck) as world-space AABBs so
             // fish steer around them (warp gates excluded — not solid). Built AFTER the
             // GLB loads settle so renderer bounds are real.
+            // Built once and shared: the fish steer around these, the drone collides with them
+            // (P1.1), and the info card will pick against them later.
+            var obstacles = new List<ObstacleBox>();
+            foreach (GameObject go in decorGos)
+            {
+                if (go == null) continue;
+                if (go.name.Contains("_warp:")) continue; // portals are not solid
+                var one = new List<GameObject> { go };
+                if (TryContentBounds(one, out Bounds ob))
+                    obstacles.Add(new ObstacleBox { Min = ob.min, Max = ob.max, ObsR = 4f });
+            }
+
             if (schoolRegs.Count > 0 || whaleCount > 0)
             {
-                var obstacles = new List<ObstacleBox>();
-                foreach (GameObject go in decorGos)
-                {
-                    if (go == null) continue;
-                    if (go.name.Contains("_warp:")) continue; // portals are not solid
-                    var one = new List<GameObject> { go };
-                    if (TryContentBounds(one, out Bounds b))
-                        obstacles.Add(new ObstacleBox { Min = b.min, Max = b.max, ObsR = 4f });
-                }
-
                 var marine = root.AddComponent<FishSchoolSystem>();
                 marine.Configure(schoolRegs, obstacles, Camera.main, BaseMat(false), _waterLevel, whaleCount);
 
@@ -353,6 +367,9 @@ namespace DiveMap.Runtime
                 FrameSizeZ = frameBox.size.z,
                 FrameMinY = frameBox.min.y,
                 WaterLevel = _waterLevel,
+                Obstacles = obstacles,
+                SeabedScaleX = _seabedScaleX,
+                SeabedScaleZ = _seabedScaleZ,
             });
         }
 
@@ -721,6 +738,8 @@ namespace DiveMap.Runtime
                                  $"past the web footprint ({inner:F1} u)");
             }
             float radius = Mathf.Max(rx, rz);
+            _seabedScaleX = sx;
+            _seabedScaleZ = sz;
 
             int rings = SeabedGeom.Rings, seg = SeabedGeom.Segments;
             int[] dim = env?.SculptDimensions();
