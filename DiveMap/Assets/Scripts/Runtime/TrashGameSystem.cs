@@ -53,7 +53,7 @@ namespace DiveMap.Runtime
         public static int Coins
         {
             get => PlayerPrefs.GetInt(CoinsPrefKey, TrashGame.StartingCoins);
-            private set { PlayerPrefs.SetInt(CoinsPrefKey, value); PlayerPrefs.Save(); }
+            set { PlayerPrefs.SetInt(CoinsPrefKey, Mathf.Max(0, value)); PlayerPrefs.Save(); }
         }
 
         public static TrashGameSystem Ensure(Transform parent)
@@ -92,6 +92,15 @@ namespace DiveMap.Runtime
 
             CoinCounter.Ensure();
             CoinCounter.Show(Coins);
+
+            // Pull the server's balance (keyed by device, no account needed) and reconcile it with
+            // anything this device earned while offline.
+            WalletClient.Refresh(coins =>
+            {
+                Coins = coins;
+                CoinCounter.Show(coins);
+            });
+
             Debug.Log($"[Game] begin coins={Coins} water={waterLevel:F0}");
         }
 
@@ -103,6 +112,11 @@ namespace DiveMap.Runtime
                 if (_pieces[i].Go != null) Destroy(_pieces[i].Go);
             _pieces.Clear();
             CoinCounter.Hide();
+            WalletClient.Flush(coins =>
+            {
+                Coins = coins;
+                CoinCounter.Show(coins);
+            });
             Debug.Log($"[Game] end coins={Coins}");
         }
 
@@ -210,7 +224,8 @@ namespace DiveMap.Runtime
 
             float h = TrashGame.HeightFactor(at.y, p.FloorY, p.SpawnY);
             int gain = TrashGame.Score(p.Kind, h, _combo, p.IsCoin);
-            Coins = Coins + gain;
+            Coins = Wallet.Earn(Coins, gain);
+            WalletClient.Earn(gain);   // queued, debounced, re-queued if the request fails
 
             CoinCounter.Show(Coins);
             CoinCounter.Fly(gain);
