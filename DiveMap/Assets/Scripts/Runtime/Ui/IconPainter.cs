@@ -89,6 +89,12 @@ namespace DiveMap.Runtime.Ui
                     strokes.Add(Line(20.5f, 9.5f, 15, 15));
                     break;
 
+                case "radar":  // #radarBtn — <circle r9/><circle r4.3/><path d="M12 12 17.5 8.5"/>
+                    strokes.Add(Circle(12f, 12f, 9f));
+                    strokes.Add(Circle(12f, 12f, 4.3f));
+                    strokes.Add(Line(12, 12, 17.5f, 8.5f));
+                    break;
+
                 case "camera": // photo
                     strokes.Add(new[] { P(3.5f, 8.5f), P(8f, 8.5f), P(9.5f, 6f), P(14.5f, 6f), P(16f, 8.5f), P(20.5f, 8.5f), P(20.5f, 19f), P(3.5f, 19f), P(3.5f, 8.5f) });
                     strokes.Add(Circle(12f, 13.5f, 3.6f));

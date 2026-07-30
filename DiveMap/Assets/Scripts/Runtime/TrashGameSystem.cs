@@ -197,6 +197,9 @@ namespace DiveMap.Runtime
             GameObject go = coin ? BuildCoin() : BuildTrash(kind);
             go.transform.SetParent(_root, false);
             go.transform.position = pos;
+            // ♻️ over litter only — a gold coin already reads as "pick me up" on its own, and the
+            // web tags only trash (spawnTrash adds the sprite; _spawnCoin does not).
+            if (!coin) RecycleBadge.Attach(go.transform);
 
             _pieces.Add(new Piece
             {

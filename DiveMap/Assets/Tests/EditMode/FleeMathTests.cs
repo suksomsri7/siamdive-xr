@@ -233,8 +233,12 @@ namespace DiveMap.Tests
         public void ArrivingAtCoverStopsTheChase()
         {
             Assert.IsTrue(FleeMath.AtShelter(distanceToShelter: 5, shelterR: 6));
-            Assert.IsTrue(FleeMath.AtShelter(distanceToShelter: 6.9, shelterR: 6), "with a margin");
+            Assert.IsTrue(FleeMath.AtShelter(distanceToShelter: 6.5, shelterR: 6),
+                          "a little past the rim still counts — the 15 % margin");
             Assert.IsFalse(FleeMath.AtShelter(distanceToShelter: 30, shelterR: 6));
+            // 6 × 1.15 is 6.899999… in binary, so the edge itself is not a useful assertion;
+            // what matters is that the margin exists and has roughly the right size.
+            Assert.IsFalse(FleeMath.AtShelter(distanceToShelter: 7.5, shelterR: 6));
         }
 
         // ── refresh cadence ──────────────────────────────────────────────────────

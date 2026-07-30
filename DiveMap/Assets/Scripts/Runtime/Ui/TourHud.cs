@@ -13,6 +13,8 @@ namespace DiveMap.Runtime.Ui
     ///   #tourDepth  top-RIGHT  max(14,safe)     pill, 19px/800 #9fe0ff, rim rgba(120,200,255,.4)
     ///   #tourHud    top-CENTRE max(15,safe)     12px/600 hint, rgba(7,26,42,.42)
     ///   #lightBtn   left 14, top 104            56×56, 2.5px white rim; ON = amber glow
+    ///   #radarBtn   left 14, top 174            56×56, toggles the minimap; off = 45 % alpha
+    ///   (mute)      left 14, top 244            ours — the web never builds its _muteFloat
     ///   #tourCam    right 14, top 104, gap 14   56×56 (photo; #tourRec cut from v1)
     ///   .stick      bottom 24, left/right 18    138×138, knob 60×60, four 9.5px labels
     ///   #minimap    bottom 16, centred          118×118 circle, 1.5px rgba(120,200,255,.45)
@@ -46,6 +48,9 @@ namespace DiveMap.Runtime.Ui
         private Button _light;
         private Image _lightIcon;
         private Button _mute;
+        private Button _radar;
+        private GameObject _minimap;
+        private bool _radarOn = true;   // the web starts with the minimap visible in a tour
         private Image _vignette;
 
         public static TourHud Ensure()
@@ -129,9 +134,17 @@ namespace DiveMap.Runtime.Ui
             Transform ic = _light.transform.Find("Icon");
             _lightIcon = ic != null ? ic.GetComponent<Image>() : null;
 
-            // ── mute: LEFT 14 / TOP 174 (the web's #radarBtn slot; radar is P2) ─
+            // ── radar: LEFT 14 / TOP 174, 56 px (#radarBtn, builder.html:271) ───
+            // This slot belongs to the radar toggle on the web. The mute button below it is ours:
+            // the web declares _muteFloat and never builds it, so there is no web position to
+            // match — it goes in the next slot down rather than displacing a control the diver
+            // may already know where to find.
+            _radar = RoundButton(root, "TourRadar", "radar", Chrome, 56f, 2.5f, new Vector2(0f, 1f),
+                                 new Vector2(UiKit.Css(14f), -UiKit.Css(174f)), ToggleRadar);
+
+            // ── mute: LEFT 14 / TOP 244 — ours, one slot below the web's last ───
             _mute = RoundButton(root, "TourMute", "sound", Chrome, 56f, 2.5f, new Vector2(0f, 1f),
-                                new Vector2(UiKit.Css(14f), -UiKit.Css(174f)), ToggleMute);
+                                new Vector2(UiKit.Css(14f), -UiKit.Css(244f)), ToggleMute);
             RenderMute();
 
             // ── camera: RIGHT 14 / TOP 104 (#tourCam; #tourRec cut from v1) ─────
@@ -141,6 +154,7 @@ namespace DiveMap.Runtime.Ui
             // ── minimap: bottom 16, centred, 118 px ─────────────────────────────
             Image mini = UiKit.MakeCircle(root, "Minimap", Chrome);
             mini.raycastTarget = false;
+            _minimap = mini.gameObject;
             RectTransform mrt = mini.rectTransform;
             mrt.anchorMin = new Vector2(0.5f, 0f);
             mrt.anchorMax = new Vector2(0.5f, 0f);
@@ -285,6 +299,22 @@ namespace DiveMap.Runtime.Ui
         {
             if (_mute == null) return;
             UiKit.SetIcon(_mute, AudioBank.Muted ? "mute" : "sound");
+        }
+
+        /// <summary>
+        /// A5 — the radar toggle (the web's #radarBtn handler, builder.html:3753): it hides the
+        /// minimap and dims its own button to 45 % rather than changing what the minimap draws.
+        /// </summary>
+        private void ToggleRadar()
+        {
+            _radarOn = !_radarOn;
+            if (_minimap != null) _minimap.SetActive(_radarOn);
+            if (_radar != null)
+            {
+                var cg = _radar.GetComponent<CanvasGroup>() ?? _radar.gameObject.AddComponent<CanvasGroup>();
+                cg.alpha = _radarOn ? 1f : 0.45f;
+            }
+            Debug.Log($"[UI] radar={( _radarOn ? "on" : "off")}");
         }
 
         /// <summary>Lamp state, styled like the web's #lightBtn.on (amber fill, amber rim + icon).</summary>
