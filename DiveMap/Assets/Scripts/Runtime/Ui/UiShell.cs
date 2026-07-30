@@ -353,6 +353,17 @@ namespace DiveMap.Runtime.Ui
             Toast.ShowTr(daylight ? "โหมดกลางวัน" : "โหมดใต้น้ำ");
         }
 
+        /// <summary>
+        /// Destination picker for a warp gate: the map list, opened straight from the tour. The web
+        /// leaves the tour to choose (its warp reloads the page), and so does this — a sheet over a
+        /// first-person view would fight the joysticks.
+        /// </summary>
+        public void OpenWarpPicker()
+        {
+            if (ModeManager.Instance != null) ModeManager.Instance.Exit();
+            OpenMapList();
+        }
+
         public void OpenMapList()
         {
             CloseActions();   // opening a screen collapses the column (and keeps QC shots clean)

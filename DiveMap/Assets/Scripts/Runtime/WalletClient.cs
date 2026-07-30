@@ -74,7 +74,13 @@ namespace DiveMap.Runtime
             set { PlayerPrefs.SetInt(PendSpendKey, Mathf.Max(0, value)); PlayerPrefs.Save(); }
         }
 
-        private static bool Online => Application.internetReachability != NetworkReachability.NotReachable;
+        /// <summary>
+        /// Unity's reachability flag, for the log only. It is NOT used as a gate: on a Linux player
+        /// (and in CI) it reports NotReachable with a perfectly good network, which silently turned
+        /// the whole wallet off — the QC run showed no [Wallet] lines at all. Every request already
+        /// degrades gracefully on failure, so the honest thing is to try and let the answer decide.
+        /// </summary>
+        private static NetworkReachability Reach => Application.internetReachability;
 
         // ── public API ───────────────────────────────────────────────────────────
 
@@ -98,7 +104,6 @@ namespace DiveMap.Runtime
         public static void Refresh(System.Action<int> onCoins)
         {
             WalletClient c = Ensure();
-            if (!Online) { onCoins?.Invoke(TrashGameSystem.Coins); return; }
             c.StartCoroutine(c.Load(onCoins));
         }
 
@@ -106,7 +111,7 @@ namespace DiveMap.Runtime
         public static void Flush(System.Action<int> onCoins = null)
         {
             WalletClient c = Ensure();
-            if (!Online || c._inFlight) return;
+            if (c._inFlight) return;
             if (!Wallet.HasPending(PendingEarned, PendingSpent)) return;
             c.StartCoroutine(c.Save(onCoins));
         }
@@ -132,6 +137,7 @@ namespace DiveMap.Runtime
         private IEnumerator Load(System.Action<int> onCoins)
         {
             string url = MapApiClient.DefaultBaseUrl + "/api/wallet?deviceId=" + UnityWebRequest.EscapeURL(DeviceId);
+            Debug.Log($"[Wallet] load reach={Reach} device={DeviceId.Substring(0, 8)}…");
             using (UnityWebRequest req = UnityWebRequest.Get(url))
             {
                 req.timeout = 15;

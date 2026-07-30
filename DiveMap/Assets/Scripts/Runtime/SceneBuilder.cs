@@ -254,9 +254,18 @@ namespace DiveMap.Runtime
                 allGos.Add(itemGo);
                 if (!swimmer) decorGos.Add(itemGo);
 
+                if (aid.StartsWith("warp:", StringComparison.OrdinalIgnoreCase))
+                {
+                    // E8: a portal, not a model — the web builds its gate from primitives too
+                    // (builder.html:2525) and it is not in the asset manifest.
+                    WarpGate.Attach(itemGo.transform);
+                    _loaded++;
+                    continue;
+                }
+
                 if (string.IsNullOrEmpty(url))
                 {
-                    // Unknown assetId (e.g. demo "warp:0" not in manifest) → placeholder.
+                    // Unknown assetId with no gate to build → placeholder.
                     SpawnPlaceholder(itemGo.transform, item, module);
                     _failed++;
                 }

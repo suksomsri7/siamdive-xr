@@ -279,6 +279,7 @@ namespace DiveMap.Runtime
             if (_lights != null) _lights.Track(pos, _state.Yaw, SeabedY(pos + _cam.transform.forward * DiveLightMath.Reach));
             if (_reef != null) _reef.SetRepulsor(pos, DiveLightMath.FishBubble * 2f);
             AudioBank.ProximityTick(pos, _animals, _animalIds);
+            CheckWarpGates(pos);
 
             _frames++;
             if (_frames == 30 || _frames % 300 == 0)
@@ -286,6 +287,37 @@ namespace DiveMap.Runtime
                           $"yaw={_state.Yaw * Mathf.Rad2Deg:F0}° " +
                           $"depth={DroneFlight.DepthMetres(pos.y, _waterLevel):F1}m " +
                           $"seabedY={seabedY:F1}");
+        }
+
+        private bool _warpArmed = true;
+
+        /// <summary>
+        /// Fly into a gate and the destination picker opens (the web: trigger at 13 u, re-arm only
+        /// after leaving 16 u, so cancelling the picker while still inside the ring does not
+        /// immediately re-open it).
+        /// </summary>
+        private void CheckWarpGates(Vector3 pos)
+        {
+            var gates = WarpGate.Gates;
+            if (gates == null || gates.Count == 0) return;
+
+            bool near = false;
+            for (int i = 0; i < gates.Count; i++)
+            {
+                WarpGate g = gates[i];
+                if (g == null) continue;
+                float d = Vector3.Distance(pos, g.transform.position);
+                if (d < WarpGate.RearmRadius) near = true;
+                if (d < WarpGate.TriggerRadius && _warpArmed)
+                {
+                    _warpArmed = false;
+                    AudioBank.PlaySfx("click");
+                    Ui.Toast.ShowTr("ประตูวาป — เลือกแมพปลายทาง");
+                    if (Ui.UiShell.Instance != null) Ui.UiShell.Instance.OpenWarpPicker();
+                    return;
+                }
+            }
+            if (!near) _warpArmed = true;
         }
 
         /// <summary>
