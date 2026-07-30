@@ -29,10 +29,11 @@ namespace DiveMap.Runtime.Ui
         private Text _title;
         private Text _langLabel;
         private Text _gfxLabel;
+        private Text _perfLabel;
         private Text _versionLabel;
         private Text _versionValue;
 
-        private Button _langTh, _langEn, _gfxHigh, _gfxLite, _link, _close;
+        private Button _langTh, _langEn, _gfxHigh, _gfxLite, _perfOn, _perfOff, _link, _close;
 
         // ── build ────────────────────────────────────────────────────────────────
 
@@ -76,6 +77,17 @@ namespace DiveMap.Runtime.Ui
 
             _gfxHigh = Choice(rt, "GfxHigh", y, pad, half, rowH, () => SetGfx(SettingsStore.High));
             _gfxLite = Choice(rt, "GfxLite", y, pad + half + gap, half, rowH, () => SetGfx(SettingsStore.Lite));
+            y += rowH + gap * 1.6f;
+
+            // ── frame-rate readout (A7) ──────────────────────────────────────────
+            // Here rather than behind a hidden gesture, because its purpose is to let the person
+            // holding the phone answer "how does it run?" with a number.
+            _perfLabel = UiKit.MakeText(rt, "PerfLabel", "", UiKit.CssFont(12f), TextAnchor.MiddleLeft, UiKit.TextDim);
+            UiKit.TopRow(_perfLabel.rectTransform, y, UiKit.RowHeight(UiKit.CssFont(12f)), pad, pad);
+            y += UiKit.RowHeight(UiKit.CssFont(12f)) + UiKit.Css(4f);
+
+            _perfOn  = Choice(rt, "PerfOn",  y, pad, half, rowH, () => SetPerf(true));
+            _perfOff = Choice(rt, "PerfOff", y, pad + half + gap, half, rowH, () => SetPerf(false));
             y += rowH + gap * 1.6f;
 
             // ── version + link ───────────────────────────────────────────────────
@@ -150,6 +162,14 @@ namespace DiveMap.Runtime.Ui
             Refresh();
         }
 
+        private void SetPerf(bool on)
+        {
+            if (PerfHud.Enabled == on) return;
+            PerfHud.Enabled = on;   // the setter persists and rebuilds the readout
+            Debug.Log("[UI] perf hud -> " + (on ? "on" : "off"));
+            Refresh();
+        }
+
         private static void OpenWeb()
         {
             Debug.Log("[UI] open " + WebUrl);
@@ -166,6 +186,7 @@ namespace DiveMap.Runtime.Ui
             _title.text = UiStrings.Tr("ตั้งค่า");
             _langLabel.text = UiStrings.Tr("ภาษา");
             _gfxLabel.text = UiStrings.Tr("คุณภาพกราฟิก");
+            _perfLabel.text = UiStrings.Tr("ตัวเลขเฟรมเรต");
             _versionLabel.text = UiStrings.Tr("เวอร์ชันแอป");
             _versionValue.text = Application.version;
 
@@ -178,6 +199,10 @@ namespace DiveMap.Runtime.Ui
             string gfx = SettingsStore.Gfx;
             SetChoice(_gfxHigh, UiStrings.Tr("คุณภาพสูง"), gfx == SettingsStore.High);
             SetChoice(_gfxLite, UiStrings.Tr("ประหยัดพลังงาน"), gfx == SettingsStore.Lite);
+
+            bool perf = PerfHud.Enabled;
+            SetChoice(_perfOn, UiStrings.Tr("แสดง"), perf);
+            SetChoice(_perfOff, UiStrings.Tr("ซ่อน"), !perf);
 
             SetLabel(_link, UiStrings.Tr("เปิดเว็บไซต์"));
             SetLabel(_close, UiStrings.Tr("ปิด"));

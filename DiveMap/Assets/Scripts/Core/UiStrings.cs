@@ -80,6 +80,11 @@ namespace DiveMap.Core
                 { "ซื้อแล้ว",               "Purchased" },
                 { "ปล่อยลงแมพแล้ว — กำลังโหลดใหม่", "Released — reloading" },
 
+                // perf readout (A7)
+                { "ตัวเลขเฟรมเรต",          "Frame rate" },
+                { "แสดง",                  "Show" },
+                { "ซ่อน",                  "Hide" },
+
                 // pins (G)
                 { "ยังไม่มีรูป/วิดีโอ",       "No photos or video yet" },
                 { "คลิปวิดีโอ — เปิดดูได้ในเว็บ", "Video clip — playable on the web" },

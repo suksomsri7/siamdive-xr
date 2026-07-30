@@ -253,6 +253,7 @@ namespace DiveMap.Runtime
             // seabed is stretched, and where "home" is for the exit re-frame.
             TourController.Configure(result);
             EnvMode.Reset();   // new scene, new lights/water to capture
+            Ui.PerfHud.Apply();   // A7 — rebuild the readout if the player left it on
 
             // D9/E8 — a diver who left through a warp gate lands IN the destination, at a random
             // point, rather than being handed the map screen. Flag cleared on use, so cancelling a

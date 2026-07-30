@@ -119,6 +119,9 @@ namespace DiveMap.Runtime.Marine
         private bool    _camSeen;
         private Mesh   _fishMesh;
         private int    _fishCount;
+
+        /// <summary>Boids currently simulated (A7 perf readout).</summary>
+        public int FishCount => _fishCount;
         private int    _whaleCount;
         private int    _frame;
         private float  _accumMs;
