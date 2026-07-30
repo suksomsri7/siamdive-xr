@@ -16,18 +16,29 @@
 | ปุ่ม danger | `rgba(176,52,74,.92)` | `UiKit.Danger` |
 | ฟอนต์ | Noto Sans Thai 400/500/600/700 | `NotoSansThai-Regular.ttf` ใน Resources |
 
+## 1.5 หน่วยวัด — สำคัญที่สุด
+เว็บวางเลย์เอาต์ด้วย **CSS px** · แอปใช้ canvas 1080×1920 สเกลด้วย `√(w/1080 · h/1920)`
+→ เลขหน่วย canvas ที่ hard-code ไว้ **ขนาดจริงต่างกันทุกเครื่อง** จึงต้องผ่าน **`UiKit.Css(px)`** เสมอ:
+```
+canvas units = cssPx × dpr / canvasScale        (dpr = Screen.dpi/160 บนมือถือ, 1 บนจอคอม/CI)
+UiKit.CssFont(px)   สำหรับ Text.fontSize
+```
+ยืนยันจาก QC log: `dpr=1.00 canvasScale=0.667 48css=72u` (1280×720) → ปุ่ม 48 CSS px = 48 px จริง
+🔴 **ห้ามเขียนเลขหน่วย canvas ตรงๆ ใน UI ใหม่อีก** ทุกตัวเลขต้องมาจาก CSS ของเว็บ
+
 ## 2. Chrome (ตำแหน่งต้องตรง — ผู้ใช้ต้องเจอปุ่มที่นิ้วเดิม)
 | เว็บ | ตำแหน่ง/ขนาด | สถานะแอป |
 |---|---|---|
-| `#backBtn` | ซ้ายบน วงกลม 48px กระจก ไอคอน `m15 5-7 7 7 7` | ❌ ยังไม่ทำ (แอปใช้ปุ่ม back ของ Android) |
+| `#backBtn` | ซ้ายบน วงกลม 48px กระจก ไอคอน `m15 5-7 7 7 7` | ✅ pass 6 |
 | `#playBtn` | ขวาบน วงกลม 48px (ให้สัตว์ขยับ) | 🚫 แอปเล่นตลอด ไม่มีปุ่ม |
 | `#menuToggle` | **ขวาล่าง** วงกลม 48px **gradient ฟ้า** กด = กาง `#actions` + สลับไอคอน ☰↔✕ | ✅ pass 2 |
 | `#actions` | คอลัมน์ปุ่มกลมเหนือ ☰ gap 10px | ✅ pass 2 (รายการแมพ/ทัวร์/ตั้งค่า) |
 | `#compass` | ขวา ล่าง+80px วงกลม 48px เข็มเหนือ `#ff3b30` ใต้ `#e9f2fa` | ✅ pass 3 (อยู่ใน HUD ทัวร์) |
 | `#toast` | **กลางจอ** radius 14 padding 13/22 14px/600 | ✅ pass 1 |
 | `#hint` | บน 72px pill radius 22 | ❌ |
-| `#sheet` | bottom sheet เต็มความกว้าง radius 24 24 0 0 max-height 72vh + grip 42×4 | ❌ **งานถัดไป** (แอปยังเป็นหน้าเต็มจอ) |
-| modal | 86vw max 380 radius 20 padding 20 · หัว 16/600 · เนื้อ 13 muted · ปุ่มแถว gap 10 radius 13 | ❌ |
+| `#sheet` | bottom sheet เต็มความกว้าง radius 24 24 0 0 max-height 72vh + grip 42×4 | ✅ pass 5-7 (รายการแมพ/ตั้งค่า/การ์ด) |
+| modal | 86vw max 380 radius 20 padding 20 · หัว 16/600 · เนื้อ 13 muted · ปุ่มแถว gap 10 radius 13 | ✅ pass 6 (กล่อง error) |
+| `#backBtn` | ซ้ายบน 48px chevron | ✅ pass 6 (โผล่เมื่อมีหน้าเปิด) |
 | chip หมวด | min-width 64 radius 15 bg white 6% + ขอบ line · เลือก = accent 22% + ขอบ accent | ❌ |
 
 ## 3. ไอคอน
@@ -36,9 +47,22 @@ Unity: `Runtime/Ui/IconPainter.cs` วาดจาก **path data ชุดเ�
 มีแล้ว: `menu close back wave sun lamp sound mute camera play exit list mask gear compass needle`
 เหตุผลที่ไม่ใช้ฟอนต์ไอคอน: NotoSansThai ไม่มี glyph ☰ (ของเดิมจึงเป็น Image 3 แถบวางมือ) และเครื่องนี้ไม่มี Unity Editor จะ import SVG/bake atlas ไม่ได้
 
-## 4. งานที่เหลือเพื่อ parity เต็ม (เรียงตามที่ผู้ใช้เห็นก่อน)
-1. **bottom sheet** — รายการแมพ/ตั้งค่า/การ์ดข้อมูล ต้องเป็นแผ่นเลื่อนขึ้นทับแมพ (เห็นแมพอยู่ข้างหลัง) ไม่ใช่หน้าเต็มจอ · ต้องมี `UiKit.RoundedSprite()` 9-slice ก่อน
-2. **modal** ตามสเปกข้อ 2 (ยืนยัน/ตั้งชื่อ)
-3. **#backBtn** ซ้ายบน + `#hint` pill
-4. chip หมวด/variants เมื่อทำ palette (P8)
-5. เว็บซ่อนชื่อแมพ (`#name` hidden) — แอปโชว์บรรทัดเดียวจางๆ ที่หัวจอเหมือน `#count` (11px muted) ถือว่าตรงสล็อตเดียวกัน
+## 3.5 HUD ทัวร์ (builder.html 231-277) — ตรงครบแล้ว pass 4-6
+| ชิ้น | เว็บ | แอป |
+|---|---|---|
+| `#tourExit` | ซ้ายบน max(14,safe) 44×44 rgba(7,26,42,.62) | ✅ |
+| `#tourDepth` | ขวาบน pill 19px/800 `#9fe0ff` ขอบ rgba(120,200,255,.4) radius 14 | ✅ |
+| `#tourHud` | กลางบน max(15,safe) 12px/600 rgba(7,26,42,.42) | ✅ |
+| `#lightBtn` | ซ้าย 14 / บน 104 · 56×56 ขอบ 2.5px ขาว · ติด = rgba(255,214,90,.32)+`#ffe08a`+ไอคอน `#ffe89a` | ✅ |
+| `#radarBtn` slot | ซ้าย 14 / บน 174 | ✅ ใช้เป็นปุ่มปิดเสียง (เรด้าอยู่ใน P2) |
+| `#tourCam` | ขวา 14 / บน 104 gap 14 · 56×56 | ✅ ถ่ายรูป (อัดวิดีโอตัดออกจาก v1) |
+| `.stick` | ล่าง 24 · ซ้าย/ขวา 18 · 138×138 · knob 60 · ป้าย 9.5px 4 ทิศ | ✅ |
+| `#minimap` | ล่าง 16 กลางจอ 118×118 ขอบ rgba(120,200,255,.45) | ✅ วาดพื้น/สิ่งกีดขวาง/ฝูง/สัตว์/ทิศ |
+| `body.tour #compass` | **ย้าย**ไปขวาบน right 138 / top 15 · 44×44 ขอบ 2px | ✅ |
+| `body.tour` ซ่อน | `#backBtn #viewbtns #sheet #count #top` | ✅ ผ่าน `UiShell.ApplyModeChrome` |
+
+## 4. งานที่เหลือเพื่อ parity เต็ม
+1. chip หมวด/variants เมื่อทำ palette (P8) · `#seltool` เมื่อทำโหมดแก้ไข
+2. `#hint` pill ในหน้าดูแมพ (ตอนนี้มีเฉพาะใน HUD ทัวร์)
+3. minimap: เว็บมีปุ่มเรด้าเปิด/ปิด (`#radarBtn`) — แอปยังโชว์ตลอด
+4. เว็บซ่อนชื่อแมพ (`#name` hidden) — แอปโชว์บรรทัดเดียวจางๆ แบบ `#count` (11px muted กลางบน) ถือว่าตรงสล็อตเดียวกัน
