@@ -314,6 +314,35 @@ namespace DiveMap.Runtime
         /// <summary>QC only — hands off the sticks.</summary>
         public void QcStopCharge() => _qcCharge = null;
 
+        /// <summary>
+        /// QC only — park the drone <paramref name="distance"/> units from <paramref name="target"/>,
+        /// facing it, before a charge.
+        ///
+        /// The headless player runs at roughly 8 fps and FS is capped at 2.5, so five seconds of
+        /// wall clock is only about 1.6 seconds of simulated time — the drone covered 7 units of
+        /// the 110 it needed and the QC shot showed a shoal that was never approached. Starting
+        /// just outside the panic radius makes the test about whether fish flee, not about how
+        /// fast a CI runner is.
+        /// </summary>
+        public void QcPlaceNear(Vector3 target, float distance)
+        {
+            Vector3 from = new Vector3(_state.Pos.X, _state.Pos.Y, _state.Pos.Z);
+            Vector3 dir = from - target;
+            dir.y = 0f;
+            if (dir.sqrMagnitude < 1e-4f) dir = new Vector3(1f, 0f, 0f);
+            dir.Normalize();
+
+            Vector3 at = target + dir * Mathf.Max(1f, distance);
+            at.y = Mathf.Clamp(target.y, SeabedY(at) + 10f, _waterLevel - 10f);
+
+            _state.Pos = new DroneFlight.Vec3(at.x, at.y, at.z);
+            _state.Vel = new DroneFlight.Vec3(0f, 0f, 0f);
+            _state.Yaw = Mathf.Atan2(target.z - at.z, target.x - at.x);
+            _cam.transform.position = at;
+            Debug.Log($"[Tour] qc placed at ({at.x:F0},{at.y:F0},{at.z:F0}) " +
+                      $"{distance:F0}u from ({target.x:F0},{target.y:F0},{target.z:F0})");
+        }
+
         private void Update()
         {
             if (!_active || _cam == null) return;

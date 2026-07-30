@@ -706,6 +706,10 @@ namespace DiveMap.Runtime.Ui
                                              "scad", out Vector3 shoal, out float shoalR))
                 {
                     Debug.Log($"[UI] qcui charging the scad shoal at ({shoal.x:F0},{shoal.y:F0},{shoal.z:F0}) R={shoalR:F0}");
+                    // Start just outside the panic radius: on the CI runner the drone cannot
+                    // cross the map inside the shot's window (see QcPlaceNear).
+                    tour.QcPlaceNear(shoal, (float)DiveMap.Core.FleeMath.DiverPanicRadius(shoalR, 4.2) * 1.05f);
+                    yield return new WaitForSecondsRealtime(0.3f);
                     tour.QcChargeToward(shoal);
                     yield return new WaitForSecondsRealtime(5f);   // long enough to build up speed
                     ScreenCapture.CaptureScreenshot(prefix + "_flee.png");

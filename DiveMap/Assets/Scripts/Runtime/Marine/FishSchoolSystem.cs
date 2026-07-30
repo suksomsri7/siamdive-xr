@@ -105,6 +105,7 @@ namespace DiveMap.Runtime.Marine
             public Vector3 HomeNow;     // where the shoal is CURRENTLY centred (eased, never snapped)
             public bool    HomeInit;
             public float   HomeRNow;    // its CURRENT radius (eased — a bait ball forms fast, not instantly)
+            public float   LogAt;       // next Time.time this school may write a [Flee] line
         }
         private SchoolFear[] _fear = System.Array.Empty<SchoolFear>();
 
@@ -116,7 +117,6 @@ namespace DiveMap.Runtime.Marine
         private Vector3 _prevCamPos;
         private float   _camSpeed;
         private bool    _camSeen;
-        private float   _panicLogAt;
         private Mesh   _fishMesh;
         private int    _fishCount;
         private int    _whaleCount;
@@ -616,9 +616,12 @@ namespace DiveMap.Runtime.Marine
             // Also logged when the diver is merely MOVING, not only when something panics: a silent
             // log was indistinguishable from "the feature is broken" when the real answer was
             // "the drone measured 10 u/s". A reviewer needs the speed to tell those apart.
-            if (diverActive && (panic > 0.05f || _camSpeed > 4f) && t > _panicLogAt)
+            // Throttled PER SCHOOL. A single shared timer meant whichever school happened to
+            // run first each second took the slot, so the shoal the diver was actually charging
+            // never appeared in the log at all.
+            if (diverActive && (panic > 0.05f || _camSpeed > 4f) && t > fx.LogAt)
             {
-                _panicLogAt = t + 1f;
+                fx.LogAt = t + 1f;
                 Debug.Log($"[Flee] school={si} panic={panic:F2} src={(predWon ? "predator" : "diver")} " +
                           $"camSpeed={_camSpeed:F1}/{FleeMath.DiverPanicSpeed:F0} dist={diverDist:F0} " +
                           $"R={FleeMath.DiverPanicRadius(fx.HomeR0, sp.FishLen):F0} " +
