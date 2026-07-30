@@ -33,7 +33,9 @@ namespace DiveMap.Runtime
         private float _waterLevel = 240f;
         private float _scaleX = 1f, _scaleZ = 1f;
         private Vector3 _homeCenter;
-        private float _homeRadius = 100f;
+        private Vector3 _homeFrame = new Vector3(100f, 40f, 100f);
+        private float _homeMinY;
+        private float _startBack = 90f;
         private bool _active;
         private int _frames;
 
@@ -41,9 +43,12 @@ namespace DiveMap.Runtime
         /// Told by <c>AppBoot</c> after each map build: the solids to fly around, the surface, and
         /// the seabed's stretch (for the map boundary).
         /// </summary>
-        public static void Configure(List<ObstacleBox> obstacles, float waterLevel,
-                                     float scaleX, float scaleZ, Vector3 frameCenter, float radius)
+        public static void Configure(SceneBuilder.BuildResult r)
         {
+            List<ObstacleBox> obstacles = r.Obstacles;
+            float waterLevel = r.WaterLevel;
+            float scaleX = r.SeabedScaleX;
+            float scaleZ = r.SeabedScaleZ;
             TourController tc = Ensure();
             if (tc == null)
             {
@@ -66,8 +71,12 @@ namespace DiveMap.Runtime
             tc._waterLevel = waterLevel;
             tc._scaleX = scaleX;
             tc._scaleZ = scaleZ;
-            tc._homeCenter = frameCenter;
-            tc._homeRadius = Mathf.Max(20f, radius);
+            tc._homeCenter = r.FrameCenter;
+            tc._homeFrame = new Vector3(r.FrameSizeX, r.FrameSizeY, r.FrameSizeZ);
+            tc._homeMinY = r.FrameMinY;
+            // Start distance comes from the CONTENT, not the seabed: the first tour shot began
+            // 263 u out because the sand is 374 u across, and the wreck was a speck.
+            tc._startBack = Mathf.Clamp(Mathf.Max(r.FrameSizeX, r.FrameSizeZ) * 0.9f, 25f, 140f);
         }
 
         private static TourController Ensure()
@@ -103,7 +112,7 @@ namespace DiveMap.Runtime
             if (_orbit != null) _orbit.enabled = false;
 
             // Start just off the content, facing it, at a comfortable height above the sand.
-            Vector3 start = _homeCenter - new Vector3(0f, 0f, Mathf.Clamp(_homeRadius * 0.9f, 30f, 260f));
+            Vector3 start = _homeCenter - new Vector3(0f, 0f, _startBack);
             start.y = Mathf.Clamp(_homeCenter.y + 12f, SeabedY(start) + 10f, _waterLevel - 12f);
 
             _state = new DroneFlight.State
@@ -132,8 +141,7 @@ namespace DiveMap.Runtime
             {
                 _orbit.enabled = true;
                 // Put the map back the way the user left it rather than wherever we stopped.
-                _orbit.FrameBox(_homeCenter, _homeRadius * 2f, _homeRadius, _homeRadius * 2f,
-                                _homeCenter.y - _homeRadius);
+                _orbit.FrameBox(_homeCenter, _homeFrame.x, _homeFrame.y, _homeFrame.z, _homeMinY);
             }
             Debug.Log("[Tour] end");
         }

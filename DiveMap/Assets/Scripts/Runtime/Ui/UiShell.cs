@@ -418,7 +418,14 @@ namespace DiveMap.Runtime.Ui
         /// </summary>
         public void SetChromeVisible(bool visible)
         {
-            if (!visible) CloseAll();
+            if (!visible)
+            {
+                CloseAll();
+                // The info card is NOT in the nav stack (by design — it must not block the
+                // orbit camera), so CloseAll misses it. The first tour QC shot caught it sitting
+                // over both joysticks.
+                if (_card != null) _card.Hide();
+            }
             if (_hamburger != null) _hamburger.SetActive(visible && (_nav == null || _nav.Count == 0));
             _chromeVisible = visible;
         }
