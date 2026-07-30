@@ -99,6 +99,15 @@ WO ใน DESIGN_DOC **ไม่ครอบคลุม** ทัวร์โด
 - **QC เพิ่มขั้นตอน**: กด heatmap/กลางวันแล้วถ่ายรูป · ค้างในทัวร์ 6 วิถ่าย `_game.png` (รอบแรกได้ทะเลว่างเพราะถ่ายที่ 2 วิ)
 - APK: `dive3d.suksomsri.cloud/dl/DiveMap-game2-67823a34*.apk` · PARITY 42% · เทส 231
 
+## 4.95 💸 CI ประหยัดโควตา (2026-07-30) — **อ่านก่อนสงสัยว่าทำไมไม่มี APK**
+GitHub บล็อกงานทั้งหมดด้วย *"recent account payments have failed or your spending limit needs to be increased"* — repo เป็น private และรอบหนึ่งกิน **44 นาที** (test 5.7 + QC 9.0 + Windows 10.9 + Android 18.4)
+→ แก้ workflow: **push ปกติรันแค่ `test` + `qc-shot` (14.7 นาที, −67%)** · ไฟล์ติดตั้งสร้างเมื่อสั่งเท่านั้น
+```bash
+tools/request_build.sh            # สั่ง build APK+Windows จาก main → ได้ run id
+tools/publish_build.sh <run> <tag>  # พอเขียว เอาไฟล์ขึ้น dive3d.suksomsri.cloud/dl/
+```
+⚠️ **ยังต้องรอโควตา/บิลของ user ก่อน CI ถึงจะกลับมารัน** — โค้ดที่ push แล้วแต่ยังไม่ผ่าน CI: P3b wallet (เทสผ่าน แต่ไม่มี QC) และ E8 warp gate (ยังไม่ผ่านอะไรเลย)
+
 ## 5. งานถัดไปทันที (คิวเรียงแล้ว)
 ### 5.1 ✅ ปิดแล้ว — WO-XR-03 (2026-07-28)
 formation ตามสูตรเว็บ + วาฬ GLB จริง + QC fixes (ครีบดำ/gloss/heading log) · commit `a7d12f8` → `f31d9fc`

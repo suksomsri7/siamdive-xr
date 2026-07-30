@@ -6,6 +6,11 @@ on:
     paths-ignore:
       - '**.md'
   workflow_dispatch:
+    inputs:
+      players:
+        description: 'Build the installable players (APK + Windows). Off = tests + QC screenshot only.'
+        type: boolean
+        default: true
 
 concurrency:
   group: divemap-ci-${{ github.ref }}
@@ -79,6 +84,11 @@ jobs:
   build:
     name: Build Android APK
     needs: test
+    # Cost control (2026-07-30): a full round was 44 runner-minutes and 29 of them were players
+    # nobody downloaded — we hand the user a build every 2-3 rounds, not every push. Tests + the
+    # QC screenshot still run on every push, so nothing that CATCHES a bug was traded away.
+    # Ask for a build with: gh workflow run "DiveMap CI (Android)" -f players=true
+    if: github.event_name == 'workflow_dispatch' && inputs.players
     runs-on: ubuntu-latest
     timeout-minutes: 90
     steps:
@@ -143,6 +153,7 @@ jobs:
   build-windows:
     name: Build Windows player
     needs: test
+    if: github.event_name == 'workflow_dispatch' && inputs.players
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
