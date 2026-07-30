@@ -38,6 +38,7 @@ namespace DiveMap.Core
                 // tour (P1.1)
                 { "ทัวร์ดำน้ำ",             "Dive tour" },
                 { "ออกทัวร์",              "Exit tour" },
+                { "ไฟหน้า",                "Headlamp" },
                 { "ยังเข้าทัวร์ไม่ได้",       "Cannot start the tour yet" },
                 { "ลากจอยซ้ายเพื่อเลี้ยว/ขึ้นลง · จอยขวาเพื่อเดินหน้า",
                   "Left stick turns and rises · right stick moves you forward" },

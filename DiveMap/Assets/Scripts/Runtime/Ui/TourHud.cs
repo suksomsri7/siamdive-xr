@@ -22,6 +22,9 @@ namespace DiveMap.Runtime.Ui
 
         private Text _depth;
         private float _shownDepth = -999f;
+        private Button _light;
+        private Text _lightLabel;
+        private Image _vignette;
 
         public static TourHud Ensure()
         {
@@ -60,10 +63,84 @@ namespace DiveMap.Runtime.Ui
             drt.sizeDelta = new Vector2(420f, UiKit.RowHeight(34));
             drt.anchoredPosition = new Vector2(28f, -84f);
 
+            BuildVignette(root);
+
             Button exit = UiKit.MakeButton(root, "TourExit", UiStrings.Tr("ออกทัวร์"), 30,
                                            UiKit.TealDim, UiKit.TextMain, ExitTour);
             UiKit.Anchor(exit.GetComponent<RectTransform>(), new Vector2(1f, 1f),
                          new Vector2(220f, 84f), new Vector2(-28f, -28f));
+
+            // Headlamp toggle, under the exit button. Labelled with the state it will produce,
+            // like the web's lightBtn highlight.
+            _light = UiKit.MakeButton(root, "TourLight", UiStrings.Tr("ไฟหน้า"), 30,
+                                      UiKit.TealDim, UiKit.TextMain, ToggleLight);
+            UiKit.Anchor(_light.GetComponent<RectTransform>(), new Vector2(1f, 1f),
+                         new Vector2(220f, 84f), new Vector2(-28f, -124f));
+            _lightLabel = _light.GetComponentInChildren<Text>(true);
+        }
+
+        /// <summary>
+        /// Vignette: the web darkens the frame's corners in its tour (#vignette) — underwater you
+        /// see through a mask, not a rectangle. Drawn behind the sticks, never taking raycasts,
+        /// and built from one generated texture so there is no asset to import.
+        /// </summary>
+        private void BuildVignette(RectTransform root)
+        {
+            _vignette = UiKit.MakePanel(root, "Vignette", new Color(0f, 0.03f, 0.05f, 0.85f));
+            _vignette.raycastTarget = false;
+            _vignette.sprite = VignetteSprite();
+            _vignette.type = Image.Type.Simple;
+            RectTransform rt = _vignette.rectTransform;
+            rt.anchorMin = Vector2.zero;
+            rt.anchorMax = Vector2.one;
+            rt.offsetMin = new Vector2(-80f, -80f);   // bleed past the edges so no seam shows
+            rt.offsetMax = new Vector2(80f, 80f);
+            rt.SetAsFirstSibling();
+        }
+
+        private static Sprite _vignetteSprite;
+        private static Sprite VignetteSprite()
+        {
+            if (_vignetteSprite != null) return _vignetteSprite;
+            const int n = 96;
+            var tex = new Texture2D(n, n, TextureFormat.RGBA32, false)
+            {
+                name = "TourVignette",
+                wrapMode = TextureWrapMode.Clamp,
+                filterMode = FilterMode.Bilinear,
+            };
+            var px = new Color32[n * n];
+            for (int y = 0; y < n; y++)
+            for (int x = 0; x < n; x++)
+            {
+                // Distance from centre in "screen halves", so the corners (≈1.41) are darkest.
+                float u = x / (float)(n - 1) * 2f - 1f;
+                float v = y / (float)(n - 1) * 2f - 1f;
+                float d = Mathf.Sqrt(u * u + v * v) / 1.4142f;
+                float a = Mathf.Clamp01((d - 0.55f) / 0.45f);
+                a = a * a * (3f - 2f * a);
+                px[y * n + x] = new Color32(255, 255, 255, (byte)Mathf.RoundToInt(a * 255f));
+            }
+            tex.SetPixels32(px);
+            tex.Apply();
+            _vignetteSprite = Sprite.Create(tex, new Rect(0f, 0f, n, n), new Vector2(0.5f, 0.5f));
+            return _vignetteSprite;
+        }
+
+        private static void ToggleLight()
+        {
+            TourController tc = TourController.Active;
+            if (tc != null) tc.ToggleHeadlight();
+        }
+
+        /// <summary>Reflect the lamp state on the button (dim = off).</summary>
+        public void SetHeadlight(bool on)
+        {
+            if (_light == null) return;
+            Image bg = _light.GetComponent<Image>();
+            if (bg != null) bg.color = on ? UiKit.Teal : UiKit.TealDim;
+            if (_lightLabel != null)
+                _lightLabel.color = on ? new Color(0.043f, 0.090f, 0.118f) : UiKit.TextMain;
         }
 
         private static void ExitTour()

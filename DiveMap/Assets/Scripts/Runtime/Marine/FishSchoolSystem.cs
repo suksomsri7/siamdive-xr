@@ -86,6 +86,9 @@ namespace DiveMap.Runtime.Marine
         private readonly List<SchoolRender> _render = new List<SchoolRender>();
 
         private Camera _cam;
+        // P1.2: the tour's fish-repelling bubble (zero radius = nobody is diving).
+        private Vector3 _repulsorPos;
+        private float   _repulsorRadius;
         private Mesh   _fishMesh;
         private int    _fishCount;
         private int    _whaleCount;
@@ -333,6 +336,26 @@ namespace DiveMap.Runtime.Marine
             // Swap buffers.
             var tmp = _cur; _cur = _nxt; _nxt = tmp;
 
+            // P1.2 — the drone's bubble (the web's droneBubble, builder.html:1668): fish are
+            // DISPLACED out of a cavity around the diver rather than steered, which is what makes
+            // a shoal part around you instead of swimming through your face. Applied after the
+            // sim so the boids keep their formation and only the last centimetres are nudged.
+            if (_repulsorRadius > 0.01f)
+            {
+                float rx = _repulsorPos.x, rz = _repulsorPos.z;
+                for (int i = 0; i < _fishCount; i++)
+                {
+                    FishState f = _cur[i];
+                    float dx = f.Pos.x - rx, dz = f.Pos.z - rz;
+                    float d = Mathf.Sqrt(dx * dx + dz * dz);
+                    float push = DiveLightMath.BubblePush(d, _repulsorRadius);
+                    if (push <= 0f) continue;
+                    f.Pos.x += dx / d * push;
+                    f.Pos.z += dz / d * push;
+                    _cur[i] = f;
+                }
+            }
+
             // Build matrices + one instanced draw per school (or per-fish under software GL).
             int drawn = 0;
             for (int si = 0; si < _render.Count; si++)
@@ -413,6 +436,16 @@ namespace DiveMap.Runtime.Marine
             if (_schools.IsCreated) _schools.Dispose();
             if (_obstacles.IsCreated) _obstacles.Dispose();
             _alloc = false;
+        }
+
+        /// <summary>
+        /// P1.2 — tell the reef that a diver is here: fish are pushed out of a bubble of
+        /// <paramref name="radius"/> around <paramref name="pos"/>. Radius 0 clears it.
+        /// </summary>
+        public void SetRepulsor(Vector3 pos, float radius)
+        {
+            _repulsorPos = pos;
+            _repulsorRadius = Mathf.Max(0f, radius);
         }
 
         // ── QC / camera helpers ─────────────────────────────────────────────────────

@@ -87,6 +87,60 @@ namespace DiveMap.Runtime.Ui
             return rt;
         }
 
+        /// <summary>
+        /// A soft-edged circle sprite, generated once at runtime. uGUI's default Image is a
+        /// rectangle, and the web's joystick is a circle (its pads are CSS border-radius:50%),
+        /// so the app needs a real round sprite — shipping a PNG would mean hand-writing a
+        /// .meta + import settings for an asset no one can preview on this machine.
+        ///
+        /// <paramref name="ringThickness"/> 0 = filled disc; &gt;0 = ring of that fraction of the
+        /// radius. Edges are smoothstepped over ~1.5 px so they read as round, not as stairs.
+        /// </summary>
+        public static Sprite CircleSprite(float ringThickness = 0f)
+        {
+            int key = Mathf.RoundToInt(ringThickness * 100f);
+            if (_circles.TryGetValue(key, out Sprite cached) && cached != null) return cached;
+
+            const int size = 128;
+            const float r = size * 0.5f;
+            var tex = new Texture2D(size, size, TextureFormat.RGBA32, false)
+            {
+                name = "UiCircle" + key,
+                wrapMode = TextureWrapMode.Clamp,
+                filterMode = FilterMode.Bilinear,
+            };
+            var px = new Color32[size * size];
+            float inner = ringThickness > 0f ? r * (1f - ringThickness) : 0f;
+            for (int y = 0; y < size; y++)
+            for (int x = 0; x < size; x++)
+            {
+                float dx = x + 0.5f - r, dy = y + 0.5f - r;
+                float d = Mathf.Sqrt(dx * dx + dy * dy);
+                float a = Mathf.Clamp01((r - 0.75f - d) / 1.5f);          // outer edge
+                if (inner > 0f) a *= Mathf.Clamp01((d - inner) / 1.5f);   // inner edge (ring)
+                byte b = (byte)Mathf.RoundToInt(Mathf.Clamp01(a) * 255f);
+                px[y * size + x] = new Color32(255, 255, 255, b);
+            }
+            tex.SetPixels32(px);
+            tex.Apply();
+
+            Sprite sprite = Sprite.Create(tex, new Rect(0f, 0f, size, size), new Vector2(0.5f, 0.5f));
+            _circles[key] = sprite;
+            return sprite;
+        }
+        private static readonly System.Collections.Generic.Dictionary<int, Sprite> _circles =
+            new System.Collections.Generic.Dictionary<int, Sprite>();
+
+        /// <summary>Round panel — same as <see cref="MakePanel"/> but with a circle sprite.</summary>
+        public static Image MakeCircle(Transform parent, string name, Color color,
+                                       float ringThickness = 0f)
+        {
+            Image img = MakePanel(parent, name, color);
+            img.sprite = CircleSprite(ringThickness);
+            img.type = Image.Type.Simple;
+            return img;
+        }
+
         /// <summary>Solid-colour panel (no sprite — avoids any Resources/shader dependency).</summary>
         public static Image MakePanel(Transform parent, string name, Color color)
         {

@@ -39,7 +39,9 @@ namespace DiveMap.Runtime.Ui
         {
             if (parent == null) return null;
 
-            Image pad = UiKit.MakePanel(parent, name, new Color(0.043f, 0.090f, 0.118f, 0.55f));
+            // ROUND, like the web (its pads are CSS circles). A rectangular pad reads as a
+            // button you can miss; a circle tells the thumb where the centre is.
+            Image pad = UiKit.MakeCircle(parent, name, new Color(0.043f, 0.090f, 0.118f, 0.50f));
             RectTransform prt = pad.rectTransform;
             prt.anchorMin = anchor;
             prt.anchorMax = anchor;
@@ -47,7 +49,16 @@ namespace DiveMap.Runtime.Ui
             prt.sizeDelta = new Vector2(size, size);
             prt.anchoredPosition = offset;
 
-            Image knob = UiKit.MakePanel(prt, "Knob", new Color(0.310f, 0.820f, 0.771f, 0.85f));
+            // Ring on the pad's rim = the deflection limit, so the stick's range is visible.
+            Image ring = UiKit.MakeCircle(prt, "Ring", new Color(0.310f, 0.820f, 0.771f, 0.30f), 0.06f);
+            ring.raycastTarget = false;
+            RectTransform rrt = ring.rectTransform;
+            rrt.anchorMin = Vector2.zero;
+            rrt.anchorMax = Vector2.one;
+            rrt.offsetMin = new Vector2(size * 0.08f, size * 0.08f);
+            rrt.offsetMax = new Vector2(-size * 0.08f, -size * 0.08f);
+
+            Image knob = UiKit.MakeCircle(prt, "Knob", new Color(0.310f, 0.820f, 0.771f, 0.88f));
             knob.raycastTarget = false;
             RectTransform krt = knob.rectTransform;
             krt.anchorMin = new Vector2(0.5f, 0.5f);

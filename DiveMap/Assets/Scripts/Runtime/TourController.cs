@@ -24,9 +24,14 @@ namespace DiveMap.Runtime
     {
         private static TourController _instance;
 
+        /// <summary>The live controller while a tour is running (used by the HUD buttons).</summary>
+        public static TourController Active => _instance != null && _instance._active ? _instance : null;
+
         private Camera _cam;
         private OrbitCamera _orbit;
         private TourHud _hud;
+        private DroneLights _lights;
+        private FishSchoolSystem _reef;
 
         private DroneFlight.State _state;
         private DroneFlight.Box[] _solids = new DroneFlight.Box[0];
@@ -123,6 +128,11 @@ namespace DiveMap.Runtime
             };
 
             _hud = TourHud.Ensure();
+            if (_lights == null) _lights = DroneLights.Attach(transform);
+            _lights.gameObject.SetActive(true);
+            _lights.Set(true);
+            if (_hud != null) _hud.SetHeadlight(true);
+            _reef = UnityEngine.Object.FindFirstObjectByType<FishSchoolSystem>();
             InputRig.Clear();
             _active = true;
             _frames = 0;
@@ -133,10 +143,25 @@ namespace DiveMap.Runtime
                       $"scale=({_scaleX:F2},{_scaleZ:F2})");
         }
 
+        /// <summary>Toggle the headlamps (HUD button). Also swaps the whole atmosphere.</summary>
+        public void ToggleHeadlight()
+        {
+            if (_lights == null) return;
+            _lights.Toggle();
+            if (_hud != null) _hud.SetHeadlight(_lights.HeadlightOn);
+        }
+
         private void End()
         {
             _active = false;
             InputRig.Clear();
+            if (_lights != null)
+            {
+                _lights.RestoreScene();
+                _lights.gameObject.SetActive(false);
+            }
+            // The reef goes back to ignoring us.
+            if (_reef != null) _reef.SetRepulsor(Vector3.zero, 0f);
             if (_orbit != null)
             {
                 _orbit.enabled = true;
@@ -176,6 +201,8 @@ namespace DiveMap.Runtime
             _cam.transform.LookAt(new Vector3(look.X, look.Y, look.Z), Vector3.up);
 
             if (_hud != null) _hud.SetDepth(DroneFlight.DepthMetres(pos.y, _waterLevel));
+            if (_lights != null) _lights.Track(pos, _state.Yaw, SeabedY(pos + _cam.transform.forward * DiveLightMath.Reach));
+            if (_reef != null) _reef.SetRepulsor(pos, DiveLightMath.FishBubble * 2f);
 
             _frames++;
             if (_frames == 30 || _frames % 300 == 0)
