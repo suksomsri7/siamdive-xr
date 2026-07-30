@@ -7,7 +7,7 @@
 > ที่มาของรายการ: `id=`, `title=`, และชื่อ `function` ทั้งหมดใน `public/builder.html` (4,408 บรรทัด)
 > วิธีอ่านสถานะ: ✅ ทำแล้ว · ⚠️ ทำบางส่วน · ❌ ยังไม่มี
 >
-> **สรุปตัวเลข: 22.5 / 86 ≈ 26% ของฟีเจอร์เว็บ** — อัปเดต 2026-07-30 (+toast, +ทัวร์ D1/D2/D4/D8)
+> **สรุปตัวเลข: 27 / 86 ≈ 31% ของฟีเจอร์เว็บ** — อัปเดต 2026-07-30 (+toast, +ทัวร์ D1/D2/D4/D8)
 > ถ้าวัดแค่ "ภาพนิ่งของฉาก" ≈ 85%
 > เวลาอัปเดตไฟล์นี้: แก้ทั้งช่องสถานะและตัวเลขสรุป ห้ามปล่อยให้ค้าง
 
@@ -19,7 +19,7 @@
 | A3 | เฟรมเปิดอัตโนมัติให้พอดีเนื้อหา | `frameContent()` | ✅ |
 | A4 | รายการแมพ + ค้นหา + thumbnail | `_objList` / API public | ✅ |
 | A5 | มินิแมพ + เรด้าแสดงสัตว์/วัตถุรอบตัว | `drawMinimap()` :3714, `radarBtn` | ❌ |
-| A6 | เข็มทิศ (เหนือ = แดง) | `compass` | ❌ |
+| A6 | เข็มทิศ (เหนือ = แดง) | `compass` | ✅ P1.2/UI-parity (ใน HUD ทัวร์) |
 | A7 | perf HUD (fps/draw calls) | `showPerfHud()` :4007 | ⚠️ มีแต่ log `avgFrameMs` ไม่มี HUD |
 
 ## B. บรรยากาศ / เรนเดอร์ (5.5/9)
@@ -33,7 +33,7 @@
 | B6 | สลับโหมดกลางวัน ☀️ / โหมดน้ำ 💧 เปิด-ปิด | `setEnv()`, `waterModeBtn`, `bright` | ❌ |
 | B7 | heatmap ความลึก + legend | `setDepthView()` :640, `depthLegend` | ❌ |
 | B8 | FX ทองเรืองแสง + หนวดไหว | `_fxGold()`, `_fxBeard()` | ❌ |
-| B9 | vignette + murk ตอนอยู่ในทัวร์ | `vignette`, `murkUI()` | ❌ |
+| B9 | vignette + murk ตอนอยู่ในทัวร์ | `vignette`, `murkUI()` | ✅ P1.2a |
 
 ## C. สัตว์ / AI (3.5/6)
 | # | ฟีเจอร์เว็บ | หลักฐาน | Unity |
@@ -43,19 +43,19 @@
 | C3 | หลบสิ่งกีดขวาง (solid avoidance) | `computeObsR()`, `ejectFromSolids()` | ✅ |
 | C4 | genome ต่อสายพันธุ์ + locomotion จาก animation | `speciesGenome()`, `deriveLocomotion()` | ⚠️ ใช้ตารางค่าคงที่ ไม่ derive จาก clip |
 | C5 | ปลาตกใจ/หนีผู้เล่น + หาที่หลบ | `schoolFlee()`, `shelterSense()`, `senseAgents()` | ❌ |
-| C6 | เสียงสัตว์ตามระยะ | `_animalSfxTick()` | ❌ |
+| C6 | เสียงสัตว์ตามระยะ | `_animalSfxTick()` | ✅ P1.2b |
 
-## D. ทัวร์ดำน้ำ (โดรน) — 4/10 (P1.1 เสร็จ)
+## D. ทัวร์ดำน้ำ (โดรน) — 6/10 (P1.1 + P1.2 เสร็จ)
 `enterTour()` :3635 · `exitTour()` · `tourUpdate()`
 | # | ฟีเจอร์ | หลักฐาน | Unity |
 |---|---|---|---|
 | D1 | เข้า/ออกโหมดทัวร์ + ล็อกจอแนวนอน | `enterTour`, `tourLockLandscape()` | ✅ P1.1 |
 | D2 | จอยสติ๊ก 2 ตัว (ขึ้น-ลง/เลี้ยว + เดินหน้า) | `makeStick()`, `stickL`, `stickR`, `knobL/R` | ✅ P1.1 (ยังเป็นแป้นเหลี่ยม รอทำวงกลม) |
-| D3 | ไฟหน้าโดรน (โคนแสง + spotlight) | `_applyHeadlight()`, `lightBtn`, `mkBeam()` :3669 | ❌ |
+| D3 | ไฟหน้าโดรน (โคนแสง + spotlight) | `_applyHeadlight()`, `lightBtn`, `mkBeam()` :3669 | ✅ P1.2a (+สลับบรรยากาศ) |
 | D4 | อ่านค่าความลึกสดขณะบิน | `tourDepth`, `depthMetres()` | ✅ P1.1 |
 | D5 | **ถ่ายรูป** | `tourShot`, `captureThumb()` | ❌ |
 | D6 | **อัดวิดีโอ + นาฬิกาจับเวลา** | `tourRec`, `stopRec()` :3801, `_recClock()` | 🚫 ตัดออกจาก v1 (user เคาะ) |
-| D7 | บับเบิลจากโดรน | `droneBubble()` | ❌ |
+| D7 | โพรงดันปลาออกจากโดรน | `droneBubble()` | ✅ P1.2a |
 | D8 | ชนวัตถุแล้วถูกดันออก | `_ejectFromSolids()` | ✅ P1.1 |
 | D9 | ทัวร์อัตโนมัติ (บินเอง) + กล้องทัวร์ | `tourCam`, `_tourInstBuild()` | ❌ |
 | D10 | สอนท่าเล่นครั้งแรก | `_tutTour()`, `_guideRun()` | ❌ |
@@ -69,7 +69,7 @@
 | E4 | ยอดเหรียญ + เซฟ/โหลด (ออนไลน์+ออฟไลน์) | `coinUI()`, `saveCoins()`, `_offlineCoinNote()` |
 | E5 | ร้านค้า — ซื้อสัตว์มาปล่อย | `openShop()` :4238, `buyAnimal()`, `priceOf()` |
 | E6 | โหมด arena / เลือกโลกแล้วเล่น | `_startArenaPlay()`, `_arenaExitGate()` |
-| E7 | เสียงเอฟเฟกต์ + เพลงบรรยากาศ + ปิดเสียง | `_playSfx()` :4381, `_ambPlay()`, `_toggleMute()` |
+| E7 | เสียงเอฟเฟกต์ + เพลงบรรยากาศ + ปิดเสียง | `_playSfx()` :4381, `_ambPlay()`, `_toggleMute()` | ✅ P1.2b |
 | E8 | ประตูวาปให้ผู้เล่นเดินทางข้ามแมพ | `_warpMenu()`, `_doWarp()`, `_warpFlash()` |
 
 ## F. AR / Holomap — 0/4 ❌

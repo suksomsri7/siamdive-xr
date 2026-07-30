@@ -71,6 +71,17 @@ WO ใน DESIGN_DOC **ไม่ครอบคลุม** ทัวร์โด
 - APK ล่าสุดส่ง user: `dive3d.suksomsri.cloud/dl/DiveMap-tour2-64f879a2*.apk`
 - **ถัดไป P1.2**: ไฟหน้าโดรน (spotlight+โคน builder.html:3669) · บับเบิล · vignette/murk (`scene.fog` near 90 far 230 ตอน tour) · **เสียง** 8 ไฟล์ที่ `maps.siamdive.com/audio/*.mp3` (streaming ไม่ต้องยัดใน APK) · แป้นจอยทำเป็นวงกลม (ตอนนี้เหลี่ยม)
 
+## 4.7 ▶️ RESUME 2026-07-30 (เช้ามืด) — P1.2 + UI parity (main `7490c819`)
+- **P1.2a** จอยกลมตามเว็บ (`UiKit.CircleSprite`) · **ไฟหน้าโดรน** `Runtime/DroneLights.cs` + `Core/DiveLightMath.cs` (8 เทส) = 2 spotlight + 2 วงไฟบนพื้น + 2 โคนแสง + **สลับบรรยากาศทั้งฉาก** (เปิด fog 170-680 ฟ้า ambient×0.55 / ปิด 70-200 เกือบดำ ×0.32) + คืนค่าฉากเดิมตอนออก · **ปลาหลบโดรน** (droneBubble: ดันตำแหน่งออก ไม่ใช่ steer) · vignette
+- **P1.2b** เสียง `Core/DiveAudio.cs` (7 เทส) + `Runtime/AudioBank.cs` — **สตรีมจาก `maps.siamdive.com/audio/`** (APK ไม่โต) · QC ยืนยัน `[Audio] loaded drone_start_cue (9.1s) / underwater_ambience (47.3s)` · เสียงวาฬตามระยะ cooldown แยกต่อตัว · ปุ่ม mute จำค่า
+- **UI parity 3 pass** (user สั่ง: "UI/UX ต้องเหมือนเว็บ") → **อ่าน `UI_PARITY.md`** ก่อนแตะ UI ทุกครั้ง
+  - tokens = `:root` ของ builder.html (bg #071a2b / accent #39b0e8 / txt #eaf4fb / mut #9fb6c9 / line 10%) · glass 0.88 ไม่ใช่ 0.72 เพราะ uGUI เบลอฉากหลังไม่ได้
+  - `Runtime/Ui/IconPainter.cs` วาดไอคอน stroke จาก path 24 หน่วยของเว็บ (15 ไอคอน) — ไม่มี Editor ให้ import SVG และ NotoSansThai ไม่มี glyph ☰
+  - **☰ ย้ายไปขวาล่าง วงกลมฟ้า กด = กางคอลัมน์ปุ่มกลม (รายการแมพ/ทัวร์/ตั้งค่า) + สลับไอคอน ☰↔✕** เหมือน `#actions` ของเว็บ · **ลบ slide-in panel ของ 05.1 ทิ้ง**
+  - toast **กลางจอ** · tour chrome เป็นวงกลมกระจก (exit/lamp/sound) · เข็มทิศเหนือแดงที่ขอบขวา
+- APK: `dive3d.suksomsri.cloud/dl/DiveMap-webui-7cc289a78d.apk`
+- **งาน parity ที่เหลือ (เรียงตามที่ผู้ใช้เห็น)**: 1) **bottom sheet** — รายการแมพ/ตั้งค่า/การ์ด ต้องเป็นแผ่นเลื่อนขึ้นทับแมพ ยังเป็นหน้าเต็มจอ (ต้องทำ `UiKit.RoundedSprite()` 9-slice ก่อน) 2) modal สเปกเว็บ 3) `#backBtn` ซ้ายบน + `#hint` pill 4) chip หมวด
+
 ## 5. งานถัดไปทันที (คิวเรียงแล้ว)
 ### 5.1 ✅ ปิดแล้ว — WO-XR-03 (2026-07-28)
 formation ตามสูตรเว็บ + วาฬ GLB จริง + QC fixes (ครีบดำ/gloss/heading log) · commit `a7d12f8` → `f31d9fc`
