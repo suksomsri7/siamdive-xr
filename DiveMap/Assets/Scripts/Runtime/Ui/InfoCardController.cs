@@ -38,7 +38,7 @@ namespace DiveMap.Runtime.Ui
 
         // CSS px, like the rest of the chrome: the web's info strip is ~110 px tall with a 16 px
         // title, not a 380-unit slab with 46-unit text.
-        private static float CardHeight => UiKit.Css(112f);
+        private static float CardHeight => UiKit.Css(66f);   // two lines + padding, like #seltool
 
         private RectTransform _layer;
         private Text _nameText;
@@ -81,55 +81,41 @@ namespace DiveMap.Runtime.Ui
             _nav = nav;
             _layer = UiKit.MakeNode(parent, "CardLayer");
 
-            // Rounded top corners + a grip, like the web's sheet — a square slab pushed up from
-            // the bottom edge is the one thing here that never looked like the same product.
-            Image card = UiKit.MakeRounded(_layer, "Card", UiKit.PanelBg, 24f);
+            // A CENTRED pill, like the web's #seltool (bottom 22, radius 30, auto width): a
+            // full-width bar sat on top of the ☰ and the compass, which live at the right edge.
+            // Capped at 86vw / 380 CSS px, the same envelope the web gives its modals.
+            float width = Mathf.Min(Screen.width / UiKit.CanvasScale * 0.86f, UiKit.Css(380f));
+            Image card = UiKit.MakeRounded(_layer, "Card", UiKit.Glass, 20f);
             RectTransform rt = card.rectTransform;
-            rt.anchorMin = new Vector2(0f, 0f);
-            rt.anchorMax = new Vector2(1f, 0f);
+            rt.anchorMin = new Vector2(0.5f, 0f);
+            rt.anchorMax = new Vector2(0.5f, 0f);
             rt.pivot = new Vector2(0.5f, 0f);
-            rt.sizeDelta = new Vector2(0f, CardHeight);
-            rt.anchoredPosition = Vector2.zero;
+            rt.sizeDelta = new Vector2(width, CardHeight);
+            rt.anchoredPosition = new Vector2(0f, UiKit.Css(22f));
 
-            Image grip = UiKit.MakeRounded(rt, "Grip", new Color(1f, 1f, 1f, 0.28f), 3f);
-            grip.raycastTarget = false;
-            RectTransform grt = grip.rectTransform;
-            grt.anchorMin = new Vector2(0.5f, 1f);
-            grt.anchorMax = new Vector2(0.5f, 1f);
-            grt.pivot = new Vector2(0.5f, 1f);
-            grt.sizeDelta = new Vector2(UiKit.Css(42f), UiKit.Css(4f));
-            grt.anchoredPosition = new Vector2(0f, -UiKit.Css(10f));
+            float pad = UiKit.Css(14f);
+            float y = UiKit.Css(10f);
 
-            // Row heights: NotoSansThai renders one line at ~1.51 × fontSize (two levels
-            // of tone marks above the base glyph plus a below-vowel). Legacy Text does not
-            // clip a line that is too tall for its rect — it DROPS it — so every row here
-            // is sized well above fontSize × 1.51.
-            float pad = UiKit.Css(16f);
-            float y = UiKit.Css(16f);
-
-            _nameText = UiKit.MakeText(rt, "Name", "", UiKit.CssFont(16f), TextAnchor.MiddleLeft, UiKit.Accent);
+            _nameText = UiKit.MakeText(rt, "Name", "", UiKit.CssFont(15f), TextAnchor.MiddleLeft, UiKit.Accent);
             _nameText.fontStyle = FontStyle.Bold;
-            UiKit.TopRow(_nameText.rectTransform, y, UiKit.RowHeight(UiKit.CssFont(16f)), pad, UiKit.Css(96f));
-            y += UiKit.RowHeight(UiKit.CssFont(16f)) + UiKit.Css(2f);
+            UiKit.TopRow(_nameText.rectTransform, y, UiKit.RowHeight(UiKit.CssFont(15f)), pad, UiKit.Css(44f));
+            y += UiKit.RowHeight(UiKit.CssFont(15f));
 
+            // Kind and depth share one muted line, dot-separated like the web's meta lines.
             _kindText = UiKit.MakeText(rt, "Kind", "", UiKit.CssFont(12f), TextAnchor.MiddleLeft, UiKit.TextDim);
-            UiKit.TopRow(_kindText.rectTransform, y, UiKit.RowHeight(UiKit.CssFont(12f)), pad, UiKit.Css(96f));
-            y += UiKit.RowHeight(UiKit.CssFont(12f)) + UiKit.Css(2f);
+            UiKit.TopRow(_kindText.rectTransform, y, UiKit.RowHeight(UiKit.CssFont(12f)), pad, UiKit.Css(44f));
 
-            _depthText = UiKit.MakeText(rt, "Depth", "", UiKit.CssFont(15f), TextAnchor.MiddleLeft, UiKit.TextMain);
-            UiKit.TopRow(_depthText.rectTransform, y, UiKit.RowHeight(UiKit.CssFont(15f)), pad, UiKit.Css(96f));
+            _depthText = UiKit.MakeText(rt, "Depth", "", UiKit.CssFont(12f), TextAnchor.MiddleRight, UiKit.TextMain);
+            UiKit.TopRow(_depthText.rectTransform, y, UiKit.RowHeight(UiKit.CssFont(12f)), UiKit.Css(120f), UiKit.Css(44f));
 
-            _closeButton = UiKit.MakeButton(rt, "CardClose", UiStrings.Tr("ปิด"), UiKit.CssFont(14f),
-                                            UiKit.Accent, UiKit.OnAccent, Hide);
+            // ✕ icon rather than a text button: the web's dismiss affordances are icons, and a
+            // "ปิด" label is wider than the pill can spare.
+            _closeButton = UiKit.MakeIconButton(rt, "CardClose", "close", Hide, false, UiKit.Css(30f));
             Image closeBg = _closeButton.GetComponent<Image>();
-            if (closeBg != null)
-            {
-                closeBg.sprite = UiKit.RoundedSprite(13f);
-                closeBg.type = Image.Type.Sliced;
-            }
-            UiKit.Anchor(_closeButton.GetComponent<RectTransform>(), new Vector2(1f, 1f),
-                         new Vector2(UiKit.Css(72f), UiKit.Css(36f)),
-                         new Vector2(-pad, -UiKit.Css(14f)));
+            if (closeBg != null) closeBg.color = new Color(1f, 1f, 1f, 0.10f);
+            UiKit.Anchor(_closeButton.GetComponent<RectTransform>(), new Vector2(1f, 0.5f),
+                         new Vector2(UiKit.Css(30f), UiKit.Css(30f)),
+                         new Vector2(-UiKit.Css(10f), 0f));
 
             _layer.gameObject.SetActive(false);
             StartCoroutine(LoadManifest());
