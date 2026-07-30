@@ -390,11 +390,21 @@ namespace DiveMap.Runtime
             CheckWarpGates(pos);
 
             _frames++;
-            if (_frames == 30 || _frames % 300 == 0)
+            // While the sticks are held (a QC charge, or a player actually flying) report every
+            // 15 frames WITH the velocity. The 300-frame cadence told us where the drone was but
+            // never how fast it was going, which is exactly the number C5 turns on — three QC
+            // rounds went by arguing about whether 10.4 u/s was the drone or the measurement.
+            bool flying = _qcCharge.HasValue || sticks.Ry != 0f || sticks.Lx != 0f;
+            if (_frames == 30 || _frames % 300 == 0 || (flying && _frames % 15 == 0))
+            {
+                float sp = Mathf.Sqrt(_state.Vel.X * _state.Vel.X + _state.Vel.Z * _state.Vel.Z);
                 Debug.Log($"[Tour] frame={_frames} pos=({pos.x:F1},{pos.y:F1},{pos.z:F1}) " +
                           $"yaw={_state.Yaw * Mathf.Rad2Deg:F0}° " +
+                          $"velXZ={sp:F1}/{DroneFlight.Speed:F0} ry={sticks.Ry:F2} " +
+                          $"dt={dt:F3} fs={fs:F2} realDt={Time.deltaTime:F3} " +
                           $"depth={DroneFlight.DepthMetres(pos.y, _waterLevel):F1}m " +
                           $"seabedY={seabedY:F1}");
+            }
         }
 
         private bool _warpArmed = true;
