@@ -112,6 +112,9 @@ namespace DiveMap.Runtime
             };
         }
 
+        /// <summary>Fish-per-school multiplier in the lite graphics mode (P0).</summary>
+        private const float LiteFishMul = 0.5f;
+
         // Preliminary seabed sizing (WO-XR-01). areaScale multiplies this base radius.
         private const float BaseSeabedRadius = 15f;
         private const float PerItemLoadTimeout = 25f;   // per GLB, soft
@@ -171,6 +174,13 @@ namespace DiveMap.Runtime
             var schoolRegs = new List<FishSchoolSystem.SchoolReg>();
             int whaleCount = 0;
 
+            // P0: the "โหมดกราฟิกประหยัด" setting only scaled the render resolution — the reef
+            // kept all 1,100 fish, which is the expensive half on a weak phone. Halve the swarm
+            // instead (never below 8 per school, or a "school" stops reading as one). Applied
+            // HERE, not in MakeSchoolReg, so the web formulas and their tests stay untouched;
+            // the QC run is always high-gfx, so 1,100 remains the oracle.
+            bool liteGfx = SettingsStore.IsLite(SettingsStore.Gfx);
+
             foreach (SceneItem item in items)
             {
                 var itemGo = new GameObject(ItemName(item));
@@ -182,7 +192,10 @@ namespace DiveMap.Runtime
                 string aid = item.AssetId ?? "";
                 if (IsSchoolItem(aid))
                 {
-                    schoolRegs.Add(MakeSchoolReg(aid, itemGo.transform.position, itemGo.transform.localScale.x));
+                    FishSchoolSystem.SchoolReg reg =
+                        MakeSchoolReg(aid, itemGo.transform.position, itemGo.transform.localScale.x);
+                    if (liteGfx) reg.Count = Mathf.Max(8, Mathf.RoundToInt(reg.Count * LiteFishMul));
+                    schoolRegs.Add(reg);
                     _loaded++;
                     continue; // no static GLB — the swarm renders itself
                 }
@@ -238,6 +251,14 @@ namespace DiveMap.Runtime
             // hand by the time the schools draw their first frame and the QC eye never
             // catches a shoal of procedural lozenges. Fish templates are extra assets, so
             // they move _loadState only: the "โหลดแล้ว N" item oracle must not budge.
+            if (liteGfx)
+            {
+                int total = 0;
+                for (int i = 0; i < schoolRegs.Count; i++) total += schoolRegs[i].Count;
+                Debug.Log($"[Marine] gfx=lite fishMul={LiteFishMul:F2} fish={total} " +
+                          $"(applies on map load — changing the setting takes effect next map)");
+            }
+
             _fishGlb = new FishGlbLibrary();
             if (schoolRegs.Count > 0)
             {

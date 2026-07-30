@@ -193,7 +193,7 @@ namespace DiveMap.Runtime
         {
             HideError();
             ShowCenter("กำลังโหลดแมพ…");
-            SetStatus("กำลังเชื่อมต่อ…");
+            SetStatus(UiStrings.Tr("กำลังเชื่อมต่อ…"));
 
             if (_mapRoot != null)
             {
@@ -220,7 +220,7 @@ namespace DiveMap.Runtime
             }
 
             string mapName = string.IsNullOrEmpty(scene.Name) ? _shortId : scene.Name;
-            SetStatus(mapName + " · กำลังวางวัตถุ…");
+            SetStatus(mapName + " · " + UiStrings.Tr("กำลังวางวัตถุ…"));
 
             SceneBuilder.BuildResult result = default;
             bool done = false;
@@ -237,7 +237,7 @@ namespace DiveMap.Runtime
             HideError();
 
             string title = string.IsNullOrEmpty(result.MapName) ? mapName : result.MapName;
-            SetStatus($"{title}  ·  โหลดแล้ว {result.Loaded} · แทนที่ {result.Failed}");
+            SetLoadSummary(title, result.Loaded, result.Failed);
 
             if (_orbit != null)
                 _orbit.FrameBox(result.FrameCenter, result.FrameSizeX, result.FrameSizeY, result.FrameSizeZ, result.FrameMinY);
@@ -461,11 +461,41 @@ namespace DiveMap.Runtime
         }
 
         private void SetStatus(string s) { if (_statusText != null) _statusText.text = s; }
+
+        // ── status line language (P0) ─────────────────────────────────────────────
+        // The header is the one label the shell's re-translate pass cannot fix: it is a
+        // COMPOSED string ("Htms Chang · โหลดแล้ว 12 · แทนที่ 2"), and UiShell.ApplyLanguage
+        // looks each Text's whole content up in the table, so a composed line never matches
+        // and stayed Thai in English. Keep the parts and re-compose on demand instead.
+        private string _summaryTitle;
+        private int _summaryLoaded = -1;
+        private int _summaryFailed;
+
+        private void SetLoadSummary(string title, int loaded, int failed)
+        {
+            _summaryTitle = title;
+            _summaryLoaded = loaded;
+            _summaryFailed = failed;
+            RenderLoadSummary();
+        }
+
+        private void RenderLoadSummary()
+        {
+            if (_summaryLoaded < 0) return;
+            SetStatus($"{_summaryTitle}  ·  {UiStrings.Tr("โหลดแล้ว")} {_summaryLoaded} · " +
+                      $"{UiStrings.Tr("แทนที่")} {_summaryFailed}");
+        }
+
+        /// <summary>Called by <c>UiShell.ApplyLanguage</c> after a language switch.</summary>
+        public void RefreshStatusLanguage() => RenderLoadSummary();
         private void ShowCenter(string s) { if (_centerText != null) { _centerText.text = s; _centerText.gameObject.SetActive(true); } }
         private void HideCenter() { if (_centerText != null) _centerText.gameObject.SetActive(false); }
 
         private void ShowError(string s)
         {
+            // Translate here rather than at every call site: every error string in this class is
+            // a Thai source key, and one missed Tr() is an English UI with a Thai error box.
+            s = UiStrings.Tr(s);
             HideCenter();
             if (_errorText != null) _errorText.text = s;
             if (_errorPanel != null) _errorPanel.SetActive(true);

@@ -27,6 +27,13 @@ namespace DiveMap.Runtime.Ui
     {
         public static UiShell Instance { get; private set; }
 
+        /// <summary>
+        /// Safe-area root for transient overlays that are not part of the navigation stack —
+        /// <see cref="Toast"/> now, the tour/game HUD next (P1/P3). Inside the safe area so a
+        /// notch or a gesture bar never clips them.
+        /// </summary>
+        public RectTransform OverlayRoot => _safe;
+
         private const float MenuWidth = 620f;
         private const float SlideSeconds = 0.18f;
 
@@ -332,6 +339,10 @@ namespace DiveMap.Runtime.Ui
 
             if (_card != null) _card.Render();
             if (_settings != null) _settings.Refresh();
+            // The map header is a composed string, so the loop above can never match it —
+            // AppBoot re-composes it from its parts (P0).
+            AppBoot boot = UnityEngine.Object.FindFirstObjectByType<AppBoot>();
+            if (boot != null) boot.RefreshStatusLanguage();
 
             Debug.Log($"[UI] language={lang} retranslated={touched} texts");
         }
@@ -517,6 +528,17 @@ namespace DiveMap.Runtime.Ui
             yield return new WaitForSecondsRealtime(0.8f);
             ScreenCapture.CaptureScreenshot(prefix + "_settings.png");
             Debug.Log("[UI] qcui shot -> " + prefix + "_settings.png");
+            yield return new WaitForSecondsRealtime(1.5f);
+
+            // 6.5) toast (P0). Proves the new transient line renders — and renders THAI — before
+            // the tour/game work starts leaning on it. Captured with the map visible, not over a
+            // panel, because that is where it will actually appear.
+            CloseAll();
+            yield return new WaitForSecondsRealtime(0.4f);
+            Toast.ShowTr("บันทึกแล้ว");
+            yield return new WaitForSecondsRealtime(0.6f);
+            ScreenCapture.CaptureScreenshot(prefix + "_toast.png");
+            Debug.Log("[UI] qcui shot -> " + prefix + "_toast.png");
             yield return new WaitForSecondsRealtime(1.5f);
 
             // 7) English: the menu + the still-open card must come back with no Thai left.

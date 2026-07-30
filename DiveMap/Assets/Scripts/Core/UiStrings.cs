@@ -29,6 +29,12 @@ namespace DiveMap.Core
         private static readonly Dictionary<string, string> En =
             new Dictionary<string, string>(StringComparer.Ordinal)
             {
+                // status line (P0: the header used to stay Thai even in English)
+                { "กำลังวางวัตถุ…",         "Placing objects…" },
+                { "โหลดแล้ว",              "loaded" },
+                { "แทนที่",                "placeholder" },
+                { "บันทึกแล้ว",             "Saved" },
+
                 // shell / menu
                 { "เมนู",                  "Menu" },
                 { "รายการแมพ",             "Maps" },
