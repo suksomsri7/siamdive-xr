@@ -46,60 +46,89 @@ namespace DiveMap.Runtime.Ui
             // card: same dismiss gesture, same corner radius, map still visible behind it.
             RectTransform rt = UiKit.MakeSheet(self, "SettingsSheet", RaiseClose, 0.62f);
 
-            // Row heights stay well above fontSize × 1.51 (NotoSansThai's line height):
-            // legacy Text DROPS a line that does not fit its rect instead of clipping it.
-            _title = UiKit.MakeText(rt, "Title", "", UiKit.CssFont(16f), TextAnchor.MiddleLeft, UiKit.Teal);
-            UiKit.TopRow(_title.rectTransform, 30f, 80f, 40f, 40f);
+            // Row geometry in CSS px (web: 16 px sheet title, 12 px section labels, 44 px rows,
+            // 16 px side padding). Row HEIGHTS still come from UiKit.RowHeight so a Thai line can
+            // never be dropped, whatever the font size resolves to.
+            float pad = UiKit.Css(16f);
+            float gap = UiKit.Css(10f);
+            float rowH = UiKit.Css(44f);
+            float y = UiKit.Css(4f);
+
+            _title = UiKit.MakeText(rt, "Title", "", UiKit.CssFont(16f), TextAnchor.MiddleLeft, UiKit.Accent);
+            _title.fontStyle = FontStyle.Bold;
+            UiKit.TopRow(_title.rectTransform, y, UiKit.RowHeight(UiKit.CssFont(16f)), pad, pad);
+            y += UiKit.RowHeight(UiKit.CssFont(16f)) + gap;
 
             // ── language ─────────────────────────────────────────────────────────
-            _langLabel = UiKit.MakeText(rt, "LangLabel", "", UiKit.CssFont(14f), TextAnchor.MiddleLeft, UiKit.TextDim);
-            UiKit.TopRow(_langLabel.rectTransform, 134f, 60f, 40f, 40f);
+            _langLabel = UiKit.MakeText(rt, "LangLabel", "", UiKit.CssFont(12f), TextAnchor.MiddleLeft, UiKit.TextDim);
+            UiKit.TopRow(_langLabel.rectTransform, y, UiKit.RowHeight(UiKit.CssFont(12f)), pad, pad);
+            y += UiKit.RowHeight(UiKit.CssFont(12f)) + UiKit.Css(4f);
 
-            _langTh = Choice(rt, "LangTh", 200f, 40f, () => SetLang(UiStrings.Thai));
-            _langEn = Choice(rt, "LangEn", 200f, 460f, () => SetLang(UiStrings.English));
+            float half = (Screen.width / UiKit.CanvasScale - pad * 2f - gap) * 0.5f;
+            _langTh = Choice(rt, "LangTh", y, pad, half, rowH, () => SetLang(UiStrings.Thai));
+            _langEn = Choice(rt, "LangEn", y, pad + half + gap, half, rowH, () => SetLang(UiStrings.English));
+            y += rowH + gap * 1.6f;
 
             // ── graphics ─────────────────────────────────────────────────────────
-            _gfxLabel = UiKit.MakeText(rt, "GfxLabel", "", UiKit.CssFont(14f), TextAnchor.MiddleLeft, UiKit.TextDim);
-            UiKit.TopRow(_gfxLabel.rectTransform, 324f, 60f, 40f, 40f);
+            _gfxLabel = UiKit.MakeText(rt, "GfxLabel", "", UiKit.CssFont(12f), TextAnchor.MiddleLeft, UiKit.TextDim);
+            UiKit.TopRow(_gfxLabel.rectTransform, y, UiKit.RowHeight(UiKit.CssFont(12f)), pad, pad);
+            y += UiKit.RowHeight(UiKit.CssFont(12f)) + UiKit.Css(4f);
 
-            _gfxHigh = Choice(rt, "GfxHigh", 390f, 40f, () => SetGfx(SettingsStore.High));
-            _gfxLite = Choice(rt, "GfxLite", 390f, 460f, () => SetGfx(SettingsStore.Lite));
+            _gfxHigh = Choice(rt, "GfxHigh", y, pad, half, rowH, () => SetGfx(SettingsStore.High));
+            _gfxLite = Choice(rt, "GfxLite", y, pad + half + gap, half, rowH, () => SetGfx(SettingsStore.Lite));
+            y += rowH + gap * 1.6f;
 
             // ── version + link ───────────────────────────────────────────────────
-            _versionLabel = UiKit.MakeText(rt, "VersionLabel", "", UiKit.CssFont(14f), TextAnchor.MiddleLeft, UiKit.TextDim);
-            UiKit.TopRow(_versionLabel.rectTransform, 526f, 58f, 40f, 480f);
+            _versionLabel = UiKit.MakeText(rt, "VersionLabel", "", UiKit.CssFont(12f), TextAnchor.MiddleLeft, UiKit.TextDim);
+            UiKit.TopRow(_versionLabel.rectTransform, y, UiKit.RowHeight(UiKit.CssFont(12f)), pad, pad);
 
-            _versionValue = UiKit.MakeText(rt, "VersionValue", Application.version, UiKit.CssFont(14f),
+            _versionValue = UiKit.MakeText(rt, "VersionValue", Application.version, UiKit.CssFont(12f),
                                            TextAnchor.MiddleRight, UiKit.TextMain);
-            UiKit.TopRow(_versionValue.rectTransform, 526f, 58f, 480f, 40f);
+            UiKit.TopRow(_versionValue.rectTransform, y, UiKit.RowHeight(UiKit.CssFont(12f)), pad, pad);
+            y += UiKit.RowHeight(UiKit.CssFont(12f)) + gap;
 
             // The URL itself is never translated — it is the same in both languages.
-            Text linkLabel = UiKit.MakeText(rt, "LinkLabel", "maps.siamdive.com", UiKit.CssFont(14f),
+            Text linkLabel = UiKit.MakeText(rt, "LinkLabel", "maps.siamdive.com", UiKit.CssFont(12f),
                                             TextAnchor.MiddleLeft, UiKit.TextDim);
-            UiKit.TopRow(linkLabel.rectTransform, 596f, 54f, 40f, 40f);
+            UiKit.TopRow(linkLabel.rectTransform, y, UiKit.RowHeight(UiKit.CssFont(12f)), pad, pad);
+            y += UiKit.RowHeight(UiKit.CssFont(12f)) + UiKit.Css(4f);
 
             _link = UiKit.MakeButton(rt, "LinkButton", "", UiKit.CssFont(14f), UiKit.CardBg, UiKit.TextMain, OpenWeb);
-            UiKit.TopRow(_link.GetComponent<RectTransform>(), 660f, 88f, 40f, 40f);
+            Round(_link);
+            UiKit.TopRow(_link.GetComponent<RectTransform>(), y, rowH, pad, pad);
 
-            _close = UiKit.MakeButton(rt, "Close", "", UiKit.CssFont(14f), UiKit.TealDim, UiKit.TextMain, RaiseClose);
-            UiKit.Anchor(_close.GetComponent<RectTransform>(), new Vector2(0.5f, 0f),
-                         new Vector2(280f, 88f), new Vector2(0f, 40f));
+            // Close pinned to the sheet's own bottom-right, web button size (radius 13).
+            _close = UiKit.MakeButton(rt, "Close", "", UiKit.CssFont(14f), UiKit.Accent, UiKit.OnAccent, RaiseClose);
+            Round(_close);
+            UiKit.Anchor(_close.GetComponent<RectTransform>(), new Vector2(1f, 0f),
+                         new Vector2(UiKit.Css(96f), UiKit.Css(42f)), new Vector2(-pad, pad));
 
             Refresh();
         }
 
-        /// <summary>A half-width choice button on the row starting at <paramref name="y"/>.</summary>
+        /// <summary>A choice chip on the row starting at <paramref name="y"/>, sized in CSS px.</summary>
         private static Button Choice(RectTransform parent, string name, float y, float x,
-                                     UnityEngine.Events.UnityAction action)
+                                     float w, float h, UnityEngine.Events.UnityAction action)
         {
-            Button b = UiKit.MakeButton(parent, name, "", 34, UiKit.CardBg, UiKit.TextMain, action);
+            Button b = UiKit.MakeButton(parent, name, "", UiKit.CssFont(14f), UiKit.CardBg,
+                                        UiKit.TextMain, action);
+            Round(b);
             RectTransform rt = b.GetComponent<RectTransform>();
             rt.anchorMin = new Vector2(0f, 1f);
             rt.anchorMax = new Vector2(0f, 1f);
             rt.pivot = new Vector2(0f, 1f);
-            rt.sizeDelta = new Vector2(400f, 88f);
+            rt.sizeDelta = new Vector2(w, h);
             rt.anchoredPosition = new Vector2(x, -y);
             return b;
+        }
+
+        /// <summary>Give a button the web's 13 px corner radius (its .row button rule).</summary>
+        private static void Round(Button b)
+        {
+            Image img = b != null ? b.GetComponent<Image>() : null;
+            if (img == null) return;
+            img.sprite = UiKit.RoundedSprite(13f);
+            img.type = Image.Type.Sliced;
         }
 
         // ── state ────────────────────────────────────────────────────────────────
