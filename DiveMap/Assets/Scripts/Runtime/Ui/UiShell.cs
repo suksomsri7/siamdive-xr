@@ -420,6 +420,9 @@ namespace DiveMap.Runtime.Ui
             // and show the web's back chevron in its place.
             if (_hamburger != null) _hamburger.SetActive(depth == 0 && _chromeVisible);
             if (_backButton != null) _backButton.SetActive(depth > 0 && _chromeVisible);
+            // The info card is not in the stack, so it would otherwise sit UNDER an opened sheet
+            // and reappear behind it (the settings QC shot showed exactly that).
+            if (depth > 0 && _card != null) _card.Hide();
             SetOrbitEnabled(depth == 0);
         }
 

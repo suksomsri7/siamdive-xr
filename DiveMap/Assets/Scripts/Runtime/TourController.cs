@@ -184,20 +184,19 @@ namespace DiveMap.Runtime
             yield return new WaitForEndOfFrame();
 
             Texture2D shot = null;
-            string path = null;
+            var result = PhotoSaver.Result.Failed;
+            string where = null;
             try
             {
                 shot = ScreenCapture.CaptureScreenshotAsTexture();
                 byte[] jpg = shot.EncodeToJPG(92);
-                string name = $"divemap_{Time.frameCount}.jpg";
-                path = System.IO.Path.Combine(Application.persistentDataPath, name);
-                System.IO.File.WriteAllBytes(path, jpg);
-                Debug.Log($"[Tour] photo {path} ({jpg.Length / 1024} KB, {shot.width}×{shot.height})");
+                string name = $"divemap_{System.DateTime.Now:yyyyMMdd_HHmmss}.jpg";
+                result = PhotoSaver.Save(jpg, name, out where);
+                Debug.Log($"[Tour] photo {result} → {where} ({jpg.Length / 1024} KB, {shot.width}×{shot.height})");
             }
             catch (System.Exception e)
             {
                 Debug.LogWarning($"[Tour] photo failed: {e.Message}");
-                path = null;
             }
             finally
             {
@@ -205,7 +204,11 @@ namespace DiveMap.Runtime
                 if (hud != null) hud.gameObject.SetActive(true);
             }
 
-            Ui.Toast.ShowTr(path != null ? "บันทึกภาพแล้ว" : "บันทึกภาพไม่สำเร็จ");
+            // Say WHERE it went: "saved" is not useful if the user then cannot find it in their
+            // gallery because the insert fell back to the app's own folder.
+            Ui.Toast.ShowTr(result == PhotoSaver.Result.Gallery ? "บันทึกภาพลงแกลเลอรีแล้ว"
+                          : result == PhotoSaver.Result.AppFolder ? "บันทึกภาพในแอปแล้ว"
+                          : "บันทึกภาพไม่สำเร็จ");
             AudioBank.PlaySfx("click");
         }
 

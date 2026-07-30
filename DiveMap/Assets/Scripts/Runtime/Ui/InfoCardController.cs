@@ -36,7 +36,9 @@ namespace DiveMap.Runtime.Ui
         /// <summary>Fallback water level when a map has no "Water" node (SceneBuilder's own default).</summary>
         private const float DefaultWaterLevel = 4f;
 
-        private const float CardHeight = 380f;
+        // CSS px, like the rest of the chrome: the web's info strip is ~110 px tall with a 16 px
+        // title, not a 380-unit slab with 46-unit text.
+        private static float CardHeight => UiKit.Css(112f);
 
         private RectTransform _layer;
         private Text _nameText;
@@ -102,19 +104,32 @@ namespace DiveMap.Runtime.Ui
             // of tone marks above the base glyph plus a below-vowel). Legacy Text does not
             // clip a line that is too tall for its rect — it DROPS it — so every row here
             // is sized well above fontSize × 1.51.
-            _nameText = UiKit.MakeText(rt, "Name", "", 46, TextAnchor.MiddleLeft, UiKit.Teal);
-            UiKit.TopRow(_nameText.rectTransform, 24f, 80f, 36f, 200f);
+            float pad = UiKit.Css(16f);
+            float y = UiKit.Css(16f);
 
-            _kindText = UiKit.MakeText(rt, "Kind", "", 34, TextAnchor.MiddleLeft, UiKit.TextDim);
-            UiKit.TopRow(_kindText.rectTransform, 116f, 60f, 36f, 200f);
+            _nameText = UiKit.MakeText(rt, "Name", "", UiKit.CssFont(16f), TextAnchor.MiddleLeft, UiKit.Accent);
+            _nameText.fontStyle = FontStyle.Bold;
+            UiKit.TopRow(_nameText.rectTransform, y, UiKit.RowHeight(UiKit.CssFont(16f)), pad, UiKit.Css(96f));
+            y += UiKit.RowHeight(UiKit.CssFont(16f)) + UiKit.Css(2f);
 
-            _depthText = UiKit.MakeText(rt, "Depth", "", 40, TextAnchor.MiddleLeft, UiKit.TextMain);
-            UiKit.TopRow(_depthText.rectTransform, 190f, 70f, 36f, 200f);
+            _kindText = UiKit.MakeText(rt, "Kind", "", UiKit.CssFont(12f), TextAnchor.MiddleLeft, UiKit.TextDim);
+            UiKit.TopRow(_kindText.rectTransform, y, UiKit.RowHeight(UiKit.CssFont(12f)), pad, UiKit.Css(96f));
+            y += UiKit.RowHeight(UiKit.CssFont(12f)) + UiKit.Css(2f);
 
-            _closeButton = UiKit.MakeButton(rt, "CardClose", UiStrings.Tr("ปิด"), 32,
-                                            UiKit.TealDim, UiKit.TextMain, Hide);
+            _depthText = UiKit.MakeText(rt, "Depth", "", UiKit.CssFont(15f), TextAnchor.MiddleLeft, UiKit.TextMain);
+            UiKit.TopRow(_depthText.rectTransform, y, UiKit.RowHeight(UiKit.CssFont(15f)), pad, UiKit.Css(96f));
+
+            _closeButton = UiKit.MakeButton(rt, "CardClose", UiStrings.Tr("ปิด"), UiKit.CssFont(14f),
+                                            UiKit.Accent, UiKit.OnAccent, Hide);
+            Image closeBg = _closeButton.GetComponent<Image>();
+            if (closeBg != null)
+            {
+                closeBg.sprite = UiKit.RoundedSprite(13f);
+                closeBg.type = Image.Type.Sliced;
+            }
             UiKit.Anchor(_closeButton.GetComponent<RectTransform>(), new Vector2(1f, 1f),
-                         new Vector2(180f, 80f), new Vector2(-24f, -24f));
+                         new Vector2(UiKit.Css(72f), UiKit.Css(36f)),
+                         new Vector2(-pad, -UiKit.Css(14f)));
 
             _layer.gameObject.SetActive(false);
             StartCoroutine(LoadManifest());
