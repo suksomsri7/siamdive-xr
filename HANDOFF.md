@@ -92,6 +92,13 @@ WO ใน DESIGN_DOC **ไม่ครอบคลุม** ทัวร์โด
 - APK: `dive3d.suksomsri.cloud/dl/DiveMap-css-4147131ff8.apk`
 - **บทเรียน**: UiStringsTests บังคับ **ค่าอังกฤษห้ามซ้ำ** (ToLang ต้อง idempotent) — "ถอย" ใช้ "Rev" เพราะ "Back" เป็นของ "ย้อนกลับ"
 
+## 4.9 ▶️ RESUME 2026-07-30 สาย — P2 ปิด + P3a เกม (main `67823a34`)
+- **P2a heatmap ความลึก**: `Core/DepthPalette.cs` (ramp 3 stop ของเว็บ) + `Runtime/SeabedView.cs` — เว็บสลับ vertex color แต่ Standard shader ไม่อ่าน → **เบคเป็น texture ใน UV เดียวกับพื้น อ่าน sculpt array ตัวเดียวกับเมช** · `Ui/DepthLegend.cs` (บาร์ 14×118 left 12/bottom 70 วาดจาก palette เดียวกัน)
+- **P2b โหมดกลางวัน/ใต้น้ำ** `Runtime/EnvMode.cs` — ⚠️ **ค่าแสงของเว็บ (hemi 1.2 / sun 1.6) เป็นของ three.js HemisphereLight** เอามาใส่ Unity Trilight ตรงๆ ทรายขาวโพลน → ใช้ 0.72/1.15 + ปิด GodRays/Caustics ในโหมดกลางวัน
+- **P3a เกม** `Core/TrashGame.cs` (11 เทส: 5 ชนิดตามน้ำหนัก · cap 30 · ทุก 5 วิ · ตก 28 u/s · อยู่ 30 วิกะพริบ 5 วิสุดท้าย · **คะแนน pts×(1+h)×(1+combo×0.1)×(coin?2:1)** · เหรียญรอบ 60 วิ ×3) + `Runtime/TrashGameSystem.cs` (เก็บในรัศมี 11u, เมชจาก Unity primitive, เซฟ local PlayerPrefs) + `Ui/CoinCounter.cs` (ป้ายกลางบน + "+N" ลอย)
+- **QC เพิ่มขั้นตอน**: กด heatmap/กลางวันแล้วถ่ายรูป · ค้างในทัวร์ 6 วิถ่าย `_game.png` (รอบแรกได้ทะเลว่างเพราะถ่ายที่ 2 วิ)
+- APK: `dive3d.suksomsri.cloud/dl/DiveMap-game2-67823a34*.apk` · PARITY 42% · เทส 231
+
 ## 5. งานถัดไปทันที (คิวเรียงแล้ว)
 ### 5.1 ✅ ปิดแล้ว — WO-XR-03 (2026-07-28)
 formation ตามสูตรเว็บ + วาฬ GLB จริง + QC fixes (ครีบดำ/gloss/heading log) · commit `a7d12f8` → `f31d9fc`
