@@ -159,6 +159,10 @@ namespace DiveMap.Runtime
             AudioBank.PlayCue();
             AudioBank.StartAmbience();
 
+            // The clean-up game runs inside the tour only — the web is emphatic that litter must
+            // not rain onto a map you are looking at or editing.
+            TrashGameSystem.Ensure(transform).Begin(_homeCenter, _waterLevel, _scaleX, _scaleZ);
+
             // No toast here: the HUD's own hint line (#tourHud) says this permanently, and the web
             // does not double up. A toast on entry also fought the hint for the same screen space.
             Debug.Log($"[Tour] begin pos=({start.x:F1},{start.y:F1},{start.z:F1}) " +
@@ -230,6 +234,7 @@ namespace DiveMap.Runtime
                 _lights.gameObject.SetActive(false);
             }
             AudioBank.StopAmbience();
+            TrashGameSystem.Ensure(transform).End();
             // The reef goes back to ignoring us.
             if (_reef != null) _reef.SetRepulsor(Vector3.zero, 0f);
             if (_orbit != null)
