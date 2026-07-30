@@ -83,7 +83,8 @@ oracle จาก `qc_player.log` ผ่านครบ:
 ภาพ: ฉากหลังไล่สีจริง · ลำแสง 10 ลำขนานดวงอาทิตย์ · ขอบทรายละลายเป็นน้ำเงิน · ปลามี texture ครบ 3 · การ์ด/เมนู/ตั้งค่าไม่ regress
 ไฟล์เทสที่ส่ง user: `dive3d.suksomsri.cloud/dl/DiveMap-fish-dc5c92d0fb.apk` + `DiveMap-win-fish-dc5c92d0fb.zip` · ภาพเทียบ `xr04-before-after.png`, `xr04-closeup-before-after.png`
 
-**ยังไม่ได้เคาะ (รอ user ตัดสินสายตา — ห้ามเดาเอง)**: ทรายในช็อตกว้างดู "ขาวสว่าง" กว่าเว็บ (caustics additive alpha 0.13 + ambient) · ลำแสงค่อนข้างทึบ (opacity 0.30) → ถ้า user บอกว่าแรงไป ลด `CausticsMaterial` alpha 0.13→0.08 และ `GodRays.Opacity` 0.30→0.22 (แก้ 2 บรรทัด)
+**user เคาะแล้ว (2026-07-29 กลางคืน): "ลำแสงควรนุ่มกว่านี้มากๆ"** → เปลี่ยนจากกรวยทึบเป็น **billboard quad หันเข้ากล้อง** (แกนล็อกตามดวงอาทิตย์ หมุนรอบแกนตัวเองเท่านั้น) + falloff 64² = ramp ยาว × fade ตรงผิวน้ำ × **bell ยกกำลังสองตามความกว้าง** (alpha = 0 ทุกขอบ → ไม่มี silhouette) + opacity 0.30→**0.11** + กว้างขึ้น (spread×0.16, 12-48u) · เทสใหม่ 4 ตัวใน `GodRayMathTests` ปักว่าขอบทุกด้านเป็นศูนย์
+**ที่ยังไม่เคาะ**: ทรายช็อตกว้างดูขาวสว่าง (caustics alpha 0.13) — รอ user บอก
 
 **perf**: llvmpipe avgFrameMs 135.6 (ก่อน 04) → 300.6 (หลัง) — เป็นเลข software renderer ที่วาดทีละตัว 1,100 ครั้ง ไม่ใช่ตัวแทนมือถือ (มือถือใช้ instanced path) · เกณฑ์ LOD ที่ใช้จริง = `count × tris > 200k` (pod จริง 50 ตัว/ฝูง → count-based ของแผนเดิมพลาด)
 

@@ -108,6 +108,60 @@ namespace DiveMap.Tests
         }
 
         [Test]
+        public void SoftProfile_IsZeroAtBothEdges_PeaksInTheMiddle_AndIsSymmetric()
+        {
+            // A shaft must have no silhouette: alpha has to reach 0 exactly at the edges.
+            Assert.AreEqual(0f, GodRayMath.SoftProfile(0f), 1e-6f);
+            Assert.AreEqual(0f, GodRayMath.SoftProfile(1f), 1e-6f);
+            Assert.AreEqual(1f, GodRayMath.SoftProfile(0.5f), 1e-4f);
+            for (float u = 0.05f; u < 0.5f; u += 0.05f)
+                Assert.AreEqual(GodRayMath.SoftProfile(u), GodRayMath.SoftProfile(1f - u), 1e-5f);
+        }
+
+        [Test]
+        public void SoftProfile_FeathersHard_NotLinearly()
+        {
+            // Squared smoothstep: a quarter of the way in it is still faint. This is the
+            // difference between "much softer" and merely "dimmer".
+            float quarter = GodRayMath.SoftProfile(0.25f);
+            Assert.Less(quarter, 0.35f, "edge falloff is too abrupt to read as light");
+            Assert.Greater(quarter, 0.05f);
+            float prev = -1f;
+            for (float u = 0f; u <= 0.5f; u += 0.05f)
+            {
+                float a = GodRayMath.SoftProfile(u);
+                Assert.GreaterOrEqual(a, prev - 1e-6f, $"profile dipped at u={u}");
+                prev = a;
+            }
+        }
+
+        [Test]
+        public void TopFade_KillsTheHardCutAtTheSurface()
+        {
+            Assert.AreEqual(0f, GodRayMath.TopFade(1f), 1e-6f);      // right on the water plane
+            Assert.AreEqual(1f, GodRayMath.TopFade(0.5f), 1e-6f);    // well below it
+            Assert.Greater(GodRayMath.TopFade(0.94f), 0f);
+            Assert.Less(GodRayMath.TopFade(0.94f), 1f);
+        }
+
+        [Test]
+        public void BeamAlpha_IsZeroOnEveryEdgeOfTheQuad()
+        {
+            for (float v = 0f; v <= 1f; v += 0.1f)
+            {
+                Assert.AreEqual(0f, GodRayMath.BeamAlpha(0f, v), 1e-6f);
+                Assert.AreEqual(0f, GodRayMath.BeamAlpha(1f, v), 1e-6f);
+            }
+            for (float u = 0f; u <= 1f; u += 0.1f)
+            {
+                Assert.AreEqual(0f, GodRayMath.BeamAlpha(u, 0f), 1e-6f);   // deep end
+                Assert.AreEqual(0f, GodRayMath.BeamAlpha(u, 1f), 1e-6f);   // surface end
+            }
+            // Brightest along the centre line, a little below the surface.
+            Assert.Greater(GodRayMath.BeamAlpha(0.5f, 0.85f), 0.5f);
+        }
+
+        [Test]
         public void SwayAndBreath_StayWithinTheirBounds()
         {
             for (float t = 0f; t < 30f; t += 0.37f)

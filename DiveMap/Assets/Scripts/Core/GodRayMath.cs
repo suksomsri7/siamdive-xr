@@ -90,6 +90,42 @@ namespace DiveMap.Core
             return RampMidA + (RampTipA - RampMidA) * ((t - RampMidT) / (1f - RampMidT));
         }
 
+        /// <summary>
+        /// Across-the-beam softness (u = 0 one edge … 1 the other). A squared smoothstep bell:
+        /// zero right at both edges, so a shaft has NO silhouette — the first version drew a
+        /// cone whose alpha only varied along its length, and a cone with a hard rim reads as a
+        /// translucent solid, not as light. Squaring the bell is what makes it "much softer"
+        /// rather than merely dimmer.
+        /// </summary>
+        public static float SoftProfile(float u)
+        {
+            if (u <= 0f || u >= 1f) return 0f;
+            float t = 1f - Math.Abs(2f * u - 1f);   // 0 at the edges, 1 in the middle
+            float s = t * t * (3f - 2f * t);        // smoothstep
+            return s * s;
+        }
+
+        /// <summary>
+        /// Fade over the last <paramref name="band"/> of the shaft's length at the surface end
+        /// (v = 1). Without it the beam starts with a hard bright cut exactly on the water
+        /// plane; real shafts emerge out of the surface glare.
+        /// </summary>
+        public static float TopFade(float v, float band = 0.12f)
+        {
+            if (band <= 0f) return 1f;
+            float t = (1f - v) / band;
+            if (t >= 1f) return 1f;
+            if (t <= 0f) return 0f;
+            return t * t * (3f - 2f * t);
+        }
+
+        /// <summary>
+        /// Full alpha of a shaft texel: length ramp × surface-end fade × across-width softness.
+        /// Zero on every edge of the quad, so nothing about the shaft has an outline.
+        /// </summary>
+        public static float BeamAlpha(float u, float v)
+            => RampAlpha(v) * TopFade(v) * SoftProfile(u);
+
         /// <summary>Slow, deterministic sway angle (degrees) for beam <paramref name="i"/> at
         /// <paramref name="time"/> seconds — ±<paramref name="amplitudeDeg"/>.</summary>
         public static float SwayDeg(int i, float time, float amplitudeDeg = 2f)
