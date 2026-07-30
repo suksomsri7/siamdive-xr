@@ -80,6 +80,10 @@ namespace DiveMap.Runtime.Ui
             UiKit.Anchor(_mute.GetComponent<RectTransform>(), new Vector2(1f, 1f),
                          new Vector2(96f, 96f), new Vector2(-26f, -242f));
             RenderMute();
+
+            // The web keeps a compass on the right edge while you dive (#compass) — same place,
+            // same red-north needle.
+            CompassWidget.Create(root);
         }
 
         /// <summary>

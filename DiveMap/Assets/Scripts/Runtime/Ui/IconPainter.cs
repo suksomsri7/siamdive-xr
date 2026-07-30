@@ -134,6 +134,10 @@ namespace DiveMap.Runtime.Ui
                     }
                     break;
 
+                case "needle": // one half of the compass needle (the caller tints + rotates it)
+                    fills.Add(new[] { P(12, 1.6f), P(17.2f, 23f), P(6.8f, 23f) });
+                    break;
+
                 case "compass": // #compass — two triangles, north red (colour applied by the caller)
                     fills.Add(new[] { P(12, 2.4f), P(16.2f, 12.6f), P(7.8f, 12.6f) });
                     fills.Add(new[] { P(12, 22.8f), P(16.2f, 12.6f), P(7.8f, 12.6f) });
