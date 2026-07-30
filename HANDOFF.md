@@ -63,6 +63,14 @@ tools/                          (สคริปต์ XR-LOD pipeline)
 รายการฟีเจอร์เว็บทั้ง 86 ข้อเทียบแอป (ดึงจาก `id=`/`title=`/`function` ใน builder.html จริง) — **ตอนนี้ ~21%**
 WO ใน DESIGN_DOC **ไม่ครอบคลุม** ทัวร์โดรน/เกมขยะ-เหรียญ/เข็มทิศ/มินิแมพ/ถ่ายรูป/อัดวิดีโอ/เสียง/heatmap/warp/pins/เชือก/บัญชี-สิทธิ์/รายการโปรดออฟไลน์ → ห้ามรายงาน % จาก WO เพียวๆ
 
+## 4.6 ▶️ RESUME 2026-07-30 — P0/P0.5/P1.1 ปิดแล้ว (main `64f879a`)
+- **P0** toast + ป้ายหัวจอแปลภาษา (เป็นสตริงประกอบ ระบบ retranslate จับไม่ได้ → AppBoot ประกอบใหม่เอง) + โหมดประหยัดลดปลาครึ่ง
+- **P0.5** `Core/AppModes.cs` (ModeRules 7 เทส) + `ModeManager` + `Ui/HudLayer` + `InputRig` — orbit gate มี 3 วีโต้ (หน้าจอเปิด/นิ้วบน UI/โหมด)
+- **P1.1 ทัวร์บินได้จริง** `Core/DroneFlight.cs` (14 เทส ยกค่าจากเว็บ: dz 0.12, yaw 1.1, SP 30, lift 0.72, inertia 0.09 **ต่อเฟรม ห้ามคูณ dt**) + `TourController` (raycast หาพื้น) + `Ui/JoystickWidget` + `Ui/TourHud`
+- QC จับได้ 2 บั๊กแล้วแก้: การ์ดข้อมูลทับจอย (ไม่อยู่ใน nav stack → `SetChromeVisible` ต้องซ่อนเอง) · ระยะเริ่มทัวร์ต้องมาจาก frame box ของเนื้อหา ไม่ใช่รัศมีพื้นทราย
+- APK ล่าสุดส่ง user: `dive3d.suksomsri.cloud/dl/DiveMap-tour2-64f879a2*.apk`
+- **ถัดไป P1.2**: ไฟหน้าโดรน (spotlight+โคน builder.html:3669) · บับเบิล · vignette/murk (`scene.fog` near 90 far 230 ตอน tour) · **เสียง** 8 ไฟล์ที่ `maps.siamdive.com/audio/*.mp3` (streaming ไม่ต้องยัดใน APK) · แป้นจอยทำเป็นวงกลม (ตอนนี้เหลี่ยม)
+
 ## 5. งานถัดไปทันที (คิวเรียงแล้ว)
 ### 5.1 ✅ ปิดแล้ว — WO-XR-03 (2026-07-28)
 formation ตามสูตรเว็บ + วาฬ GLB จริง + QC fixes (ครีบดำ/gloss/heading log) · commit `a7d12f8` → `f31d9fc`
