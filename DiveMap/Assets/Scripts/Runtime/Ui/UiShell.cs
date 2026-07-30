@@ -706,9 +706,12 @@ namespace DiveMap.Runtime.Ui
                                              "scad", out Vector3 shoal, out float shoalR))
                 {
                     Debug.Log($"[UI] qcui charging the scad shoal at ({shoal.x:F0},{shoal.y:F0},{shoal.z:F0}) R={shoalR:F0}");
-                    // Start just outside the panic radius: on the CI runner the drone cannot
-                    // cross the map inside the shot's window (see QcPlaceNear).
-                    tour.QcPlaceNear(shoal, (float)DiveMap.Core.FleeMath.DiverPanicRadius(shoalR, 4.2) * 1.05f);
+                    // Start WELL INSIDE the panic radius (0.3×, i.e. panic ≈ 0.7 → the shoal balls
+                    // up). Starting just outside it looked fairer but was not a test: at CI speed
+                    // the drone closed one unit per second and reached 92 of a 93-unit radius by
+                    // the time the shutter went — panic 0.01, and a picture proving nothing. The
+                    // speed rule is still honoured; the log shows the drone passing 11 u/s.
+                    tour.QcPlaceNear(shoal, (float)DiveMap.Core.FleeMath.DiverPanicRadius(shoalR, 4.2) * 0.3f);
                     yield return new WaitForSecondsRealtime(0.3f);
                     tour.QcChargeToward(shoal);
                     yield return new WaitForSecondsRealtime(5f);   // long enough to build up speed
