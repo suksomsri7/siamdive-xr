@@ -250,6 +250,15 @@ namespace DiveMap.Runtime.Ui
                 if (boot == null || !boot.CanEditCurrent) { Toast.ShowTr("แมพนี้แก้ไม่ได้"); return; }
                 ObjectListSheet.Open();
             });
+
+            // 🕘 version history — the safety net under undo, which only reaches back as far as
+            // this session. Owner-only on the server, so it says so rather than failing quietly.
+            ActionButton(6, "history", () =>
+            {
+                var boot = FindFirstObjectByType<AppBoot>();
+                if (boot == null || string.IsNullOrEmpty(boot.CurrentMapId)) return;
+                RevisionSheet.Open();
+            });
             _actions.gameObject.SetActive(false);
         }
 
@@ -855,6 +864,20 @@ namespace DiveMap.Runtime.Ui
                 Debug.Log("[UI] qcui shot -> " + prefix + "_objlist.png");
                 yield return new WaitForSecondsRealtime(1.2f);
                 ObjectListSheet.Close();
+                yield return new WaitForSecondsRealtime(0.4f);
+
+                // 6.7) version history. The demo map is not owned by this device, so the server
+                // answers 403 — which is the branch worth photographing: it must SAY so, not
+                // sit on an empty list looking broken.
+                RevisionSheet.Open();
+                yield return new WaitForSecondsRealtime(2.5f);
+                RevisionSheet rs = RevisionSheet.Current;
+                Debug.Log($"[QC] revisions open={(rs != null)} rows={(rs != null ? rs.RowCount : -1)} " +
+                          $"err={(rs != null ? rs.LastError : null)}");
+                ScreenCapture.CaptureScreenshot(prefix + "_revisions.png");
+                Debug.Log("[UI] qcui shot -> " + prefix + "_revisions.png");
+                yield return new WaitForSecondsRealtime(1.2f);
+                RevisionSheet.Close();
                 yield return new WaitForSecondsRealtime(0.4f);
             }
             }

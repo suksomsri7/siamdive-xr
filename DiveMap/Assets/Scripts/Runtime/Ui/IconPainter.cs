@@ -208,6 +208,11 @@ namespace DiveMap.Runtime.Ui
                     strokes.Add(Line(7.8f, 17f, 13f, 17f));
                     break;
 
+                case "history":  // 🕘 — a clock with the hands at "a while ago"
+                    strokes.Add(Circle(12f, 12f, 8.4f));
+                    strokes.Add(new[] { P(12f, 6.8f), P(12f, 12.4f), P(16.2f, 14.6f) });
+                    break;
+
                 case "check":    // ✓
                     strokes.Add(new[] { P(4.6f, 12.6f), P(9.8f, 18f), P(19.6f, 6.4f) });
                     break;

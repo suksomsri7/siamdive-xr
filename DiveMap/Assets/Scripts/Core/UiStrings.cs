@@ -113,6 +113,21 @@ namespace DiveMap.Core
                 { "ตั้งชื่อวัตถุ",           "Name this object" },
                 { "บันทึก",                "Save" },
                 { "แมพนี้แก้ไม่ได้",         "This map is not editable" },
+                // version history (I) + clear
+                { "ประวัติเวอร์ชัน",         "Version history" },
+                { "กู้คืนแล้วของที่แก้หลังจากนั้นจะหายไป", "Restoring discards everything edited since" },
+                { "เวอร์ชัน",              "Version" },
+                { "กู้คืนเวอร์ชัน",          "Restore version" },
+                { "กู้คืน",                "Restore" },
+                { "กู้คืนแล้ว",             "Restored" },
+                { "กู้คืนไม่สำเร็จ",         "Could not restore" },
+                { "ยังไม่มีประวัติ",         "No history yet" },
+                { "โหลดประวัติไม่สำเร็จ",     "Could not load the history" },
+                { "เฉพาะเจ้าของแมพเท่านั้นที่กู้คืนได้", "Only the map owner can restore" },
+                { "เมื่อครู่",              "just now" },
+                { "นาทีที่แล้ว",            "min ago" },
+                { "ชม. ที่แล้ว",            "h ago" },
+                { "วันที่แล้ว",             "d ago" },
 
                 // account (J) — wording taken from the RN app's mapI18n.ts
                 { "เข้าสู่ระบบ / สมัครสมาชิก", "Sign in / Sign up" },
