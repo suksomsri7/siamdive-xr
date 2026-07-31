@@ -186,6 +186,18 @@ namespace DiveMap.EditorTools
                 PlayerSettings.iOS.appleEnableAutomaticSigning = false;
                 PlayerSettings.iOS.appleDeveloperTeamID = Environment.GetEnvironmentVariable("APPLE_TEAM_ID") ?? "";
 
+                // Apple accepts a given build number exactly ONCE per version. Unity's default is
+                // empty, which reaches App Store Connect as "0", so a second upload of version 1.0
+                // is rejected as a duplicate — at the end of the run, after everything expensive
+                // has already been paid for. The CI run number is monotonic and never reused, so
+                // it is the build number.
+                var buildNumber = Environment.GetEnvironmentVariable("IOS_BUILD_NUMBER");
+                if (!string.IsNullOrWhiteSpace(buildNumber))
+                {
+                    PlayerSettings.iOS.buildNumber = buildNumber;
+                    Debug.Log($"[CIBuild] build number {PlayerSettings.bundleVersion} ({buildNumber})");
+                }
+
                 // ProvisioningProfileType lives in UnityEditor, NOT UnityEditor.iOS — checked in
                 // Unity's own source (Editor/Mono/PlayerSettingsIOS.bindings.cs), after guessing it
                 // twice and paying for both: `UnityEditor.iOS.ProvisioningProfileType` fails to

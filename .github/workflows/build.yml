@@ -179,6 +179,8 @@ jobs:
           UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
           IOS_PROFILE_UUID: ${{ env.IOS_PROFILE_UUID }}
+          # Monotonic and never reused, which is exactly what Apple requires of a build number.
+          IOS_BUILD_NUMBER: ${{ github.run_number }}
           # NOT BUILD_PATH: unity-builder exports that name itself and wins. Ours is namespaced.
           DM_BUILD_PATH: ${{ github.workspace }}/build/iOS
         with:
