@@ -171,6 +171,14 @@ namespace DiveMap.Core
                 { "บันทึกสิทธิ์แล้ว",         "Permissions saved" },
                 { "เฉพาะเจ้าของแมพเท่านั้น",   "Only the map owner can do that" },
                 { "บันทึกไม่สำเร็จ",         "Could not save" },
+                // pins (G)
+                { "แตะบนแผนที่เพื่อปักหมุด",   "Tap the map to drop a pin" },
+                { "ปักหมุดแล้ว",            "Pin dropped" },
+                { "ลบหมุด",                "Delete pin" },
+                { "ลบหมุดแล้ว",             "Pin deleted" },
+                { "เพิ่มรูป",               "Add a photo" },
+                { "เพิ่มรูปแล้ว",            "Photo added" },
+                { "อัปโหลดไม่สำเร็จ",        "Upload failed" },
 
                 // account (J) — wording taken from the RN app's mapI18n.ts
                 { "เข้าสู่ระบบ / สมัครสมาชิก", "Sign in / Sign up" },

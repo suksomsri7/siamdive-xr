@@ -260,6 +260,15 @@ namespace DiveMap.Runtime.Ui
                 RevisionSheet.Open();
             });
 
+            // 📍 drop a pin
+            ActionButton(10, "pin", () =>
+            {
+                var boot = FindFirstObjectByType<AppBoot>();
+                if (boot == null || !boot.CanEditCurrent) { Toast.ShowTr("แมพนี้แก้ไม่ได้"); return; }
+                CloseActions();
+                PinPlacer.Start();
+            });
+
             // ⚙️ map settings — name, public/private, search listing, editors, water, area, clear
             ActionButton(9, "sliders", () =>
             {
@@ -957,6 +966,27 @@ namespace DiveMap.Runtime.Ui
                     yield return new WaitForSecondsRealtime(1.0f);
                     RopeSheet.Close();
                     yield return new WaitForSecondsRealtime(0.4f);
+
+                    // 6.94) pins — drop one on the seabed, then attach a photo to it. The
+                    // upload is a real round trip to the media route, which sniffs magic bytes,
+                    // so the bytes have to be a genuine PNG (EncodeToPNG makes one).
+                    string pinId = PinPlacer.QcPlace(new Vector3(40f, 60f, 40f));
+                    yield return new WaitForSecondsRealtime(1.0f);
+                    int pinCount = eb.CurrentScene != null && eb.CurrentScene.Root["pins"] is Newtonsoft.Json.Linq.JArray pa
+                        ? pa.Count : -1;
+                    Debug.Log($"[QC] pin placed id={pinId} pins={pinCount} markers={PinMarker.Markers.Count}");
+
+                    var tex = new Texture2D(8, 8);
+                    for (int px = 0; px < 8; px++) for (int py = 0; py < 8; py++) tex.SetPixel(px, py, Color.cyan);
+                    tex.Apply();
+                    bool uploaded = false;
+                    yield return PinPlacer.AddMedia(pinId, tex.EncodeToPNG(), ok => uploaded = ok);
+                    Debug.Log($"[QC] pin media uploaded={uploaded}");
+                    ScreenCapture.CaptureScreenshot(prefix + "_pin.png");
+                    Debug.Log("[UI] qcui shot -> " + prefix + "_pin.png");
+                    yield return new WaitForSecondsRealtime(1.0f);
+                    PinPlacer.Remove(pinId);
+                    yield return new WaitForSecondsRealtime(0.6f);
 
                     // 6.95) map settings — the sheet that carries name / public / search /
                     // editors / water / area / clear.
