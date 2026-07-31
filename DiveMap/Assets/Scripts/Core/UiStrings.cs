@@ -107,6 +107,11 @@ namespace DiveMap.Core
                 { "ล้างทั้งหมด",            "Clear all" },
                 { "แตะอีกครั้งเพื่อล้างทั้งแมพ", "Tap again to clear the whole map" },
                 { "ล้างแมพแล้ว",           "Map cleared" },
+                { "โมเดลบนแมพ",            "Objects on the map" },
+                { "ค้นหา",                 "Search" },
+                { "ทุกชนิด",               "All kinds" },
+                { "ตั้งชื่อวัตถุ",           "Name this object" },
+                { "บันทึก",                "Save" },
 
                 // account (J) — wording taken from the RN app's mapI18n.ts
                 { "เข้าสู่ระบบ / สมัครสมาชิก", "Sign in / Sign up" },

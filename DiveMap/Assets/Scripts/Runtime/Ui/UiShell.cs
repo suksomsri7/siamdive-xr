@@ -835,6 +835,18 @@ namespace DiveMap.Runtime.Ui
                 SelectionToolbar.Hide();
                 GizmoController.Deselect();
                 yield return new WaitForSecondsRealtime(0.4f);
+
+                // 6.6) the object list — the only route to something buried inside a wreck.
+                ObjectListSheet.Open();
+                yield return new WaitForSecondsRealtime(1.0f);
+                ObjectListSheet ol = ObjectListSheet.Current;
+                Debug.Log($"[QC] object list open={(ol != null)} rows={(ol != null ? ol.RowCount : -1)} " +
+                          $"filter='{(ol != null ? ol.KindFilter : null)}'");
+                ScreenCapture.CaptureScreenshot(prefix + "_objlist.png");
+                Debug.Log("[UI] qcui shot -> " + prefix + "_objlist.png");
+                yield return new WaitForSecondsRealtime(1.2f);
+                ObjectListSheet.Close();
+                yield return new WaitForSecondsRealtime(0.4f);
             }
             }
 

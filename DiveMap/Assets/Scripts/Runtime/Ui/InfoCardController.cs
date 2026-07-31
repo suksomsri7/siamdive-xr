@@ -45,6 +45,8 @@ namespace DiveMap.Runtime.Ui
         private Text _kindText;
         private Text _depthText;
         private Button _closeButton;
+        private Button _editButton;
+        private string _openId;
         private UiNav _nav;
 
         private AssetManifest _manifest;
@@ -116,6 +118,17 @@ namespace DiveMap.Runtime.Ui
             UiKit.Anchor(_closeButton.GetComponent<RectTransform>(), new Vector2(1f, 0.5f),
                          new Vector2(UiKit.Css(30f), UiKit.Css(30f)),
                          new Vector2(-UiKit.Css(10f), 0f));
+
+            // ✎ EDIT — the bridge between "I tapped something" and the editing tools. Without it
+            // nothing in section I is reachable by a real user: the gizmo had no way to be told
+            // what to select. Only shown when the server says this account may write to the map
+            // (AppBoot.CanEditCurrent), so it never appears on somebody else's dive site.
+            _editButton = UiKit.MakeIconButton(rt, "CardEdit", "move", BeginEditingOpenItem,
+                                               true, UiKit.Css(30f));
+            UiKit.Anchor(_editButton.GetComponent<RectTransform>(), new Vector2(1f, 0.5f),
+                         new Vector2(UiKit.Css(30f), UiKit.Css(30f)),
+                         new Vector2(-UiKit.Css(46f), 0f));
+            _editButton.gameObject.SetActive(false);
 
             _layer.gameObject.SetActive(false);
             StartCoroutine(LoadManifest());
@@ -331,7 +344,23 @@ namespace DiveMap.Runtime.Ui
             Debug.Log($"[UI] card name={_openName} kind={_openKindKey} depth={_openDepth:F1} " +
                       $"asset={assetId} id={id}");
 
+            // Editable maps get the ✎ button; everyone else just reads the card.
+            var boot = FindFirstObjectByType<AppBoot>();
+            bool canEdit = boot != null && boot.CanEditCurrent;
+            if (_editButton != null) _editButton.gameObject.SetActive(canEdit);
+            _openId = id;
+
             EnsureLabels(mapRoot);
+        }
+
+        /// <summary>Hand the tapped item to the editing tools and get out of the way.</summary>
+        private void BeginEditingOpenItem()
+        {
+            if (string.IsNullOrEmpty(_openId)) return;
+            string id = _openId;
+            Hide();
+            GizmoController.Select(id);
+            Debug.Log("[UI] card → edit " + id);
         }
 
         /// <summary>Re-render the open card in the current language (called after a language switch).</summary>
