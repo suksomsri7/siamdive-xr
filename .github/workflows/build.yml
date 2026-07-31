@@ -10,7 +10,11 @@ on:
       players:
         description: 'Build the installable players (APK + Windows). Off = tests + QC screenshot only.'
         type: boolean
-        default: true
+        default: false
+      ios:
+        description: 'Build iOS and send it to TestFlight (macOS runner — 10x minutes once this repo is private).'
+        type: boolean
+        default: false
 
 concurrency:
   group: divemap-ci-${{ github.ref }}
@@ -90,6 +94,80 @@ jobs:
           name: ProjectSettings
           path: DiveMap/ProjectSettings/**
           retention-days: 14
+
+  # ────────────────────────────────────────────────────────────────────────────
+  # 2b) iOS → TestFlight. The only way to put this app on an iPhone or iPad: Apple
+  #     requires the build to happen on macOS, so this job runs on a rented Mac.
+  #
+  #     ⚠️ COST: macOS minutes bill at 10× on a PRIVATE repo. This repo is public until
+  #     10 Aug 2026 (cron on the VPS flips it back), and while it is public these runners
+  #     are free. After that, one ~45-minute iOS build spends ~450 of the 2,000 free
+  #     minutes — about four builds a month. Deliberately kept behind workflow_dispatch
+  #     for that reason, like the other players.
+  #
+  #     Signing lives here, not in the Unity step: Unity writes an unsigned Xcode project
+  #     and fastlane signs it with the App Store Connect API key. Two steps, two distinct
+  #     failure messages — a Unity error and a certificate error are different problems and
+  #     should not both read as "iOS build failed".
+  # ────────────────────────────────────────────────────────────────────────────
+  ios:
+    name: Build iOS → TestFlight
+    needs: test
+    if: github.event_name == 'workflow_dispatch' && inputs.ios
+    runs-on: macos-14
+    timeout-minutes: 120
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          lfs: true
+
+      - name: Cache Library
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.PROJECT_PATH }}/Library
+          key: Library-ios-${{ hashFiles('DiveMap/Packages/manifest.json') }}
+          restore-keys: |
+            Library-ios-
+            Library-
+
+      - name: Build Xcode project (Unity)
+        uses: game-ci/unity-builder@v4
+        env:
+          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          BUILD_PATH: ${{ github.workspace }}/build/iOS
+        with:
+          projectPath: ${{ env.PROJECT_PATH }}
+          unityVersion: ${{ env.UNITY_VERSION }}
+          targetPlatform: iOS
+          buildMethod: DiveMap.EditorTools.CIBuild.BuildIos
+          allowDirtyBuild: true
+
+      - name: Show what Unity produced
+        run: |
+          ls -la build/iOS || true
+          echo "── camera permission (AR dies silently without it) ──"
+          grep -A1 NSCameraUsageDescription build/iOS/Info.plist || \
+            echo "::error::NSCameraUsageDescription missing — AR would terminate the app on launch"
+
+      - name: Archive, sign and upload to TestFlight
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: bash tools/ios_testflight.sh
+
+      - name: Upload the Xcode project when something goes wrong
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: DiveMap-xcode
+          path: build/iOS
+          retention-days: 7
 
   # ────────────────────────────────────────────────────────────────────────────
   # 2) Android APK build (only after tests pass). Build gate = QC_PLAN §1.3.

@@ -19,7 +19,10 @@ namespace DiveMap.EditorTools
     {
         private const string ApplicationIdentifier = "com.siamdive.divemap";
         private const string ProductName = "DiveMap";
-        private const string CompanyName = "SiamDive";
+        // The legal entity Apple and Google have on file (Apple Team 3DD2VCN6JQ). Stores show
+        // this next to the app, so "SiamDive" — which is nobody's registered name — would have
+        // had to be corrected during review rather than before it.
+        private const string CompanyName = "SIAM DIVE CENTER COMPANY LIMITED";
         private const string DefaultOutputPath = "Build/DiveMap.apk";
 
         // Called by CI:  -buildMethod CIBuild.BuildAndroid
@@ -126,6 +129,92 @@ namespace DiveMap.EditorTools
             {
                 Fail($"Unhandled exception during build: {ex}");
             }
+        }
+
+        // Called by CI:  -buildMethod DiveMap.EditorTools.CIBuild.BuildIos
+        //
+        // Produces an Xcode PROJECT, not an .ipa — Unity's iOS target always does. The macOS
+        // runner then archives and signs it (fastlane), which is the only place a signing identity
+        // exists. Splitting it that way also means a Unity error and a signing error look
+        // different in the log instead of both reading as "iOS build failed".
+        //
+        // Nothing here touches the camera permission: that is Info.plist, written after Xcode
+        // generation by IosCameraUsage. Without it iOS terminates the app the moment AR opens.
+        public static void BuildIos()
+        {
+            try
+            {
+                PlayerSettings.applicationIdentifier = ApplicationIdentifier;
+                PlayerSettings.SetApplicationIdentifier(NamedBuildTarget.iOS, ApplicationIdentifier);
+                PlayerSettings.productName = ProductName;
+                PlayerSettings.companyName = CompanyName;
+
+                // Apple requires a 64-bit ARM build; Unity only offers IL2CPP for iOS anyway, but
+                // stating it keeps the build honest if a default ever changes.
+                PlayerSettings.SetScriptingBackend(NamedBuildTarget.iOS, ScriptingImplementation.IL2CPP);
+                PlayerSettings.SetArchitecture(NamedBuildTarget.iOS, 1);   // ARM64
+
+                // Signing is the RUNNER's job (fastlane match / App Store Connect API key), so the
+                // Xcode project is generated unsigned and manual. Letting Unity attempt automatic
+                // signing here would need an Apple ID inside the Unity step and fail confusingly.
+                PlayerSettings.iOS.appleEnableAutomaticSigning = false;
+                PlayerSettings.iOS.appleDeveloperTeamID = Environment.GetEnvironmentVariable("APPLE_TEAM_ID") ?? "";
+
+                // iOS 13 is the floor Metal + this Unity version want, and is old enough to cover
+                // any iPhone or iPad still receiving updates.
+                PlayerSettings.iOS.targetOSVersionString = "13.0";
+                PlayerSettings.iOS.requiresFullScreen = true;
+
+                // The camera reason string ALSO lives in PlayerSettings; IosCameraUsage writes it
+                // into the generated plist as well because a Unity version that ignores this field
+                // would take AR down with it and nothing would say why.
+                PlayerSettings.iOS.cameraUsageDescription = IosCameraUsage.Reason;
+
+                string outputPath = ResolveOutputPathDir("Build/iOS");
+                EnsureParentDirectory(Path.Combine(outputPath, "placeholder"));
+
+                var scenes = ResolveScenes();
+                if (scenes.Length == 0)
+                {
+                    Fail("No enabled scenes found in EditorBuildSettings. Aborting build.");
+                    return;
+                }
+
+                var options = new BuildPlayerOptions
+                {
+                    scenes = scenes,
+                    locationPathName = outputPath,
+                    target = BuildTarget.iOS,
+                    targetGroup = BuildTargetGroup.iOS,
+                    options = BuildOptions.None,
+                };
+
+                Debug.Log($"[CIBuild] Building iOS Xcode project -> {outputPath} " +
+                          $"team='{PlayerSettings.iOS.appleDeveloperTeamID}' id={ApplicationIdentifier}");
+                BuildReport report = BuildPipeline.BuildPlayer(options);
+                BuildSummary summary = report.summary;
+
+                if (summary.result == BuildResult.Succeeded)
+                {
+                    Debug.Log($"[CIBuild] Xcode project written in {summary.totalTime}: {summary.outputPath}");
+                    EditorApplication.Exit(0);
+                }
+                else
+                {
+                    Fail($"Build failed: result={summary.result}, errors={summary.totalErrors}.");
+                }
+            }
+            catch (Exception ex)
+            {
+                Fail($"Unhandled exception during iOS build: {ex}");
+            }
+        }
+
+        /// <summary>Output DIRECTORY (iOS writes a folder, not a file).</summary>
+        private static string ResolveOutputPathDir(string fallback)
+        {
+            string p = Environment.GetEnvironmentVariable("BUILD_PATH");
+            return string.IsNullOrWhiteSpace(p) ? fallback : p;
         }
 
         // Called by CI:  -buildMethod DiveMap.EditorTools.CIBuild.BuildLinux
