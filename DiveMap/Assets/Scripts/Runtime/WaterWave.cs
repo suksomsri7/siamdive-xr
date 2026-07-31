@@ -10,20 +10,25 @@ namespace DiveMap.Runtime
     /// shape: seen from below (the angle a diver spends the whole dive at) the light through it
     /// breaks up, and the horizon line stops being a perfectly straight edge.
     ///
-    /// Two sine waves crossing at an angle rather than one: a single wave train looks like a
-    /// corrugated roof from above, and the give-away is that every crest is parallel.
+    /// The shape itself is <see cref="DiveMap.Core.WaterWaveMath"/> — the web's three-term
+    /// formula, ported number for number. This component's job is only to move a mesh with it.
     ///
-    /// The mesh is written once per frame from a cached base copy. Reading back the displaced
-    /// vertices and re-displacing them would compound the offset and the sea would climb away.
+    /// ⚠️ This file previously carried its own invented constants (two terms, total amplitude
+    /// 1.6 against the web's 7). It looked right in isolation — there WAS a moving surface — and
+    /// it was four times too flat. Numbers that describe how something looks have to come from
+    /// the thing being copied.
+    ///
+    /// The mesh is written from a cached base copy. Reading back the displaced vertices and
+    /// re-displacing them would compound the offset and the sea would climb away.
     /// </summary>
     [DisallowMultipleComponent]
     public sealed class WaterWave : MonoBehaviour
     {
-        /// <summary>Peak-to-trough, in world units. The web's surf is subtle; so is this.</summary>
-        public float amplitude = 1.6f;
-        public float speed = 0.6f;
-        /// <summary>World units per wavelength.</summary>
-        public float length = 110f;
+        /// <summary>
+        /// Scales the whole formula. 1 = the web exactly; anything else is a deliberate departure,
+        /// so it is one number in one place rather than three amplitudes to keep in step.
+        /// </summary>
+        public float amplitude = 1f;
 
         private Mesh _mesh;
         private Vector3[] _base;
@@ -45,20 +50,22 @@ namespace DiveMap.Runtime
             _mesh.MarkDynamic();
         }
 
+        private int _frame;
+
         private void Update()
         {
             if (_mesh == null || _base == null) return;
 
-            float t = Time.time * speed;
-            float k = Mathf.PI * 2f / Mathf.Max(1f, length);
+            // Every other frame, like the web (builder.html:3929 — "คลื่น+normals ทุก 2 เฟรม
+            // (~30fps) = ลด CPU ครึ่ง แทบไม่เห็นต่าง"). Recomputing normals over a 72-segment disc
+            // is the expensive half, and water at 30 Hz is indistinguishable from water at 60.
+            if ((_frame++ & 1) != 0) return;
 
+            float t = Time.time;
             for (int i = 0; i < _base.Length; i++)
             {
                 Vector3 p = _base[i];
-                // Two trains, ~50° apart, different periods — no repeating crest line.
-                float h = Mathf.Sin(p.x * k + t) * 0.6f
-                        + Mathf.Sin((p.x * 0.64f + p.z * 0.77f) * k * 1.37f + t * 1.31f) * 0.4f;
-                p.y = _base[i].y + h * amplitude;
+                p.y = _base[i].y + (float)DiveMap.Core.WaterWaveMath.Height(p.x, p.z, t) * amplitude;
                 _work[i] = p;
             }
 
