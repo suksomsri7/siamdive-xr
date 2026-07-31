@@ -79,6 +79,13 @@ namespace DiveMap.Core
                 { "เหรียญไม่พอ",            "Not enough coins" },
                 { "ซื้อแล้ว",               "Purchased" },
                 { "ปล่อยลงแมพแล้ว — กำลังโหลดใหม่", "Released — reloading" },
+                { "บันทึกลงแมพแล้ว",         "Saved into the map" },
+                { "มีคนแก้แมพนี้ก่อน — เก็บไว้ในเครื่องนี้แทน",
+                  "Someone edited this map first — kept on this device instead" },
+                { "แมพนี้แก้ไม่ได้ — เก็บไว้ในเครื่องนี้แทน",
+                  "This map is not editable — kept on this device instead" },
+                { "บันทึกไม่สำเร็จ — เก็บไว้ในเครื่องนี้แทน",
+                  "Could not save — kept on this device instead" },
                 // palette = the shop (placing IS buying, builder.html tryPlace :4298)
                 { "ซื้อสัตว์ต้องต่อเน็ต",      "Buying sea life needs a connection" },
                 { "เหรียญไม่พอ — ต้องการ",    "Not enough coins — you need" },

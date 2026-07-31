@@ -1,3 +1,4 @@
+using System.Collections;
 using Newtonsoft.Json.Linq;
 using UnityEngine;
 using DiveMap.Core;
@@ -90,13 +91,67 @@ namespace DiveMap.Runtime.Ui
             // different ids, or Inject's duplicate guard would drop the second one.
             long stamp = System.DateTime.UtcNow.Ticks;
             JObject item = ShopStock.MakeItem(assetId, x, y, z, yaw, 1.0, stamp);
+
+            // Local first, always. The server write can fail (no rights, no signal) and the
+            // player has already been charged — the on-device copy is what guarantees they keep
+            // what they paid for.
             ShopStock.Add(boot.CurrentMapId, item);
             Debug.Log($"[Shop] released {assetId} at ({x:F0},{y:F0},{z:F0}) on map {boot.CurrentMapId}");
 
-            Toast.ShowTr("ปล่อยลงแมพแล้ว — กำลังโหลดใหม่");
+            boot.StartCoroutine(SaveThenReload(boot, item));
+            return true;
+        }
+
+        /// <summary>
+        /// Try to make the placement permanent, then rebuild the map.
+        ///
+        /// This is the difference between "you can see your fish" and "everyone can": the web
+        /// autosaves into the map, this app could only keep purchases on the device (ShopStock's
+        /// own comment records that as a limitation). Now it attempts the real write and falls
+        /// back to the device copy — which is the correct outcome on an admin world map, where
+        /// editPolicy is "none" and a 403 is the server working as intended, not an error.
+        /// </summary>
+        private static IEnumerator SaveThenReload(AppBoot boot, JObject item)
+        {
+            SceneData scene = boot.CurrentScene;
+            bool saved = false;
+
+            // Don't spend a round trip to be told 403: the GET already said whether this account
+            // may write here. Most maps a player dives into are admin worlds (editPolicy "none").
+            if (!boot.CanEditCurrent)
+            {
+                Toast.ShowTr("แมพนี้แก้ไม่ได้ — เก็บไว้ในเครื่องนี้แทน");
+            }
+            else if (scene != null && scene.Root["items"] is JArray items)
+            {
+                // The scene already carries this item (ShopStock injected it on the last load, or
+                // Inject will on the next); add it here too so the array we send is complete.
+                ShopStock.Inject(scene, new[] { item });
+
+                MapSaveClient.Result result = default;
+                yield return MapSaveClient.SaveItems(boot.CurrentMapId, items, boot.CurrentRev,
+                                                     r => result = r);
+                saved = result.Ok;
+
+                if (saved)
+                {
+                    // It lives in the map now; a second copy on the device would show up twice
+                    // for this player and nobody else.
+                    ShopStock.Remove(boot.CurrentMapId, (string)item["id"]);
+                    Toast.ShowTr("บันทึกลงแมพแล้ว");
+                }
+                else if (result.Conflict) Toast.ShowTr("มีคนแก้แมพนี้ก่อน — เก็บไว้ในเครื่องนี้แทน");
+                else if (result.Forbidden) Toast.ShowTr("แมพนี้แก้ไม่ได้ — เก็บไว้ในเครื่องนี้แทน");
+                else Toast.ShowTr("บันทึกไม่สำเร็จ — เก็บไว้ในเครื่องนี้แทน");
+            }
+            else
+            {
+                Toast.ShowTr("ปล่อยลงแมพแล้ว — กำลังโหลดใหม่");
+            }
+
+            Debug.Log($"[Shop] placement saved to server={saved}");
             if (ModeManager.Instance != null) ModeManager.Instance.Exit();
             boot.ReloadCurrentMap();
-            return true;
         }
     }
 }

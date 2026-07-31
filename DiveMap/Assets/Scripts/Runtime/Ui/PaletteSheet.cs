@@ -94,6 +94,10 @@ namespace DiveMap.Runtime.Ui
             RectTransform layer = HudLayer.For(ModeManager.Current) ?? HudLayer.For(AppMode.Tour);
             if (layer == null) return;
 
+            // On the web this screen belongs to EDIT mode, where the tour HUD does not exist.
+            // Keep it up and you get two coin badges and a compass sticking out of the sheet.
+            TourHud.SetChromeVisible(false);
+
             RectTransform root = UiKit.MakeNode(layer, "PaletteSheet");
             UiKit.Stretch(root);
             var sheet = root.gameObject.AddComponent<PaletteSheet>();
@@ -107,11 +111,16 @@ namespace DiveMap.Runtime.Ui
             if (_open == null) return;
             Destroy(_open.gameObject);
             _open = null;
+            TourHud.SetChromeVisible(true);
         }
 
         private void OnDestroy()
         {
-            if (_open == this) _open = null;
+            if (_open != this) return;
+            _open = null;
+            // Destroyed without going through Close() (a map reload tears the layer down) —
+            // the HUD must still come back, or the player lands in a tour with no controls.
+            TourHud.SetChromeVisible(true);
         }
 
         // ── build ────────────────────────────────────────────────────────────────

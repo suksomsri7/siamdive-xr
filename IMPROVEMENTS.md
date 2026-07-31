@@ -34,6 +34,33 @@ DiveMap/ProjectSettings/ProjectVersion.txt      ← มีไฟล์เดี�
 ตอนนี้ยังไม่พัง เพราะยังไม่ขึ้นสโตร์ แต่พอถึง WO-XR-07 (ขึ้น Play) จะกลายเป็นปัญหาทันที
 และทำให้ build ไม่ reproducible — คนละเครื่อง build ได้คนละแอป
 
+### 🔴 A4 · เว็บ autosave ทับงานคนอื่นได้ — เซิร์ฟเวอร์มีตัวกันไว้ให้แล้วแต่ไม่มีใครใช้
+เซิร์ฟเวอร์เตรียม optimistic-concurrency ไว้ครบ (`[shortId]/route.ts:134`):
+```ts
+if (typeof b.baseRev === "number" && b.baseRev !== site.rev) {
+  return NextResponse.json({ error:"conflict", conflict:true, site: fresh }, { status: 409 });
+}
+```
+แต่ `builder.html:3363` — body ที่ส่งจริง **ไม่มี `baseRev`**:
+```js
+const body = JSON.stringify({ deviceId: DEVICE, ...(shortId?{}:{shortId:pendingShortId}),
+                              ...serialize(), ...(thumbUrl?{thumbUrl}:{}) });
+```
+เว็บ**เก็บ** `siteRev` ไว้ (`:3364` `siteRev = r.site.rev`) แต่ไม่เคยส่งกลับ
+→ ตัวกันชนไม่เคยทำงานเลยสักครั้ง
+
+**ผลจริง**: แมพ `editPolicy:"all"` = **ใครก็แก้ได้** และ autosave ยิงทุก 1.3 วินาที
+สองคนเปิดแมพเดียวกันพร้อมกัน → คนที่ autosave ทีหลัง**ลบงานอีกคนทิ้งเงียบๆ** ไม่มีใครรู้
+แก้ที่เว็บ = เติม `baseRev: siteRev` 1 คำ แล้วดัก 409
+
+ฝั่ง Unity: `MapSaveClient` ส่ง `baseRev` ทุกครั้งและโชว์ข้อความ "มีคนแก้แมพนี้ก่อน" แทนที่จะทับ
+
+### 🟡 A5 · `canEdit`/`owned` อยู่นอก `site` ในผลลัพธ์ GET → ถูกทิ้งตอน parse
+`[shortId]/route.ts:93` ตอบ `{ site:{…}, canEdit, owned }`
+แต่ `MapApiClient.ParseSiteResponse` แกะ `site` ออกมาแล้วโยนสองตัวนั้นทิ้ง
+→ แอปไม่รู้ว่าบันทึกได้ไหมจนกว่าจะโดน 403 (หลังหักเหรียญไปแล้ว)
+แก้แล้วในรอบนี้ (ยัด `canEdit`/`owned` เข้า site ก่อนสร้าง SceneData)
+
 ### 🟡 A3 · react API ไม่ idempotent จริง
 `react/route.ts:9-13` เขียนเองว่า *"1-per-device is enforced client-side"*
 → ล้าง PlayerPrefs / ลงแอปใหม่ = กดไลก์แมพเดิมซ้ำได้ไม่จำกัด (rate limit 60 ครั้ง/10 นาที ช่วยได้แค่บางส่วน)
@@ -159,6 +186,31 @@ RN ใช้ `Alert.alert` ซึ่งบนบางเครื่องก�
 ### 🟢 E2 · thumbnail ของ palette ยังไม่ถูก preload
 เปิดหมวดใหม่ = ยิง 82 request พร้อมกัน (cap ที่ 4 ตัวใน `ThumbnailCache.MaxConcurrent`)
 ผู้ใช้เห็นไอคอน fallback ไล่หายทีละใบ · ควร prefetch หมวดถัดไปตอน idle
+
+---
+
+---
+
+## F. เจอจากภาพ QC (ไม่ใช่จากการอ่านโค้ด)
+
+### ✅ F1 · เหรียญขึ้นซ้อนกัน 2 อัน ตอนเปิด palette — **แก้แล้ว**
+`qc_ui_palette_buy.png` (CI `30596568212`): ป้าย 🪙450 ของ `PaletteSheet` ทับป้าย 🪙450
+ของ `CoinCounter` ใน HUD ทัวร์ · แถมเข็มทิศ/ตัวเลขความลึก/ปุ่มกล้อง โผล่รอบๆ sheet
+สาเหตุ: บนเว็บ palette อยู่ใน **โหมดแก้ไข** ซึ่งไม่มี HUD ทัวร์เลย แต่แอปเปิดจากในทัวร์
+แก้: `TourHud.SetChromeVisible(false)` ตอนเปิด · คืนตอนปิด **และตอน OnDestroy**
+(แมพ reload จะทำลาย layer โดยไม่ผ่าน `Close()` → ถ้าไม่คืนใน OnDestroy ผู้เล่นจะเจอทัวร์ที่ไม่มีจอย)
+
+**บทเรียน**: ตรวจ log อย่างเดียวไม่พอ — log บอกว่า `chips=10 cards=15` ถูกหมด
+แต่ภาพบอกว่ามีป้ายเหรียญ 2 อัน · **ทุกหน้าใหม่ต้องดูภาพจริง ไม่ใช่แค่ตัวเลข**
+
+### 🟡 F2 · ไอคอนชิปบางตัวอ่านไม่ออกที่ขนาด 23 px
+"ปะการังเทียม" (🗿 moai) ดูเหมือนแบตเตอรี่ · "เรือ" (⛵) เล็กเกินจะเห็นใบ
+เว็บใช้ emoji จริงซึ่งมีรายละเอียดสีครบ · แอปวาดเป็นเส้นขาวล้วนเพราะฟอนต์ไม่มี emoji
+ทางเลือก: วาดแบบมีสี (fill หลายชั้น) หรือใช้รูป PNG เล็กๆ เหมือน thumbnail ของ item
+
+### 🟢 F3 · ชื่อ item ในกริดปนไทย-อังกฤษ
+`Acrobat Shrimp` / `Longhorn Shrimp` แต่ `ปู` / `ม้าน้ำ` — มาจาก `name` ใน manifest
+เว็บก็เป็นแบบเดียวกัน (ไม่ใช่ regression) แต่ควรทำให้เป็นภาษาเดียวทั้งกริด
 
 ---
 

@@ -143,6 +143,22 @@ namespace DiveMap.Core
             UnityEngine.PlayerPrefs.Save();
         }
 
+        /// <summary>
+        /// Forget one purchase — used once it has been written into the map on the server, where
+        /// everyone can see it. Keeping the device copy as well would draw the same animal twice
+        /// for the buyer and once for everybody else.
+        /// </summary>
+        public static void Remove(string mapId, string itemId)
+        {
+            if (string.IsNullOrEmpty(itemId)) return;
+            List<JObject> all = Load(mapId);
+            int before = all.Count;
+            all.RemoveAll(o => o != null && string.Equals((string)o["id"], itemId, StringComparison.Ordinal));
+            if (all.Count == before) return;
+            UnityEngine.PlayerPrefs.SetString(KeyFor(mapId), Serialise(all));
+            UnityEngine.PlayerPrefs.Save();
+        }
+
         /// <summary>Inject this map's purchases into a freshly fetched scene.</summary>
         public static int InjectFromStore(SceneData scene, string mapId)
             => Inject(scene, Load(mapId));

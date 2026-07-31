@@ -87,6 +87,12 @@ namespace DiveMap.Runtime
             // Unwrap { site: {...} } when present; otherwise treat root as the site.
             JObject site = root["site"] is JObject s ? s : root;
 
+            // canEdit / owned sit OUTSIDE site (route.ts:93) and would be lost by the unwrap.
+            // They are the server's own verdict on whether a save will be accepted — the app
+            // needs it BEFORE charging a player for something it cannot persist.
+            if (root["canEdit"] != null) site["canEdit"] = root["canEdit"];
+            if (root["owned"] != null) site["owned"] = root["owned"];
+
             // items / pins / env may arrive as JSON strings — decode in place so the
             // rest of the pipeline always sees real JArray / JObject tokens.
             NormalizeEmbedded(site, "items");

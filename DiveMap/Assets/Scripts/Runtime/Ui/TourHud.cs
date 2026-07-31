@@ -53,6 +53,22 @@ namespace DiveMap.Runtime.Ui
         private bool _radarOn = true;   // the web starts with the minimap visible in a tour
         private Image _vignette;
 
+        /// <summary>
+        /// Hide/show the whole tour HUD. The palette is a full-screen editing surface on the web
+        /// — it lives in edit mode, where none of this chrome exists. Leaving the HUD up behind
+        /// it put a SECOND coin badge on screen (the palette draws the web's own centred one) and
+        /// left the compass, depth read-out and camera button poking out around the sheet.
+        /// </summary>
+        public static void SetChromeVisible(bool visible)
+        {
+            RectTransform layer = HudLayer.For(AppMode.Tour);
+            TourHud hud = layer != null ? layer.GetComponentInChildren<TourHud>(true) : null;
+            if (hud == null) return;
+            hud.gameObject.SetActive(visible);
+            if (CompassWidget.Instance != null) CompassWidget.Instance.SetVisible(visible);
+            if (visible) CoinCounter.Show(TrashGameSystem.Coins); else CoinCounter.Hide();
+        }
+
         public static TourHud Ensure()
         {
             RectTransform layer = HudLayer.For(AppMode.Tour);

@@ -228,6 +228,14 @@ namespace DiveMap.Runtime
             int restocked = ShopStock.InjectFromStore(scene, _shortId);
             if (restocked > 0) Debug.Log($"[Shop] restored {restocked} purchased item(s) for {_shortId}");
 
+            // Keep the scene JSON around: it is what a save writes back, and the rev is what
+            // stops that save from clobbering an edit made on another device.
+            CurrentScene = scene;
+            CurrentRev = scene.Root["rev"] != null ? (int)scene.Root["rev"] : -1;
+            CanEditCurrent = scene.Root["canEdit"] != null && (bool)scene.Root["canEdit"];
+            Debug.Log($"[AppBoot] map {_shortId} rev={CurrentRev} canEdit={CanEditCurrent} " +
+                      $"policy={scene.Root["editPolicy"]}");
+
             string mapName = string.IsNullOrEmpty(scene.Name) ? _shortId : scene.Name;
             SetStatus(mapName + " · " + UiStrings.Tr("กำลังวางวัตถุ…"));
 
@@ -365,6 +373,27 @@ namespace DiveMap.Runtime
         /// Null until the first load finishes.
         /// </summary>
         public static AssetManifest Manifest { get; private set; }
+
+        /// <summary>
+        /// The scene as loaded, purchases already injected. Saving writes THIS back — the built
+        /// GameObjects are a rendering of it, not the source of truth, so a save never has to
+        /// reverse-engineer the scene graph.
+        /// </summary>
+        public SceneData CurrentScene { get; private set; }
+
+        /// <summary>
+        /// The map's revision when it was fetched, for the PATCH optimistic-concurrency guard.
+        /// -1 = unknown (the GET did not carry one), which makes the save unguarded.
+        /// </summary>
+        public int CurrentRev { get; private set; } = -1;
+
+        /// <summary>
+        /// The server's verdict on whether THIS account may write to THIS map (route.ts:93).
+        /// False on every admin world map (editPolicy "none"), which is most of what a player
+        /// dives into — so a purchase there is kept on the device rather than saved, and the
+        /// player is told which of the two happened.
+        /// </summary>
+        public bool CanEditCurrent { get; private set; }
 
         /// <summary>
         /// E5 — rebuild the map that is already open. Used after a purchase: the animal has been
