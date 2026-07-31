@@ -241,6 +241,15 @@ namespace DiveMap.Runtime.Ui
             ActionButton(2, "depth", ToggleDepthView);   // the web's #depthViewBtn
             ActionButton(3, "wave", ToggleEnv);          // the web's #env (☀️ / 💧)
             ActionButton(4, "gear", OpenSettings);
+
+            // 📋 objects — only useful on a map this account can write to, and the button is
+            // built once at startup when that is not yet known, so it decides at TAP time.
+            ActionButton(5, "objects", () =>
+            {
+                var boot = FindFirstObjectByType<AppBoot>();
+                if (boot == null || !boot.CanEditCurrent) { Toast.ShowTr("แมพนี้แก้ไม่ได้"); return; }
+                ObjectListSheet.Open();
+            });
             _actions.gameObject.SetActive(false);
         }
 

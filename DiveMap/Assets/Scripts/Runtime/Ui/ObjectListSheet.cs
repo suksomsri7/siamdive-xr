@@ -198,6 +198,15 @@ namespace DiveMap.Runtime.Ui
             AssetManifest.Module m = assetId != null && AppBoot.Manifest != null
                 ? AppBoot.Manifest.Get(assetId) : null;
             if (m != null && !string.IsNullOrWhiteSpace(m.Name)) return m.Name;
+
+            // Procedural ids (warp:0, rock:2 …) have no manifest row, and showing the raw id
+            // in a list a player reads is the same as showing nothing.
+            if (!string.IsNullOrEmpty(assetId))
+            {
+                if (assetId.StartsWith("warp:", StringComparison.Ordinal)) return UiStrings.Tr("ประตูวาป");
+                int c = assetId.IndexOf(':');
+                if (c > 0) return UiStrings.Tr(Palette.LabelOf(Palette.FoldKind(assetId.Substring(0, c).ToUpperInvariant(), assetId)));
+            }
             return assetId ?? "?";
         }
 
@@ -300,7 +309,7 @@ namespace DiveMap.Runtime.Ui
             // ✎ rename
             Button ren = UiKit.MakeButton(row.transform, "Rename", null, 0, new Color(0f, 0f, 0f, 0f),
                                           UiKit.TextMain, () => Rename(id, name));
-            Glyph(ren.transform, "move", UiKit.TextDim, UiKit.Css(16f));
+            Glyph(ren.transform, "pencil", UiKit.TextDim, UiKit.Css(16f));
             Place(ren.GetComponent<RectTransform>(), -(pad + act), act);
 
             // 🗑 delete

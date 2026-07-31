@@ -194,6 +194,20 @@ namespace DiveMap.Runtime.Ui
                     strokes.Add(Line(14f, 10f, 13.6f, 17.4f));
                     break;
 
+                case "pencil":   // ✎ — rename / edit
+                    strokes.Add(new[] { P(3.8f, 20.2f), P(5.2f, 15.6f), P(16.4f, 4.4f),
+                                        P(19.6f, 7.6f), P(8.4f, 18.8f), P(3.8f, 20.2f) });
+                    strokes.Add(Line(14.2f, 6.6f, 17.4f, 9.8f));
+                    break;
+
+                case "objects":  // 📋 — the object list: a clipboard with rows
+                    strokes.Add(new[] { P(4.6f, 5.4f), P(19.4f, 5.4f), P(19.4f, 20.6f), P(4.6f, 20.6f), P(4.6f, 5.4f) });
+                    strokes.Add(new[] { P(9f, 5.4f), P(9f, 3.4f), P(15f, 3.4f), P(15f, 5.4f) });
+                    strokes.Add(Line(7.8f, 10.2f, 16.2f, 10.2f));
+                    strokes.Add(Line(7.8f, 13.6f, 16.2f, 13.6f));
+                    strokes.Add(Line(7.8f, 17f, 13f, 17f));
+                    break;
+
                 case "check":    // ✓
                     strokes.Add(new[] { P(4.6f, 12.6f), P(9.8f, 18f), P(19.6f, 6.4f) });
                     break;

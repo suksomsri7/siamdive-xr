@@ -112,6 +112,7 @@ namespace DiveMap.Core
                 { "ทุกชนิด",               "All kinds" },
                 { "ตั้งชื่อวัตถุ",           "Name this object" },
                 { "บันทึก",                "Save" },
+                { "แมพนี้แก้ไม่ได้",         "This map is not editable" },
 
                 // account (J) — wording taken from the RN app's mapI18n.ts
                 { "เข้าสู่ระบบ / สมัครสมาชิก", "Sign in / Sign up" },
