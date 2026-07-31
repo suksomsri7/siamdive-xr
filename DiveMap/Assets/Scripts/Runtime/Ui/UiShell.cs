@@ -281,6 +281,7 @@ namespace DiveMap.Runtime.Ui
             _mapList.Build(_thumbs);
             _mapList.CloseRequested += CloseTop;
             _mapList.MapSelected += OnMapSelected;
+            _mapList.WorldsRequested += OpenWorlds;
             _mapsLayer.SetActive(false);
         }
 
@@ -376,6 +377,22 @@ namespace DiveMap.Runtime.Ui
             if (_mapList != null) _mapList.EnsureLoaded();
         }
 
+        /// <summary>
+        /// "Play Game!" → the worlds picker, then dive straight in. Same trip as the warp gate:
+        /// <see cref="TourController.ArrivingByWarp"/> puts the diver in the water at the
+        /// destination instead of parking them in front of a menu — the banner promises
+        /// "dive in", so landing on an orbit camera would be a broken promise.
+        /// </summary>
+        public void OpenWorlds()
+        {
+            if (_mapList == null) return;
+            WorldsPopup.Show(_mapList.Cards, _thumbs, shortId =>
+            {
+                TourController.ArrivingByWarp = true;
+                OnMapSelected(shortId);
+            });
+        }
+
         public void OpenSettings()
         {
             CloseActions();
@@ -422,6 +439,9 @@ namespace DiveMap.Runtime.Ui
 
             if (_card != null) _card.Render();
             if (_settings != null) _settings.Refresh();
+            // Card bylines are "by " + a name that is not in the table, so the sweep above can
+            // never match them — the screen re-composes its own composed strings.
+            if (_mapList != null) _mapList.RefreshLanguage();
             // The map header is a composed string, so the loop above can never match it —
             // AppBoot re-composes it from its parts (P0).
             AppBoot boot = UnityEngine.Object.FindFirstObjectByType<AppBoot>();
@@ -596,18 +616,38 @@ namespace DiveMap.Runtime.Ui
             float t1 = Time.realtimeSinceStartup;
             while (Time.realtimeSinceStartup - t1 < 10f)
             {
+                // The banner's coin comes from StreamingAssets, so it is part of "the page is
+                // drawn" — a shot taken before it lands looks like the banner has a hole in it.
                 if (_mapList != null && !_mapList.IsLoading && _mapList.CardCount > 0 &&
+                    _mapList.BannerReady &&
                     _mapList.ThumbnailsLoaded >= Mathf.Min(3, _mapList.CardCount)) break;
                 yield return new WaitForSecondsRealtime(0.25f);
             }
+            int worlds = 0;
+            if (_mapList != null)
+                foreach (MapCard c in _mapList.Cards) if (MapDirectory.IsOfficial(c)) worlds++;
             Debug.Log($"[UI] qcui maps cards={(_mapList != null ? _mapList.CardCount : -1)} " +
                       $"total={(_mapList != null ? _mapList.Total : -1)} " +
                       $"thumbs={(_mapList != null ? _mapList.ThumbnailsLoaded : -1)} " +
+                      $"banner={(_mapList != null && _mapList.BannerReady ? "ok" : "MISSING")} " +
+                      $"worlds={worlds} " +
                       $"err={(_mapList != null ? _mapList.LastError : "no screen")}");
             yield return new WaitForSecondsRealtime(0.6f);
             ScreenCapture.CaptureScreenshot(prefix + "_maps.png");
             Debug.Log("[UI] qcui shot -> " + prefix + "_maps.png");
             yield return new WaitForSecondsRealtime(1.5f);
+
+            // 3b) the "Play Game!" banner's destination — proves the banner is wired, not paint.
+            OpenWorlds();
+            yield return new WaitForSecondsRealtime(1.0f);
+            WorldsPopup popup = UnityEngine.Object.FindFirstObjectByType<WorldsPopup>();
+            Debug.Log($"[UI] qcui worlds popup={(popup != null ? "open" : "MISSING")} " +
+                      $"rows={(popup != null ? popup.RowCount : -1)}");
+            ScreenCapture.CaptureScreenshot(prefix + "_worlds.png");
+            Debug.Log("[UI] qcui shot -> " + prefix + "_worlds.png");
+            yield return new WaitForSecondsRealtime(1.2f);
+            if (popup != null) popup.Close();
+            yield return new WaitForSecondsRealtime(0.5f);
 
             // 4) search "Chang" (server-side; expect exactly the Htms Chang demo map)
             if (_mapList != null)

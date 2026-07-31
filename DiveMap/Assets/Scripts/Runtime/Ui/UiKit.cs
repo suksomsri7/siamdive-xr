@@ -285,6 +285,53 @@ namespace DiveMap.Runtime.Ui
             new System.Collections.Generic.Dictionary<int, Sprite>();
 
         /// <summary>
+        /// The INVERSE of <see cref="RoundedSprite"/>: opaque in the four corners, transparent
+        /// everywhere else. Laid over a rectangular image and tinted with the surrounding colour,
+        /// it rounds that image's corners.
+        ///
+        /// Why not a <see cref="UnityEngine.UI.Mask"/>: a <c>RawImage</c> cannot be 9-sliced, and
+        /// a stencil mask inside the list's <c>RectMask2D</c> costs a stencil pass per card and
+        /// depends on alpha-clip behaviour that differs between the GL and Vulkan paths — this
+        /// draws the same pixels with one extra quad and no render-state surprises. It only works
+        /// on a solid background, which is exactly where the app uses it (map cards).
+        /// </summary>
+        public static Sprite RoundedCutoutSprite(float cssRadius)
+        {
+            int key = Mathf.RoundToInt(cssRadius * 10f);
+            if (_cutouts.TryGetValue(key, out Sprite cached) && cached != null) return cached;
+
+            int r = Mathf.Clamp(Mathf.RoundToInt(Css(cssRadius)), 2, 64);
+            int size = r * 2 + 4;
+
+            var tex = new Texture2D(size, size, TextureFormat.RGBA32, false)
+            {
+                name = $"UiCutout{key}",
+                wrapMode = TextureWrapMode.Clamp,
+                filterMode = FilterMode.Bilinear,
+            };
+            var px = new Color32[size * size];
+            for (int y = 0; y < size; y++)
+            for (int x = 0; x < size; x++)
+            {
+                float dx = Mathf.Max(Mathf.Abs(x + 0.5f - size * 0.5f) - (size * 0.5f - r), 0f);
+                float dy = Mathf.Max(Mathf.Abs(y + 0.5f - size * 0.5f) - (size * 0.5f - r), 0f);
+                float d = Mathf.Sqrt(dx * dx + dy * dy);
+                float inside = Mathf.Clamp01((r - 0.5f - d) / 1.2f);
+                px[y * size + x] = new Color32(255, 255, 255, (byte)Mathf.RoundToInt((1f - inside) * 255f));
+            }
+            tex.SetPixels32(px);
+            tex.Apply();
+
+            var sprite = Sprite.Create(tex, new Rect(0f, 0f, size, size), new Vector2(0.5f, 0.5f),
+                                       100f, 0, SpriteMeshType.FullRect,
+                                       new Vector4(r, r, r, r));
+            _cutouts[key] = sprite;
+            return sprite;
+        }
+        private static readonly System.Collections.Generic.Dictionary<int, Sprite> _cutouts =
+            new System.Collections.Generic.Dictionary<int, Sprite>();
+
+        /// <summary>
         /// The web's bottom sheet (#sheet, builder.html:120-127): docked to the bottom edge, full
         /// width, rounded 24 px top corners, at most 72% of the viewport tall, with a 42×4 grip.
         /// The map stays visible behind it — that is the whole point of a sheet over a full-screen

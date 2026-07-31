@@ -264,5 +264,48 @@ namespace DiveMap.Tests
             Assert.AreEqual("", MapDirectory.Ellipsize("Hanuman", 0));
             Assert.AreEqual("", MapDirectory.Ellipsize("Hanuman", -3));
         }
+
+        // ── accountId / bylines (map hub) ────────────────────────────────────────
+
+        [Test]
+        public void ParseList_KeepsAccountId()
+        {
+            MapPage page = MapDirectory.ParseList(RealListJson);
+            Assert.AreEqual(MapDirectory.AdminAccountId, page.Cards[0].AccountId, "Hanuman is an admin world");
+            Assert.AreEqual("cmqsvx18h000004l8cji95y2r", page.Cards[5].AccountId, "Tu Nakarin's own map");
+        }
+
+        [Test]
+        public void IsOfficial_OnlyForTheAdminAccount()
+        {
+            MapPage page = MapDirectory.ParseList(RealListJson);
+            Assert.IsTrue(MapDirectory.IsOfficial(page.Cards[0]));
+            Assert.IsFalse(MapDirectory.IsOfficial(page.Cards[5]));
+            Assert.IsFalse(MapDirectory.IsOfficial(null));
+            Assert.IsFalse(MapDirectory.IsOfficial(new MapCard()), "no accountId is not official");
+        }
+
+        [Test]
+        public void OwnerKind_FollowsTheRnHubsOrder()
+        {
+            MapPage page = MapDirectory.ParseList(RealListJson);
+            MapCard admin = page.Cards[0];      // accountId = admin, ownerName null
+            MapCard named = page.Cards[5];      // ownerName "Tu Nakarin"
+
+            // isMine wins over everything, exactly like map.tsx's nested ternary.
+            Assert.AreEqual(OwnerKind.You, MapDirectory.OwnerKindOf(admin, true));
+            Assert.AreEqual(OwnerKind.Official, MapDirectory.OwnerKindOf(admin, false));
+            Assert.AreEqual(OwnerKind.Named, MapDirectory.OwnerKindOf(named, false));
+        }
+
+        [Test]
+        public void OwnerKind_FallsBackToCommunity()
+        {
+            Assert.AreEqual(OwnerKind.Community, MapDirectory.OwnerKindOf(new MapCard(), false));
+            Assert.AreEqual(OwnerKind.Community,
+                            MapDirectory.OwnerKindOf(new MapCard { OwnerName = "   " }, false),
+                            "a whitespace-only owner name is not a name");
+            Assert.AreEqual(OwnerKind.Community, MapDirectory.OwnerKindOf(null, false));
+        }
     }
 }

@@ -152,6 +152,44 @@ namespace DiveMap.Runtime.Ui
                     strokes.Add(new[] { P(3.5f, 17.5f), P(12f, 21.5f), P(20.5f, 17.5f) });
                     break;
 
+                // ── map hub (RN Ionicons: search / add / heart / ellipsis / person / image) ──
+
+                case "search": // Ionicons "search" — lens + handle
+                    strokes.Add(Circle(10.4f, 10.4f, 6.4f));
+                    strokes.Add(Line(15.1f, 15.1f, 20.4f, 20.4f));
+                    break;
+
+                case "plus":   // Ionicons "add"
+                    strokes.Add(Line(12, 4.5f, 12, 19.5f));
+                    strokes.Add(Line(4.5f, 12, 19.5f, 12));
+                    break;
+
+                case "heart":     // Ionicons "heart-outline"
+                    strokes.Add(HeartPath());
+                    break;
+
+                case "heartfill": // Ionicons "heart" (liked)
+                    fills.Add(HeartPath());
+                    break;
+
+                case "dots":   // Ionicons "ellipsis-horizontal" — the per-card menu
+                    fills.Add(Dot(5.4f, 12f, 1.75f));
+                    fills.Add(Dot(12f, 12f, 1.75f));
+                    fills.Add(Dot(18.6f, 12f, 1.75f));
+                    break;
+
+                case "person": // Ionicons "person-circle-outline" — the signed-out account button
+                    strokes.Add(Circle(12f, 12f, 9.2f));
+                    strokes.Add(Circle(12f, 9.9f, 3.1f));
+                    strokes.Add(Arc(12f, 20.2f, 5.6f, 200f, 340f));
+                    break;
+
+                case "image":  // Ionicons "image-outline" — thumbnail placeholder
+                    strokes.Add(new[] { P(4, 5), P(20, 5), P(20, 19), P(4, 19), P(4, 5) });
+                    strokes.Add(Circle(8.8f, 9.6f, 1.5f));
+                    strokes.Add(new[] { P(4.4f, 17.4f), P(9.6f, 11.8f), P(13.2f, 15.6f), P(15.9f, 12.9f), P(19.6f, 17f) });
+                    break;
+
                 case "needle": // one half of the compass needle (the caller tints + rotates it)
                     fills.Add(new[] { P(12, 1.6f), P(17.2f, 23f), P(6.8f, 23f) });
                     break;
@@ -197,6 +235,34 @@ namespace DiveMap.Runtime.Ui
                 pts[i] = new Vector2(cx + Mathf.Cos(a) * r, cy + Mathf.Sin(a) * r);
             }
             return pts;
+        }
+
+        /// <summary>
+        /// Closed heart outline, symmetric about x=12: bottom tip → up the left side → the two
+        /// lobes → back down the right. Six cubics, sampled — the same shape Ionicons draws,
+        /// which the rasteriser can either stroke ("heart") or fill ("heartfill").
+        /// </summary>
+        private static Vector2[] HeartPath()
+        {
+            var pts = new List<Vector2>();
+            Cubic(pts, P(12f, 20.8f), P(5.5f, 15.5f), P(2.8f, 12f), P(2.8f, 8.6f));
+            Cubic(pts, P(2.8f, 8.6f), P(2.8f, 5.6f), P(5.2f, 3.5f), P(7.9f, 3.5f));
+            Cubic(pts, P(7.9f, 3.5f), P(9.8f, 3.5f), P(11.2f, 4.7f), P(12f, 6.2f));
+            Cubic(pts, P(12f, 6.2f), P(12.8f, 4.7f), P(14.2f, 3.5f), P(16.1f, 3.5f));
+            Cubic(pts, P(16.1f, 3.5f), P(18.8f, 3.5f), P(21.2f, 5.6f), P(21.2f, 8.6f));
+            Cubic(pts, P(21.2f, 8.6f), P(21.2f, 12f), P(18.5f, 15.5f), P(12f, 20.8f));
+            return pts.ToArray();
+        }
+
+        /// <summary>Append a sampled cubic Bézier, skipping the start point after the first call.</summary>
+        private static void Cubic(List<Vector2> into, Vector2 p0, Vector2 c1, Vector2 c2, Vector2 p3, int seg = 12)
+        {
+            if (into.Count == 0) into.Add(p0);
+            for (int i = 1; i <= seg; i++)
+            {
+                float t = i / (float)seg, u = 1f - t;
+                into.Add(u * u * u * p0 + 3f * u * u * t * c1 + 3f * u * t * t * c2 + t * t * t * p3);
+            }
         }
 
         /// <summary>The web's wavy path, sampled: amplitude ≈1.6 over x 3…21.</summary>

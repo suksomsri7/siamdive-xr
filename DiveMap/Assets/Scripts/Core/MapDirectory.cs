@@ -15,11 +15,25 @@ namespace DiveMap.Core
         public string Name;
         public string ThumbUrl;
         public string OwnerName;
+        public string AccountId;
         public string UpdatedAt;
         public int ViewCount;
         public int LikeCount;
         public int FavoriteCount;
         public bool IsPublic;
+    }
+
+    /// <summary>Which "by …" line a card shows. Mirrors siamdive-rn <c>map.tsx</c>.</summary>
+    public enum OwnerKind
+    {
+        /// <summary>The signed-in user's own map ("by You").</summary>
+        You,
+        /// <summary>An admin/warp-world map ("by SIAMDIVE").</summary>
+        Official,
+        /// <summary>Someone else's map whose creator has a username ("by &lt;name&gt;").</summary>
+        Named,
+        /// <summary>Someone else's map with no username ("by Community").</summary>
+        Community,
     }
 
     /// <summary>One page of <see cref="MapCard"/> plus the server's paging counters.</summary>
@@ -103,6 +117,7 @@ namespace DiveMap.Core
                         Name = ReadString(o["name"]),
                         ThumbUrl = ReadString(o["thumbUrl"]),
                         OwnerName = ReadString(o["ownerName"]),
+                        AccountId = ReadString(o["accountId"]),
                         UpdatedAt = ReadString(o["updatedAt"]),
                         ViewCount = ReadInt(o["viewCount"], 0),
                         LikeCount = ReadInt(o["likeCount"], 0),
@@ -114,6 +129,31 @@ namespace DiveMap.Core
 
             if (page.Total < 0) page.Total = page.Skip + page.Cards.Count;
             return page;
+        }
+
+        /// <summary>
+        /// The SiamDive admin account. Its maps are the warp worlds behind the "Play Game!"
+        /// banner, and they carry the "by SIAMDIVE" byline instead of a creator name.
+        /// Same constant as <c>ADMIN_ACCT</c> in siamdive-rn <c>src/app/map.tsx</c>.
+        /// </summary>
+        public const string AdminAccountId = "cmqrpkm6f000004jrjhztnaq4";
+
+        /// <summary>True when the card belongs to the admin account (a warp world).</summary>
+        public static bool IsOfficial(MapCard card) =>
+            card != null && string.Equals(card.AccountId, AdminAccountId, StringComparison.Ordinal);
+
+        /// <summary>
+        /// Which byline a card shows, exactly as the RN hub decides it:
+        /// <c>isMine ? byYou : accountId === ADMIN_ACCT ? byOfficial : ownerName ? "by {name}" : byCommunity</c>.
+        /// The caller supplies <paramref name="isMine"/> because this app has no sign-in yet
+        /// (queued as item 4) — until it does, nothing is "mine" and the branch is never taken.
+        /// </summary>
+        public static OwnerKind OwnerKindOf(MapCard card, bool isMine)
+        {
+            if (isMine) return OwnerKind.You;
+            if (IsOfficial(card)) return OwnerKind.Official;
+            if (card != null && !string.IsNullOrWhiteSpace(card.OwnerName)) return OwnerKind.Named;
+            return OwnerKind.Community;
         }
 
         /// <summary>Display name for a card — never empty (falls back to the shortId).</summary>

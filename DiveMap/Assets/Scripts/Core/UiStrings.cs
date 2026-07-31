@@ -122,6 +122,29 @@ namespace DiveMap.Core
                 { "ไม่ทราบผู้สร้าง",         "Unknown creator" },
                 { "กำลังเปิดแมพ…",          "Opening map…" },
 
+                // map hub — ported 1:1 from the RN app's mapI18n.ts so the two products
+                // say the same words. Keys keep the Latin "dive site" the RN copy uses.
+                { "ค้นหา dive site สาธารณะ…", "Search public dive sites…" },
+                { "ไม่พบ dive site",        "No dive sites found" },
+                { "ยังไม่มี dive site",      "No dive sites yet" },
+                { "สร้างโดย",              "by" },              // + owner name
+                { "สร้างโดย ชุมชน",         "by Community" },
+                { "สร้างโดย คุณ",           "by You" },
+                { "โดย SIAMDIVE",          "by SIAMDIVE" },
+                { "เปิดแผนที่",             "Go To Map" },
+                { "ยกเลิก",                "Cancel" },
+                { "รายงาน",                "Report" },
+                { "ขอบคุณที่รายงาน",         "Thanks for reporting" },
+                { "แมพนี้ถูกซ่อนเพื่อรอตรวจสอบแล้ว", "This map has been hidden pending review" },
+                { "ส่งรายงานไม่สำเร็จ",       "Could not send the report" },
+                { "ยังไม่เปิดให้ใช้ในแอปนี้",   "Not available in this app yet" },
+
+                // "Play Game!" banner + worlds picker
+                { "เล่นเกม!",               "Play Game!" },
+                { "ดำลงเก็บเหรียญ เก็บขยะใต้น้ำ", "Dive in, collect coins & clean up the reef" },
+                { "เลือกโลกที่จะดำลง — วาประหว่างกันได้", "Pick a world to dive in - warp between them" },
+                { "ค้นหาโลก…",             "Search worlds…" },
+
                 // info card (05.3)
                 { "ความลึก",               "Depth" },
                 { "ม.",                    "m" },

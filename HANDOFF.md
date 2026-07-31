@@ -213,6 +213,52 @@ user ส่งภาพหน้าจอเว็บจริง 2 รูป �
 - ⚠️ **สัตว์ raw ไม่มี rig/animation** → เอามาแทนตรงๆ ไม่ได้ ต้องรัน `optimize → auto-rig → swim clip` ใหม่ทีละตัว (ดู [[reference_marine_asset_pipeline]])
 - แนะนำทำ **3 tier** (ไกล/ใกล้/พระเอก) ไม่ใช่ยก 100k tris ทั้งหมด — เป็นงานปรับคุณภาพ ทำหลังฟีเจอร์
 
+## 4.98 ▶️ RESUME 2026-07-31 — ✅ ปิดข้อ 1 หน้ารายการแมพ (รอ CI)
+
+### 🔑 สิ่งที่ต้องรู้ก่อนแตะหน้านี้ต่อ
+**ภาพ `docs/refs/web-maplist.png` ไม่ใช่ builder.html — เป็นแอป React Native**
+`/root/projects/siamdive-rn/src/app/map.tsx` (623 บรรทัด) + `src/lib/mapI18n.ts`
+→ ค่าทุกตัว (สี/ระยะ/ขนาด/ข้อความ EN+TH) ถอดจาก StyleSheet ของไฟล์นั้นตรงๆ ไม่ได้เดาจากภาพ
+**ทุกงาน UI ที่เหลือให้เปิดไฟล์นี้ก่อนเสมอ** (ดู [[feedback_verify_web_source_before_porting]])
+
+### ทำอะไรไป
+| ของใหม่ | สาระ |
+|---|---|
+| `Ui/MapListScreen.cs` | **เขียนใหม่ทั้งไฟล์** — จาก bottom sheet แถวเดี่ยว 74px → **หน้าเต็ม** + กริด 2 คอลัมน์ · header `‹ [🔍 ค้นหา] + (บัญชี)` · แบนเนอร์ Play Game! · การ์ด: รูป 100px มุมมน + ชื่อ + `by …` + ♡n + ⋯ |
+| `Ui/WorldsPopup.cs` | แตะแบนเนอร์ → เลือกโลก (กรอง `accountId == ADMIN_ACCT`) → **ลงน้ำเลย** (`ArrivingByWarp`) |
+| `Ui/ActionSheet.cs` | แทน `Alert.alert(title, buttons)` ของ RN — ใช้กับเมนู ⋯ |
+| `Core/MapGridLayout.cs` | เลขวางกริดล้วนๆ + เทส 13 ตัว (กันบั๊ก "ทุกการ์ดไปคอลัมน์ 0") |
+| `Core/LikedMaps.cs` | จำว่าเครื่องนี้กดหัวใจแมพไหน + เทส 11 ตัว |
+| `Runtime/MapReactClient.cs` | `POST /react` + `/report` จริง |
+| `StreamingAssets/coin.png` | เหรียญทอง SCUBA DIVING ก๊อปจาก RN (วาดเองไม่ได้ เป็นภาพถ่าย) |
+| `UiKit.RoundedCutoutSprite` | ครอบมุมรูปให้มน (RawImage 9-slice ไม่ได้ · เลี่ยง stencil Mask) |
+| ไอคอนใหม่ | `search / plus / heart / heartfill / dots / person / image` (Ionicons 24 viewBox) |
+
+### ⚠️ 3 อย่างที่ตั้งใจ**ไม่ทำ** (อย่าเคลมว่าเสร็จ)
+1. **☁ เก็บออฟไลน์** — แอปยังไม่มีที่เก็บแมพในเครื่องเลย ใส่ไอคอนไปก็โกหก → รอทำระบบออฟไลน์จริง
+2. **`by You`** — ต้อง login ก่อน (หมวด J = ข้อ 4 ในคิว) · `MapDirectory.OwnerKindOf` มีกิ่ง `isMine` รออยู่แล้ว
+3. **ปุ่ม + และปุ่มบัญชี** — วาดครบตามภาพ แต่กดแล้วขึ้น toast "ยังไม่เปิดให้ใช้ในแอปนี้"
+
+### 🐞 เจอบั๊กในแอป RN ที่ขายอยู่จริง (ยังไม่แก้ — คนละ repo)
+`siamdive-rn/src/lib/dive-map-client.ts:73` — `react()` **ไม่ได้ส่ง `deviceId`** แต่ route บังคับ
+(`react/route.ts:16` → 400 `deviceId required`) และ error ถูกกลืนใน `try{}catch{}`
+→ **ปุ่มหัวใจในแอปมือถือขึ้นเลขให้ดูเฉยๆ ไม่เคยบันทึกจริง** · ฝั่ง Unity ส่ง deviceId ถูกแล้ว
+แก้ 1 บรรทัด ถ้า user สั่ง
+
+### 📌 §4.97 มี 1 ข้อที่จดผิด
+"API ส่ง `ownerName` มาแล้วแต่โค้ดไม่ได้ใช้" — **ไม่จริง** โค้ดเดิม (`MapListScreen.cs:410-413`)
+ใช้ `card.OwnerName` อยู่แล้ว ที่ขาดจริงคือกิ่ง `by SIAMDIVE` (admin) และรูปแบบ `by <ชื่อ>` ของ RN
+
+### ต้องเช็คอะไรตอน CI เขียว
+```
+[UI] maps cards=N total=N banner=ok worlds=5 err=            ← banner=MISSING แปลว่าเหรียญไม่ขึ้น
+[UI] grid cols=2 cardW=… cardH=… banner=on coin=ok
+[UI] card0 name='…' meta='by SIAMDIVE' likes=1 …             ← chars=0 = ข้อความหาย (ดู LineHeightRatio)
+[UI] qcui worlds popup=open rows=5
+```
+ภาพใหม่ในอาร์ติแฟกต์: `qc_ui_maps.png` (เทียบกับ `docs/refs/web-maplist.png`) + **`qc_ui_worlds.png`**
+⚠️ QC รันที่ 1280×720 แนวนอน → กริด 2 คอลัมน์จะกว้างมาก **ไม่ใช่บั๊ก** (RN ก็ `numColumns={2}` ตายตัว)
+
 ## 5. งานถัดไปทันที (คิวเรียงแล้ว)
 ### 5.1 ✅ ปิดแล้ว — WO-XR-03 (2026-07-28)
 formation ตามสูตรเว็บ + วาฬ GLB จริง + QC fixes (ครีบดำ/gloss/heading log) · commit `a7d12f8` → `f31d9fc`
