@@ -752,6 +752,92 @@ namespace DiveMap.Runtime.Ui
 
             // 6.7) tour HUD (P1.1): joysticks + depth + exit, with the drone parked (no input in
             // a headless run). Proves the HUD builds and that the mode swap actually hides the
+            // 6.5) I — editing. This block MUST run in the MAP VIEW, not the tour: the gizmo
+            // deliberately deselects the moment the mode is not View (that is the fix for
+            // IMPROVEMENTS F4). Running it inside the tour is what made the second gesture
+            // report "released with no drag" against an empty id — the code was right and the
+            // test was in the wrong mode.
+            // The toolbar's actions are the ones that change the map, so
+            // this drives the whole chain: select → duplicate → undo → redo, checking the
+            // item count after each. A screenshot proves the pill is drawn; the counts prove
+            // it did what it says.
+            {
+            AppBoot eb = FindFirstObjectByType<AppBoot>();
+            DiveMap.Core.SceneData sc = eb != null ? eb.CurrentScene : null;
+            Newtonsoft.Json.Linq.JArray its = sc != null ? DiveMap.Core.SceneEdit.Items(sc) : null;
+            string pick = its != null && its.Count > 0
+                ? (string)its[0]["id"] : null;
+
+            Debug.Log($"[QC] edit test map items={(its != null ? its.Count : -1)} pick={pick}");
+            if (pick != null)
+            {
+                SelectionToolbar.Show(pick, true);
+                yield return new WaitForSecondsRealtime(0.8f);
+                ScreenCapture.CaptureScreenshot(prefix + "_seltool.png");
+                Debug.Log("[UI] qcui shot -> " + prefix + "_seltool.png");
+                yield return new WaitForSecondsRealtime(1.0f);
+
+                int before = its.Count;
+                Button dup = FindDeep(UiShell.Instance.OverlayRoot, "Dup")?.GetComponent<Button>();
+                if (dup != null) dup.onClick.Invoke(); else Debug.LogWarning("[QC] no Dup button");
+                yield return new WaitForSecondsRealtime(2.5f);
+
+                DiveMap.Core.SceneData sc2 = eb.CurrentScene;
+                int afterDup = DiveMap.Core.SceneEdit.Items(sc2).Count;
+                bool undone = MapEditor.Undo();
+                yield return new WaitForSecondsRealtime(2.5f);
+                int afterUndo = DiveMap.Core.SceneEdit.Items(eb.CurrentScene).Count;
+                bool redone = MapEditor.Redo();
+                yield return new WaitForSecondsRealtime(2.0f);
+                int afterRedo = DiveMap.Core.SceneEdit.Items(eb.CurrentScene).Count;
+
+                Debug.Log($"[QC] edit result items {before}→{afterDup} (dup, expected {before + 1}) " +
+                          $"→{afterUndo} (undo, expected {before}) →{afterRedo} (redo, expected {before + 1}) " +
+                          $"· undone={undone} redone={redone} history={MapEditor.HistoryCount} " +
+                          $"saveRefused={MapEditor.SaveRefused}");
+
+                // 6.93) the gizmo. No touch input exists in a headless player, so the
+                // gesture is driven directly — what is being proven is the maths and the
+                // one-snapshot-per-gesture rule, not the finger.
+                Newtonsoft.Json.Linq.JObject before1 =
+                    DiveMap.Core.SceneEdit.Find(DiveMap.Core.SceneEdit.Items(eb.CurrentScene), pick);
+                double px0 = (double)before1["p"][0], pz0 = (double)before1["p"][2];
+                // Capture the yaw BEFORE the drags: the expected value is relative to it,
+                // and the last round's "expected 3.142" silently assumed it was zero.
+                double yaw0 = before1["r"] != null ? (double)before1["r"][1] : 0.0;
+                int hist0 = MapEditor.HistoryCount;
+
+                GizmoController.Select(pick);
+                GizmoController.QcDrag(SelectionToolbar.Mode.Translate,
+                                       new Vector2(640f, 400f), new Vector2(760f, 470f));
+                yield return new WaitForSecondsRealtime(2.5f);
+
+                Newtonsoft.Json.Linq.JObject after1 =
+                    DiveMap.Core.SceneEdit.Find(DiveMap.Core.SceneEdit.Items(eb.CurrentScene), pick);
+                double px1 = (double)after1["p"][0], pz1 = (double)after1["p"][2];
+
+                GizmoController.QcDrag(SelectionToolbar.Mode.Rotate,
+                                       new Vector2(640f, 400f), new Vector2(850f, 400f));
+                yield return new WaitForSecondsRealtime(2.0f);
+                double yaw = (double)DiveMap.Core.SceneEdit
+                    .Find(DiveMap.Core.SceneEdit.Items(eb.CurrentScene), pick)["r"][1];
+
+                Debug.Log($"[QC] gizmo move ({px0:F1},{pz0:F1})→({px1:F1},{pz1:F1}) " +
+                          $"moved={(px1 != px0 || pz1 != pz0)} · yaw {yaw0:F3}→{yaw:F3} " +
+                          $"(expected {DiveMap.Core.GizmoMath.YawAfterDrag(yaw0, 210):F3}) " +
+                          $"· history {hist0}→{MapEditor.HistoryCount} (expected +2, one per gesture)");
+
+                // Put the map back: undo everything this block did.
+                MapEditor.Undo(); yield return new WaitForSecondsRealtime(1.2f);
+                MapEditor.Undo(); yield return new WaitForSecondsRealtime(1.2f);
+                MapEditor.Undo();
+                yield return new WaitForSecondsRealtime(2.0f);
+                SelectionToolbar.Hide();
+                GizmoController.Deselect();
+                yield return new WaitForSecondsRealtime(0.4f);
+            }
+            }
+
             // shell chrome, which no unit test can show.
             if (TourController.Start())
             {
@@ -841,87 +927,6 @@ namespace DiveMap.Runtime.Ui
                 yield return new WaitForSecondsRealtime(1.2f);
                 ShopSheet.Close();
                 yield return new WaitForSecondsRealtime(0.4f);
-
-                    // 6.92) I — editing. The toolbar's actions are the ones that change the map, so
-                // this drives the whole chain: select → duplicate → undo → redo, checking the
-                // item count after each. A screenshot proves the pill is drawn; the counts prove
-                // it did what it says.
-                {
-                    AppBoot eb = FindFirstObjectByType<AppBoot>();
-                    DiveMap.Core.SceneData sc = eb != null ? eb.CurrentScene : null;
-                    Newtonsoft.Json.Linq.JArray its = sc != null ? DiveMap.Core.SceneEdit.Items(sc) : null;
-                    string pick = its != null && its.Count > 0
-                        ? (string)its[0]["id"] : null;
-
-                    Debug.Log($"[QC] edit test map items={(its != null ? its.Count : -1)} pick={pick}");
-                    if (pick != null)
-                    {
-                        SelectionToolbar.Show(pick, true);
-                        yield return new WaitForSecondsRealtime(0.8f);
-                        ScreenCapture.CaptureScreenshot(prefix + "_seltool.png");
-                        Debug.Log("[UI] qcui shot -> " + prefix + "_seltool.png");
-                        yield return new WaitForSecondsRealtime(1.0f);
-
-                        int before = its.Count;
-                        Button dup = FindDeep(UiShell.Instance.OverlayRoot, "Dup")?.GetComponent<Button>();
-                        if (dup != null) dup.onClick.Invoke(); else Debug.LogWarning("[QC] no Dup button");
-                        yield return new WaitForSecondsRealtime(2.5f);
-
-                        DiveMap.Core.SceneData sc2 = eb.CurrentScene;
-                        int afterDup = DiveMap.Core.SceneEdit.Items(sc2).Count;
-                        bool undone = MapEditor.Undo();
-                        yield return new WaitForSecondsRealtime(2.5f);
-                        int afterUndo = DiveMap.Core.SceneEdit.Items(eb.CurrentScene).Count;
-                        bool redone = MapEditor.Redo();
-                        yield return new WaitForSecondsRealtime(2.0f);
-                        int afterRedo = DiveMap.Core.SceneEdit.Items(eb.CurrentScene).Count;
-
-                        Debug.Log($"[QC] edit result items {before}→{afterDup} (dup, expected {before + 1}) " +
-                                  $"→{afterUndo} (undo, expected {before}) →{afterRedo} (redo, expected {before + 1}) " +
-                                  $"· undone={undone} redone={redone} history={MapEditor.HistoryCount} " +
-                                  $"saveRefused={MapEditor.SaveRefused}");
-
-                        // 6.93) the gizmo. No touch input exists in a headless player, so the
-                        // gesture is driven directly — what is being proven is the maths and the
-                        // one-snapshot-per-gesture rule, not the finger.
-                        Newtonsoft.Json.Linq.JObject before1 =
-                            DiveMap.Core.SceneEdit.Find(DiveMap.Core.SceneEdit.Items(eb.CurrentScene), pick);
-                        double px0 = (double)before1["p"][0], pz0 = (double)before1["p"][2];
-                        // Capture the yaw BEFORE the drags: the expected value is relative to it,
-                        // and the last round's "expected 3.142" silently assumed it was zero.
-                        double yaw0 = before1["r"] != null ? (double)before1["r"][1] : 0.0;
-                        int hist0 = MapEditor.HistoryCount;
-
-                        GizmoController.Select(pick);
-                        GizmoController.QcDrag(SelectionToolbar.Mode.Translate,
-                                               new Vector2(640f, 400f), new Vector2(760f, 470f));
-                        yield return new WaitForSecondsRealtime(2.5f);
-
-                        Newtonsoft.Json.Linq.JObject after1 =
-                            DiveMap.Core.SceneEdit.Find(DiveMap.Core.SceneEdit.Items(eb.CurrentScene), pick);
-                        double px1 = (double)after1["p"][0], pz1 = (double)after1["p"][2];
-
-                        GizmoController.QcDrag(SelectionToolbar.Mode.Rotate,
-                                               new Vector2(640f, 400f), new Vector2(850f, 400f));
-                        yield return new WaitForSecondsRealtime(2.0f);
-                        double yaw = (double)DiveMap.Core.SceneEdit
-                            .Find(DiveMap.Core.SceneEdit.Items(eb.CurrentScene), pick)["r"][1];
-
-                        Debug.Log($"[QC] gizmo move ({px0:F1},{pz0:F1})→({px1:F1},{pz1:F1}) " +
-                                  $"moved={(px1 != px0 || pz1 != pz0)} · yaw {yaw0:F3}→{yaw:F3} " +
-                                  $"(expected {DiveMap.Core.GizmoMath.YawAfterDrag(yaw0, 210):F3}) " +
-                                  $"· history {hist0}→{MapEditor.HistoryCount} (expected +2, one per gesture)");
-
-                        // Put the map back: undo everything this block did.
-                        MapEditor.Undo(); yield return new WaitForSecondsRealtime(1.2f);
-                        MapEditor.Undo(); yield return new WaitForSecondsRealtime(1.2f);
-                        MapEditor.Undo();
-                        yield return new WaitForSecondsRealtime(2.0f);
-                        SelectionToolbar.Hide();
-                        GizmoController.Deselect();
-                        yield return new WaitForSecondsRealtime(0.4f);
-                    }
-                }
 
             // 6.95) D10 — the first-dive spotlight. Forced, because the automatic path marks
                 // itself seen on the first CI player run and would never appear in the second.
