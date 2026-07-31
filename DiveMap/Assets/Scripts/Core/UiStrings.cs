@@ -69,7 +69,9 @@ namespace DiveMap.Core
                 // AR (F1/F4) — the web's #arctl, #exitAR, #arhint
                 { "ดูแบบ AR",                       "View in AR" },
                 { "✕ ออก AR",                       "✕ Leave AR" },
-                { "ขนาด",                           "Size" },
+                // "ขนาด" is already in the table (the gizmo's scale label) — one key, one entry,
+                // and a duplicate throws inside the static initialiser, which takes out every test
+                // that so much as mentions UiStrings rather than failing where the mistake is.
                 { "เล็งกล้องไปที่พื้นเรียบ",             "Point the camera at a flat surface" },
                 { "ใหญ่สุดแล้ว",                     "That is as large as it goes" },
                 { "เล็กสุดแล้ว",                      "That is as small as it goes" },

@@ -50,9 +50,16 @@ namespace DiveMap.Core
         /// </summary>
         public static Quat CameraRotation(Quat attitude, double screenAngleDeg)
         {
+            // The screen angle comes from the OS and is normally one of four values, but a NaN
+            // here would sail through every rotation below (NaN compares false against any
+            // bound, so a length check does not catch it) and reach the camera as a black
+            // screen. Treated as "no rotation", which is what an unknown display angle means.
+            double screenDeg = double.IsNaN(screenAngleDeg) || double.IsInfinity(screenAngleDeg)
+                ? 0 : screenAngleDeg;
+
             Quat a = ToUnity(attitude);
             Quat tilt = Quat.FromAxisAngle(new Vec3(1, 0, 0), 90 * Deg);
-            Quat screen = Quat.FromAxisAngle(new Vec3(0, 0, 1), -screenAngleDeg * Deg);
+            Quat screen = Quat.FromAxisAngle(new Vec3(0, 0, 1), -screenDeg * Deg);
             return Mul(Mul(tilt, a), screen).Normalized();
         }
 
