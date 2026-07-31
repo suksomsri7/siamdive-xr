@@ -233,7 +233,11 @@ namespace DiveMap.Runtime.Ui
             _actions.anchorMax = new Vector2(1f, 0f);
             _actions.pivot = new Vector2(1f, 0f);
             // The column sits directly above the toggle: 48 px buttons with the web's 10 px gap.
-            _actions.sizeDelta = new Vector2(UiKit.Css(48f), UiKit.Css(48f * 12f + 110f));
+            // TWO columns. One column of 12 buttons needs 12×58 + the toggle's 78 = 774 css px,
+            // which does not fit a 720-tall phone — the QC menu shot showed the twelfth button
+            // (AR) simply missing off the top edge, with nothing in any log to say so.
+            _actions.sizeDelta = new Vector2(UiKit.Css(48f * 2f + 10f),
+                                             UiKit.Css(48f * ActionRows + 40f));
             _actions.anchoredPosition = new Vector2(-UiKit.Css(12f), UiKit.Css(20f + 48f + 10f));
 
             ActionButton(0, "list", OpenMapList);
@@ -305,6 +309,9 @@ namespace DiveMap.Runtime.Ui
             _actions.gameObject.SetActive(false);
         }
 
+        /// <summary>How tall the action column is allowed to get before it wraps.</summary>
+        private const int ActionRows = 6;
+
         private void ActionButton(int index, string icon, UnityEngine.Events.UnityAction action)
         {
             Button b = UiKit.MakeIconButton(_actions, "Action_" + icon, icon, () =>
@@ -313,11 +320,17 @@ namespace DiveMap.Runtime.Ui
                 action?.Invoke();
             }, false, UiKit.Css(48f));
             RectTransform rt = b.GetComponent<RectTransform>();
-            rt.anchorMin = new Vector2(0.5f, 0f);
-            rt.anchorMax = new Vector2(0.5f, 0f);
-            rt.pivot = new Vector2(0.5f, 0f);
+            // Right-aligned inside the column box: widening the box for a second column must not
+            // shift the first one, or every existing button moves away from the ☰ it hangs under.
+            rt.anchorMin = new Vector2(1f, 0f);
+            rt.anchorMax = new Vector2(1f, 0f);
+            rt.pivot = new Vector2(1f, 0f);
             rt.sizeDelta = new Vector2(UiKit.Css(48f), UiKit.Css(48f));
-            rt.anchoredPosition = new Vector2(0f, index * UiKit.Css(58f));   // 48 + 10 gap
+            // Fill bottom-up, then wrap into a second column to the LEFT — away from the screen
+            // edge, so a wrapped button is still under the thumb rather than at the rim.
+            int row = index % ActionRows;
+            int col = index / ActionRows;
+            rt.anchoredPosition = new Vector2(-col * UiKit.Css(58f), row * UiKit.Css(58f));
         }
 
         /// <summary>Expand/collapse the action column and swap ☰ ↔ ✕, like the web.</summary>
