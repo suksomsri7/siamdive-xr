@@ -194,7 +194,7 @@ CI ตรวจให้แล้ว: เข้า/ออกโหมด · ต�
 
 | # | ตรวจอะไร | ถ้าผิดต้องแก้ตรงไหน |
 |---|---|---|
-| 1 | ขออนุญาตกล้องแล้วเห็นภาพห้องจริง | `ArSession.StartCameraFeed` · ถ้า APK ไม่มี `android.permission.CAMERA` ต้องเพิ่ม `Assets/Plugins/Android/AndroidManifest.xml` |
+| 1 | ขออนุญาตกล้องแล้วเห็นภาพห้องจริง | `ArSession.StartCameraFeed` · สิทธิ์ถูกแทรกโดย `Editor/AndroidCameraPermission.cs` แล้ว (ตรวจได้ใน log build: `[Build] android manifest: camera permission …`) |
 | 2 | **หันขวาแล้วภาพไปขวา** (ไม่ใช่ซ้าย) | `GyroMath.ToUnity` — negation เดียว |
 | 3 | หมุนเครื่องเป็นแนวนอนแล้วเส้นขอบฟ้ายังราบ | เทสล็อกไว้แล้ว ถ้าพลาดแปลว่า `Screen.orientation` รายงานไม่ตรง |
 | 4 | ภาพจากกล้องไม่เอียง 90°/กลับหัว | `ArSession.FitFeed` (`videoRotationAngle` / `videoVerticallyMirrored`) |
