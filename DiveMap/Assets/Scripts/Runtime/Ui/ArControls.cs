@@ -87,7 +87,7 @@ namespace DiveMap.Runtime.Ui
             brt.sizeDelta = new Vector2(UiKit.Css(196f), UiKit.Css(52f));
             brt.anchoredPosition = new Vector2(0f, UiKit.Css(28f));
 
-            _minus = Step(bar.transform, "ArMinus", "−", 0f, () => Zoom(false));
+            _minus = Step(bar.transform, "ArMinus", "–", 0f, () => Zoom(false));
             Text label = UiKit.MakeLine(bar.transform, "Label", UiStrings.Tr("ขนาด"),
                                         UiKit.CssFont(14f), TextAnchor.MiddleCenter, UiKit.TextDim);
             RectTransform lrt = label.rectTransform;
@@ -96,7 +96,10 @@ namespace DiveMap.Runtime.Ui
             lrt.pivot = new Vector2(0.5f, 0.5f);
             lrt.sizeDelta = new Vector2(UiKit.Css(80f), UiKit.Css(24f));
             lrt.anchoredPosition = Vector2.zero;
-            _plus = Step(bar.transform, "ArPlus", "＋", 1f, () => Zoom(true));
+            // "+" not the web's fullwidth "＋": NotoSansThai has no glyph for U+FF0B, and the
+            // first QC shot showed the button as an empty box. A missing glyph is invisible in
+            // code review and only shows in a screenshot — which is why the shot is taken.
+            _plus = Step(bar.transform, "ArPlus", "+", 1f, () => Zoom(true));
 
             // #arhint — the web's one-liner. Says what to DO ("point the camera at a flat
             // surface"), because a user holding a phone at a reef needs an instruction, not a

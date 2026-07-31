@@ -61,10 +61,22 @@ namespace DiveMap.Runtime
         private Vector3 _camPos;
         private Quaternion _camRot;
         private bool _fog;
-        private GameObject _seabed, _water;
-        private bool _seabedWas, _waterWas;
+        // The seabed's LOOK is spread over four sibling objects, not one. CI's log said
+        // "seabedHidden=True" and the screenshot still showed a glowing white floor — because
+        // Caustics is a sibling of Seabed, not a child of it. Hiding by name means hiding all
+        // of them, so they are held as a list and each remembers its own previous state.
+        private static readonly string[] UnderwaterParts = { "Seabed", "Caustics", "Water", "GodRays" };
+        private readonly System.Collections.Generic.List<GameObject> _hidden =
+            new System.Collections.Generic.List<GameObject>();
+        private readonly System.Collections.Generic.List<bool> _hiddenWas =
+            new System.Collections.Generic.List<bool>();
         private Backdrop _backdrop;
         private bool _orbitWas;
+        // The orbit rig DERIVES the camera pose from these every frame, so restoring the transform
+        // alone is not restoring the view: the rig simply recomputes over it on the next frame.
+        // CI caught exactly that (`[QC] ar restored … pos=False`).
+        private Vector3 _orbitTarget;
+        private float _orbitDistance, _orbitMin;
 
         public static ArSession Ensure()
         {
@@ -158,12 +170,19 @@ namespace DiveMap.Runtime
             }
             else if (_orbit != null)
             {
+                _orbitTarget = _orbit.target;
+                _orbitDistance = _orbit.distance;
+                _orbitMin = _orbit.minDistance;
                 _orbit.enabled = true;
                 _orbit.target = _center;
                 _orbit.minDistance = 0.05f;
                 _orbit.distance = (float)(ArPlacement.Distance / _scale);
                 Toast.ShowTr("เครื่องนี้ไม่มีเซนเซอร์ — ลากเพื่อหมุนแทน");
             }
+
+            // The compass belongs to a map you are flying over, not to a model on your table —
+            // and in AR it is the only thing left drawing over the room.
+            if (Ui.CompassWidget.Instance != null) Ui.CompassWidget.Instance.SetVisible(false);
 
             ArControls.Open();
             Debug.Log($"[AR] begin span=({_sizeX:F0},{_sizeZ:F0}) fit={_fit:F5} " +
@@ -173,13 +192,22 @@ namespace DiveMap.Runtime
         private void HideUnderwaterWorld()
         {
             // The web: `seabed.visible=false; surf.visible=false; scene.background=null;`
+            // Here that is four objects: the sand, the caustic light dancing 0.4 u above it, the
+            // water disc, and the sun shafts. Leave any one of them and the room does not show
+            // through — it looks like the AR feed failed rather than like a bug.
+            _hidden.Clear();
+            _hiddenWas.Clear();
             GameObject root = GameObject.Find("Map");
             if (root != null)
             {
-                Transform sb = root.transform.Find("Seabed");
-                Transform w = root.transform.Find("Water");
-                if (sb != null) { _seabed = sb.gameObject; _seabedWas = _seabed.activeSelf; _seabed.SetActive(false); }
-                if (w != null) { _water = w.gameObject; _waterWas = _water.activeSelf; _water.SetActive(false); }
+                foreach (string name in UnderwaterParts)
+                {
+                    Transform t = root.transform.Find(name);
+                    if (t == null) continue;
+                    _hidden.Add(t.gameObject);
+                    _hiddenWas.Add(t.gameObject.activeSelf);
+                    t.gameObject.SetActive(false);
+                }
             }
 
             _backdrop = _cam.GetComponent<Backdrop>();
@@ -369,8 +397,11 @@ namespace DiveMap.Runtime
 
             if (_feed != null) { Destroy(_feed.gameObject); _feed = null; }
 
-            if (_seabed != null) { _seabed.SetActive(_seabedWas); _seabed = null; }
-            if (_water != null) { _water.SetActive(_waterWas); _water = null; }
+            int restoredParts = _hidden.Count;
+            for (int i = 0; i < _hidden.Count; i++)
+                if (_hidden[i] != null) _hidden[i].SetActive(_hiddenWas[i]);
+            _hidden.Clear();
+            _hiddenWas.Clear();
             if (_backdrop != null) { _backdrop.SetVisible(true); _backdrop = null; }
             RenderSettings.fog = _fog;
 
@@ -383,19 +414,29 @@ namespace DiveMap.Runtime
                 _cam.transform.SetPositionAndRotation(_camPos, _camRot);
             }
 
+            bool usedOrbitFallback = !_gyro;   // AR borrowed the orbit rig only when there was no sensor
             if (_gyro) Input.gyro.enabled = false;
             _gyro = false;
 
-            // The orbit rig re-reads the camera pose it was given back, so the map view returns to
-            // exactly the shot the user left — not a reset frame.
+            // Hand the orbit rig its own state back, not just the camera transform. Without the
+            // three lines below the rig recomputes the pose from a target/distance AR left behind
+            // and the map opens somewhere else entirely — with nothing logged, because from the
+            // camera's point of view it was put back correctly and then moved a frame later.
             if (_orbit != null)
             {
+                if (usedOrbitFallback)
+                {
+                    _orbit.target = _orbitTarget;
+                    _orbit.distance = _orbitDistance;
+                    _orbit.minDistance = _orbitMin;
+                }
                 _orbit.enabled = _orbitWas;
-                _orbit.minDistance = 2f;
                 _orbit = null;
             }
 
-            Debug.Log("[AR] exit — scene restored");
+            if (Ui.CompassWidget.Instance != null) Ui.CompassWidget.Instance.SetVisible(true);
+
+            Debug.Log($"[AR] exit — scene restored ({restoredParts} underwater part(s) put back)");
         }
 
         private void StopFeed()

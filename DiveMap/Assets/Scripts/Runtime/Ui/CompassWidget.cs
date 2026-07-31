@@ -98,6 +98,9 @@ namespace DiveMap.Runtime.Ui
             if (_rt != null) _rt.gameObject.SetActive(visible);
         }
 
+        /// <summary>Is the needle on screen (QC reads this — AR must leave nothing over the room).</summary>
+        public bool IsVisible => _rt != null && _rt.gameObject.activeSelf;
+
         /// <summary>
         /// The web does NOT hide the compass in the tour — it MOVES it (builder.html:234):
         /// <c>body.tour #compass{right:138px; top:max(15px,safe); 44×44; bg rgba(7,26,42,.5);

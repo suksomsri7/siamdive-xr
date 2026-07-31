@@ -714,6 +714,31 @@ namespace DiveMap.Runtime.Ui
             return es.IsPointerOverGameObject();
         }
 
+        /// <summary>How many of the named map parts are currently hidden (QC only).</summary>
+        private static int ArPartsHidden(Transform map, string[] names)
+        {
+            int n = 0;
+            foreach (string s in names)
+            {
+                Transform t = map != null ? map.Find(s) : null;
+                if (t != null && !t.gameObject.activeSelf) n++;
+            }
+            return n;
+        }
+
+        /// <summary>How many parts came back exactly as they were found (QC only).</summary>
+        private static int ArPartsMatch(Transform map, string[] names, System.Collections.Generic.List<bool> was)
+        {
+            int n = 0;
+            for (int i = 0; i < names.Length; i++)
+            {
+                Transform t = map != null ? map.Find(names[i]) : null;
+                bool now = t != null && t.gameObject.activeSelf;
+                if (now == was[i]) n++;
+            }
+            return n;
+        }
+
         // ── headless QC capture (-qcui <prefix>) ─────────────────────────────────
 
         private IEnumerator QcUi(string prefix)
@@ -1125,9 +1150,17 @@ namespace DiveMap.Runtime.Ui
                 float nearBefore = arCam != null ? arCam.nearClipPlane : 0f;
                 float farBefore = arCam != null ? arCam.farClipPlane : 0f;
                 bool fogBefore = RenderSettings.fog;
-                GameObject seabedGo = GameObject.Find("Map") != null
-                    ? GameObject.Find("Map").transform.Find("Seabed")?.gameObject : null;
-                bool seabedBefore = seabedGo != null && seabedGo.activeSelf;
+                // Check ALL FOUR underwater parts, not just the sand. The first AR run logged
+                // seabedHidden=True and the screenshot still showed a glowing white floor: the
+                // caustic sheet is a SIBLING of Seabed, so hiding Seabed left it drawing.
+                string[] arParts = { "Seabed", "Caustics", "Water", "GodRays" };
+                Transform arMap = GameObject.Find("Map") != null ? GameObject.Find("Map").transform : null;
+                var arWas = new System.Collections.Generic.List<bool>();
+                foreach (string n in arParts)
+                {
+                    Transform t = arMap != null ? arMap.Find(n) : null;
+                    arWas.Add(t != null && t.gameObject.activeSelf);
+                }
 
                 bool entered = ArSession.Start();
                 yield return new WaitForSecondsRealtime(1.5f);
@@ -1137,7 +1170,8 @@ namespace DiveMap.Runtime.Ui
                 Debug.Log($"[QC] ar entered={entered} mode={ModeManager.Current} " +
                           $"controls={ArControls.IsOpen} chrome={ModeRules.AllowsMenu(ModeManager.Current)} " +
                           $"fit={fit:F5} (1 world unit reads as {apparent * 100:F2} cm) " +
-                          $"seabedHidden={(seabedGo != null && !seabedGo.activeSelf)} fog={RenderSettings.fog}");
+                          $"underwaterHidden={ArPartsHidden(arMap, arParts)}/{arParts.Length} " +
+                          $"fog={RenderSettings.fog} compass={(CompassWidget.Instance == null || !CompassWidget.Instance.IsVisible)}");
                 Debug.Log("[QC] ar NOT COVERED HERE: camera feed and gyroscope — headless has " +
                           "neither. Both need a device run; see docs/WO-AR-HOLOMAP.md.");
                 ScreenCapture.CaptureScreenshot(prefix + "_ar.png");
@@ -1168,7 +1202,7 @@ namespace DiveMap.Runtime.Ui
                               Mathf.Approximately(arCam.farClipPlane, farBefore);
                 Debug.Log($"[QC] ar restored mode={ModeManager.Current} pos={posOk} rot={rotOk} " +
                           $"clip={clipOk} fog={(RenderSettings.fog == fogBefore)} " +
-                          $"seabed={(seabedGo == null || seabedGo.activeSelf == seabedBefore)} " +
+                          $"underwater={ArPartsMatch(arMap, arParts, arWas)}/{arParts.Length} " +
                           $"controlsGone={!ArControls.IsOpen}");
                 ScreenCapture.CaptureScreenshot(prefix + "_ar_restored.png");
                 Debug.Log("[UI] qcui shot -> " + prefix + "_ar_restored.png");
