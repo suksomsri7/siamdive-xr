@@ -243,6 +243,33 @@ namespace DiveMap.Runtime
 
             _backdrop = _cam.GetComponent<Backdrop>();
             if (_backdrop != null) _backdrop.SetVisible(false);
+
+            // Whatever is still painting the sea has to be NAMED, not guessed at. Twice now a log
+            // has said the underwater world was hidden while the screenshot showed a lit seabed,
+            // and each guess cost a CI round. Every large renderer still drawing, with its full
+            // path — the answer, whatever it turns out to be, is in this line.
+            {
+                var big = new System.Collections.Generic.List<string>();
+                foreach (MeshRenderer mr in FindObjectsByType<MeshRenderer>(FindObjectsSortMode.None))
+                {
+                    if (!mr.enabled || !mr.gameObject.activeInHierarchy) continue;
+                    Vector3 sz = mr.bounds.size;
+                    if (Mathf.Max(sz.x, sz.z) < 80f) continue;      // ignore ordinary props
+                    big.Add($"{Path(mr.transform)}({sz.x:F0}×{sz.z:F0})");
+                }
+                Debug.Log($"[AR] large renderers still drawing: {big.Count} — " +
+                          string.Join(" · ", big.GetRange(0, Mathf.Min(10, big.Count))));
+            }
+
+
+        }
+
+        /// <summary>Full scene path of a transform — "Map/Seabed" tells you what a name alone cannot.</summary>
+        private static string Path(Transform t)
+        {
+            string s = t.name;
+            for (Transform p = t.parent; p != null; p = p.parent) s = p.name + "/" + s;
+            return s;
         }
 
         /// <summary>Put the eye where the site reads as a tabletop model, and clip to suit.</summary>
