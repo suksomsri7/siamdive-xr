@@ -178,6 +178,10 @@ jobs:
           ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
           ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          # The team is at Apple's limit of 2 distribution certificates, so the runner imports the
+          # existing one instead of asking the API key to create a third (it cannot).
+          APPLE_DIST_P12_BASE64: ${{ secrets.APPLE_DIST_P12_BASE64 }}
+          APPLE_DIST_P12_PASSWORD: ${{ secrets.APPLE_DIST_P12_PASSWORD }}
           XCODE_DIR: ${{ env.XCODE_DIR }}
         run: bash tools/ios_testflight.sh
 
