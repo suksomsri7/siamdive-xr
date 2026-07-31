@@ -114,9 +114,25 @@ jobs:
     name: Build iOS → TestFlight
     needs: test
     if: github.event_name == 'workflow_dispatch' && inputs.ios
-    runs-on: macos-14
+    # macos-14 carried Xcode 15.4 = the iOS 17.5 SDK, and App Store Connect now refuses those
+    # uploads: "All iOS and iPadOS apps must be built with the iOS 26 SDK or later". The runner
+    # image is the only place that version is decided, so it is pinned here rather than left on
+    # macos-latest, which moves under us the day GitHub promotes a new image.
+    runs-on: macos-26
     timeout-minutes: 120
     steps:
+      - name: Fail early if the SDK is too old for App Store Connect
+        run: |
+          # Apple rejects at UPLOAD time, i.e. after ~15 minutes of IL2CPP, archive and sign.
+          # Reading the version here turns that into a 5-second failure with the reason in it.
+          xcodebuild -version
+          MAJOR=$(xcodebuild -version | sed -nE '1s/Xcode ([0-9]+).*/\1/p')
+          if [ "$MAJOR" -lt 26 ]; then
+            echo "::error::Xcode $MAJOR ships an SDK App Store Connect no longer accepts (needs 26+)."
+            ls -d /Applications/Xcode*.app
+            exit 1
+          fi
+
       - name: Checkout
         uses: actions/checkout@v4
         with:
@@ -199,6 +215,8 @@ jobs:
             exit 1
           fi
           echo "profile $IOS_PROFILE_NAME is on the app target"
+
+          bash tools/ios_app_icon.sh branding/AppIcon1024.png "$DIR/Unity-iPhone/Images.xcassets/AppIcon.appiconset"
 
           echo "── the two plist keys that decide whether this build is usable ──"
           grep -A1 NSCameraUsageDescription "$DIR/Info.plist" || \
