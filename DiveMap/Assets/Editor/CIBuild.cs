@@ -17,7 +17,24 @@ namespace DiveMap.EditorTools
     /// </summary>
     public static class CIBuild
     {
-        private const string ApplicationIdentifier = "com.siamdive.divemap";
+        /// <summary>
+        /// Bundle id. Overridable with APPLICATION_ID because this app is meant to REPLACE the
+        /// live SIAMDIVE app (com.siamdive.app, App Store 6787005046) eventually, and Apple does
+        /// not let an app change its bundle id after the first upload. So the switch cannot be
+        /// "edit the record later" — it has to be this build producing com.siamdive.app and going
+        /// to that record as an update, or existing users keep the old app forever.
+        ///
+        /// Until then it ships under its own id so TestFlight cannot touch the live listing.
+        ///
+        /// ⚠️ Before that switch: the two apps do NOT agree on who the user is. This one makes a
+        /// device id from PlayerPrefs/SystemInfo (WalletClient.cs:50); the React Native app has
+        /// its own in AsyncStorage. Every map, coin and favourite on the server is keyed to that
+        /// id, so an update that changes it shows the user an empty account — data intact on the
+        /// server, key lost on the phone. That has to be solved first, not noticed on release day.
+        /// </summary>
+        private static string ApplicationIdentifier =>
+            Environment.GetEnvironmentVariable("APPLICATION_ID") is string s && !string.IsNullOrWhiteSpace(s)
+                ? s.Trim() : "com.siamdive.divemap";
         private const string ProductName = "DiveMap";
         // The legal entity Apple and Google have on file (Apple Team 3DD2VCN6JQ). Stores show
         // this next to the app, so "SiamDive" — which is nobody's registered name — would have
