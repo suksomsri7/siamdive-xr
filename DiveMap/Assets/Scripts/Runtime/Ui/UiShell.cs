@@ -910,6 +910,31 @@ namespace DiveMap.Runtime.Ui
                 yield return new WaitForSecondsRealtime(0.6f);
                 SculptSheet.Close();
                 yield return new WaitForSecondsRealtime(0.4f);
+
+                // 6.9) ropes. The demo map has none, so one is tied between the first two
+                // objects and measured: it must MESH (a rope that parses but draws nothing is
+                // the failure mode), then follow its object, then vanish when that object goes.
+                RopeSystem rs2 = RopeSystem.Ensure();
+                if (rs2 != null && its.Count >= 2)
+                {
+                    var ea = new DiveMap.Core.RopeEnd
+                        { ItemId = (string)its[0]["id"], Lx = 0, Ly = 6, Lz = 0 };
+                    var eb2 = new DiveMap.Core.RopeEnd
+                        { ItemId = (string)its[1]["id"], Lx = 0, Ly = 6, Lz = 0 };
+                    DiveMap.Core.Rope made = rs2.Add(ea, eb2);
+                    yield return new WaitForSecondsRealtime(1.0f);
+
+                    Debug.Log($"[QC] rope added={(made != null)} count={rs2.Count} drawn={rs2.DrawnCount} " +
+                              $"sag={(made != null ? made.Sag : -1):F1}");
+                    ScreenCapture.CaptureScreenshot(prefix + "_rope.png");
+                    Debug.Log("[UI] qcui shot -> " + prefix + "_rope.png");
+                    yield return new WaitForSecondsRealtime(1.2f);
+
+                    RopeSystem.DetachFrom((string)its[0]["id"]);
+                    yield return new WaitForSecondsRealtime(0.6f);
+                    Debug.Log($"[QC] rope after detach count={rs2.Count} drawn={rs2.DrawnCount} (expected 0/0)");
+                }
+                yield return new WaitForSecondsRealtime(0.4f);
             }
             }
 

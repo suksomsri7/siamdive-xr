@@ -331,6 +331,7 @@ namespace DiveMap.Runtime.Ui
         {
             string gone = _id;
             if (!Edit(items => SceneEdit.Delete(items, gone))) return;
+            RopeSystem.DetachFrom(gone);   // a rope tied to nothing is data that looks fine and is not
             Debug.Log("[Edit] deleted " + gone);
             Toast.ShowTr("ลบแล้ว");
             Dismissed?.Invoke();

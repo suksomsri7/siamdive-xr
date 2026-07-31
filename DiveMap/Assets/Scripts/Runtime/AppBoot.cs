@@ -254,6 +254,7 @@ namespace DiveMap.Runtime
             }
 
             _mapRoot = result.Root;
+            RopeSystem.Load(scene);   // env.ropes → tubes, once the objects they tie to exist
             HideCenter();
             HideError();
 
@@ -433,6 +434,7 @@ namespace DiveMap.Runtime
             if (!done) yield break;
 
             _mapRoot = result.Root;
+            RopeSystem.Load(CurrentScene);
             TourController.Configure(result);
             EnvMode.Reset();
             Ui.PerfHud.Apply();

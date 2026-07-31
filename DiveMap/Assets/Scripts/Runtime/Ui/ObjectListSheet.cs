@@ -367,6 +367,7 @@ namespace DiveMap.Runtime.Ui
             if (GizmoController.Selected == id) { SelectionToolbar.Hide(); GizmoController.Deselect(); }
 
             if (!SceneEdit.Delete(items, id)) return;
+            RopeSystem.DetachFrom(id);
             MapEditor.RecordAndApply(items);
             Toast.ShowTr("ลบแล้ว");
             CollectKinds();

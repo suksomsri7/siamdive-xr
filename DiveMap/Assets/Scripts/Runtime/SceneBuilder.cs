@@ -677,6 +677,13 @@ namespace DiveMap.Runtime
             return new Material(Shader.Find("Standard")); // fallback ใน editor
         }
 
+        /// <summary>
+        /// An opaque Standard material for anything built outside this class (ropes). Goes
+        /// through <see cref="BaseMat"/> so it uses the SAME Resources material — a shader found
+        /// by name at runtime gets stripped from a player build and renders magenta.
+        /// </summary>
+        public static Material OpaqueMaterial() => BaseMat(false);
+
         private static Material PlaceholderMaterial(SceneItem item, AssetManifest.Module module)
         {
             var mat = BaseMat(false);
