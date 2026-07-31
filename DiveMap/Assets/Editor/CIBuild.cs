@@ -171,11 +171,37 @@ namespace DiveMap.EditorTools
                 PlayerSettings.SetScriptingBackend(NamedBuildTarget.iOS, ScriptingImplementation.IL2CPP);
                 PlayerSettings.SetArchitecture(NamedBuildTarget.iOS, 1);   // ARM64
 
-                // Signing is the RUNNER's job (fastlane match / App Store Connect API key), so the
-                // Xcode project is generated unsigned and manual. Letting Unity attempt automatic
-                // signing here would need an Apple ID inside the Unity step and fail confusingly.
+                // The CERTIFICATE stays the runner's job — it lives in a keychain, never here. What
+                // has to be decided at generation time is WHICH PROFILE each target signs with,
+                // because that is written per target inside the Xcode project and cannot be
+                // supplied from the command line afterwards: xcodebuild build settings apply to
+                // every target at once, and UnityFramework must NOT carry the app's profile.
+                //
+                // Automatic signing is not an option here even though it sounds easier. Without an
+                // Apple ID inside the Unity step it defaults to a DEVELOPMENT profile, and Xcode
+                // then refuses the distribution identity the runner supplies:
+                //   "Unity-iPhone is automatically signed for development, but a conflicting code
+                //    signing identity iPhone Distribution has been manually specified"
+                // TestFlight only accepts distribution, so the profile is named outright.
                 PlayerSettings.iOS.appleEnableAutomaticSigning = false;
                 PlayerSettings.iOS.appleDeveloperTeamID = Environment.GetEnvironmentVariable("APPLE_TEAM_ID") ?? "";
+
+                var profileUuid = Environment.GetEnvironmentVariable("IOS_PROFILE_UUID");
+                if (!string.IsNullOrWhiteSpace(profileUuid))
+                {
+                    PlayerSettings.iOS.iOSManualProvisioningProfileType =
+                        UnityEditor.iOS.ProvisioningProfileType.Distribution;
+                    PlayerSettings.iOS.iOSManualProvisioningProfileID = profileUuid;
+                    Debug.Log($"[CIBuild] signing with App Store profile {profileUuid}");
+                }
+                else
+                {
+                    // Local builds open in Xcode and get signed by hand, so this is a warning and
+                    // not a failure — but on CI it is the difference between a TestFlight build and
+                    // 12 minutes of IL2CPP thrown away at the archive step.
+                    Debug.LogWarning("[CIBuild] IOS_PROFILE_UUID not set — the Xcode project will " +
+                                     "have no provisioning profile and cannot be archived unattended.");
+                }
 
                 // iOS 13 is the floor Metal + this Unity version want, and is old enough to cover
                 // any iPhone or iPad still receiving updates.

@@ -10,6 +10,7 @@
 #   ASC_KEY_P8      the .p8 file's CONTENTS
 #   APPLE_TEAM_ID   the developer team               (e.g. 3DD2VCN6JQ)
 #   APPLE_DIST_P12_BASE64 / APPLE_DIST_P12_PASSWORD   the distribution certificate + its key
+#   IOS_PROFILE_UUID   the App Store profile Unity already wrote onto the app target
 #
 # The API key handles everything that can be re-issued (profiles): it can be revoked from a web
 # page in ten seconds, a leaked .p12 cannot. The certificate is the one thing the key CANNOT
@@ -21,7 +22,8 @@ SCHEME="${SCHEME:-Unity-iPhone}"
 ARCHIVE="$PWD/build/DiveMap.xcarchive"
 EXPORT_DIR="$PWD/build/ipa"
 
-for v in ASC_KEY_ID ASC_ISSUER_ID ASC_KEY_P8 APPLE_TEAM_ID APPLE_DIST_P12_BASE64 APPLE_DIST_P12_PASSWORD; do
+for v in ASC_KEY_ID ASC_ISSUER_ID ASC_KEY_P8 APPLE_TEAM_ID APPLE_DIST_P12_BASE64 APPLE_DIST_P12_PASSWORD \
+         IOS_PROFILE_UUID; do
   if [ -z "${!v:-}" ]; then
     echo "::error::$v is not set — add it under Settings → Secrets → Actions." >&2
     echo "  Nothing about the build is wrong; it simply has no way to sign or upload." >&2
@@ -92,42 +94,44 @@ fi
 echo "signing as: $SIGN_IDENTITY"
 
 echo "── archiving ─────────────────────────────────────────────"
-# -allowProvisioningUpdates lets Xcode create/renew the profile through the API key, which is
-# what makes this work without a certificate committed anywhere.
+# Manual signing, and deliberately so. Automatic signing was tried twice and cannot work here:
 #
-# CODE_SIGN_IDENTITY is not optional here. Unity generates the project with automatic signing
-# turned OFF (CIBuild.BuildIos), so every target carries CODE_SIGN_IDENTITY = "iPhone Developer".
-# Handing xcodebuild only CODE_SIGN_STYLE=Automatic flips the STYLE and leaves the IDENTITY alone,
-# so Xcode dutifully asks Apple for a *development* profile — and those are minted from the team's
-# list of registered devices, which a CI-only team does not have:
+#   1. On its own it asks Apple for a DEVELOPMENT profile, which is minted from the team's list of
+#      registered devices — a CI-only team has none:
+#        error: Your team has no devices from which to generate a provisioning profile
+#   2. Told to use the distribution identity instead, it calls that a contradiction:
+#        error: Unity-iPhone is automatically signed for development, but a conflicting code
+#               signing identity iPhone Distribution has been manually specified
 #
-#   error: Your team has no devices from which to generate a provisioning profile
-#   error: No profiles for 'com.siamdive.divemap' were found ... iOS App Development
+# TestFlight only accepts App Store distribution, so the profile is named outright: Unity writes it
+# onto the app target during generation (CIBuild.BuildIos, IOS_PROFILE_UUID) and the workflow step
+# before this one verifies it landed. Nothing about profiles is passed on the command line, because
+# command-line build settings hit ALL THREE targets and UnityFramework — bundle id
+# com.unity3d.framework — would then be handed a profile issued for the app.
 #
-# The message names devices, so it reads like "go register your iPhone" — it is not. TestFlight
-# never wants a development profile; it wants App Store distribution, which needs no devices at
-# all. Naming the identity is what asks for the right kind. The empty specifier clears any profile
-# name Unity may have written, which would otherwise pin Xcode to a profile that does not exist.
-# Command-line build settings apply to all three targets (Unity-iPhone, UnityFramework,
-# GameAssembly) — setting them per target in the pbxproj would be undone by the next Unity build.
+# The identity IS passed: every target has to be signed by the same certificate, and Unity leaves
+# the generated project pointing at "iPhone Developer".
 xcodebuild -project "$XCODE_DIR/Unity-iPhone.xcodeproj" \
            -scheme "$SCHEME" \
            -configuration Release \
            -archivePath "$ARCHIVE" \
            -destination 'generic/platform=iOS' \
-           -allowProvisioningUpdates \
-           -authenticationKeyPath ~/.appstoreconnect/private_keys/"AuthKey_${ASC_KEY_ID}.p8" \
-           -authenticationKeyID "$ASC_KEY_ID" \
-           -authenticationKeyIssuerID "$ASC_ISSUER_ID" \
            OTHER_CODE_SIGN_FLAGS="--keychain $KEYCHAIN" \
            DEVELOPMENT_TEAM="$APPLE_TEAM_ID" \
-           CODE_SIGN_STYLE=Automatic \
+           CODE_SIGN_STYLE=Manual \
            CODE_SIGN_IDENTITY="$SIGN_IDENTITY" \
-           PROVISIONING_PROFILE_SPECIFIER="" \
-           PROVISIONING_PROFILE="" \
            archive
 
 echo "── exporting ─────────────────────────────────────────────"
+# Read the bundle id out of the archive rather than repeating the default from CIBuild.cs. This
+# app is meant to eventually take over the existing SIAMDIVE listing by switching APPLICATION_ID,
+# and on that day a hard-coded id here would silently export an .ipa whose profile map matches
+# nothing — Xcode's answer to that is a generic "no applicable devices" style failure.
+BUNDLE_ID=$(/usr/libexec/PlistBuddy -c 'Print :ApplicationProperties:CFBundleIdentifier' "$ARCHIVE/Info.plist")
+echo "archive holds: $BUNDLE_ID"
+
+# The export repeats the signing choice; an archive signed manually cannot be exported with
+# signingStyle automatic, which would send Xcode back to hunting for a development profile.
 cat > /tmp/export.plist <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -136,7 +140,12 @@ cat > /tmp/export.plist <<PLIST
   <key>method</key><string>app-store-connect</string>
   <key>teamID</key><string>${APPLE_TEAM_ID}</string>
   <key>uploadSymbols</key><true/>
-  <key>signingStyle</key><string>automatic</string>
+  <key>signingStyle</key><string>manual</string>
+  <key>signingCertificate</key><string>${SIGN_IDENTITY}</string>
+  <key>provisioningProfiles</key>
+  <dict>
+    <key>${BUNDLE_ID}</key><string>${IOS_PROFILE_UUID}</string>
+  </dict>
   <key>destination</key><string>export</string>
 </dict>
 </plist>
@@ -145,11 +154,7 @@ PLIST
 xcodebuild -exportArchive \
            -archivePath "$ARCHIVE" \
            -exportPath "$EXPORT_DIR" \
-           -exportOptionsPlist /tmp/export.plist \
-           -allowProvisioningUpdates \
-           -authenticationKeyPath ~/.appstoreconnect/private_keys/"AuthKey_${ASC_KEY_ID}.p8" \
-           -authenticationKeyID "$ASC_KEY_ID" \
-           -authenticationKeyIssuerID "$ASC_ISSUER_ID"
+           -exportOptionsPlist /tmp/export.plist
 
 IPA=$(find "$EXPORT_DIR" -name '*.ipa' | head -1)
 if [ -z "$IPA" ]; then
