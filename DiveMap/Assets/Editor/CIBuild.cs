@@ -227,10 +227,17 @@ namespace DiveMap.EditorTools
             }
         }
 
-        /// <summary>Output DIRECTORY (iOS writes a folder, not a file).</summary>
+        /// <summary>
+        /// Output DIRECTORY (iOS writes a folder, not a file).
+        ///
+        /// Reads DM_BUILD_PATH, not BUILD_PATH: game-ci/unity-builder exports BUILD_PATH itself
+        /// and its value wins, so ours silently became the action's relative "build/iOS" — which,
+        /// with Unity's working directory set to the project folder, put the Xcode project
+        /// somewhere no later step was looking.
+        /// </summary>
         private static string ResolveOutputPathDir(string fallback)
         {
-            string p = Environment.GetEnvironmentVariable("BUILD_PATH");
+            string p = Environment.GetEnvironmentVariable("DM_BUILD_PATH");
             return string.IsNullOrWhiteSpace(p) ? fallback : p;
         }
 

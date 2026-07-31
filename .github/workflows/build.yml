@@ -138,7 +138,8 @@ jobs:
           UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
           UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-          BUILD_PATH: ${{ github.workspace }}/build/iOS
+          # NOT BUILD_PATH: unity-builder exports that name itself and wins. Ours is namespaced.
+          DM_BUILD_PATH: ${{ github.workspace }}/build/iOS
         with:
           projectPath: ${{ env.PROJECT_PATH }}
           unityVersion: ${{ env.UNITY_VERSION }}
@@ -146,15 +147,29 @@ jobs:
           buildMethod: DiveMap.EditorTools.CIBuild.BuildIos
           allowDirtyBuild: true
 
-      - name: Show what Unity produced
+      - name: Locate the Xcode project and check its plist
         run: |
-          ls -la build/iOS || true
+          # FIND it, do not assume where it is. game-ci/unity-builder exports its own BUILD_PATH
+          # and overrode ours, so Unity wrote the project under DiveMap/build/iOS while every
+          # later step looked in build/iOS — an empty directory, and a 3-minute failure at the end
+          # of a 45-minute job.
+          PROJ=$(find . -maxdepth 5 -name 'Unity-iPhone.xcodeproj' -not -path '*/Library/*' | head -1)
+          if [ -z "$PROJ" ]; then
+            echo "::error::Unity reported success but produced no Xcode project"
+            find . -maxdepth 4 -type d -name 'iOS*' -not -path '*/Library/*' || true
+            exit 1
+          fi
+          DIR=$(dirname "$PROJ")
+          echo "XCODE_DIR=$DIR" >> "$GITHUB_ENV"
+          echo "found: $DIR"
+          ls -la "$DIR"
+
           echo "── the two plist keys that decide whether this build is usable ──"
-          grep -A1 NSCameraUsageDescription build/iOS/Info.plist || \
+          grep -A1 NSCameraUsageDescription "$DIR/Info.plist" || \
             echo "::error::NSCameraUsageDescription missing — AR would terminate the app on launch"
           # Without this the build reaches TestFlight but nobody can install it until someone
           # answers an export-compliance question by hand — a 45-minute round trip.
-          grep -A1 ITSAppUsesNonExemptEncryption build/iOS/Info.plist || \
+          grep -A1 ITSAppUsesNonExemptEncryption "$DIR/Info.plist" || \
             echo "::error::ITSAppUsesNonExemptEncryption missing — the build will sit in Missing Compliance"
 
       - name: Archive, sign and upload to TestFlight
@@ -163,6 +178,7 @@ jobs:
           ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
           ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          XCODE_DIR: ${{ env.XCODE_DIR }}
         run: bash tools/ios_testflight.sh
 
       - name: Upload the Xcode project when something goes wrong
@@ -170,7 +186,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: DiveMap-xcode
-          path: build/iOS
+          path: ${{ env.XCODE_DIR }}
           retention-days: 7
 
   # ────────────────────────────────────────────────────────────────────────────
