@@ -1207,6 +1207,13 @@ namespace DiveMap.Runtime.Ui
                 foreach (GameObject go in FindObjectsByType<GameObject>(FindObjectsSortMode.None))
                     if (go.name == "Map" && go.transform.parent == null) roots++;
                 Debug.Log($"[QC] ar map roots={roots} (expected 1 — more means a leaked build)");
+
+                // J7 — the models kept for a dive with no signal. Hits should be 0 on a cold CI
+                // run and non-zero on the second map, which is the whole claim being made.
+                Debug.Log($"[QC] offline assets stored={AssetCacheStore.Stored} " +
+                          $"hits={AssetCacheStore.Hits} misses={AssetCacheStore.Misses} " +
+                          $"evicted={AssetCacheStore.Evicted} size={AssetCacheStore.TotalLabel} " +
+                          $"(cap {DiveMap.Core.AssetCache.FormatSize(DiveMap.Core.AssetCache.BudgetBytes)})");
                 ScreenCapture.CaptureScreenshot(prefix + "_ar.png");
                 Debug.Log("[UI] qcui shot -> " + prefix + "_ar.png");
                 yield return new WaitForSecondsRealtime(1.2f);

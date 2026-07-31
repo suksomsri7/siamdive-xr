@@ -458,13 +458,37 @@ namespace DiveMap.Runtime
 
         // ── Async GLB load (fire-and-forget, tracked via SceneLoadState) ───────────
 
+        /// <summary>
+        /// J7 — what to actually hand glTFast: the on-device copy when there is one, otherwise the
+        /// network, fetching the bytes ourselves on the way so the next dive does not need a signal.
+        ///
+        /// The download happens here rather than letting glTFast do it because there is no way to
+        /// ask glTFast for the bytes it fetched; the alternative is downloading every model twice,
+        /// which on a boat's mobile data is not a detail.
+        ///
+        /// Every failure path ends at the original URL, so the worst case is exactly the behaviour
+        /// before this existed: glTFast tries, fails, and the item becomes a placeholder.
+        /// </summary>
+        private static async System.Threading.Tasks.Task<string> CachedUri(string url)
+        {
+            if (!DiveMap.Core.AssetCache.IsCacheable(url)) return url;
+
+            string local = AssetCacheStore.Resolve(url);
+            if (!ReferenceEquals(local, url) && local != url) return local;   // already on the device
+
+            byte[] data = await AssetCacheStore.Download(url);
+            if (data == null) return url;                                     // offline → let it fail as before
+            return AssetCacheStore.Store(url, data) ? AssetCacheStore.FileUri(url) : url;
+        }
+
+
         private async void LoadItemAsync(string url, Transform parent, SceneItem item, AssetManifest.Module module, bool ground)
         {
             bool ok = false;
             try
             {
                 var gltf = new GltfImport();
-                ok = await gltf.Load(url);
+                ok = await gltf.Load(await CachedUri(url));
                 if (ok)
                 {
                     // Instantiate the main scene as children of the per-item GameObject.
@@ -519,7 +543,7 @@ namespace DiveMap.Runtime
             try
             {
                 var gltf = new GltfImport();
-                ok = await gltf.Load(url);
+                ok = await gltf.Load(await CachedUri(url));
                 if (ok) ok = await gltf.InstantiateMainSceneAsync(parent);
             }
             catch (Exception e)

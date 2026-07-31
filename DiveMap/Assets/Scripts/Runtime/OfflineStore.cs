@@ -12,10 +12,12 @@ namespace DiveMap.Runtime
     /// This is what the ☁ badge in the hub has been promising all along, and what "ทัวร์ออฟไลน์"
     /// means — a dive you have opened once will open again on a boat with no signal.
     ///
-    /// What it deliberately does NOT do: cache the GLB models. Those are hundreds of megabytes
-    /// and Unity's own cache already handles repeat downloads; a map that opens offline with
-    /// placeholder shapes is still a map, and pretending otherwise would mean shipping a
-    /// multi-gigabyte download button. That limit is stated in the UI rather than hidden.
+    /// This is the JSON half. The models are <see cref="AssetCacheStore"/> — added afterwards,
+    /// because a map with its JSON and no models opens as a field of grey placeholders, which
+    /// reads as a broken map rather than a missing download. The earlier note here said caching
+    /// the GLBs was deliberately out of scope on size grounds; that turned out to be solvable
+    /// with the shipped app's own answer (220 MB, least-recently-used first), so it is no longer
+    /// true and is corrected rather than left to mislead.
     /// </summary>
     public static class OfflineStore
     {
