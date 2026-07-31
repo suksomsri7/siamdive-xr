@@ -229,6 +229,11 @@ namespace DiveMap.Runtime.Ui
                     fills.Add(Dot(7.5f, 17f, 2.2f));
                     break;
 
+                case "cloud":    // ☁✓ — "this map is on your device"
+                    strokes.Add(Blob(new Vector2(11.5f, 13.5f), CloudInside));
+                    strokes.Add(new[] { P(8.8f, 14.2f), P(10.8f, 16.2f), P(15.0f, 11.8f) });
+                    break;
+
                 case "check":    // ✓
                     strokes.Add(new[] { P(4.6f, 12.6f), P(9.8f, 18f), P(19.6f, 6.4f) });
                     break;
@@ -428,6 +433,16 @@ namespace DiveMap.Runtime.Ui
                 pts[i] = centre + dir * lo;
             }
             return pts;
+        }
+
+        /// <summary>A cloud: two bumps over a flat base with rounded feet.</summary>
+        private static bool CloudInside(Vector2 q)
+        {
+            if ((q - new Vector2(9.7f, 11.9f)).sqrMagnitude <= 4.5f * 4.5f) return true;   // big bump
+            if ((q - new Vector2(15.3f, 13.8f)).sqrMagnitude <= 3.3f * 3.3f) return true;  // small bump
+            if ((q - new Vector2(7.2f, 15.4f)).sqrMagnitude <= 2.4f * 2.4f) return true;   // left foot
+            if ((q - new Vector2(15.3f, 15.4f)).sqrMagnitude <= 2.4f * 2.4f) return true;  // right foot
+            return q.x >= 7.2f && q.x <= 15.3f && q.y >= 12f && q.y <= 17.8f;              // body
         }
 
         /// <summary>A painter's palette: a disc with a thumb-hole notch bitten out of the right.</summary>

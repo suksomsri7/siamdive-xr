@@ -182,6 +182,11 @@ namespace DiveMap.Core
                 { "ตั้งรูปหน้าปกแล้ว",        "Cover photo set" },
                 { "กำลังบันทึก…",           "Saving…" },
                 { "ตั้งรูปหน้าปก",           "Set cover photo" },
+                // offline (J7 / A4)
+                { "โหมดออฟไลน์ — ใช้สำเนาในเครื่อง", "Offline — using the copy on this device" },
+                { "แมพนี้ยังไม่มีในเครื่อง",   "This map is not on your device yet" },
+                { "เปิดแมพนี้ตอนออนไลน์ 1 ครั้ง แล้วจะใช้แบบออฟไลน์ได้",
+                  "Open it once while online and it will work offline" },
 
                 // account (J) — wording taken from the RN app's mapI18n.ts
                 { "เข้าสู่ระบบ / สมัครสมาชิก", "Sign in / Sign up" },

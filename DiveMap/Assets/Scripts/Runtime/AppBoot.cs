@@ -32,6 +32,10 @@ namespace DiveMap.Runtime
 
         private GameObject _mapRoot;
         private string _shortId;
+        private bool _offline;
+
+        /// <summary>True when the current map came off the disk rather than the network.</summary>
+        public bool IsOffline => _offline;
 
         private void Start()
         {
@@ -218,9 +222,19 @@ namespace DiveMap.Runtime
 
             if (fetchErr != null || scene == null)
             {
-                ShowError(fetchErr ?? "โหลดแมพไม่สำเร็จ");
-                yield break;
+                // No signal, or the server said no. If this map has been opened before, its copy
+                // is on disk — that is the whole point of keeping one.
+                scene = OfflineStore.Load(_shortId);
+                if (scene == null)
+                {
+                    ShowError(fetchErr ?? "โหลดแมพไม่สำเร็จ");
+                    yield break;
+                }
+                Debug.Log("[AppBoot] served " + _shortId + " from the offline copy");
+                SetStatus(UiStrings.Tr("โหมดออฟไลน์ — ใช้สำเนาในเครื่อง"));
+                _offline = true;
             }
+            else _offline = false;
 
             // E5 — put the player's own purchases back into the map before it is built, so a
             // bought animal goes through exactly the same pipeline as everything else rather
@@ -232,6 +246,9 @@ namespace DiveMap.Runtime
             // stops that save from clobbering an edit made on another device.
             CurrentScene = scene;
             CurrentRev = scene.Root["rev"] != null ? (int)scene.Root["rev"] : -1;
+            // Keep a copy of every map that loads. "Maps you have opened" and "maps you can open
+            // offline" are then the same set — there is no download step to forget.
+            if (!_offline) OfflineStore.Save(_shortId, scene);
             CanEditCurrent = scene.Root["canEdit"] != null && (bool)scene.Root["canEdit"];
             Debug.Log($"[AppBoot] map {_shortId} rev={CurrentRev} canEdit={CanEditCurrent} " +
                       $"policy={scene.Root["editPolicy"]}");

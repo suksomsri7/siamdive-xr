@@ -27,17 +27,15 @@ namespace DiveMap.Runtime.Ui
     ///   card        #0e2336 r17 padding 10 · thumb h100 r12 #155078 · name · "by …" · ♡ n … ⋯
     /// </code>
     ///
-    /// Data is still the public directory (<c>GET /api/dive-sites/public</c>) rather than the
-    /// web's "My Map" default: that list is per-account, and sign-in is queued as item 4. The
-    /// chrome is what this work order is about, and it is all here except the ☁ offline badge,
-    /// which needs a local map store this app does not have — see the WHAT'S NOT HERE note at
-    /// the bottom of this comment.
+    /// Signed out, the list is the public directory (<c>GET /api/dive-sites/public</c>); signed
+    /// in it is My Map + favourites, exactly like the RN hub. The signed-out default differs
+    /// deliberately: RN shows favourites only, which on a fresh install is an empty screen, and
+    /// a viewer whose front page is blank has nothing to view.
     ///
-    /// Not ported (documented, not silently dropped):
-    ///  • ☁ "offline copy" badge — the app has no on-device map store to drive it.
-    ///  • "by You" — needs sign-in (item 4). <see cref="MapDirectory.OwnerKindOf"/> already
-    ///    has the branch; nothing sets <c>isMine</c> yet.
-    ///  • + (create) and the account button open a toast instead of the builder/login.
+    /// Everything the reference screenshot shows is here, including ☁ (a real on-device copy —
+    /// <see cref="DiveMap.Runtime.OfflineStore"/>) and "by You". The + button is the one control
+    /// still short of its destination: creating a map needs a name-and-place flow this screen
+    /// does not own yet, so it says so rather than opening something half-built.
     /// </summary>
     [DisallowMultipleComponent]
     public sealed class MapListScreen : MonoBehaviour
@@ -935,6 +933,23 @@ namespace DiveMap.Runtime.Ui
             view.Heart = heart;
             view.LikeCount = count;
             like.onClick.AddListener(() => ToggleLike(view));
+
+            // ☁ offline-ready. Shown only for maps that really do have a usable copy on this
+            // device — the badge is a promise that the dive opens with no signal, so it must not
+            // appear on a map that would open empty.
+            if (OfflineStore.Has(card.ShortId))
+            {
+                Image cloud = UiKit.MakePanel(parent, "Offline", Color.white);
+                cloud.sprite = IconPainter.Get("cloud");
+                cloud.raycastTarget = false;
+                cloud.color = new Color(1f, 1f, 1f, 0.9f);
+                RectTransform crt2 = cloud.rectTransform;
+                crt2.anchorMin = new Vector2(1f, 1f);
+                crt2.anchorMax = new Vector2(1f, 1f);
+                crt2.pivot = new Vector2(1f, 1f);
+                crt2.sizeDelta = new Vector2(UiKit.Css(16f), UiKit.Css(16f));
+                crt2.anchoredPosition = new Vector2(-(CardPad + UiKit.Css(40f)), -(rowTop + UiKit.Css(5f)));
+            }
 
             // ⋯ menu — 30×26, r8, white 7%
             Image menuBg = UiKit.MakeRounded(parent, "Menu", new Color(1f, 1f, 1f, 0.07f), 8f);

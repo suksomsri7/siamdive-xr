@@ -698,6 +698,8 @@ namespace DiveMap.Runtime.Ui
                     _mapList.ThumbnailsLoaded >= Mathf.Min(3, _mapList.CardCount)) break;
                 yield return new WaitForSecondsRealtime(0.25f);
             }
+            Debug.Log($"[QC] offline cached={DiveMap.Runtime.OfflineStore.Count} " +
+                      $"demo={DiveMap.Runtime.OfflineStore.Has(MapApiClient.DefaultShortId)}");
             int worlds = 0;
             if (_mapList != null)
                 foreach (MapCard c in _mapList.Cards) if (MapDirectory.IsOfficial(c)) worlds++;
