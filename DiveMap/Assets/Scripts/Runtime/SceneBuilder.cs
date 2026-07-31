@@ -1,6 +1,7 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Threading.Tasks;
 using GLTFast;
 using UnityEngine;
 using DiveMap.Core;
@@ -189,6 +190,7 @@ namespace DiveMap.Runtime
             _loaded = 0;
             _failed = 0;
             _loadState.Reset();
+            ReleaseImports();   // the previous map's meshes — its objects are already destroyed
 
             var root = new GameObject("Map");
             // Publish it immediately. A build is a long async job (every GLB is a download), and
@@ -482,16 +484,70 @@ namespace DiveMap.Runtime
         }
 
 
+        /// <summary>
+        /// One <see cref="GltfImport"/> per URL for the lifetime of the scene, not one per item.
+        ///
+        /// 🔴 A map is a handful of models repeated: T-13 has 494 objects built from 10 assets,
+        /// and 394 of those are the same 68 KB frame. Loading per item meant 494 downloads, 494
+        /// parses and — the part that actually kills it — 494 separate copies of the same meshes,
+        /// textures and materials resident at once. On a phone that map failed wholesale: every
+        /// object fell back to a grey box, which is what put a wall of labels across the screen.
+        ///
+        /// The web hit this first and fixed it the same way (v.0659, "gload cache/dedup 491
+        /// โมเดล→2 โหลด กัน WebView crash") — a WebView was crashing where Unity merely runs out
+        /// of texture memory and reports every load as failed.
+        ///
+        /// Keyed by URL and holding the TASK, not the result, so N items asking at the same moment
+        /// await one download instead of racing into N. Held in a field for the same reason
+        /// <see cref="_fishGlb"/> is: disposing an import pulls the meshes out from under every
+        /// instance made from it.
+        /// </summary>
+        private readonly Dictionary<string, Task<GltfImport>> _imports =
+            new Dictionary<string, Task<GltfImport>>(StringComparer.Ordinal);
+
+        /// <summary>
+        /// Drop the shared imports between maps. Every caller destroys the old map root before
+        /// starting a new build (AppBoot:204, :477), so nothing is still drawing from these — and
+        /// an import that is never disposed keeps its meshes and textures on the GPU for the rest
+        /// of the session, which on a phone is the difference between switching maps twice and
+        /// switching maps all evening.
+        /// </summary>
+        private void ReleaseImports()
+        {
+            foreach (Task<GltfImport> t in _imports.Values)
+            {
+                // Only completed loads own anything; a still-running one disposes itself when the
+                // scene it was loading for is gone.
+                if (t != null && t.Status == TaskStatus.RanToCompletion) t.Result?.Dispose();
+            }
+            _imports.Clear();
+        }
+
+        private Task<GltfImport> ImportFor(string url)
+        {
+            if (_imports.TryGetValue(url, out Task<GltfImport> pending)) return pending;
+            Task<GltfImport> task = LoadImport(url);
+            _imports[url] = task;
+            return task;
+        }
+
+        private async Task<GltfImport> LoadImport(string url)
+        {
+            var gltf = new GltfImport();
+            bool ok = await gltf.Load(await CachedUri(url));
+            return ok ? gltf : null;
+        }
+
         private async void LoadItemAsync(string url, Transform parent, SceneItem item, AssetManifest.Module module, bool ground)
         {
             bool ok = false;
             try
             {
-                var gltf = new GltfImport();
-                ok = await gltf.Load(await CachedUri(url));
-                if (ok)
+                GltfImport gltf = await ImportFor(url);
+                if (gltf != null && parent != null)
                 {
-                    // Instantiate the main scene as children of the per-item GameObject.
+                    // Instantiate the main scene as children of the per-item GameObject. Safe to
+                    // call again and again on one import — that is the whole point of sharing it.
                     ok = await gltf.InstantiateMainSceneAsync(parent);
                 }
             }
