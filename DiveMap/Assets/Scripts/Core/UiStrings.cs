@@ -140,6 +140,20 @@ namespace DiveMap.Core
                 { "รีเซ็ตพื้นแล้ว",          "Floor reset" },
                 { "พ้นน้ำ",                "above water" },
                 { "ลึก",                   "depth" },
+                // ropes (H)
+                { "ปรับเชือก",              "Rope settings" },
+                { "ความห้อย",              "Sag" },
+                { "ความหนา",               "Thickness" },
+                { "ลบเชือก",               "Delete rope" },
+                { "ลบเชือกแล้ว",            "Rope deleted" },
+                { "ผูกเชือก",               "Tie a rope" },
+                { "แตะจุดยึดที่ 1 (บนวัตถุ)",  "Tap the first anchor (on an object)" },
+                { "แตะจุดยึดที่ 2",          "Tap the second anchor" },
+                { "แตะให้โดนวัตถุ",          "Tap an object, not the water" },
+                { "ยกเลิกเชือก",            "Rope cancelled" },
+                { "ต้องเป็นคนละชิ้น",         "Pick two different objects" },
+                { "เชื่อมเชือกแล้ว",          "Rope tied" },
+                { "ผูกเชือกไม่สำเร็จ",        "Could not tie the rope" },
 
                 // account (J) — wording taken from the RN app's mapI18n.ts
                 { "เข้าสู่ระบบ / สมัครสมาชิก", "Sign in / Sign up" },

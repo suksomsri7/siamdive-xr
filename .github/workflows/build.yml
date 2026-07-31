@@ -271,7 +271,7 @@ jobs:
           echo "BIN=$BIN"; chmod +x "$BIN"
           timeout 380 xvfb-run -a -s "-screen 0 1280x720x24" \
             "$BIN" -qcui "$PWD/qc_ui" -screen-width 1280 -screen-height 720 -force-glcore || true
-          ls -la qc_ui_menu.png qc_ui_maps.png qc_ui_worlds.png qc_ui_search.png qc_ui_palette.png qc_ui_palette_buy.png qc_ui_login.png qc_ui_seltool.png qc_ui_objlist.png qc_ui_revisions.png qc_ui_sculpt.png qc_ui_rope.png \
+          ls -la qc_ui_menu.png qc_ui_maps.png qc_ui_worlds.png qc_ui_search.png qc_ui_palette.png qc_ui_palette_buy.png qc_ui_login.png qc_ui_seltool.png qc_ui_objlist.png qc_ui_revisions.png qc_ui_sculpt.png qc_ui_rope.png qc_ui_ropepanel.png \
                  qc_ui_card.png qc_ui_settings.png qc_ui_en.png || echo "::warning::UI screenshots incomplete"
           cp ~/.config/unity3d/SiamDive/DiveMap/Player.log qc_ui_player.log 2>/dev/null || true
 

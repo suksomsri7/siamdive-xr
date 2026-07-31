@@ -260,6 +260,15 @@ namespace DiveMap.Runtime.Ui
                 RevisionSheet.Open();
             });
 
+            // 🪢 tie a rope between two objects
+            ActionButton(8, "rope", () =>
+            {
+                var boot = FindFirstObjectByType<AppBoot>();
+                if (boot == null || !boot.CanEditCurrent) { Toast.ShowTr("แมพนี้แก้ไม่ได้"); return; }
+                CloseActions();
+                RopeSheet.StartTie();
+            });
+
             // ⛰️ sculpt the floor
             ActionButton(7, "mountain", () =>
             {
@@ -929,6 +938,16 @@ namespace DiveMap.Runtime.Ui
                     ScreenCapture.CaptureScreenshot(prefix + "_rope.png");
                     Debug.Log("[UI] qcui shot -> " + prefix + "_rope.png");
                     yield return new WaitForSecondsRealtime(1.2f);
+
+                    // the edit panel, on the rope we just made
+                    RopeSheet.Open(made.Id);
+                    yield return new WaitForSecondsRealtime(0.8f);
+                    Debug.Log($"[QC] rope panel open={RopeSheet.IsOpen} id={RopeSheet.Current?.RopeId}");
+                    ScreenCapture.CaptureScreenshot(prefix + "_ropepanel.png");
+                    Debug.Log("[UI] qcui shot -> " + prefix + "_ropepanel.png");
+                    yield return new WaitForSecondsRealtime(1.0f);
+                    RopeSheet.Close();
+                    yield return new WaitForSecondsRealtime(0.4f);
 
                     RopeSystem.DetachFrom((string)its[0]["id"]);
                     yield return new WaitForSecondsRealtime(0.6f);

@@ -213,6 +213,13 @@ namespace DiveMap.Runtime.Ui
                     strokes.Add(new[] { P(12f, 6.8f), P(12f, 12.4f), P(16.2f, 14.6f) });
                     break;
 
+                case "rope":     // 🪢 — a hanging line with a knot at each end
+                    strokes.Add(new[] { P(4.4f, 6.6f), P(7.2f, 14.4f), P(12f, 17.2f),
+                                        P(16.8f, 14.4f), P(19.6f, 6.6f) });
+                    strokes.Add(Circle(4.4f, 5.2f, 1.8f));
+                    strokes.Add(Circle(19.6f, 5.2f, 1.8f));
+                    break;
+
                 case "check":    // ✓
                     strokes.Add(new[] { P(4.6f, 12.6f), P(9.8f, 18f), P(19.6f, 6.4f) });
                     break;
