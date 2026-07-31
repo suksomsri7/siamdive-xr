@@ -259,6 +259,15 @@ namespace DiveMap.Runtime.Ui
                 if (boot == null || string.IsNullOrEmpty(boot.CurrentMapId)) return;
                 RevisionSheet.Open();
             });
+
+            // ⛰️ sculpt the floor
+            ActionButton(7, "mountain", () =>
+            {
+                var boot = FindFirstObjectByType<AppBoot>();
+                if (boot == null || !boot.CanEditCurrent) { Toast.ShowTr("แมพนี้แก้ไม่ได้"); return; }
+                CloseActions();
+                SculptSheet.Open();
+            });
             _actions.gameObject.SetActive(false);
         }
 
@@ -879,6 +888,28 @@ namespace DiveMap.Runtime.Ui
                 yield return new WaitForSecondsRealtime(1.2f);
                 RevisionSheet.Close();
                 yield return new WaitForSecondsRealtime(0.4f);
+
+                // 6.8) sculpt. Paint at the centre of the screen — the orbit camera looks at the
+                // seabed, so that ray lands on the floor — then check the heights actually moved.
+                SculptSheet.Open();
+                yield return new WaitForSecondsRealtime(0.8f);
+                SculptSheet ss = SculptSheet.Current;
+                float peakBefore = PeakHeight();
+                if (ss != null)
+                {
+                    ss.QcPaint(new Vector2(Screen.width * 0.5f, Screen.height * 0.42f));
+                    yield return new WaitForSecondsRealtime(1.2f);
+                }
+                Debug.Log($"[QC] sculpt open={(ss != null)} ready={SeabedSculptor.Ready} " +
+                          $"samples={(SeabedSculptor.Heights != null ? SeabedSculptor.Heights.Length : -1)} " +
+                          $"peak {peakBefore:F2}→{PeakHeight():F2} raise={(ss != null && ss.Raise)}");
+                ScreenCapture.CaptureScreenshot(prefix + "_sculpt.png");
+                Debug.Log("[UI] qcui shot -> " + prefix + "_sculpt.png");
+                yield return new WaitForSecondsRealtime(1.2f);
+                SeabedSculptor.Flatten();          // leave the demo map as we found it
+                yield return new WaitForSecondsRealtime(0.6f);
+                SculptSheet.Close();
+                yield return new WaitForSecondsRealtime(0.4f);
             }
             }
 
@@ -1062,6 +1093,16 @@ namespace DiveMap.Runtime.Ui
             yield return new WaitForSecondsRealtime(1f);
             Debug.Log("[UI] qcui done");
             Application.Quit(0);
+        }
+
+        /// <summary>QC helper — the tallest sculpt sample, so a stroke can be measured.</summary>
+        private static float PeakHeight()
+        {
+            float[] h = SeabedSculptor.Heights;
+            if (h == null) return 0f;
+            float peak = 0f;
+            for (int i = 0; i < h.Length; i++) peak = Mathf.Max(peak, Mathf.Abs(h[i]));
+            return peak;
         }
 
         private static Transform FindDeep(Transform where, string name)

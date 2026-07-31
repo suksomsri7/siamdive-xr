@@ -128,6 +128,18 @@ namespace DiveMap.Core
                 { "นาทีที่แล้ว",            "min ago" },
                 { "ชม. ที่แล้ว",            "h ago" },
                 { "วันที่แล้ว",             "d ago" },
+                // sculpt (I)
+                { "ลากบนพื้นเพื่อปั้น",       "Drag on the floor to sculpt" },
+                { "ขุดหลุม",               "Dig" },
+                { "ก่อเนิน",               "Raise" },
+                { "ขนาดหัวแปรง",           "Brush size" },
+                { "ความแรง",               "Strength" },
+                { "สุ่มพื้น",              "Randomise" },
+                { "รีเซ็ตเรียบ",            "Reset flat" },
+                { "สุ่มพื้นแล้ว",           "Floor randomised" },
+                { "รีเซ็ตพื้นแล้ว",          "Floor reset" },
+                { "พ้นน้ำ",                "above water" },
+                { "ลึก",                   "depth" },
 
                 // account (J) — wording taken from the RN app's mapI18n.ts
                 { "เข้าสู่ระบบ / สมัครสมาชิก", "Sign in / Sign up" },

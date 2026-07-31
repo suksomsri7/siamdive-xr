@@ -788,6 +788,11 @@ namespace DiveMap.Runtime
             Material sandMat = SandMaterial();
             mr.sharedMaterial = sandMat;
             SeabedView.Register(sandMat, sculpt, slopeX, slopeZ, waterLevel, sx, sz, rings, seg);
+
+            // Sculpting rebuilds ONLY this mesh (a brush stroke must not re-download every GLB),
+            // so it needs the exact parameters this build used.
+            _sbSx = sx; _sbSz = sz; _sbSlopeX = slopeX; _sbSlopeZ = slopeZ; _sbThickness = thickness;
+            SeabedSculptor.Register(sculpt, rings, seg, SeabedGeom.SandRadius);
             seabed.AddComponent<MeshCollider>().sharedMesh = mf.sharedMesh;
 
             // ── Caustics (WO-XR-04.3) ─────────────────────────────────────────────
@@ -859,6 +864,20 @@ namespace DiveMap.Runtime
         ///   • The sculpt height array is indexed exactly as before ((r−1)·seg+j), so saved
         ///     web sculpts still land on the right vertices.
         /// </summary>
+        private float _sbSx = 1f, _sbSz = 1f, _sbSlopeX, _sbSlopeZ, _sbThickness;
+
+        /// <summary>
+        /// Re-mesh the seabed from a modified sculpt array, reusing the slope/scale/thickness the
+        /// last full build resolved. Returns the new mesh, or null when this builder has not made
+        /// a seabed yet.
+        /// </summary>
+        public Mesh RebuildSeabedMesh(float[] sculpt, int rings, int seg)
+        {
+            if (sculpt == null || rings <= 1 || seg <= 2) return null;
+            return BuildPolarGrid(rings, seg, _sbSx, _sbSz, _sbSlopeX, _sbSlopeZ, sculpt,
+                                  _sbThickness, out _);
+        }
+
         private static Mesh BuildPolarGrid(int rings, int seg, float sx, float sz,
                                            float slopeX, float slopeZ, float[] sculpt, float thickness,
                                            out Mesh topSurface)

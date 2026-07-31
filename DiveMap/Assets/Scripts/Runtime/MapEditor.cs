@@ -98,6 +98,16 @@ namespace DiveMap.Runtime
             return recorded;
         }
 
+        /// <summary>
+        /// The seabed was re-shaped. The heights live in <c>env</c>, not <c>items</c>, so there
+        /// is nothing for the item-array history to snapshot — but the map IS dirty and must be
+        /// saved. Undo does not currently step back over a sculpt; the version history does.
+        /// </summary>
+        public static void MarkSculpted()
+        {
+            Ensure().MarkDirty();
+        }
+
         public static bool Undo()
         {
             MapEditor e = Ensure();
@@ -199,9 +209,13 @@ namespace DiveMap.Runtime
             _saving = true;
             JArray items = SceneEdit.Items(scene);
 
+            // env carries the seabed sculpt and the water level; leaving it out of the write
+            // is how a re-shaped floor reverts on the next load.
+            JObject env = scene.Root["env"] as JObject;
+
             MapSaveClient.Result result = default;
-            yield return MapSaveClient.SaveItems(boot.CurrentMapId, items, boot.CurrentRev,
-                                                 r => result = r);
+            yield return MapSaveClient.SaveMap(boot.CurrentMapId, items, env, boot.CurrentRev,
+                                               r => result = r);
             _saving = false;
 
             if (result.Ok)

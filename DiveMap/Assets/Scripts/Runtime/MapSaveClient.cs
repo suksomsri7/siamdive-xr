@@ -55,6 +55,19 @@ namespace DiveMap.Runtime
             yield return Patch(shortId, body, baseRev, onDone);
         }
 
+        /// <summary>
+        /// Items AND env in one write. Sculpting lives in <c>env.sculpt</c>, so a save that only
+        /// carried items would let a re-shaped seabed look right until the next load and then
+        /// silently revert — the most confusing failure a builder can have.
+        /// </summary>
+        public static IEnumerator SaveMap(string shortId, JArray items, JObject env, int baseRev,
+                                          Action<Result> onDone)
+        {
+            var body = new JObject { ["items"] = items ?? new JArray() };
+            if (env != null) body["env"] = env;
+            yield return Patch(shortId, body, baseRev, onDone);
+        }
+
         /// <summary>Rename (the web's name modal). Names are clipped to 120 chars server-side.</summary>
         public static IEnumerator Rename(string shortId, string name, Action<Result> onDone)
         {
