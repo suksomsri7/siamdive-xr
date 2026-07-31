@@ -842,7 +842,54 @@ namespace DiveMap.Runtime.Ui
                 ShopSheet.Close();
                 yield return new WaitForSecondsRealtime(0.4f);
 
-                // 6.95) D10 — the first-dive spotlight. Forced, because the automatic path marks
+                    // 6.92) I — editing. The toolbar's actions are the ones that change the map, so
+                // this drives the whole chain: select → duplicate → undo → redo, checking the
+                // item count after each. A screenshot proves the pill is drawn; the counts prove
+                // it did what it says.
+                {
+                    AppBoot eb = FindFirstObjectByType<AppBoot>();
+                    DiveMap.Core.SceneData sc = eb != null ? eb.CurrentScene : null;
+                    Newtonsoft.Json.Linq.JArray its = sc != null ? DiveMap.Core.SceneEdit.Items(sc) : null;
+                    string pick = its != null && its.Count > 0
+                        ? (string)its[0]["id"] : null;
+
+                    Debug.Log($"[QC] edit test map items={(its != null ? its.Count : -1)} pick={pick}");
+                    if (pick != null)
+                    {
+                        SelectionToolbar.Show(pick, true);
+                        yield return new WaitForSecondsRealtime(0.8f);
+                        ScreenCapture.CaptureScreenshot(prefix + "_seltool.png");
+                        Debug.Log("[UI] qcui shot -> " + prefix + "_seltool.png");
+                        yield return new WaitForSecondsRealtime(1.0f);
+
+                        int before = its.Count;
+                        Button dup = FindDeep(UiShell.Instance.OverlayRoot, "Dup")?.GetComponent<Button>();
+                        if (dup != null) dup.onClick.Invoke(); else Debug.LogWarning("[QC] no Dup button");
+                        yield return new WaitForSecondsRealtime(2.5f);
+
+                        DiveMap.Core.SceneData sc2 = eb.CurrentScene;
+                        int afterDup = DiveMap.Core.SceneEdit.Items(sc2).Count;
+                        bool undone = MapEditor.Undo();
+                        yield return new WaitForSecondsRealtime(2.5f);
+                        int afterUndo = DiveMap.Core.SceneEdit.Items(eb.CurrentScene).Count;
+                        bool redone = MapEditor.Redo();
+                        yield return new WaitForSecondsRealtime(2.0f);
+                        int afterRedo = DiveMap.Core.SceneEdit.Items(eb.CurrentScene).Count;
+
+                        Debug.Log($"[QC] edit result items {before}→{afterDup} (dup, expected {before + 1}) " +
+                                  $"→{afterUndo} (undo, expected {before}) →{afterRedo} (redo, expected {before + 1}) " +
+                                  $"· undone={undone} redone={redone} history={MapEditor.HistoryCount} " +
+                                  $"saveRefused={MapEditor.SaveRefused}");
+
+                        // Put the map back: undo the redo, so the next QC step sees the map it expects.
+                        MapEditor.Undo();
+                        yield return new WaitForSecondsRealtime(2.0f);
+                        SelectionToolbar.Hide();
+                        yield return new WaitForSecondsRealtime(0.4f);
+                    }
+                }
+
+            // 6.95) D10 — the first-dive spotlight. Forced, because the automatic path marks
                 // itself seen on the first CI player run and would never appear in the second.
                 TutorialGuide.Forget(TutorialGuide.TourKey);
                 bool tut = TutorialGuide.StartTour(force: true);

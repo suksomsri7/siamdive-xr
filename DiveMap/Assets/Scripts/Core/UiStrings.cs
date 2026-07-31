@@ -92,6 +92,22 @@ namespace DiveMap.Core
                 { "ปักหมุด",               "Pin" },
                 { "ปั้นพื้น",              "Sculpt floor" },
 
+                // editing (I) — selection toolbar + history
+                { "ก๊อปแล้ว",              "Duplicated" },
+                { "ลบแล้ว",               "Deleted" },
+                { "ยังไม่มีแมพให้แก้",       "No map to edit yet" },
+                { "ย้าย",                 "Move" },
+                { "หมุน",                 "Rotate" },
+                { "ขนาด",                 "Size" },
+                { "สี",                   "Colour" },
+                { "ก๊อป",                  "Duplicate" },
+                { "ลบ",                   "Delete" },
+                { "เลิกทำ",                "Undo" },
+                { "ทำซ้ำ",                 "Redo" },
+                { "ล้างทั้งหมด",            "Clear all" },
+                { "แตะอีกครั้งเพื่อล้างทั้งแมพ", "Tap again to clear the whole map" },
+                { "ล้างแมพแล้ว",           "Map cleared" },
+
                 // account (J) — wording taken from the RN app's mapI18n.ts
                 { "เข้าสู่ระบบ / สมัครสมาชิก", "Sign in / Sign up" },
                 { "ใส่อีเมลเพื่อรับรหัส OTP",  "Enter your email to get an OTP code" },

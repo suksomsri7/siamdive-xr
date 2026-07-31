@@ -152,6 +152,57 @@ namespace DiveMap.Runtime.Ui
                     strokes.Add(new[] { P(3.5f, 17.5f), P(12f, 21.5f), P(20.5f, 17.5f) });
                     break;
 
+                // ── selection toolbar (#seltool :318) — ✥ ⟳ ⤢ 🎨 ⧉ 🗑 ✓ ↺ ──
+
+                case "move":     // ✥ — four-way arrows
+                    strokes.Add(Line(12, 3.2f, 12, 20.8f));
+                    strokes.Add(Line(3.2f, 12, 20.8f, 12));
+                    strokes.Add(new[] { P(9.2f, 6f), P(12f, 3.2f), P(14.8f, 6f) });
+                    strokes.Add(new[] { P(9.2f, 18f), P(12f, 20.8f), P(14.8f, 18f) });
+                    strokes.Add(new[] { P(6f, 9.2f), P(3.2f, 12f), P(6f, 14.8f) });
+                    strokes.Add(new[] { P(18f, 9.2f), P(20.8f, 12f), P(18f, 14.8f) });
+                    break;
+
+                case "rotate":   // ⟳ — an almost-closed ring with an arrow head
+                    strokes.Add(Arc(12f, 12f, 7.6f, -60f, 250f));
+                    strokes.Add(new[] { P(12.6f, 1.4f), P(15.8f, 4.2f), P(12.2f, 6.6f) });
+                    break;
+
+                case "resize":   // ⤢ — a diagonal with heads at both ends
+                    strokes.Add(Line(5f, 19f, 19f, 5f));
+                    strokes.Add(new[] { P(13.4f, 5f), P(19f, 5f), P(19f, 10.6f) });
+                    strokes.Add(new[] { P(10.6f, 19f), P(5f, 19f), P(5f, 13.4f) });
+                    break;
+
+                case "palette":  // 🎨 — a palette blob with three wells
+                    strokes.Add(Blob(new Vector2(11.6f, 12f), PaletteInside));
+                    fills.Add(Dot(8f, 8.6f, 1.35f));
+                    fills.Add(Dot(13.4f, 7.2f, 1.35f));
+                    fills.Add(Dot(16.6f, 11f, 1.35f));
+                    break;
+
+                case "copy":     // ⧉ — two offset rounded squares
+                    strokes.Add(new[] { P(8.6f, 3.6f), P(20.4f, 3.6f), P(20.4f, 15.4f), P(8.6f, 15.4f), P(8.6f, 3.6f) });
+                    strokes.Add(new[] { P(15.4f, 8.6f), P(15.4f, 20.4f), P(3.6f, 20.4f), P(3.6f, 8.6f), P(8.6f, 8.6f) });
+                    break;
+
+                case "trash":    // 🗑 — lid, can, two ribs
+                    strokes.Add(Line(3.6f, 6.4f, 20.4f, 6.4f));
+                    strokes.Add(new[] { P(9f, 6.4f), P(9f, 3.6f), P(15f, 3.6f), P(15f, 6.4f) });
+                    strokes.Add(new[] { P(5.8f, 6.4f), P(7f, 20.6f), P(17f, 20.6f), P(18.2f, 6.4f) });
+                    strokes.Add(Line(10f, 10f, 10.4f, 17.4f));
+                    strokes.Add(Line(14f, 10f, 13.6f, 17.4f));
+                    break;
+
+                case "check":    // ✓
+                    strokes.Add(new[] { P(4.6f, 12.6f), P(9.8f, 18f), P(19.6f, 6.4f) });
+                    break;
+
+                case "undo":     // ↺ — the "original colour" reset
+                    strokes.Add(Arc(12f, 12.4f, 7.2f, 200f, 500f));
+                    strokes.Add(new[] { P(8.2f, 2.2f), P(5.2f, 6.2f), P(9.8f, 7.6f) });
+                    break;
+
                 // ── palette chips — the web's emoji, drawn (NotoSansThai has no emoji) ──
 
                 case "rock":     // 🪨 — a faceted boulder
@@ -319,6 +370,37 @@ namespace DiveMap.Runtime.Ui
             Cubic(pts, P(16.1f, 3.5f), P(18.8f, 3.5f), P(21.2f, 5.6f), P(21.2f, 8.6f));
             Cubic(pts, P(21.2f, 8.6f), P(21.2f, 12f), P(18.5f, 15.5f), P(12f, 20.8f));
             return pts.ToArray();
+        }
+
+        /// <summary>
+        /// Outline of an arbitrary star-shaped region, traced radially from <paramref name="centre"/>.
+        /// Lets a blobby glyph (the painter's palette) be described as "which points are inside"
+        /// instead of as a hand-fitted polyline whose ends have to meet exactly.
+        /// </summary>
+        private static Vector2[] Blob(Vector2 centre, System.Func<Vector2, bool> inside, int seg = 72)
+        {
+            var pts = new Vector2[seg + 1];
+            for (int i = 0; i <= seg; i++)
+            {
+                float a = Mathf.PI * 2f * i / seg;
+                var dir = new Vector2(Mathf.Cos(a), Mathf.Sin(a));
+                float lo = 0f, hi = 24f;
+                for (int k = 0; k < 20; k++)
+                {
+                    float mid = (lo + hi) * 0.5f;
+                    if (inside(centre + dir * mid)) lo = mid; else hi = mid;
+                }
+                pts[i] = centre + dir * lo;
+            }
+            return pts;
+        }
+
+        /// <summary>A painter's palette: a disc with a thumb-hole notch bitten out of the right.</summary>
+        private static bool PaletteInside(Vector2 q)
+        {
+            if ((q - new Vector2(11.6f, 12f)).sqrMagnitude > 8.6f * 8.6f) return false;
+            if ((q - new Vector2(19.2f, 15.4f)).sqrMagnitude < 3.4f * 3.4f) return false;   // the notch
+            return true;
         }
 
         /// <summary>

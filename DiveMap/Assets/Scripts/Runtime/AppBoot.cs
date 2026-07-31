@@ -236,6 +236,10 @@ namespace DiveMap.Runtime
             Debug.Log($"[AppBoot] map {_shortId} rev={CurrentRev} canEdit={CanEditCurrent} " +
                       $"policy={scene.Root["editPolicy"]}");
 
+            // Start (or switch) the editing session. Undo history is per map: undoing across two
+            // maps would write one map's items into the other.
+            MapEditor.Begin(_shortId, SceneEdit.Items(scene));
+
             string mapName = string.IsNullOrEmpty(scene.Name) ? _shortId : scene.Name;
             SetStatus(mapName + " · " + UiStrings.Tr("กำลังวางวัตถุ…"));
 
@@ -402,6 +406,47 @@ namespace DiveMap.Runtime
         /// instead of two that can disagree.
         /// </summary>
         public void ReloadCurrentMap() => Retry();
+
+        /// <summary>
+        /// Rebuild from the scene ALREADY in memory, without going back to the server.
+        ///
+        /// An edit changes <see cref="CurrentScene"/>; re-fetching would throw that away and
+        /// redraw the last saved copy — the change would appear to undo itself. This is the path
+        /// every editing operation uses; <see cref="ReloadCurrentMap"/> stays for the cases that
+        /// genuinely want the server's version back.
+        /// </summary>
+        public void RebuildFromMemory()
+        {
+            if (CurrentScene == null) { Retry(); return; }
+            if (_rebuild != null) StopCoroutine(_rebuild);
+            _rebuild = StartCoroutine(RebuildRoutine());
+        }
+        private Coroutine _rebuild;
+
+        private IEnumerator RebuildRoutine()
+        {
+            if (_mapRoot != null) { Destroy(_mapRoot); _mapRoot = null; }
+
+            SceneBuilder.BuildResult result = default;
+            bool done = false;
+            yield return _builder.BuildRoutine(CurrentScene, Manifest, r => { result = r; done = true; });
+            if (!done) yield break;
+
+            _mapRoot = result.Root;
+            TourController.Configure(result);
+            EnvMode.Reset();
+            Ui.PerfHud.Apply();
+
+            if (result.Root != null && result.WaterLevel > result.FrameMinY + 5f)
+            {
+                float spread = Mathf.Clamp(result.Radius * 0.45f, 60f, 220f);
+                float length = Mathf.Clamp(result.WaterLevel - result.FrameMinY + 20f, 60f, 400f);
+                GodRays.Attach(result.Root.transform, result.FrameCenter, spread, result.WaterLevel, length);
+            }
+
+            Debug.Log($"[AppBoot] rebuilt from memory · items={result.Loaded} failed={result.Failed}");
+            _rebuild = null;
+        }
 
         /// <summary>
         /// Switch to another dive-site map (WO-XR-05.2 map list). Persisting the id also
