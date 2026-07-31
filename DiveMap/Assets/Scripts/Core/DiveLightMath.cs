@@ -28,14 +28,35 @@ namespace DiveMap.Core
             public float DiveLight;
         }
 
-        /// <summary>Headlight ON: 0x18638a, near 170, far 680, ambient ×0.55, dive light 2.2.</summary>
+        /// <summary>
+        /// Headlight ON. Fog colour and the dive light are the web's; the reach is NOT.
+        ///
+        /// 🔎 Deliberate divergence, asked for after diving the build on a phone: the web lifts
+        /// AMBIENT to 0.55 and pushes fog out to 680 u when you switch the lamps on, which lights
+        /// the entire map at once — the seabed 300 u behind you brightens as much as the rock in
+        /// front of the lamp. A torch does not do that, and the moment it stops behaving like a
+        /// torch there is no reason to carry one.
+        ///
+        /// So the ambient lift is small (0.32 → 0.38, enough that switching on reads as a change
+        /// in the water itself) and the light now comes from the lamps, which have a range. Fog
+        /// far 380 u ≈ 63 m: past that the map fades into the dark whether the lamps are on or
+        /// not, which is what gives the beam something to be brighter THAN.
+        /// (U_PER_M = 6, builder.html:600.)
+        /// </summary>
         public static Atmosphere HeadlightOn => new Atmosphere
         {
-            FogNear = 170f, FogFar = 680f,
+            FogNear = 170f, FogFar = 380f,
             FogR = 0.094f, FogG = 0.388f, FogB = 0.541f,   // 0x18638a
-            AmbientMul = 0.55f,
+            AmbientMul = 0.38f,
             DiveLight = 2.2f,
         };
+
+        /// <summary>
+        /// How far a lamp throws, in world units. The web says 460 u = 77 m, which on a 340 u map
+        /// is "everything" — the far rim is lit as brightly as the sand under the drone. A real
+        /// dive torch is useful to about 25 m in clear water, and that is the number here.
+        /// </summary>
+        public const float LampRange = 150f;
 
         /// <summary>Headlight OFF: 0x08303f, near 70, far 200, ambient ×0.32, dive light 0.5.</summary>
         public static Atmosphere HeadlightOff => new Atmosphere

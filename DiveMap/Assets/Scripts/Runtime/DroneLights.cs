@@ -60,7 +60,7 @@ namespace DiveMap.Runtime
             _lampB = NewLight("LampB", LightType.Spot, new Color(0.949f, 0.976f, 1f));
             foreach (Light l in new[] { _lampA, _lampB })
             {
-                l.range = 460f;
+                l.range = DiveLightMath.LampRange;
                 l.spotAngle = 0.9f * 2f * Mathf.Rad2Deg;
                 l.innerSpotAngle = l.spotAngle * 0.35f;   // penumbra 0.65 → soft outer third
                 l.shadows = LightShadows.None;            // two shadowed spots on a phone: no

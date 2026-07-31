@@ -683,6 +683,12 @@ namespace DiveMap.Runtime
 
         // ── Placeholder ─────────────────────────────────────────────────────────────
 
+        /// <summary>
+        /// Write the failed asset's name over its placeholder box. Off in anything a player can
+        /// hold; on in the Editor, where the point is to find out what did not load.
+        /// </summary>
+        public static bool ShowPlaceholderNames { get; set; } = Application.isEditor;
+
         private static void SpawnPlaceholder(Transform parent, SceneItem item, AssetManifest.Module module)
         {
             var cube = GameObject.CreatePrimitive(PrimitiveType.Cube);
@@ -694,8 +700,17 @@ namespace DiveMap.Runtime
             var rend = cube.GetComponent<Renderer>();
             if (rend != null) rend.sharedMaterial = PlaceholderMaterial(item, module);
 
-            string label = item?.Label ?? module?.Name ?? item?.AssetId ?? "?";
-            AddLabel(parent, label);
+            // The name is a DEVELOPER'S aid: it says which asset failed to load. A player sees a
+            // wall of a hundred identical frames, so a hundred labels — the phone build showed the
+            // word "โครงโปร่ง" stamped across the whole screen in letters taller than the objects
+            // they belonged to. The grey box stays (the map keeps its shape and its collisions);
+            // the caption goes, and the count of failures is already reported in the status line
+            // and in the QC log, which is where it can be read without standing in front of it.
+            if (ShowPlaceholderNames)
+            {
+                string label = item?.Label ?? module?.Name ?? item?.AssetId ?? "?";
+                AddLabel(parent, label);
+            }
         }
 
         private static Color ColorForItem(SceneItem item, AssetManifest.Module module)

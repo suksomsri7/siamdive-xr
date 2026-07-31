@@ -258,7 +258,13 @@ namespace DiveMap.Runtime.Ui
 
         private void BuildVignette(RectTransform root)
         {
-            _vignette = UiKit.MakePanel(root, "Vignette", new Color(0f, 0.03f, 0.05f, 0.85f));
+            // 0.85 was read on a phone as "the picture does not fill the screen": the sprite is a
+            // RADIAL gradient stretched over a 2.16:1 landscape display, so the darkening that
+            // looks like a soft corner shade on a square editor view becomes two dark bands down
+            // the left and right edges — indistinguishable from letterboxing, and the first thing
+            // reported about the drone view. Corners now settle at 0.42, and the falloff starts
+            // further out (VignetteSprite), so the frame reads as depth rather than as a border.
+            _vignette = UiKit.MakePanel(root, "Vignette", new Color(0f, 0.03f, 0.05f, 0.42f));
             _vignette.raycastTarget = false;
             _vignette.sprite = VignetteSprite();
             _vignette.type = Image.Type.Simple;
@@ -287,7 +293,10 @@ namespace DiveMap.Runtime.Ui
                 float u = x / (float)(n - 1) * 2f - 1f;
                 float v = y / (float)(n - 1) * 2f - 1f;
                 float d = Mathf.Sqrt(u * u + v * v) / 1.4142f;
-                float a = Mathf.Clamp01((d - 0.55f) / 0.45f);
+                // Start at 0.72 of the way out, not 0.55: on a wide screen the edge midpoints sit
+                // at d = 0.707, so the old figure began darkening the sides before they were even
+                // near a corner.
+                float a = Mathf.Clamp01((d - 0.72f) / 0.28f);
                 a = a * a * (3f - 2f * a);
                 px[y * n + x] = new Color32(255, 255, 255, (byte)Mathf.RoundToInt(a * 255f));
             }

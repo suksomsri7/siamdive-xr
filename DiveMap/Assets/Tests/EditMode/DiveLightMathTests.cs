@@ -16,7 +16,10 @@ namespace DiveMap.Tests
             DiveLightMath.Atmosphere on = DiveLightMath.HeadlightOn;
             DiveLightMath.Atmosphere off = DiveLightMath.HeadlightOff;
 
-            Assert.Greater(on.FogFar, off.FogFar * 3f, "with the lamps on you must see much further");
+            Assert.Greater(on.FogFar, off.FogFar * 1.5f, "with the lamps on you must see further");
+            Assert.Less(on.FogFar, 500f,
+                        "and NOT to the far rim of the map — a torch that lights everything is "
+                        + "not a torch, which is what the phone build showed");
             Assert.Greater(on.FogNear, off.FogNear);
             Assert.Greater(on.AmbientMul, off.AmbientMul, "lamps off = dimmer surroundings");
             Assert.Greater(on.DiveLight, off.DiveLight);
@@ -24,12 +27,13 @@ namespace DiveMap.Tests
         }
 
         [Test]
-        public void AtmospherePresets_MatchTheWebsNumbers()
+        public void AtmospherePresets_AreTheWebsExceptTheReach()
         {
             DiveLightMath.Atmosphere on = DiveLightMath.HeadlightOn;
             Assert.AreEqual(170f, on.FogNear, 0.01f);
-            Assert.AreEqual(680f, on.FogFar, 0.01f);
-            Assert.AreEqual(0.55f, on.AmbientMul, 0.001f);
+            // 380/0.38, not the web's 680/0.55: see DiveLightMath.HeadlightOn for why.
+            Assert.AreEqual(380f, on.FogFar, 0.01f);
+            Assert.AreEqual(0.38f, on.AmbientMul, 0.001f);
             Assert.AreEqual(2.2f, on.DiveLight, 0.001f);
 
             DiveLightMath.Atmosphere off = DiveLightMath.HeadlightOff;

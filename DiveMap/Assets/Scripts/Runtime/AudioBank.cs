@@ -51,11 +51,35 @@ namespace DiveMap.Runtime
 
         private bool _ambienceWanted;
 
+#if UNITY_IOS && !UNITY_EDITOR
+        [System.Runtime.InteropServices.DllImport("__Internal")]
+        private static extern void DiveMapEnablePlaybackAudio();
+#endif
+
+        /// <summary>
+        /// Ask iOS for an audio session that is not silenced by the switch on the side of the
+        /// phone (Plugins/iOS/DiveMapAudioSession.mm). Done once, before the first clip is
+        /// fetched, because a session changed after playback has started does not retroactively
+        /// unmute what is already running.
+        /// </summary>
+        private static void ConfigurePlatformAudio()
+        {
+#if UNITY_IOS && !UNITY_EDITOR
+            try { DiveMapEnablePlaybackAudio(); }
+            catch (System.Exception e)
+            {
+                // A missing symbol must not take the whole scene down over background noise.
+                Debug.LogWarning("[Audio] iOS session not configured: " + e.Message);
+            }
+#endif
+        }
+
         public static AudioBank Ensure()
         {
             if (_instance != null) return _instance;
             var go = new GameObject("AudioBank");
             _instance = go.AddComponent<AudioBank>();
+            ConfigurePlatformAudio();
             return _instance;
         }
 
