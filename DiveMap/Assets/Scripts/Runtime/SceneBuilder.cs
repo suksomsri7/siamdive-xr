@@ -459,6 +459,15 @@ namespace DiveMap.Runtime
                 // its base to the pivot (localPosition Y=0) so it rests ON the seabed instead
                 // of the GLB's own (often centred) pivot half-sinking into the sand.
                 if (ground && parent != null) GroundToBase(parent);
+
+                // B8 — the hero statues: gold glow, and the beard/robe drifting in the current.
+                // Applied AFTER the model exists, because both walk its real renderers/bounds.
+                if (parent != null)
+                {
+                    string fxId = item != null ? (item.AssetId ?? "") : "";
+                    if (GoldFx.IsGolden(fxId)) GoldFx.ApplyGold(parent.gameObject);
+                    if (GoldFx.HasBeard(fxId)) GoldFx.ApplyBeard(parent.gameObject);
+                }
                 _loaded++;
             }
             else
@@ -839,6 +848,9 @@ namespace DiveMap.Runtime
             wmf.sharedMesh = BuildDisc(sx * 1.02f, sz * 1.02f, 72, doubleSided: true);
             wmr.sharedMaterial = WaterMaterial();
             water.AddComponent<WaterScroll>();
+            // B2 — the surface has shape, not just a sliding texture. Seen from below (where a
+            // diver spends the dive) this is what breaks up the light coming through it.
+            water.AddComponent<WaterWave>();
 
             bounds = new Bounds(Vector3.zero, new Vector3(rx * 2f, Mathf.Max(waterLevel, 2f) * 2f, rz * 2f));
             Debug.Log($"[Scene] seabed rx={rx:F1} rz={rz:F1} rings={rings} seg={seg} " +
