@@ -149,9 +149,13 @@ jobs:
       - name: Show what Unity produced
         run: |
           ls -la build/iOS || true
-          echo "── camera permission (AR dies silently without it) ──"
+          echo "── the two plist keys that decide whether this build is usable ──"
           grep -A1 NSCameraUsageDescription build/iOS/Info.plist || \
             echo "::error::NSCameraUsageDescription missing — AR would terminate the app on launch"
+          # Without this the build reaches TestFlight but nobody can install it until someone
+          # answers an export-compliance question by hand — a 45-minute round trip.
+          grep -A1 ITSAppUsesNonExemptEncryption build/iOS/Info.plist || \
+            echo "::error::ITSAppUsesNonExemptEncryption missing — the build will sit in Missing Compliance"
 
       - name: Archive, sign and upload to TestFlight
         env:

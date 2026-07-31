@@ -90,6 +90,18 @@ namespace DiveMap.EditorTools
         public const string Reason =
             "ใช้กล้องเพื่อวางแผนที่ดำน้ำแบบ AR บนพื้นจริงตรงหน้าคุณ";
 
+        /// <summary>Put a key/value before the root dict's closing tag.</summary>
+        private static string Insert(string plist, string key, string valueXml)
+        {
+            int at = plist.LastIndexOf("</dict>", System.StringComparison.Ordinal);
+            if (at < 0)
+            {
+                Debug.LogWarning("[Build] Info.plist has no </dict> — " + key + " NOT declared");
+                return plist;
+            }
+            return plist.Insert(at, "\t<key>" + key + "</key>\n\t" + valueXml + "\n");
+        }
+
         [PostProcessBuild(1)]
         public static void OnPostProcessBuild(BuildTarget target, string path)
         {
@@ -103,23 +115,32 @@ namespace DiveMap.EditorTools
             }
 
             string text = File.ReadAllText(plist);
-            if (text.Contains("NSCameraUsageDescription"))
+            string added = "";
+
+            if (!text.Contains("NSCameraUsageDescription"))
             {
-                Debug.Log("[Build] ios Info.plist: camera usage already present");
+                text = Insert(text, "NSCameraUsageDescription", "<string>" + Reason + "</string>");
+                added += "camera-usage ";
+            }
+
+            // Export compliance. Without this key every upload lands in TestFlight as "Missing
+            // Compliance" and CANNOT be installed until someone answers a question in a web form —
+            // after a 45-minute build. The app uses nothing but HTTPS, which is exactly the
+            // exemption this key declares, so the answer is known in advance and belongs here.
+            if (!text.Contains("ITSAppUsesNonExemptEncryption"))
+            {
+                text = Insert(text, "ITSAppUsesNonExemptEncryption", "<false/>");
+                added += "export-compliance ";
+            }
+
+            if (added.Length == 0)
+            {
+                Debug.Log("[Build] ios Info.plist: nothing to add");
                 return;
             }
 
-            // Insert before the closing </dict> of the root dictionary.
-            int at = text.LastIndexOf("</dict>", System.StringComparison.Ordinal);
-            if (at < 0)
-            {
-                Debug.LogWarning("[Build] Info.plist has no </dict> — camera usage NOT declared");
-                return;
-            }
-
-            string entry = "\t<key>NSCameraUsageDescription</key>\n\t<string>" + Reason + "</string>\n";
-            File.WriteAllText(plist, text.Insert(at, entry));
-            Debug.Log("[Build] ios Info.plist: camera usage added");
+            File.WriteAllText(plist, text);
+            Debug.Log("[Build] ios Info.plist: added " + added.Trim());
         }
     }
 }
