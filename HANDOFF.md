@@ -259,6 +259,25 @@ user ส่งภาพหน้าจอเว็บจริง 2 รูป �
 ภาพใหม่ในอาร์ติแฟกต์: `qc_ui_maps.png` (เทียบกับ `docs/refs/web-maplist.png`) + **`qc_ui_worlds.png`**
 ⚠️ QC รันที่ 1280×720 แนวนอน → กริด 2 คอลัมน์จะกว้างมาก **ไม่ใช่บั๊ก** (RN ก็ `numColumns={2}` ตายตัว)
 
+### ✅ ผล CI run `30593417408` (เขียว) — ตรวจแล้ว
+```
+[UI] maps page q='' skip=0 got=6 total=6
+[UI] grid cols=2 cardW=927 cardH=308 banner=on coin=ok
+[UI] card0 name='Hanuman' meta='โดย SIAMDIVE' likes=1 rect=897x38 chars=7 lines=1
+[UI] qcui maps cards=6 total=6 thumbs=5 banner=ok worlds=5 err=
+[UI] qcui worlds popup=open rows=5
+[UI] qcui search q='Chang' cards=1 → banner=off        ← ซ่อนแบนเนอร์ตอนค้นหา ถูกแล้ว
+```
+ยืนยันจากภาพ: header ครบ 4 ปุ่ม · แบนเนอร์เหรียญทองขึ้นจริง · กริด 2 คอลัมน์ · **รูปมุมมนจริง**
+(`RoundedCutoutSprite` ทำงาน) · ชื่อหนา + `โดย SIAMDIVE` + ♡n + ⋯ (มีพื้นหลังจางตามเว็บ) · popup เลือกโลก 5 แถว
+
+### ❗ 2 อย่างที่ยัง**ไม่มีภาพพิสูจน์** (อย่าเคลมว่าตรวจแล้ว)
+1. **หน้านี้ตอนภาษาอังกฤษ** — `qc_ui_en.png` ถ่ายหน้า info card ไม่ใช่หน้ารายการแมพ
+   `RefreshLanguage()` ถูกเรียกจริง (`[UI] language=en retranslated=32`) และตารางคำผ่านเทส latin-gate
+   แต่ยังไม่เห็นภาพ → **ให้เพิ่ม shot ตอนรอบ CI ถัดไป** (เปิด map list ซ้ำหลังสลับภาษา)
+2. **เมนู ⋯ (`ActionSheet`)** — ยังไม่มี shot เลย · qcui ไม่ได้กดปุ่มการ์ด
+3. เลย์เอาต์บนจอ**แนวตั้งจริง** ยังไม่เคยเห็น (QC เป็นแนวนอนล้วน) → เห็นตอนส่ง APK
+
 ## 5. งานถัดไปทันที (คิวเรียงแล้ว)
 ### 5.1 ✅ ปิดแล้ว — WO-XR-03 (2026-07-28)
 formation ตามสูตรเว็บ + วาฬ GLB จริง + QC fixes (ครีบดำ/gloss/heading log) · commit `a7d12f8` → `f31d9fc`
