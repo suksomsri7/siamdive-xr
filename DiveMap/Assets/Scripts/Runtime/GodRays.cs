@@ -31,6 +31,9 @@ namespace DiveMap.Runtime
         // as the camera bobs, so it fades across the last 1.5 m (U_PER_M = 6, builder.html:600).
         private const float SurfaceFadeUnits = 9f;
 
+        /// <summary>How far below the water the shafts begin — 8 m at U_PER_M = 6.</summary>
+        private const float SurfaceGapUnits = 48f;
+
         private Transform[] _beams;
         private MeshRenderer[] _renderers;
         private MaterialPropertyBlock _mpb;
@@ -83,8 +86,16 @@ namespace DiveMap.Runtime
 
                 var beam = new GameObject($"Beam{i}");
                 beam.transform.SetParent(transform, false);
-                // Start AT the surface and shine down-sun.
-                beam.transform.position = new Vector3(center.x + off.X, waterLevel, center.z + off.Z);
+                // Start BELOW the surface, not at it. Where a shaft met the water plane it drew a
+                // hard bright edge along the underside of the surface — flat blue-black streaks
+                // that swing as the billboard turns. That is the one thing about the shafts that
+                // has been reported twice, and no amount of fading fixes it while the geometry is
+                // still there to intersect the water. Shafts now begin 8 m down (48 u), where the
+                // eye reads them as light already travelling through water rather than as sheets
+                // stuck to the ceiling.
+                beam.transform.position = new Vector3(center.x + off.X,
+                                                      waterLevel - SurfaceGapUnits,
+                                                      center.z + off.Z);
                 // Quad is authored across local X and along local +Z (top end at z=0).
                 beam.transform.localScale = new Vector3(baseWidth * widthMul, 1f, length);
 

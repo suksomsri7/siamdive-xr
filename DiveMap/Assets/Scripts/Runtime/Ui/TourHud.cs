@@ -11,7 +11,7 @@ namespace DiveMap.Runtime.Ui
     ///
     ///   #tourExit   top-LEFT   max(14,safe)     44×44 circle, rgba(7,26,42,.62)
     ///   #tourDepth  top-RIGHT  max(14,safe)     pill, 19px/800 #9fe0ff, rim rgba(120,200,255,.4)
-    ///   #tourHud    top-CENTRE max(15,safe)     12px/600 hint, rgba(7,26,42,.42)
+    ///   #tourHud    (dropped — the sticks are already labelled; see Build)
     ///   #lightBtn   left 14, top 104            56×56, 2.5px white rim; ON = amber glow
     ///   #radarBtn   left 14, top 174            56×56, toggles the minimap; off = 45 % alpha
     ///   #tourCam    right 14, top 104, gap 14   56×56 (photo; #tourRec cut from v1)
@@ -32,8 +32,6 @@ namespace DiveMap.Runtime.Ui
         private static readonly Color DepthBg   = new Color(0.024f, 0.086f, 0.149f, 0.66f); // rgba(6,22,38,.66)
         private static readonly Color DepthTxt  = new Color(0.624f, 0.878f, 1f, 1f);        // #9fe0ff
         private static readonly Color DepthRim  = new Color(0.471f, 0.784f, 1f, 0.40f);
-        private static readonly Color HintBg    = new Color(0.027f, 0.102f, 0.165f, 0.42f);
-        private static readonly Color HintTxt   = new Color(1f, 1f, 1f, 0.78f);
         private static readonly Color Rim       = new Color(1f, 1f, 1f, 0.85f);             // 2.5px rim
         private static readonly Color LampOn    = new Color(1f, 0.839f, 0.353f, 0.32f);     // rgba(255,214,90,.32)
         private static readonly Color LampOnRim = new Color(1f, 0.878f, 0.541f, 1f);        // #ffe08a
@@ -129,21 +127,12 @@ namespace DiveMap.Runtime.Ui
             _depth.fontStyle = FontStyle.Bold;
             UiKit.Stretch(_depth.rectTransform);
 
-            // ── hint line: TOP-CENTRE, 12px/600 ─────────────────────────────────
-            Image hint = UiKit.MakePanel(root, "TourHint", HintBg);
-            hint.sprite = UiKit.RoundedSprite(14f);
-            hint.type = Image.Type.Sliced;
-            hint.raycastTarget = false;
-            RectTransform hrt = hint.rectTransform;
-            hrt.anchorMin = new Vector2(0.5f, 1f);
-            hrt.anchorMax = new Vector2(0.5f, 1f);
-            hrt.pivot = new Vector2(0.5f, 1f);
-            hrt.sizeDelta = new Vector2(UiKit.Css(300f), UiKit.Css(28f));
-            hrt.anchoredPosition = new Vector2(0f, -UiKit.Css(15f));
-            Text hintText = UiKit.MakeText(hrt, "Text",
-                UiStrings.Tr("จอยซ้าย = ขึ้น/ลง + หัน · จอยขวา = เดินหน้า"),
-                UiKit.CssFont(12f), TextAnchor.MiddleCenter, HintTxt);
-            UiKit.Stretch(hintText.rectTransform);
+            // ── hint line: REMOVED at the user's request ────────────────────────
+            // The web keeps #tourHud ("จอยซ้าย = ขึ้น/ลง + หัน · จอยขวา = เดินหน้า") on screen
+            // for the whole dive. It is a caption for controls that are already labelled — each
+            // stick carries ขึ้น/ลง/หัน/หน้า/ถอย/สไลด์ around its rim — so it says the same thing
+            // twice, in the middle of the view you came to look at. The tutorial still teaches
+            // the sticks on the first dive, which is where a beginner needs the words.
 
             // ── lamp: LEFT 14 / TOP 104, 56 px, 2.5 px rim ──────────────────────
             _light = RoundButton(root, "TourLight", "lamp", Chrome, 56f, 2.5f, new Vector2(0f, 1f),
@@ -253,21 +242,18 @@ namespace DiveMap.Runtime.Ui
 
         private void BuildVignette(RectTransform root)
         {
-            // 0.85 was read on a phone as "the picture does not fill the screen": the sprite is a
-            // RADIAL gradient stretched over a 2.16:1 landscape display, so the darkening that
-            // looks like a soft corner shade on a square editor view becomes two dark bands down
-            // the left and right edges — indistinguishable from letterboxing, and the first thing
-            // reported about the drone view. Corners now settle at 0.42, and the falloff starts
-            // further out (VignetteSprite), so the frame reads as depth rather than as a border.
-            _vignette = UiKit.MakePanel(root, "Vignette", new Color(0f, 0.03f, 0.05f, 0.42f));
+            // The web's own line, ported exactly rather than approximated (builder.html #vignette):
+            //   radial-gradient(ellipse 78% 80% at 50% 42%, transparent 38%, rgba(4,16,32,.42) 100%)
+            // Two earlier passes guessed at this — a circle stretched across a 2.16:1 phone screen,
+            // which darkens the left and right edges far more than the top and bottom and reads as
+            // a border rather than as depth. An ellipse sized in PERCENT of the element behaves the
+            // same at every aspect, which is exactly why CSS specifies it that way.
+            _vignette = UiKit.MakePanel(root, "Vignette", new Color(0.016f, 0.063f, 0.125f, 0.42f));
             _vignette.raycastTarget = false;
             _vignette.sprite = VignetteSprite();
             _vignette.type = Image.Type.Simple;
-            RectTransform rt = _vignette.rectTransform;
-            UiKit.Stretch(rt);
-            rt.offsetMin = new Vector2(-80f, -80f);
-            rt.offsetMax = new Vector2(80f, 80f);
-            rt.SetAsFirstSibling();
+            UiKit.Stretch(_vignette.rectTransform);   // CSS inset:0 — no bleed past the screen
+            _vignette.rectTransform.SetAsFirstSibling();
         }
 
         private static Sprite _vignetteSprite;
@@ -285,14 +271,13 @@ namespace DiveMap.Runtime.Ui
             for (int y = 0; y < n; y++)
             for (int x = 0; x < n; x++)
             {
-                float u = x / (float)(n - 1) * 2f - 1f;
-                float v = y / (float)(n - 1) * 2f - 1f;
-                float d = Mathf.Sqrt(u * u + v * v) / 1.4142f;
-                // Start at 0.72 of the way out, not 0.55: on a wide screen the edge midpoints sit
-                // at d = 0.707, so the old figure began darkening the sides before they were even
-                // near a corner.
-                float a = Mathf.Clamp01((d - 0.72f) / 0.28f);
-                a = a * a * (3f - 2f * a);
+                // Element-relative, like CSS: 0..1 across the rect, centre at (50%, 42%).
+                // Radii are the gradient's own 78% / 80%, so the ellipse scales WITH the screen
+                // and the falloff at the left edge matches the falloff at the top edge.
+                float u = (x / (float)(n - 1) - 0.5f) / 0.78f;
+                float v = (y / (float)(n - 1) - 0.58f) / 0.80f;   // v=0 is the bottom row
+                float d = Mathf.Sqrt(u * u + v * v);
+                float a = Mathf.Clamp01((d - 0.38f) / 0.62f);     // transparent 38% → full 100%
                 px[y * n + x] = new Color32(255, 255, 255, (byte)Mathf.RoundToInt(a * 255f));
             }
             tex.SetPixels32(px);

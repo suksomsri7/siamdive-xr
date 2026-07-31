@@ -278,6 +278,12 @@ namespace DiveMap.Runtime.Marine
             if (tex != null && mat.HasProperty("_MainTex")) mat.SetTexture("_MainTex", tex);
             if (mat.HasProperty("_Glossiness")) mat.SetFloat("_Glossiness", 0.1f); // matte, per QC r8
             if (mat.HasProperty("_Metallic"))   mat.SetFloat("_Metallic", 0f);
+            // Turning this on at RUNTIME is not enough on a real GPU. The INSTANCING_ON shader
+            // variant only survives the build if some material ASSET has instancing ticked, and
+            // none did — so on the phone the schools drew nothing at all while CI, which falls
+            // back to one draw per fish on software GL, saw a full reef and reported success.
+            // Same family of trap as the stripped transparent variant and the stripped fog:
+            // the fix lives in Resources/*.mat (m_EnableInstancingVariants: 1), not here.
             mat.enableInstancing = true;
             return mat;
         }
