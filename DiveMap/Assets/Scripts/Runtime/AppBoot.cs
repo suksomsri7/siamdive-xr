@@ -292,11 +292,25 @@ namespace DiveMap.Runtime
             // D9/E8 — a diver who left through a warp gate lands IN the destination, at a random
             // point, rather than being handed the map screen. Flag cleared on use, so cancelling a
             // warp cannot hijack the next map the player opens.
-            if (TourController.ArrivingByWarp)
+            bool arena = TourController.ArenaPlay;
+            bool warped = TourController.ArrivingByWarp;
+            bool autoPlay = Core.ArenaEntry.ShouldAutoPlay(
+                accountId: (string)scene.Root["accountId"],
+                canEdit: scene.Root["canEdit"] != null && (bool)scene.Root["canEdit"],
+                arenaPlay: arena,
+                arrivedByWarp: warped,
+                online: Application.internetReachability != NetworkReachability.NotReachable,
+                arMode: ArSession.Active);
+
+            // Both flags are cleared whatever the gate decided: a cancelled warp or a world the
+            // player backed out of must not hijack the next map they open.
+            TourController.ArrivingByWarp = false;
+            TourController.ArenaPlay = false;
+
+            if (autoPlay)
             {
-                TourController.ArrivingByWarp = false;
-                Debug.Log("[Tour] warp arrival → entering the tour at a random spawn");
-                TourController.Start(randomStart: true);
+                Debug.Log($"[Tour] auto-play (arena={arena} warp={warped}) → tour at a random spawn");
+                StartCoroutine(StartTourAfterDelay());
             }
 
             // ── Sun shafts (WO-XR-04.3) ─────────────────────────────────────────────
@@ -643,6 +657,18 @@ namespace DiveMap.Runtime
         private string _summaryTitle;
         private int _summaryLoaded = -1;
         private int _summaryFailed;
+
+        /// <summary>
+        /// The web's <c>setTimeout(…, 600)</c>. The pause is not cosmetic: the last GLBs are still
+        /// arriving as the map "finishes", and dropping the diver in mid-load starts the tour
+        /// inside a world that is still growing objects around them.
+        /// </summary>
+        private System.Collections.IEnumerator StartTourAfterDelay()
+        {
+            yield return new WaitForSeconds(Core.ArenaEntry.StartDelaySeconds);
+            if (this == null || _mapRoot == null) yield break;   // player left while we waited
+            TourController.Start(randomStart: true);
+        }
 
         private void SetLoadSummary(string title, int loaded, int failed)
         {

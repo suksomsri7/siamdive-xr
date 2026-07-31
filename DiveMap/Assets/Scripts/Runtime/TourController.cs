@@ -119,6 +119,13 @@ namespace DiveMap.Runtime
         public static bool ArrivingByWarp { get; set; }
 
         /// <summary>
+        /// Set when the player picked a world through 🎮 เล่นเกม! — the web's <c>arenaPlay</c>.
+        /// Someone who tapped "play" has already said what they want; handing them the orbit view
+        /// and a menu makes them ask for it a second time. Cleared on use like the warp flag.
+        /// </summary>
+        public static bool ArenaPlay { get; set; }
+
+        /// <summary>
         /// Enter the tour. <paramref name="randomStart"/> drops the diver at a random point in the
         /// map instead of the fixed opening view — the web does this for anyone who arrives by
         /// "play" or through a warp gate, so a familiar map still opens on something new.

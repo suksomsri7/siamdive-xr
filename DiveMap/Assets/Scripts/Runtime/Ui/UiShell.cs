@@ -531,7 +531,12 @@ namespace DiveMap.Runtime.Ui
             if (_mapList == null) return;
             WorldsPopup.Show(_mapList.Cards, _thumbs, shortId =>
             {
-                TourController.ArrivingByWarp = true;
+                // The web keeps these two apart (arenaPlay vs _warpPlay) and so does this now.
+                // Borrowing the warp flag worked, but it made the banner the ONLY way into a
+                // world: a player who opened the very same map from its card in the list got the
+                // orbit view instead, because nothing else set the flag. The rule is about the
+                // map, not the door you came through — see Core.ArenaEntry.
+                TourController.ArenaPlay = true;
                 OnMapSelected(shortId);
             });
         }
