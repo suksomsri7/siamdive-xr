@@ -78,6 +78,19 @@ jobs:
           path: test-results
           retention-days: 14
 
+      # ProjectSettings/ is not in git (IMPROVEMENTS A2): app name, bundle id, icon, orientation
+      # and the graphics API order all come from Unity's defaults on every build, so no two builds
+      # are guaranteed the same and nothing can be configured for iOS. Unity WRITES that folder on
+      # first import, so the only way to get the real files without an Editor on the VPS is to take
+      # them out of a run that just imported the project. Uploaded here to be committed once.
+      - name: Upload ProjectSettings (to be committed — see IMPROVEMENTS A2)
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ProjectSettings
+          path: DiveMap/ProjectSettings/**
+          retention-days: 14
+
   # ────────────────────────────────────────────────────────────────────────────
   # 2) Android APK build (only after tests pass). Build gate = QC_PLAN §1.3.
   # ────────────────────────────────────────────────────────────────────────────
