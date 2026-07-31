@@ -103,10 +103,13 @@ namespace DiveMap.Tests
                 E("old", 60, 100),
                 E("mid", 60, 200),
             };
-            List<AssetCache.Entry> plan = AssetCache.PlanEviction(all, 130);
+            // 180 stored, budget 100: dropping "old" leaves 120 — still over — so "mid" goes too,
+            // and then it stops at 60. (The first version of this test asked for a budget of 130,
+            // where ONE eviction is already enough, and called the correct answer a failure.)
+            List<AssetCache.Entry> plan = AssetCache.PlanEviction(all, 100);
 
-            Assert.AreEqual(2, plan.Count, "180 down to 130 needs two of the three gone");
-            Assert.AreEqual("old", plan[0].Key);
+            Assert.AreEqual(2, plan.Count, "180 → 120 → 60; two must go to get under 100");
+            Assert.AreEqual("old", plan[0].Key, "least recently used first");
             Assert.AreEqual("mid", plan[1].Key);
         }
 
