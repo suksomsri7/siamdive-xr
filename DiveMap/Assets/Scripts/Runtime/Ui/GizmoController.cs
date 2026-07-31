@@ -104,7 +104,7 @@ namespace DiveMap.Runtime.Ui
 
             JObject item = SceneEdit.Find(SceneEdit.Items(scene), itemId);
             string assetId = item != null ? (string)item["assetId"] : null;
-            AssetManifest.Module m = assetId != null ? AppBoot.Manifest.Find(assetId) : null;
+            AssetManifest.Module m = assetId != null ? AppBoot.Manifest.Get(assetId) : null;
             return m != null && m.Kind == Palette.Rock;
         }
 
@@ -307,7 +307,7 @@ namespace DiveMap.Runtime.Ui
             double[] up = WebCoord.PositionToUnity(p);
             _target.position = new Vector3((float)up[0], (float)up[1], (float)up[2]);
 
-            WebCoord.Quat q = WebCoord.RotationToUnity(r);
+            Quat q = WebCoord.RotationToUnity(r);   // Quat is a DiveMap.Core type, not nested
             _target.rotation = new Quaternion((float)q.X, (float)q.Y, (float)q.Z, (float)q.W);
 
             float k = Mathf.Max(1e-4f, (float)s[0]) * _scaleUnit;

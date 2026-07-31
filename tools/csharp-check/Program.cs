@@ -181,6 +181,106 @@ foreach ((string path, SyntaxTree tree) in trees)
     }
 }
 
+// ── 5) members that do not exist on a project type (CS0117 / CS0426 / CS1061) ─
+//
+// Written after CI went red on BOTH of these in one round:
+//   GizmoController.cs(107): AppBoot.Manifest.Find(…)  → AssetManifest has Get(), not Find()
+//   GizmoController.cs(310): WebCoord.Quat q          → Quat is a sibling type, not nested
+//
+// Scope: `Type.Member` where Type is declared in this project. Static members, nested types
+// and enum values are all checkable from syntax alone. Instance chains are followed exactly
+// ONE hop — `AppBoot.Manifest.Get(x)` works because Manifest's declared type is also a
+// project type. Beyond that the guessing would start, so it stops.
+var typeMembers = new Dictionary<string, HashSet<string>>(StringComparer.Ordinal);
+var memberType = new Dictionary<string, string>(StringComparer.Ordinal);   // "Type.Member" → declared type
+var partialTypes = new HashSet<string>(StringComparer.Ordinal);
+
+foreach ((_, SyntaxTree tree) in trees)
+    foreach (TypeDeclarationSyntax type in tree.GetRoot().DescendantNodes().OfType<TypeDeclarationSyntax>())
+    {
+        // NESTED types only ever appear as Outer.Nested, so a bare `Nested.Member` is almost
+        // certainly a DIFFERENT type with the same short name — or not a type at all. Both false
+        // positives this rule produced on its first run were exactly that:
+        //   BuildResult.Succeeded  → UnityEditor.Build.Reporting.BuildResult, not SceneBuilder's
+        //   Spec.Formation         → a property named Spec, not FishAssetPick's nested struct
+        if (type.Parent is TypeDeclarationSyntax) continue;
+
+        string owner = type.Identifier.ValueText;
+        if (type.Modifiers.Any(m => m.ValueText == "partial")) partialTypes.Add(owner);
+        if (!typeMembers.TryGetValue(owner, out HashSet<string> set))
+            typeMembers[owner] = set = new HashSet<string>(StringComparer.Ordinal);
+
+        foreach (MemberDeclarationSyntax m in type.Members)
+        {
+            switch (m)
+            {
+                case MethodDeclarationSyntax me: set.Add(me.Identifier.ValueText); break;
+                case PropertyDeclarationSyntax pr:
+                    set.Add(pr.Identifier.ValueText);
+                    memberType[owner + "." + pr.Identifier.ValueText] = pr.Type.ToString();
+                    break;
+                case EventDeclarationSyntax ev: set.Add(ev.Identifier.ValueText); break;
+                case FieldDeclarationSyntax fd:
+                    foreach (VariableDeclaratorSyntax v in fd.Declaration.Variables)
+                    {
+                        set.Add(v.Identifier.ValueText);
+                        memberType[owner + "." + v.Identifier.ValueText] = fd.Declaration.Type.ToString();
+                    }
+                    break;
+                case EventFieldDeclarationSyntax efd:
+                    foreach (VariableDeclaratorSyntax v in efd.Declaration.Variables) set.Add(v.Identifier.ValueText);
+                    break;
+                case BaseTypeDeclarationSyntax nested: set.Add(nested.Identifier.ValueText); break;
+                case DelegateDeclarationSyntax dg: set.Add(dg.Identifier.ValueText); break;
+            }
+        }
+        // A type with a base class may inherit anything — do not police it.
+        if (type.BaseList != null) set.Add("*");
+    }
+
+foreach ((_, SyntaxTree tree) in trees)
+    foreach (EnumDeclarationSyntax en in tree.GetRoot().DescendantNodes().OfType<EnumDeclarationSyntax>())
+    {
+        if (!typeMembers.TryGetValue(en.Identifier.ValueText, out HashSet<string> set))
+            typeMembers[en.Identifier.ValueText] = set = new HashSet<string>(StringComparer.Ordinal);
+        foreach (EnumMemberDeclarationSyntax v in en.Members) set.Add(v.Identifier.ValueText);
+    }
+
+var memberNamesAnywhere = new HashSet<string>(StringComparer.Ordinal);
+foreach (KeyValuePair<string, HashSet<string>> kv in typeMembers)
+    foreach (string m in kv.Value) memberNamesAnywhere.Add(m);
+
+foreach ((string path, SyntaxTree tree) in trees)
+    foreach (MemberAccessExpressionSyntax ma in tree.GetRoot().DescendantNodes().OfType<MemberAccessExpressionSyntax>())
+    {
+        string ownerName = null;
+
+        if (ma.Expression is IdentifierNameSyntax owner)
+        {
+            ownerName = owner.Identifier.ValueText;
+        }
+        else if (ma.Expression is MemberAccessExpressionSyntax inner &&
+                 inner.Expression is IdentifierNameSyntax root2)
+        {
+            // one hop: Type.Member.Next — resolve Member's declared type
+            if (memberType.TryGetValue(root2.Identifier.ValueText + "." + inner.Name.Identifier.ValueText,
+                                       out string declaredType))
+                ownerName = declaredType;
+        }
+        if (ownerName == null) continue;
+        if (!typeMembers.TryGetValue(ownerName, out HashSet<string> members)) continue;
+        if (memberNamesAnywhere.Contains(ownerName)) continue;   // also a field/property name — ambiguous
+        if (members.Contains("*") || partialTypes.Contains(ownerName)) continue;   // inherited / split across files
+
+        string wanted = ma.Name.Identifier.ValueText;
+        if (members.Contains(wanted)) continue;
+
+        Report(path, ma.Name.GetLocation(), "CHK002",
+               $"'{ownerName}' has no member '{wanted}' — did you mean one of: " +
+               string.Join(", ", members.Where(x => x != "*").OrderBy(x => x, StringComparer.Ordinal).Take(8)) + "…");
+        problems++;
+    }
+
 Console.WriteLine($"csharp-check: {files.Length} files · {problems} problem(s)");
 return problems == 0 ? 0 : 1;
 

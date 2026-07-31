@@ -96,13 +96,29 @@ DiveMap/Assets/Scripts/Runtime/MapEditor.cs(203,17): CS0103: 'Toast' is declared
 ตรงบรรทัด/คอลัมน์กับที่ Unity รายงานอีกครั้ง · ระวัง false positive: รายงานเฉพาะชื่อที่ประกาศ
 **ที่เดียวในโปรเจกต์** (ถ้าซ้ำ = กำกวม ปล่อยให้ compiler ตัดสิน) และไม่ใช่ชื่อที่ qualified อยู่แล้ว
 
-จับได้แล้ว: syntax ทุกชนิด · `CS0136`/`CS0128` ตัวแปรชนกัน · `using` ชี้ namespace ที่ไม่มีจริง
-· **`CS0103` type ในโปรเจกต์ที่ namespace เอื้อมไม่ถึง**
-จับไม่ได้: ชื่อ method ที่ไม่มีจริง, argument ผิดชนิด, type จาก Unity/แพ็กเกจ → ยังต้องพึ่ง CI
-**กฎใหม่: รัน `./tools/check.sh` ทุกครั้งก่อน push**
+**รอบ 3 (หลัง CI แดงครั้งที่ 3)** — `AppBoot.Manifest.Find(…)` (ชื่อจริงคือ `Get`) และ
+`WebCoord.Quat` (`Quat` เป็น type พี่น้อง ไม่ใช่ nested) → เพิ่มกฎที่ 5: **member ที่ไม่มีจริง
+บน type ของโปรเจกต์** พร้อมบอกรายชื่อ member ที่มีให้เลือก
+```
+G.cs(107,73): CHK002: 'AssetManifest' has no member 'Find'
+  — did you mean one of: All, BaseUrl, Count, FromJson, Get, Load, ManifestUri, Module…
+```
+ตามได้ 1 ทอด (`AppBoot.Manifest.Get` ทำงานเพราะรู้ว่า `Manifest` เป็น `AssetManifest`)
 
-📊 CI แดงไป 2 ครั้ง (30 นาที) · ทั้งสองครั้งเป็น error ที่ตรวจได้ในเครื่องภายใน 1 วินาที
-ทั้งสองคลาสถูกครอบด้วยเครื่องมือแล้ว — ถ้ายังแดงอีก จะเป็นคลาสใหม่ที่ควรเพิ่มกฎที่ 5
+⚠️ **รอบแรกของกฎนี้ให้ false positive 2 ตัว — ต้องไล่ดูทีละตัวก่อนเชื่อ**
+- `BuildResult.Succeeded` = enum ของ **UnityEditor** ชื่อพ้องกับ struct ในโปรเจกต์
+- `Spec.Formation` = ชื่อ **property** ไม่ใช่ type
+→ แก้ด้วยกฎเดียวคุมทั้งคู่: **ตรวจเฉพาะ type ระดับบนสุด** (nested type ปกติเรียกว่า `Outer.Nested`
+อยู่แล้ว ถ้าเจอ `Nested.Member` เปล่าๆ แปลว่าน่าจะเป็นคนละตัว) + ข้ามชื่อที่เป็น member ที่ไหนสักแห่ง
+เครื่องมือที่ cry wolf จะถูกเมินภายในสองวัน — ยอมจับได้น้อยลงดีกว่าจับผิด
+
+จับได้แล้ว: syntax ทุกชนิด · `CS0136`/`CS0128` ตัวแปรชนกัน · `using` ชี้ namespace ที่ไม่มีจริง
+· `CS0103` type ที่ namespace เอื้อมไม่ถึง · **`CS0117/CS0426/CS1061` member ที่ไม่มีจริง**
+จับไม่ได้: argument ผิดชนิด, member ของ type จาก Unity/แพ็กเกจ, generic ผิด → ยังต้องพึ่ง CI
+**กฎ: รัน `./tools/check.sh` ทุกครั้งก่อน push**
+
+📊 CI แดงไป 3 ครั้ง (45 นาที) · ทั้งสามเป็น error ที่ตรวจในเครื่องได้ใน 1 วินาที
+ทุกคลาสถูกครอบแล้ว — ถ้าแดงอีก จดว่าเป็นคลาสอะไร แล้วเพิ่มกฎ ไม่ใช่แค่แก้แล้วผ่านไป
 
 ### 🟡 B2 · ยังใช้ legacy `UnityEngine.UI.Text` ทั้งแอป ไม่ใช่ TextMeshPro
 ผลที่จับได้แล้ว: กฎ `LineHeightRatio = 1.511` + `RowHeight()` ที่ต้องระวังทุกครั้ง
