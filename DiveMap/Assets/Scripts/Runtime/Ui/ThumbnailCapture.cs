@@ -79,8 +79,12 @@ namespace DiveMap.Runtime.Ui
             yield return MapSaveClient.SetThumbnail(boot.CurrentMapId, url, r => result = r);
 
             if (result.Ok && boot.CurrentScene != null) boot.CurrentScene.Root["thumbUrl"] = url;
-            Debug.Log($"[Thumb] saved ok={result.Ok} url={url}");
-            Toast.ShowTr(result.Ok ? "ตั้งรูปหน้าปกแล้ว" : "บันทึกไม่สำเร็จ");
+            // Say WHY it did not stick. "ok=False" on its own sent a QC round chasing the
+            // capture and the upload, when both had worked and the map simply is not ours.
+            Debug.Log($"[Thumb] captured+uploaded ok · patch ok={result.Ok} " +
+                      $"forbidden={result.Forbidden} err={result.Error} url={url}");
+            Toast.ShowTr(result.Ok ? "ตั้งรูปหน้าปกแล้ว"
+                                   : (result.Forbidden ? "เฉพาะเจ้าของแมพเท่านั้น" : "บันทึกไม่สำเร็จ"));
             onDone?.Invoke(result.Ok ? url : null);
         }
 

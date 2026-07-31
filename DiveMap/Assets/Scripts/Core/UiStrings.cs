@@ -185,6 +185,7 @@ namespace DiveMap.Core
                 // offline (J7 / A4)
                 { "โหมดออฟไลน์ — ใช้สำเนาในเครื่อง", "Offline — using the copy on this device" },
                 { "แมพนี้ยังไม่มีในเครื่อง",   "This map is not on your device yet" },
+                { "เลือกแล้ว",             "selected" },
                 { "เปิดแมพนี้ตอนออนไลน์ 1 ครั้ง แล้วจะใช้แบบออฟไลน์ได้",
                   "Open it once while online and it will work offline" },
 

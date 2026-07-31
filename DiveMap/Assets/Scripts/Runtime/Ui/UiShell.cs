@@ -915,6 +915,29 @@ namespace DiveMap.Runtime.Ui
                 ScreenCapture.CaptureScreenshot(prefix + "_objlist.png");
                 Debug.Log("[UI] qcui shot -> " + prefix + "_objlist.png");
                 yield return new WaitForSecondsRealtime(1.2f);
+                // I4 — group select, then a group scale about the shared pivot. The measurable
+                // part is that the items move APART, not just grow: scaling about each object's
+                // own origin collapses an arrangement into a pile and errors nowhere.
+                if (ol != null && its.Count >= 2)
+                {
+                    string g1 = (string)its[0]["id"], g2 = (string)its[1]["id"];
+                    var pivotOk = DiveMap.Core.MultiSelect.Pivot(
+                        DiveMap.Core.SceneEdit.Items(eb.CurrentScene), new[] { g1, g2 },
+                        out double _, out double _, out double _);
+                    double gap0 = Gap(eb, g1, g2);
+                    ol.QcPick(g1, g2);
+                    yield return new WaitForSecondsRealtime(0.6f);
+                    ScreenCapture.CaptureScreenshot(prefix + "_multiselect.png");
+                    Debug.Log("[UI] qcui shot -> " + prefix + "_multiselect.png");
+                    ol.GroupAction("scale");
+                    yield return new WaitForSecondsRealtime(2.0f);
+                    double gap1 = Gap(eb, g1, g2);
+                    Debug.Log($"[QC] multiselect picked={ol.PickedCount} pivotOk={pivotOk} " +
+                              $"gap {gap0:F1}→{gap1:F1} (expected ×1.25 = {gap0 * 1.25:F1})");
+                    MapEditor.Undo();
+                    yield return new WaitForSecondsRealtime(1.5f);
+                }
+
                 ObjectListSheet.Close();
                 yield return new WaitForSecondsRealtime(0.4f);
 
@@ -1212,6 +1235,19 @@ namespace DiveMap.Runtime.Ui
             yield return new WaitForSecondsRealtime(1f);
             Debug.Log("[UI] qcui done");
             Application.Quit(0);
+        }
+
+        /// <summary>QC helper — distance between two items, so a group scale can be measured.</summary>
+        private static double Gap(AppBoot boot, string a, string b)
+        {
+            Newtonsoft.Json.Linq.JArray items = DiveMap.Core.SceneEdit.Items(boot.CurrentScene);
+            Newtonsoft.Json.Linq.JObject oa = DiveMap.Core.SceneEdit.Find(items, a);
+            Newtonsoft.Json.Linq.JObject ob = DiveMap.Core.SceneEdit.Find(items, b);
+            if (oa == null || ob == null) return -1;
+            double dx = (double)oa["p"][0] - (double)ob["p"][0];
+            double dy = (double)oa["p"][1] - (double)ob["p"][1];
+            double dz = (double)oa["p"][2] - (double)ob["p"][2];
+            return System.Math.Sqrt(dx * dx + dy * dy + dz * dz);
         }
 
         /// <summary>QC helper — the tallest sculpt sample, so a stroke can be measured.</summary>

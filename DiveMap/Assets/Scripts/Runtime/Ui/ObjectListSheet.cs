@@ -268,7 +268,8 @@ namespace DiveMap.Runtime.Ui
 
             if (_rows != null) _rows.sizeDelta = new Vector2(0f, n > 0 ? n * (rowH + gap) - gap : 0f);
             if (_title != null)
-                _title.text = UiStrings.Tr("โมเดลบนแมพ") + " (" + n + ")";
+                _title.text = UiStrings.Tr("โมเดลบนแมพ") + " (" + n + ")" +
+                              (_picked.Count >= 2 ? "  ·  " + UiStrings.Tr("เลือกแล้ว") + " " + _picked.Count : "");
             if (_kindLabel != null)
                 _kindLabel.text = _kindFilter.Length == 0
                     ? UiStrings.Tr("ทุกชนิด")
@@ -303,8 +304,23 @@ namespace DiveMap.Runtime.Ui
             lrt.anchorMin = new Vector2(0f, 0.5f);
             lrt.anchorMax = new Vector2(1f, 0.5f);
             lrt.pivot = new Vector2(0.5f, 0.5f);
-            lrt.sizeDelta = new Vector2(-(pad + act * 2f + UiKit.Css(18f)), UiKit.RowHeight(nSize));
-            lrt.anchoredPosition = new Vector2((pad - act * 2f - UiKit.Css(14f)) * 0.5f, 0f);
+            lrt.sizeDelta = new Vector2(-(pad + UiKit.Css(34f) + act * 2f + UiKit.Css(18f)), UiKit.RowHeight(nSize));
+            lrt.anchoredPosition = new Vector2((pad + UiKit.Css(34f) - act * 2f - UiKit.Css(14f)) * 0.5f, 0f);
+
+            // ☑ group tick — the left edge, so it never competes with the row's own tap target
+            bool picked = _picked.Contains(id);
+            Button tick = UiKit.MakeButton(row.transform, "Tick", null, 0,
+                                           picked ? UiKit.Accent : new Color(1f, 1f, 1f, 0.10f),
+                                           UiKit.TextMain, () => TogglePick(id));
+            Image tbg = tick.GetComponent<Image>();
+            if (tbg != null) { tbg.sprite = UiKit.RoundedSprite(6f); tbg.type = Image.Type.Sliced; }
+            RectTransform tkrt = tick.GetComponent<RectTransform>();
+            tkrt.anchorMin = new Vector2(0f, 0.5f);
+            tkrt.anchorMax = new Vector2(0f, 0.5f);
+            tkrt.pivot = new Vector2(0f, 0.5f);
+            tkrt.sizeDelta = new Vector2(UiKit.Css(22f), UiKit.Css(22f));
+            tkrt.anchoredPosition = new Vector2(UiKit.Css(8f), 0f);
+            if (picked) Glyph(tick.transform, "check", UiKit.OnAccent, UiKit.Css(14f));
 
             // ✎ rename
             Button ren = UiKit.MakeButton(row.transform, "Rename", null, 0, new Color(0f, 0f, 0f, 0f),
@@ -355,6 +371,55 @@ namespace DiveMap.Runtime.Ui
                 Debug.Log($"[Edit] renamed {id} → '{value}'");
                 Render();
             });
+        }
+
+        /// <summary>
+        /// Group selection. The web puts a checkbox on each row and a "ย้าย/ย่อขยายที่เลือก"
+        /// button that appears at 2+; this keeps the same rule — a group of one is just a
+        /// selection, so the bar stays hidden until there are two.
+        /// </summary>
+        private readonly HashSet<string> _picked = new HashSet<string>(StringComparer.Ordinal);
+
+        /// <summary>QC: how many rows are ticked.</summary>
+        public int PickedCount => _picked.Count;
+
+        private void TogglePick(string id)
+        {
+            if (!_picked.Remove(id)) _picked.Add(id);
+            Render();
+        }
+
+        /// <summary>QC only — tick rows without a finger.</summary>
+        public void QcPick(params string[] ids)
+        {
+            foreach (string id in ids) _picked.Add(id);
+            Render();
+        }
+
+        /// <summary>Apply one operation to every ticked row.</summary>
+        public void GroupAction(string what)
+        {
+            JArray items = Items();
+            if (items == null || _picked.Count < 2) return;
+
+            int n;
+            switch (what)
+            {
+                case "scale": n = MultiSelect.ScaleBy(items, _picked, 1.25); break;
+                case "snap":  n = MultiSelect.Snap(items, _picked); break;
+                case "dup":   n = MultiSelect.DuplicateAll(items, _picked, DateTime.UtcNow.Ticks).Count; break;
+                default:
+                    foreach (string id in _picked) RopeSystem.DetachFrom(id);
+                    n = MultiSelect.DeleteAll(items, _picked);
+                    _picked.Clear();
+                    break;
+            }
+            if (n == 0) return;
+
+            MapEditor.RecordAndApply(items);
+            Debug.Log($"[Edit] group {what} on {n} item(s)");
+            CollectKinds();
+            Render();
         }
 
         private void Delete(string id)
