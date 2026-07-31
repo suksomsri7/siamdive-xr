@@ -233,7 +233,7 @@ namespace DiveMap.Runtime.Ui
             _actions.anchorMax = new Vector2(1f, 0f);
             _actions.pivot = new Vector2(1f, 0f);
             // The column sits directly above the toggle: 48 px buttons with the web's 10 px gap.
-            _actions.sizeDelta = new Vector2(UiKit.Css(48f), UiKit.Css(48f * 5f + 40f));
+            _actions.sizeDelta = new Vector2(UiKit.Css(48f), UiKit.Css(48f * 12f + 110f));
             _actions.anchoredPosition = new Vector2(-UiKit.Css(12f), UiKit.Css(20f + 48f + 10f));
 
             ActionButton(0, "list", OpenMapList);
@@ -241,6 +241,13 @@ namespace DiveMap.Runtime.Ui
             ActionButton(2, "depth", ToggleDepthView);   // the web's #depthViewBtn
             ActionButton(3, "wave", ToggleEnv);          // the web's #env (☀️ / 💧)
             ActionButton(4, "gear", OpenSettings);
+
+            // 🔳 AR — the web's enterAR. Sits with the "look at the map" tools rather than the
+            // editing ones: it is a way of viewing this site, not a way of changing it.
+            ActionButton(11, "ar", () =>
+            {
+                if (!ArSession.Start()) Toast.ShowTr("เข้า AR ตอนนี้ไม่ได้");
+            });
 
             // 📋 objects — only useful on a map this account can write to, and the button is
             // built once at startup when that is not yet known, so it decides at TAP time.
@@ -1101,6 +1108,71 @@ namespace DiveMap.Runtime.Ui
                 }
                 yield return new WaitForSecondsRealtime(0.4f);
             }
+            }
+
+            // 6.13) AR (F1/F4). This must run BEFORE the tour: AR is enterable from View only
+            // (ModeRules.CanEnter), so the same block placed after the tour would log "refused"
+            // and read as a broken feature — the lesson the gizmo QC taught the hard way.
+            //
+            // What CI can honestly check here is the half that does not need hardware: the mode
+            // switch, the overlay, where the viewer is put, and — the part most likely to rot —
+            // that leaving hands the scene back EXACTLY as it was found. The feed and the gyro
+            // need a phone, and the log says so rather than implying a pass.
+            {
+                Camera arCam = Camera.main;
+                Vector3 poseBefore = arCam != null ? arCam.transform.position : Vector3.zero;
+                Quaternion rotBefore = arCam != null ? arCam.transform.rotation : Quaternion.identity;
+                float nearBefore = arCam != null ? arCam.nearClipPlane : 0f;
+                float farBefore = arCam != null ? arCam.farClipPlane : 0f;
+                bool fogBefore = RenderSettings.fog;
+                GameObject seabedGo = GameObject.Find("Map") != null
+                    ? GameObject.Find("Map").transform.Find("Seabed")?.gameObject : null;
+                bool seabedBefore = seabedGo != null && seabedGo.activeSelf;
+
+                bool entered = ArSession.Start();
+                yield return new WaitForSecondsRealtime(1.5f);
+
+                double fit = ArSession.FitScale;
+                double apparent = DiveMap.Core.ArPlacement.ApparentSpan(1f, fit);
+                Debug.Log($"[QC] ar entered={entered} mode={ModeManager.Current} " +
+                          $"controls={ArControls.IsOpen} chrome={ModeRules.AllowsMenu(ModeManager.Current)} " +
+                          $"fit={fit:F5} (1 world unit reads as {apparent * 100:F2} cm) " +
+                          $"seabedHidden={(seabedGo != null && !seabedGo.activeSelf)} fog={RenderSettings.fog}");
+                Debug.Log("[QC] ar NOT COVERED HERE: camera feed and gyroscope — headless has " +
+                          "neither. Both need a device run; see docs/WO-AR-HOLOMAP.md.");
+                ScreenCapture.CaptureScreenshot(prefix + "_ar.png");
+                Debug.Log("[UI] qcui shot -> " + prefix + "_ar.png");
+                yield return new WaitForSecondsRealtime(1.2f);
+
+                // − and + must move the viewer and must stop rather than run away.
+                double s0 = ArSession.Scale;
+                if (ArSession.Instance != null) ArSession.Instance.Zoom(true);
+                yield return new WaitForSecondsRealtime(0.5f);
+                double s1 = ArSession.Scale;
+                for (int i = 0; i < 40; i++) ArSession.Instance?.Zoom(false);
+                yield return new WaitForSecondsRealtime(0.5f);
+                double s2 = ArSession.Scale;
+                Debug.Log($"[QC] ar zoom {s0:F5} → {s1:F5} (expected ×1.22 = {s0 * 1.22:F5}) " +
+                          $"→ 40 presses of − floors at {s2:F5} " +
+                          $"(expected {fit * DiveMap.Core.ArPlacement.MinZoom:F5}, i.e. it cannot be lost)");
+
+                if (ModeManager.Instance != null) ModeManager.Instance.Exit();
+                yield return new WaitForSecondsRealtime(1.2f);
+
+                // The restore check. A mode that quietly keeps the fog off, or the seabed hidden,
+                // or the near plane at 2 units, poisons every screen after it — and would show up
+                // as "the map looks wrong after AR" long after anyone connects the two.
+                bool posOk = arCam != null && (arCam.transform.position - poseBefore).magnitude < 0.01f;
+                bool rotOk = arCam != null && Quaternion.Angle(arCam.transform.rotation, rotBefore) < 0.1f;
+                bool clipOk = arCam != null && Mathf.Approximately(arCam.nearClipPlane, nearBefore) &&
+                              Mathf.Approximately(arCam.farClipPlane, farBefore);
+                Debug.Log($"[QC] ar restored mode={ModeManager.Current} pos={posOk} rot={rotOk} " +
+                          $"clip={clipOk} fog={(RenderSettings.fog == fogBefore)} " +
+                          $"seabed={(seabedGo == null || seabedGo.activeSelf == seabedBefore)} " +
+                          $"controlsGone={!ArControls.IsOpen}");
+                ScreenCapture.CaptureScreenshot(prefix + "_ar_restored.png");
+                Debug.Log("[UI] qcui shot -> " + prefix + "_ar_restored.png");
+                yield return new WaitForSecondsRealtime(0.8f);
             }
 
             // shell chrome, which no unit test can show.

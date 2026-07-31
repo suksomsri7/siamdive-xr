@@ -285,6 +285,7 @@ namespace DiveMap.Runtime
             // Hand the drone its world: what to collide with, where the surface is, how the
             // seabed is stretched, and where "home" is for the exit re-frame.
             TourController.Configure(result);
+            ArSession.Configure(result);   // F1 — AR needs the footprint to place the viewer
             EnvMode.Reset();   // new scene, new lights/water to capture
             Ui.PerfHud.Apply();   // A7 — rebuild the readout if the player left it on
 
@@ -453,6 +454,7 @@ namespace DiveMap.Runtime
             _mapRoot = result.Root;
             RopeSystem.Load(CurrentScene);
             TourController.Configure(result);
+            ArSession.Configure(result);   // F1 — AR needs the footprint to place the viewer
             EnvMode.Reset();
             Ui.PerfHud.Apply();
 

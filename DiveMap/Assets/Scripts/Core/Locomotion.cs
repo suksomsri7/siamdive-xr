@@ -21,6 +21,12 @@ namespace DiveMap.Core
     ///   otherwise       roam 160  swim 1.00
     ///   diet predator   roam ×1.15/1.35, swim ×1.22/1.28  (big/small)
     /// </code>
+    ///
+    /// ⚠️ Two things here were ported wrong the first time and only CI caught them: the predator
+    /// multiplier applies to stationary animals too (the web has no guard), and the two
+    /// personality factors are DIFFERENT — roam varies ±25 %, swim only ±15 %. The radius is then
+    /// capped, which is where the "humpback capped at 200" note comes from: 330 × 1.25 is 412, and
+    /// with no hand-tuned radius the cap cuts it to 200.
     /// </summary>
     public static class Locomotion
     {
@@ -62,14 +68,18 @@ namespace DiveMap.Core
             // A configured radius wins over the zone default; personality still varies it.
             double baseRoam = configuredRoam ?? roam;
 
-            // energy 0..1 → ±20 % on both, so two fish of one species do not move in lockstep.
+            // energy 0..1 varies both so two fish of one species do not move in lockstep — but by
+            // different amounts: how far it wanders is a bigger personality trait than how fast.
             double e = Clamp01(energy);
-            double vary = 0.8 + e * 0.4;
+
+            // The cap is the point of the hand-tuned radius: without one an animal is held to 200
+            // world units however big it is; with one it is trusted out to 400.
+            double cap = configuredRoam.HasValue ? 400 : 200;
 
             return new Result
             {
-                RoamRadius = Math.Max(4.0, baseRoam * vary),
-                SwimMultiplier = Math.Max(0.05, swim * vary),
+                RoamRadius = Math.Min(cap, baseRoam * (0.75 + e * 0.50)),
+                SwimMultiplier = swim * (0.85 + e * 0.30),
             };
         }
 

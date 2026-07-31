@@ -106,6 +106,18 @@ namespace DiveMap.Runtime.Ui
                     strokes.Add(Circle(12f, 13.5f, 3.6f));
                     break;
 
+                case "ar":     // AR — viewfinder corners around a small cube on a surface
+                    strokes.Add(new[] { P(3.2f, 8f), P(3.2f, 4.6f), P(6.6f, 4.6f) });      // ┌
+                    strokes.Add(new[] { P(17.4f, 4.6f), P(20.8f, 4.6f), P(20.8f, 8f) });   // ┐
+                    strokes.Add(new[] { P(20.8f, 16f), P(20.8f, 19.4f), P(17.4f, 19.4f) });// ┘
+                    strokes.Add(new[] { P(6.6f, 19.4f), P(3.2f, 19.4f), P(3.2f, 16f) });   // └
+                    // the cube: a top face and two sides, i.e. an object standing in the frame
+                    strokes.Add(new[] { P(12f, 8.2f), P(16.2f, 10.4f), P(12f, 12.6f), P(7.8f, 10.4f), P(12f, 8.2f) });
+                    strokes.Add(new[] { P(7.8f, 10.4f), P(7.8f, 14.4f), P(12f, 16.6f),
+                                        P(16.2f, 14.4f), P(16.2f, 10.4f) });
+                    strokes.Add(Line(12f, 12.6f, 12f, 16.6f));
+                    break;
+
                 case "play":   // #playBtn — filled triangle 7 4 / 20 12 / 7 20
                     fills.Add(new[] { P(7, 4), P(20, 12), P(7, 20) });
                     break;

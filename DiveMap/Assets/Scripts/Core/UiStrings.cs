@@ -66,6 +66,19 @@ namespace DiveMap.Core
                 { "ลากจอยซ้ายเพื่อเลี้ยว/ขึ้นลง · จอยขวาเพื่อเดินหน้า",
                   "Left stick turns and rises · right stick moves you forward" },
 
+                // AR (F1/F4) — the web's #arctl, #exitAR, #arhint
+                { "ดูแบบ AR",                       "View in AR" },
+                { "✕ ออก AR",                       "✕ Leave AR" },
+                { "ขนาด",                           "Size" },
+                { "เล็งกล้องไปที่พื้นเรียบ",             "Point the camera at a flat surface" },
+                { "ใหญ่สุดแล้ว",                     "That is as large as it goes" },
+                { "เล็กสุดแล้ว",                      "That is as small as it goes" },
+                { "เครื่องนี้ไม่มีเซนเซอร์ — ลากเพื่อหมุนแทน",
+                  "No motion sensor on this device — drag to look around instead" },
+                { "เปิดกล้องไม่ได้ — แสดงแบบจำลองอย่างเดียว",
+                  "Camera unavailable — showing the model only" },
+                { "เข้า AR ตอนนี้ไม่ได้",              "AR cannot start right now" },
+
                 // shell / menu
                 { "เมนู",                  "Menu" },
                 { "รายการแมพ",             "Maps" },
