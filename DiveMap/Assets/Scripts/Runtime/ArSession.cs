@@ -41,7 +41,11 @@ namespace DiveMap.Runtime
         /// <summary>The fitted (tabletop) scale for this map, i.e. where zoom starts.</summary>
         public static double FitScale => Instance != null ? Instance._fit : 0;
 
+        /// <summary>The map root AR hides parts of — QC checks the same one, not a lookalike.</summary>
+        public static GameObject MapRoot => Instance != null ? Instance._mapRoot : null;
+
         // Where the map is, from the last build.
+        private GameObject _mapRoot;
         private Vector3 _center;
         private float _sizeX = 100f, _sizeZ = 100f, _minY;
 
@@ -92,6 +96,11 @@ namespace DiveMap.Runtime
         {
             ArSession s = Ensure();
             if (s == null) return;
+            // Hold the root the builder just made. Looking it up later by name was wrong: the QC
+            // run reloads the map (buying an item does), and `GameObject.Find("Map")` can hand
+            // back a root that is no longer the one on screen — AR then hid an invisible copy and
+            // logged "3/3 hidden" over a seabed the user could still see.
+            s._mapRoot = r.Root;
             s._center = r.FrameCenter;
             s._sizeX = r.FrameSizeX;
             s._sizeZ = r.FrameSizeZ;
@@ -204,7 +213,7 @@ namespace DiveMap.Runtime
             // through — it looks like the AR feed failed rather than like a bug.
             _hidden.Clear();
             _hiddenWas.Clear();
-            GameObject root = GameObject.Find("Map");
+            GameObject root = _mapRoot != null ? _mapRoot : GameObject.Find("Map");
             if (root != null)
             {
                 var missing = new System.Collections.Generic.List<string>();
@@ -221,6 +230,15 @@ namespace DiveMap.Runtime
                 if (missing.Count > 0)
                     Debug.Log("[AR] no such map part: " + string.Join(", ", missing) +
                               " — nothing to hide, which is fine if this map has none");
+
+                // Everything else still under the root, so a part that turns out to draw over the
+                // room can be named immediately instead of costing a CI round to identify.
+                var rest = new System.Collections.Generic.List<string>();
+                foreach (Transform child in root.transform)
+                    if (child.gameObject.activeSelf && System.Array.IndexOf(UnderwaterParts, child.name) < 0)
+                        rest.Add(child.name);
+                Debug.Log($"[AR] root='{root.name}' still showing {rest.Count} child(ren): " +
+                          string.Join(", ", rest.GetRange(0, System.Math.Min(12, rest.Count))));
             }
 
             _backdrop = _cam.GetComponent<Backdrop>();

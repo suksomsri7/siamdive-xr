@@ -1175,7 +1175,10 @@ namespace DiveMap.Runtime.Ui
                 // seabedHidden=True and the screenshot still showed a glowing white floor: the
                 // caustic sheet is a SIBLING of Seabed, so hiding Seabed left it drawing.
                 string[] arParts = { "Seabed", "Caustics", "Water", "GodRays" };
-                Transform arMap = GameObject.Find("Map") != null ? GameObject.Find("Map").transform : null;
+                // Same root ArSession uses. Checking a DIFFERENT root than the one being hidden
+                // is how the log came back "3/3 hidden" over a seabed that was plainly on screen.
+                Transform arMap = ArSession.MapRoot != null ? ArSession.MapRoot.transform
+                                : GameObject.Find("Map") != null ? GameObject.Find("Map").transform : null;
                 var arWas = new System.Collections.Generic.List<bool>();
                 foreach (string n in arParts)
                 {
