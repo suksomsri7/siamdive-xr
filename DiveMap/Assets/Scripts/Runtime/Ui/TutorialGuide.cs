@@ -117,8 +117,10 @@ namespace DiveMap.Runtime.Ui
                                     Detail = "เปิดไฟหน้าโดรน มองเห็นตอนดำลึก" });
             g._steps.Add(new Step { Target = "CoinBadge", Title = "เหรียญของคุณ",
                                     Detail = "เก็บขยะและเหรียญทองที่ตกลงมา = ได้เหรียญ เอาไว้ซื้อสัตว์ทะเลในร้านค้า" });
-            g._steps.Add(new Step { Target = "TourShop", Title = "ร้านค้า",
-                                    Detail = "ใช้เหรียญซื้อสัตว์ทะเลมาปล่อยลงแมพของคุณ" });
+            // The shop step went with the cart button. A spotlight step whose target no longer
+            // exists is worse than a missing step: it dims the screen and points at nothing.
+            g._steps.Add(new Step { Target = "TourMute", Title = "เสียง",
+                                    Detail = "ปิด/เปิดเสียงใต้น้ำ" });
             g._steps.Add(new Step { Target = "TourExit", Title = "ออกทัวร์",
                                     Detail = "กลับไปหน้าแมพเมื่อเที่ยวเสร็จ" });
 

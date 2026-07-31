@@ -14,8 +14,9 @@ namespace DiveMap.Runtime.Ui
     ///   #tourHud    top-CENTRE max(15,safe)     12px/600 hint, rgba(7,26,42,.42)
     ///   #lightBtn   left 14, top 104            56×56, 2.5px white rim; ON = amber glow
     ///   #radarBtn   left 14, top 174            56×56, toggles the minimap; off = 45 % alpha
-    ///   (mute)      left 14, top 244            ours — the web never builds its _muteFloat
     ///   #tourCam    right 14, top 104, gap 14   56×56 (photo; #tourRec cut from v1)
+    ///   (mute)      right 14, top 174           ours — the web never builds its _muteFloat.
+    ///                                           Took the cart's slot: shopping is not diving.
     ///   .stick      bottom 24, left/right 18    138×138, knob 60×60, four 9.5px labels
     ///   #minimap    bottom 16, centred          118×118 circle, 1.5px rgba(120,200,255,.45)
     ///
@@ -158,25 +159,19 @@ namespace DiveMap.Runtime.Ui
             _radar = RoundButton(root, "TourRadar", "radar", Chrome, 56f, 2.5f, new Vector2(0f, 1f),
                                  new Vector2(UiKit.Css(14f), -UiKit.Css(174f)), ToggleRadar);
 
-            // ── mute: LEFT 14 / TOP 244 — ours, one slot below the web's last ───
-            _mute = RoundButton(root, "TourMute", "sound", Chrome, 56f, 2.5f, new Vector2(0f, 1f),
-                                new Vector2(UiKit.Css(14f), -UiKit.Css(244f)), ToggleMute);
-            RenderMute();
-
             // ── camera: RIGHT 14 / TOP 104 (#tourCam; #tourRec cut from v1) ─────
             RoundButton(root, "TourShot", "camera", Chrome, 56f, 2.5f, new Vector2(1f, 1f),
                         new Vector2(-UiKit.Css(14f), -UiKit.Css(104f)), Photo);
 
-            // ── shop: RIGHT 14 / TOP 174 (E5) ───────────────────────────────────
-            // The web puts #_shopBtn at right 10 / top 82, but that is its BUILDER chrome; here
-            // the same rail already carries the camera at top 104, and a shop button overlapping
-            // the shutter is worse than one slot lower. Mirrors the radar on the left rail.
-            // The cart opens the PALETTE, not the openShop() list: on the web the palette is
-            // where a player buys (placing an object deducts the coins), and the plain list is a
-            // secondary path. Porting the list first was the mistake §4.97 records.
-            RoundButton(root, "TourShop", "cart", Chrome, 56f, 2.5f, new Vector2(1f, 1f),
-                        new Vector2(-UiKit.Css(14f), -UiKit.Css(174f)),
-                        () => PaletteSheet.Open(UiShell.Instance != null ? UiShell.Instance.Thumbs : null));
+            // ── mute: RIGHT 14 / TOP 174 — where the cart used to be ────────────
+            // The cart (it opened the palette to buy and place things) is gone from the drone
+            // view: diving is not shopping, and it sat on the rail your thumb reaches while
+            // flying. Sound is what a diver actually reaches for mid-dive, so it takes the slot
+            // rather than staying two rows down the opposite rail where it had been parked for
+            // want of a web position to copy. Buying still lives in the builder, untouched.
+            _mute = RoundButton(root, "TourMute", "sound", Chrome, 56f, 2.5f, new Vector2(1f, 1f),
+                                new Vector2(-UiKit.Css(14f), -UiKit.Css(174f)), ToggleMute);
+            RenderMute();
 
             // ── minimap: bottom 16, centred, 118 px ─────────────────────────────
             Image mini = UiKit.MakeCircle(root, "Minimap", Chrome);
