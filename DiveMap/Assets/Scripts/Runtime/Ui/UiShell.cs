@@ -1210,7 +1210,11 @@ namespace DiveMap.Runtime.Ui
 
                 // J7 — the models kept for a dive with no signal. Hits should be 0 on a cold CI
                 // run and non-zero on the second map, which is the whole claim being made.
-                Debug.Log($"[QC] offline assets stored={AssetCacheStore.Stored} " +
+                // `files=` matters: the counters are per-process, so a second launch legitimately
+                // reports stored=0 while every model came off the disk. Without the on-disk count
+                // that line reads like the cache did nothing.
+                Debug.Log($"[QC] offline assets files={AssetCacheStore.Entries.Count} " +
+                          $"stored={AssetCacheStore.Stored} " +
                           $"hits={AssetCacheStore.Hits} misses={AssetCacheStore.Misses} " +
                           $"evicted={AssetCacheStore.Evicted} size={AssetCacheStore.TotalLabel} " +
                           $"(cap {DiveMap.Core.AssetCache.FormatSize(DiveMap.Core.AssetCache.BudgetBytes)})");
