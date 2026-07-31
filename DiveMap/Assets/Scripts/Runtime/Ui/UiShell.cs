@@ -572,7 +572,7 @@ namespace DiveMap.Runtime.Ui
         /// the fingerId overload is mandatory — the parameterless one only tracks the
         /// mouse and always returns false on a phone.
         /// </summary>
-        private static bool PointerOverUi()
+        internal static bool PointerOverUi()
         {
             EventSystem es = EventSystem.current;
             if (es == null) return false;
@@ -881,10 +881,40 @@ namespace DiveMap.Runtime.Ui
                                   $"· undone={undone} redone={redone} history={MapEditor.HistoryCount} " +
                                   $"saveRefused={MapEditor.SaveRefused}");
 
-                        // Put the map back: undo the redo, so the next QC step sees the map it expects.
+                        // 6.93) the gizmo. No touch input exists in a headless player, so the
+                        // gesture is driven directly — what is being proven is the maths and the
+                        // one-snapshot-per-gesture rule, not the finger.
+                        Newtonsoft.Json.Linq.JObject before1 =
+                            DiveMap.Core.SceneEdit.Find(DiveMap.Core.SceneEdit.Items(eb.CurrentScene), pick);
+                        double px0 = (double)before1["p"][0], pz0 = (double)before1["p"][2];
+                        int hist0 = MapEditor.HistoryCount;
+
+                        GizmoController.Select(pick);
+                        GizmoController.QcDrag(SelectionToolbar.Mode.Translate,
+                                               new Vector2(640f, 400f), new Vector2(760f, 470f));
+                        yield return new WaitForSecondsRealtime(2.5f);
+
+                        Newtonsoft.Json.Linq.JObject after1 =
+                            DiveMap.Core.SceneEdit.Find(DiveMap.Core.SceneEdit.Items(eb.CurrentScene), pick);
+                        double px1 = (double)after1["p"][0], pz1 = (double)after1["p"][2];
+
+                        GizmoController.QcDrag(SelectionToolbar.Mode.Rotate,
+                                               new Vector2(640f, 400f), new Vector2(850f, 400f));
+                        yield return new WaitForSecondsRealtime(2.0f);
+                        double yaw = (double)DiveMap.Core.SceneEdit
+                            .Find(DiveMap.Core.SceneEdit.Items(eb.CurrentScene), pick)["r"][1];
+
+                        Debug.Log($"[QC] gizmo move ({px0:F1},{pz0:F1})→({px1:F1},{pz1:F1}) moved={(px1 != px0 || pz1 != pz0)} " +
+                                  $"· yaw={yaw:F3} (expected {DiveMap.Core.GizmoMath.YawAfterDrag(0, 210):F3}) " +
+                                  $"· history {hist0}→{MapEditor.HistoryCount} (expected +2, one per gesture)");
+
+                        // Put the map back: undo everything this block did.
+                        MapEditor.Undo(); yield return new WaitForSecondsRealtime(1.2f);
+                        MapEditor.Undo(); yield return new WaitForSecondsRealtime(1.2f);
                         MapEditor.Undo();
                         yield return new WaitForSecondsRealtime(2.0f);
                         SelectionToolbar.Hide();
+                        GizmoController.Deselect();
                         yield return new WaitForSecondsRealtime(0.4f);
                     }
                 }
