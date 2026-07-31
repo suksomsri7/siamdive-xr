@@ -116,8 +116,81 @@ foreach ((string path, SyntaxTree tree) in trees)
         problems++;
     }
 
+// ── 4) project types used from a namespace that cannot see them (CS0103) ─────
+//
+// The compiler needs references to type-check; this does not. But it CAN check the one
+// case that keeps happening: a type declared IN THIS PROJECT, referenced by its simple
+// name, from a file whose namespace + usings do not reach it.
+//
+// Real example this was written for — MapEditor.cs (namespace DiveMap.Runtime) calling
+// Toast (DiveMap.Runtime.Ui). A CHILD namespace is not in scope; the file needed
+// `using DiveMap.Runtime.Ui;`. Cost: one CI round.
+//
+// Deliberately conservative: a name is only reported when it is declared exactly once in
+// the project (no ambiguity about which namespace it should have come from), it is not
+// declared anywhere the file can already see, and it appears as a bare identifier.
+var typeNamespaces = new Dictionary<string, HashSet<string>>(StringComparer.Ordinal);
+foreach ((_, SyntaxTree tree) in trees)
+    foreach (BaseTypeDeclarationSyntax type in tree.GetRoot().DescendantNodes().OfType<BaseTypeDeclarationSyntax>())
+    {
+        // Nested types are reached through their parent's name, not on their own.
+        if (type.Parent is BaseTypeDeclarationSyntax) continue;
+        string ns = NamespaceOf(type);
+        if (!typeNamespaces.TryGetValue(type.Identifier.ValueText, out HashSet<string> set))
+            typeNamespaces[type.Identifier.ValueText] = set = new HashSet<string>(StringComparer.Ordinal);
+        set.Add(ns);
+    }
+
+foreach ((string path, SyntaxTree tree) in trees)
+{
+    SyntaxNode unit = tree.GetRoot();
+
+    // Namespaces this file can see: its own and every ancestor, plus its usings.
+    var fileUsings = new HashSet<string>(StringComparer.Ordinal);
+    foreach (UsingDirectiveSyntax u in unit.DescendantNodes().OfType<UsingDirectiveSyntax>())
+        if (u.Alias == null && u.Name != null) fileUsings.Add(u.Name.ToString());
+
+    var reported = new HashSet<string>(StringComparer.Ordinal);
+
+    foreach (IdentifierNameSyntax id in unit.DescendantNodes().OfType<IdentifierNameSyntax>())
+    {
+        string name = id.Identifier.ValueText;
+        if (reported.Contains(name)) continue;
+        if (!typeNamespaces.TryGetValue(name, out HashSet<string> declaredIn)) continue;
+        if (declaredIn.Count != 1) continue;                       // ambiguous — leave it to the compiler
+
+        // Only a bare `Name.Member` / `Name x` usage; `A.Name` is already qualified.
+        if (id.Parent is QualifiedNameSyntax) continue;
+        if (id.Parent is MemberAccessExpressionSyntax ma && ma.Name == id) continue;
+
+        // Where does this occurrence sit?
+        string here = NamespaceOf(id);
+        string target = System.Linq.Enumerable.First(declaredIn);
+        if (target.Length == 0) continue;                          // global namespace is always visible
+
+        bool visible = fileUsings.Contains(target) ||
+                       here == target ||
+                       here.StartsWith(target + ".", StringComparison.Ordinal);   // ancestor of `here`
+
+        if (visible) continue;
+
+        Report(path, id.GetLocation(), "CS0103",
+               $"'{name}' is declared in namespace '{target}', which this file cannot see — add `using {target};`");
+        reported.Add(name);
+        problems++;
+    }
+}
+
 Console.WriteLine($"csharp-check: {files.Length} files · {problems} problem(s)");
 return problems == 0 ? 0 : 1;
+
+// Innermost namespace containing a node, or "" for the global namespace.
+static string NamespaceOf(SyntaxNode node)
+{
+    for (SyntaxNode n = node.Parent; n != null; n = n.Parent)
+        if (n is BaseNamespaceDeclarationSyntax ns) return ns.Name.ToString();
+    return "";
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 

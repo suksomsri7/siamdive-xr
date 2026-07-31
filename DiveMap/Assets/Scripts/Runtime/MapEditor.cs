@@ -2,6 +2,7 @@ using System.Collections;
 using Newtonsoft.Json.Linq;
 using UnityEngine;
 using DiveMap.Core;
+using DiveMap.Runtime.Ui;   // Toast — a CHILD namespace is not in scope without this
 
 namespace DiveMap.Runtime
 {

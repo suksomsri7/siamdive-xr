@@ -86,9 +86,23 @@ $ dotnet …/csharp-check.dll /tmp/regress
 ```
 **บรรทัดและคอลัมน์ตรงกับที่ Unity รายงานเป๊ะ** (`UiShell.cs(882,24): error CS0136`)
 
-จับได้: syntax ทุกชนิด · `CS0136`/`CS0128` ตัวแปรชนกัน · `using` ชี้ namespace ที่ไม่มีจริง
-จับไม่ได้: ชื่อ type/method ที่ไม่มีจริง, argument ผิดชนิด → ยังต้องพึ่ง CI
+**รอบ 2 (หลัง CI แดงครั้งที่ 2)** — `MapEditor.cs` เรียก `Toast` ซึ่งอยู่ `DiveMap.Runtime.Ui`
+แต่ไฟล์อยู่ `DiveMap.Runtime` · **namespace ลูกไม่ได้อยู่ใน scope ของแม่** ต้องมี using
+→ เพิ่มกฎที่ 4: type ที่ประกาศ**ในโปรเจกต์นี้** ถูกเรียกด้วยชื่อเปล่าจากไฟล์ที่ namespace+using เอื้อมไม่ถึง
+```
+DiveMap/Assets/Scripts/Runtime/MapEditor.cs(203,17): CS0103: 'Toast' is declared in namespace
+  'DiveMap.Runtime.Ui', which this file cannot see — add `using DiveMap.Runtime.Ui;`
+```
+ตรงบรรทัด/คอลัมน์กับที่ Unity รายงานอีกครั้ง · ระวัง false positive: รายงานเฉพาะชื่อที่ประกาศ
+**ที่เดียวในโปรเจกต์** (ถ้าซ้ำ = กำกวม ปล่อยให้ compiler ตัดสิน) และไม่ใช่ชื่อที่ qualified อยู่แล้ว
+
+จับได้แล้ว: syntax ทุกชนิด · `CS0136`/`CS0128` ตัวแปรชนกัน · `using` ชี้ namespace ที่ไม่มีจริง
+· **`CS0103` type ในโปรเจกต์ที่ namespace เอื้อมไม่ถึง**
+จับไม่ได้: ชื่อ method ที่ไม่มีจริง, argument ผิดชนิด, type จาก Unity/แพ็กเกจ → ยังต้องพึ่ง CI
 **กฎใหม่: รัน `./tools/check.sh` ทุกครั้งก่อน push**
+
+📊 CI แดงไป 2 ครั้ง (30 นาที) · ทั้งสองครั้งเป็น error ที่ตรวจได้ในเครื่องภายใน 1 วินาที
+ทั้งสองคลาสถูกครอบด้วยเครื่องมือแล้ว — ถ้ายังแดงอีก จะเป็นคลาสใหม่ที่ควรเพิ่มกฎที่ 5
 
 ### 🟡 B2 · ยังใช้ legacy `UnityEngine.UI.Text` ทั้งแอป ไม่ใช่ TextMeshPro
 ผลที่จับได้แล้ว: กฎ `LineHeightRatio = 1.511` + `RowHeight()` ที่ต้องระวังทุกครั้ง
