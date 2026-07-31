@@ -101,6 +101,15 @@ namespace DiveMap.Runtime.Ui
         private readonly List<MapCard> _cards = new List<MapCard>();
         private readonly List<CardView> _views = new List<CardView>();
 
+        private Button _accountBtn;
+        private Image _accountBg, _accountIcon, _accountRim;
+        private Text _accountInitial;
+
+        /// <summary>shortIds this account owns — the only thing that can say "by You".</summary>
+        private readonly HashSet<string> _mine = new HashSet<string>(StringComparer.Ordinal);
+        private readonly HashSet<string> _favourites = new HashSet<string>(StringComparer.Ordinal);
+        private Coroutine _identity;
+
         private string _query = "";
         private int _total = -1;
         private bool _loading;
@@ -176,13 +185,48 @@ namespace DiveMap.Runtime.Ui
             Place(add.GetComponent<RectTransform>(), x, BtnSize);
             x += BtnSize + HeaderGap;
 
-            Button prof = CircleButton(root, "AccountButton", "person", ProfBg,
+            // Signed out → the outline person, which opens sign-in. Signed in → the initial on
+            // the accent fill, which opens the profile. Same button, RN's two states.
+            _accountBtn = CircleButton(root, "AccountButton", "person", ProfBg,
                                        new Color(0.812f, 0.894f, 0.961f, 1f), UiKit.Css(26f),
-                                       () => Toast.ShowTr("ยังไม่เปิดให้ใช้ในแอปนี้"));
-            Image rim = UiKit.MakeCircle(prof.transform, "Rim", ProfRim, 0.035f);
+                                       OnAccountTapped);
+            _accountBg = _accountBtn.GetComponent<Image>();
+            Transform glyph = _accountBtn.transform.Find("Icon");
+            _accountIcon = glyph != null ? glyph.GetComponent<Image>() : null;
+
+            Image rim = UiKit.MakeCircle(_accountBtn.transform, "Rim", ProfRim, 0.035f);
             rim.raycastTarget = false;
             UiKit.Stretch(rim.rectTransform);
-            Place(prof.GetComponent<RectTransform>(), x, BtnSize);
+            _accountRim = rim;
+
+            _accountInitial = UiKit.MakeLine(_accountBtn.transform, "Initial", "", UiKit.CssFont(18f),
+                                             TextAnchor.MiddleCenter, Color.white);
+            _accountInitial.fontStyle = FontStyle.Bold;
+            UiKit.Stretch(_accountInitial.rectTransform);
+            _accountInitial.gameObject.SetActive(false);
+
+            Place(_accountBtn.GetComponent<RectTransform>(), x, BtnSize);
+            RenderAccount();
+        }
+
+        private void OnAccountTapped()
+        {
+            if (Account.IsSignedIn) ProfileSheet.Open();
+            else LoginSheet.Open();
+        }
+
+        /// <summary>Swap the account button between its signed-out and signed-in faces.</summary>
+        private void RenderAccount()
+        {
+            bool on = Account.IsSignedIn;
+            if (_accountBg != null) _accountBg.color = on ? AddBg : ProfBg;
+            if (_accountRim != null) _accountRim.color = on ? UiKit.Accent : ProfRim;
+            if (_accountIcon != null) _accountIcon.gameObject.SetActive(!on);
+            if (_accountInitial != null)
+            {
+                _accountInitial.gameObject.SetActive(on);
+                if (on) _accountInitial.text = Account.Initial(Account.Name, Account.Email);
+            }
         }
 
         private RectTransform BuildSearchBox(RectTransform root)
@@ -373,7 +417,65 @@ namespace DiveMap.Runtime.Ui
         /// <summary>Load the first page once (no-op if the list already has rows).</summary>
         public void EnsureLoaded()
         {
+            // Who is signed in decides which cards say "by You", so ask before drawing any.
+            if (_identity == null) _identity = StartCoroutine(RefreshIdentity());
             if (_cards.Count == 0 && !_loading) Reload(_query);
+        }
+
+        private void OnEnable()
+        {
+            LoginSheet.SignedIn += OnAccountChanged;
+            ProfileSheet.Changed += OnAccountChanged;
+        }
+
+        private void OnAccountChanged()
+        {
+            RenderAccount();
+            _mine.Clear();
+            _favourites.Clear();
+            if (_identity != null) StopCoroutine(_identity);
+            _identity = StartCoroutine(RefreshIdentity());
+            Reload(_query);
+        }
+
+        /// <summary>
+        /// Ask the server who owns this device, then which maps are theirs. Runs beside the list
+        /// fetch rather than in front of it — a slow /me must not hold up the cards, it only
+        /// changes a byline once it lands.
+        /// </summary>
+        private System.Collections.IEnumerator RefreshIdentity()
+        {
+            yield return AccountClient.FetchMe((me, changed) =>
+            {
+                RenderAccount();
+                if (changed)
+                {
+                    // A different account (including a logout): everything scoped to the old one
+                    // is now a lie. The RN app calls this syncAcctScope.
+                    _mine.Clear();
+                    _favourites.Clear();
+                }
+            });
+
+            yield return AccountClient.MyMaps(cards =>
+            {
+                _mine.Clear();
+                for (int i = 0; i < cards.Count; i++) _mine.Add(cards[i].ShortId);
+            });
+
+            yield return AccountClient.Favourites(cards =>
+            {
+                _favourites.Clear();
+                for (int i = 0; i < cards.Count; i++) _favourites.Add(cards[i].ShortId);
+            });
+
+            Debug.Log($"[UI] identity signedIn={Account.IsSignedIn} name='{Account.Name}' " +
+                      $"mine={_mine.Count} favourites={_favourites.Count}");
+
+            _identity = null;
+            // Signed in with an empty search box, the list should be My Map, not the directory.
+            if (Account.IsSignedIn && string.IsNullOrEmpty(_query.Trim())) Reload(_query);
+            else RefreshLanguage();   // otherwise just re-label the cards already on screen
         }
 
         /// <summary>Set the search box programmatically (used by the -qcui capture run).</summary>
@@ -384,13 +486,68 @@ namespace DiveMap.Runtime.Ui
             OnSearchChanged(q);
         }
 
+        /// <summary>
+        /// The RN hub shows "My Map" (own maps + favourites) by default and switches to the
+        /// public directory the moment you type. This app keeps the public directory as the
+        /// signed-OUT default rather than RN's favourites-only list, which on a fresh install is
+        /// an empty screen — a viewer whose front page is blank has nothing to view. Signed in,
+        /// the behaviour is RN's exactly.
+        /// </summary>
         public void Reload(string q)
         {
             _query = q ?? "";
             _total = -1;
             LastError = null;
             ClearCards();
-            StartFetch(_query, 0, true);
+
+            if (Account.IsSignedIn && string.IsNullOrEmpty(_query.Trim()))
+                StartMine();
+            else
+                StartFetch(_query, 0, true);
+        }
+
+        private void StartMine()
+        {
+            if (_fetch != null) { StopCoroutine(_fetch); _fetch = null; }
+            _fetch = StartCoroutine(LoadMine());
+        }
+
+        /// <summary>My Map = the account's own maps, then favourites that are not already there.</summary>
+        private System.Collections.IEnumerator LoadMine()
+        {
+            _loading = true;
+            ShowStatus(UiStrings.Tr("กำลังโหลด…"), false);
+
+            List<MapCard> mine = null, favs = null;
+            yield return AccountClient.MyMaps(c => mine = c);
+            yield return AccountClient.Favourites(c => favs = c);
+
+            _mine.Clear();
+            if (mine != null) for (int i = 0; i < mine.Count; i++) _mine.Add(mine[i].ShortId);
+            _favourites.Clear();
+            if (favs != null) for (int i = 0; i < favs.Count; i++) _favourites.Add(favs[i].ShortId);
+
+            ClearCards();
+            if (mine != null)
+                foreach (MapCard c in mine) { _cards.Add(c); AddCardView(c, _cards.Count - 1); }
+            if (favs != null)
+                foreach (MapCard c in favs)
+                {
+                    if (_mine.Contains(c.ShortId)) continue;   // already listed as your own
+                    _cards.Add(c);
+                    AddCardView(c, _cards.Count - 1);
+                }
+
+            _total = _cards.Count;   // these routes are not paged; there is no "load more"
+            LayoutContent();
+            if (_banner != null) _banner.gameObject.SetActive(ShowBanner);
+
+            if (_cards.Count == 0) ShowStatus(UiStrings.Tr("ยังไม่มี dive site"), false);
+            else HideStatus();
+
+            Debug.Log($"[UI] my maps mine={_mine.Count} favourites={_favourites.Count} cards={_cards.Count}");
+            _loading = false;
+            _fetch = null;
         }
 
         /// <summary>
@@ -413,12 +570,18 @@ namespace DiveMap.Runtime.Ui
 
         private void OnDisable()
         {
+            // Static events outlive this screen; a subscription left behind would fire into a
+            // destroyed object the next time anybody signs in.
+            LoginSheet.SignedIn -= OnAccountChanged;
+            ProfileSheet.Changed -= OnAccountChanged;
+
             // Deactivating the layer kills every running coroutine on this GameObject.
             // Clear the in-flight flags so re-opening the screen starts a fresh request
             // instead of waiting forever on a fetch that Unity already killed.
             _loading = false;
             _fetch = null;
             _debounce = null;
+            _identity = null;
         }
 
         // ── input handlers ───────────────────────────────────────────────────────
@@ -798,10 +961,12 @@ namespace DiveMap.Runtime.Ui
         }
 
         /// <summary>The "by …" line. Composed here so a language switch can rebuild it.</summary>
-        private static string OwnerLine(MapCard card)
+        private string OwnerLine(MapCard card)
         {
-            switch (MapDirectory.OwnerKindOf(card, false))
+            bool isMine = card != null && !string.IsNullOrEmpty(card.ShortId) && _mine.Contains(card.ShortId);
+            switch (MapDirectory.OwnerKindOf(card, isMine))
             {
+                case OwnerKind.You:       return UiStrings.Tr("สร้างโดย คุณ");
                 case OwnerKind.Official:  return UiStrings.Tr("โดย SIAMDIVE");
                 case OwnerKind.Named:     return UiStrings.Tr("สร้างโดย") + " " + card.OwnerName.Trim();
                 default:                  return UiStrings.Tr("สร้างโดย ชุมชน");
@@ -849,8 +1014,32 @@ namespace DiveMap.Runtime.Ui
             ActionSheet sheet = ActionSheet.Show(MapDirectory.DisplayName(card));
             if (sheet == null) return;   // no shell (unit/QC harness) — the card tap still works
             sheet.AddItem(UiStrings.Tr("เปิดแผนที่"), () => MapSelected?.Invoke(card.ShortId));
+
+            // ⭐ favourite = "keep it in My Map". Server-side and keyed by account when signed in,
+            // so it follows the diver to their next phone (favorites/route.ts ownerKey).
+            bool faved = _favourites.Contains(card.ShortId);
+            sheet.AddItem(UiStrings.Tr(faved ? "เอาออกจาก My Map" : "เก็บเข้า My Map"),
+                          () => ToggleFavourite(card, !faved));
+
             sheet.AddItem(UiStrings.Tr("รายงาน"), () => ReportMap(card), true);
             sheet.AddCancel(UiStrings.Tr("ยกเลิก"));
+        }
+
+        private void ToggleFavourite(MapCard card, bool on)
+        {
+            // Optimistic, like the like button: the list re-labels immediately and the server
+            // call only corrects it if it fails.
+            if (on) _favourites.Add(card.ShortId); else _favourites.Remove(card.ShortId);
+            StartCoroutine(AccountClient.ToggleFavourite(card.ShortId, on, ok =>
+            {
+                if (!ok)
+                {
+                    if (on) _favourites.Remove(card.ShortId); else _favourites.Add(card.ShortId);
+                    Toast.ShowTr("เชื่อมต่อไม่ได้");
+                    return;
+                }
+                Toast.ShowTr(on ? "เก็บเข้า My Map แล้ว" : "เอาออกจาก My Map แล้ว");
+            }));
         }
 
         private void ReportMap(MapCard card)

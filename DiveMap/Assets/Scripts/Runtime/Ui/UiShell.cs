@@ -644,6 +644,20 @@ namespace DiveMap.Runtime.Ui
             Debug.Log("[UI] qcui shot -> " + prefix + "_maps.png");
             yield return new WaitForSecondsRealtime(1.5f);
 
+            // 3a) J — sign-in. Only the FIRST step is photographed: the later ones need a real
+            // OTP from a real mailbox, which no headless run can have. What this proves is that
+            // the button opens the right sheet and the sheet draws.
+            LoginSheet.Open();
+            yield return new WaitForSecondsRealtime(0.8f);
+            LoginSheet login = LoginSheet.Current;
+            Debug.Log($"[UI] qcui login open={(login != null)} step={(login != null ? login.StepName : null)} " +
+                      $"signedIn={DiveMap.Core.Account.IsSignedIn}");
+            ScreenCapture.CaptureScreenshot(prefix + "_login.png");
+            Debug.Log("[UI] qcui shot -> " + prefix + "_login.png");
+            yield return new WaitForSecondsRealtime(1.2f);
+            LoginSheet.Close();
+            yield return new WaitForSecondsRealtime(0.4f);
+
             // 3b) the "Play Game!" banner's destination — proves the banner is wired, not paint.
             OpenWorlds();
             yield return new WaitForSecondsRealtime(1.0f);
@@ -879,20 +893,20 @@ namespace DiveMap.Runtime.Ui
                 PaletteSheet.Open(_thumbs);
                 yield return new WaitForSecondsRealtime(0.6f);
                 PaletteSheet buyPal = PaletteSheet.Current;
-                Button card = null;
+                Button buyCard = null;
                 if (buyPal != null)
                 {
                     buyPal.QcShowKind(DiveMap.Core.Palette.MarineLife);
                     yield return new WaitForSecondsRealtime(0.4f);
-                    card = buyPal.QcCard(want);
-                    if (card == null)   // the cheapest animal may live under SCHOOL
+                    buyCard = buyPal.QcCard(want);
+                    if (buyCard == null)   // the cheapest animal may live under SCHOOL
                     {
                         buyPal.QcShowKind(DiveMap.Core.Palette.School);
                         yield return new WaitForSecondsRealtime(0.4f);
-                        card = buyPal.QcCard(want);
+                        buyCard = buyPal.QcCard(want);
                     }
                 }
-                if (card != null) card.onClick.Invoke();
+                if (buyCard != null) buyCard.onClick.Invoke();
                 else Debug.LogWarning("[QC] buy test — could not find the palette card to press");
 
                 yield return new WaitForSecondsRealtime(2f);
