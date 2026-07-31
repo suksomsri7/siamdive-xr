@@ -220,9 +220,13 @@ jobs:
 
           bash tools/ios_app_icon.sh branding/AppIcon1024.png "$DIR/Unity-iPhone/Images.xcassets/AppIcon.appiconset"
 
-          echo "── the two plist keys that decide whether this build is usable ──"
+          echo "── the plist keys that decide whether this build is usable ──"
           grep -A1 NSCameraUsageDescription "$DIR/Info.plist" || \
             echo "::error::NSCameraUsageDescription missing — AR would terminate the app on launch"
+          # The half of AR that fails silently: no key, no CoreMotion, and Input.gyro.attitude
+          # simply never changes. Nothing in the log says so — the model just sticks to the screen.
+          grep -A1 NSMotionUsageDescription "$DIR/Info.plist" || \
+            echo "::error::NSMotionUsageDescription missing — the phone's attitude sensor stays silent"
           # Without this the build reaches TestFlight but nobody can install it until someone
           # answers an export-compliance question by hand — a 45-minute round trip.
           grep -A1 ITSAppUsesNonExemptEncryption "$DIR/Info.plist" || \

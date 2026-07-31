@@ -31,7 +31,18 @@ namespace DiveMap.Runtime.Ui
         /// <summary>QC surface — the bar is on screen.</summary>
         public static bool IsOpen => _open != null;
 
-        private Text _minus, _plus;
+        private Text _minus, _plus, _diag;
+
+        /// <summary>
+        /// One line of live sensor readout, top-left under the exit button.
+        ///
+        /// 🔎 Temporary, and here on purpose. AR is the one feature CI cannot see: the runner has
+        /// no camera and no gyroscope, so "does the attitude sensor deliver on this phone" is a
+        /// question no test can answer and no log reaches. Two rounds were already lost today to
+        /// guessing at questions a device could have answered in one screenshot. Remove once the
+        /// sensor is confirmed on hardware.
+        /// </summary>
+        public static void SetDiagnostics(string line) => _open?.ShowDiag(line);
 
         public static void Open()
         {
@@ -64,6 +75,11 @@ namespace DiveMap.Runtime.Ui
             if (_open == this) _open = null;
         }
 
+        private void ShowDiag(string line)
+        {
+            if (_diag != null) _diag.text = line;
+        }
+
         private void Build(RectTransform root)
         {
             // ✕ ออก AR — top-left, where the tour's exit lives, so leaving is in the same place
@@ -77,6 +93,15 @@ namespace DiveMap.Runtime.Ui
             ert.pivot = new Vector2(0f, 1f);
             ert.sizeDelta = new Vector2(UiKit.Css(112f), UiKit.Css(40f));
             ert.anchoredPosition = new Vector2(UiKit.Css(12f), -UiKit.Css(12f));
+
+            _diag = UiKit.MakeLine(root, "ArDiag", "", UiKit.CssFont(11f),
+                                   TextAnchor.UpperLeft, UiKit.TextDim);
+            RectTransform drt = _diag.rectTransform;
+            drt.anchorMin = new Vector2(0f, 1f);
+            drt.anchorMax = new Vector2(0f, 1f);
+            drt.pivot = new Vector2(0f, 1f);
+            drt.sizeDelta = new Vector2(UiKit.Css(300f), UiKit.Css(34f));
+            drt.anchoredPosition = new Vector2(UiKit.Css(12f), -UiKit.Css(58f));
 
             // ── the size bar, centred at the bottom like the web's #arctl ────────
             Image bar = UiKit.MakeRounded(root, "ArCtl", UiKit.Glass, 24f);

@@ -428,6 +428,19 @@ namespace DiveMap.Runtime
                 Quaternion a = Input.gyro.attitude;
                 Quat r = GyroMath.CameraRotation(new Quat(a.x, a.y, a.z, a.w), ScreenAngle());
                 _cam.transform.rotation = new Quaternion((float)r.X, (float)r.Y, (float)r.Z, (float)r.W);
+
+                // Reported on screen because there is nowhere else to report it: no camera and no
+                // gyroscope on the runner, and no console on a TestFlight phone. If `att` never
+                // moves while the phone turns, the sensor is not delivering and the maths below it
+                // is irrelevant; if it moves and the view does not, the maths is the problem.
+                // That is one screenshot instead of a round of guessing.
+                Ui.ArControls.SetDiagnostics(
+                    $"gyro on · att {a.x:F2},{a.y:F2},{a.z:F2},{a.w:F2}\n" +
+                    $"yaw {_cam.transform.eulerAngles.y:F0}° · screen {ScreenAngle():F0}°");
+            }
+            else
+            {
+                Ui.ArControls.SetDiagnostics("gyro OFF — no sensor reported by this device");
             }
 
             FitFeed();

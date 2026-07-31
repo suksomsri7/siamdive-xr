@@ -26,8 +26,16 @@ namespace DiveMap.Runtime
         private const float Opacity = 0.11f;     // r1 used 0.30 and read as translucent solids
         private static readonly Color Tint = new Color(0.918f, 0.965f, 1f); // 0xeaf6ff
 
+        // How far below the surface a shaft reaches full strength. A shaft is light IN water, so
+        // from above the water there is nothing to see — but a hard on/off at the waterline pops
+        // as the camera bobs, so it fades across the last 1.5 m (U_PER_M = 6, builder.html:600).
+        private const float SurfaceFadeUnits = 9f;
+
         private Transform[] _beams;
+        private MeshRenderer[] _renderers;
+        private MaterialPropertyBlock _mpb;
         private Vector3 _dir;                    // sun direction, shared by every shaft
+        private float _waterLevel;
         private Camera _cam;
 
         /// <summary>
@@ -50,6 +58,8 @@ namespace DiveMap.Runtime
         {
             GodRayMath.Vec3 d = GodRayMath.SunDirection();
             _dir = new Vector3(d.X, d.Y, d.Z);
+            _waterLevel = waterLevel;
+            _mpb = new MaterialPropertyBlock();
             _cam = Camera.main;
 
             Mesh quad = BeamMesh();
@@ -61,6 +71,7 @@ namespace DiveMap.Runtime
             }
 
             _beams = new Transform[BeamCount];
+            _renderers = new MeshRenderer[BeamCount];
             // Wide and faint beats narrow and bright: a soft shaft has to be broad enough that
             // its feathered edges have room to fade.
             float baseWidth = Mathf.Clamp(spread * 0.16f, 12f, 48f);
@@ -87,6 +98,7 @@ namespace DiveMap.Runtime
                 mr.reflectionProbeUsage = UnityEngine.Rendering.ReflectionProbeUsage.Off;
 
                 _beams[i] = beam.transform;
+                _renderers[i] = mr;
             }
 
             Orient();   // face the camera before the first frame is drawn
@@ -109,6 +121,18 @@ namespace DiveMap.Runtime
             Vector3 camPos = _cam != null ? _cam.transform.position : Vector3.zero;
             float t = Time.time;
 
+            // Seen from above the water the shafts were the loudest thing on screen — hard blue
+            // blades sweeping over the surface. Two separate things were wrong and both are here:
+            //
+            //  • the camera was OUTSIDE the medium the light is travelling through. Underwater the
+            //    shaft is the scattering; from above there is nothing between eye and water to
+            //    scatter, so the quad is just a blue rectangle lying across the sea.
+            //  • the billboard turns the quad to face the camera, so looking ALONG a shaft turns
+            //    an edge-on sliver into a full-width slab — the widest, brightest thing possible
+            //    at the exact angle where a real shaft disappears. The "spin" the user saw was
+            //    this flip chasing the camera, not the ±2° sway.
+            float surfaceFade = Mathf.Clamp01((_waterLevel - camPos.y) / SurfaceFadeUnits);
+
             for (int i = 0; i < _beams.Length; i++)
             {
                 Transform b = _beams[i];
@@ -129,6 +153,24 @@ namespace DiveMap.Runtime
                     if (up.sqrMagnitude < 1e-6f) up = Vector3.Cross(dir, Vector3.forward);
                 }
                 b.rotation = Quaternion.LookRotation(dir, up);
+
+                // A shaft seen end-on has no cross-section to light up: fade with the sine of the
+                // angle between the view and the shaft, which is 1 broadside and 0 down the barrel.
+                float sqr = toCam.sqrMagnitude;
+                float along = sqr > 1e-6f ? Mathf.Abs(Vector3.Dot(toCam / Mathf.Sqrt(sqr), dir)) : 1f;
+                float alpha = Opacity * surfaceFade * (1f - along * along);
+
+                MeshRenderer mr = _renderers != null && i < _renderers.Length ? _renderers[i] : null;
+                if (mr == null) continue;
+                // Additive blending never darkens, so an invisible shaft still costs fill rate on
+                // a phone. Below a sixteenth of a level it cannot be seen — stop drawing it.
+                bool visible = alpha > 0.002f;
+                if (mr.enabled != visible) mr.enabled = visible;
+                if (!visible) continue;
+
+                var c = Tint; c.a = alpha;
+                _mpb.SetColor("_Color", c);
+                mr.SetPropertyBlock(_mpb);
             }
         }
 

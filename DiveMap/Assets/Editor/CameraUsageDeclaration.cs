@@ -90,6 +90,21 @@ namespace DiveMap.EditorTools
         public const string Reason =
             "ใช้กล้องเพื่อวางแผนที่ดำน้ำแบบ AR บนพื้นจริงตรงหน้าคุณ";
 
+        /// <summary>
+        /// The second half of AR, and the half that fails QUIETLY. iOS reads the phone's attitude
+        /// through CoreMotion, which is gated on this key — and Unity has no PlayerSettings field
+        /// for it (only camera, location and microphone exist in PlayerSettingsIOS.bindings.cs),
+        /// so nothing puts it in the plist unless it is written here.
+        ///
+        /// Without it the camera feed still works, the model still draws, the size buttons still
+        /// work — only <c>Input.gyro.attitude</c> stops changing. On device that reads as "the
+        /// model is stuck to the screen and turning the phone does nothing", which looks like a
+        /// bug in the AR maths rather than a missing string. The sibling RN app
+        /// (siamdive-rn/app.json) carries this key for exactly the same sensor.
+        /// </summary>
+        public const string MotionReason =
+            "ใช้เซนเซอร์การหมุนของเครื่อง เพื่อให้หันมือถือแล้วมองรอบแผนที่ดำน้ำแบบ AR ได้";
+
         /// <summary>Put a key/value before the root dict's closing tag.</summary>
         private static string Insert(string plist, string key, string valueXml)
         {
@@ -121,6 +136,12 @@ namespace DiveMap.EditorTools
             {
                 text = Insert(text, "NSCameraUsageDescription", "<string>" + Reason + "</string>");
                 added += "camera-usage ";
+            }
+
+            if (!text.Contains("NSMotionUsageDescription"))
+            {
+                text = Insert(text, "NSMotionUsageDescription", "<string>" + MotionReason + "</string>");
+                added += "motion-usage ";
             }
 
             // Export compliance. Without this key every upload lands in TestFlight as "Missing
