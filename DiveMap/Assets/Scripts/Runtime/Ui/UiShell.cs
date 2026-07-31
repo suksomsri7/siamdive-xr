@@ -1199,6 +1199,14 @@ namespace DiveMap.Runtime.Ui
                           $"fog={RenderSettings.fog} compass={(CompassWidget.Instance == null || !CompassWidget.Instance.IsVisible)}");
                 Debug.Log("[QC] ar NOT COVERED HERE: camera feed and gyroscope — headless has " +
                           "neither. Both need a device run; see docs/WO-AR-HOLOMAP.md.");
+
+                // How many map roots exist. Anything but 1 means a cancelled build was orphaned
+                // and a ghost map is drawing behind the real one — invisible in every other mode
+                // (it lines up exactly with the real map) and only obvious once AR hides the sea.
+                int roots = 0;
+                foreach (GameObject go in FindObjectsByType<GameObject>(FindObjectsSortMode.None))
+                    if (go.name == "Map" && go.transform.parent == null) roots++;
+                Debug.Log($"[QC] ar map roots={roots} (expected 1 — more means a leaked build)");
                 ScreenCapture.CaptureScreenshot(prefix + "_ar.png");
                 Debug.Log("[UI] qcui shot -> " + prefix + "_ar.png");
                 yield return new WaitForSecondsRealtime(1.2f);

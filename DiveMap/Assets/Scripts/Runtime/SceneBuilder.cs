@@ -169,6 +169,21 @@ namespace DiveMap.Runtime
         /// <summary>
         /// Coroutine that builds the whole scene and reports a <see cref="BuildResult"/>.
         /// </summary>
+        /// <summary>
+        /// The root of the build currently running, so a caller that cancels one can clean up
+        /// after it. Null once the build has handed its result over.
+        /// </summary>
+        public GameObject InFlightRoot { get; private set; }
+
+        /// <summary>Destroy a build that was abandoned part-way. Safe to call at any time.</summary>
+        public void DiscardInFlight()
+        {
+            if (InFlightRoot == null) return;
+            Debug.Log("[Scene] discarding a cancelled build's root — it would have kept drawing");
+            Destroy(InFlightRoot);
+            InFlightRoot = null;
+        }
+
         public IEnumerator BuildRoutine(SceneData scene, AssetManifest manifest, Action<BuildResult> onDone)
         {
             _loaded = 0;
@@ -176,6 +191,12 @@ namespace DiveMap.Runtime
             _loadState.Reset();
 
             var root = new GameObject("Map");
+            // Publish it immediately. A build is a long async job (every GLB is a download), and
+            // the caller is allowed to cancel one — StopCoroutine simply stops running the method,
+            // so without this the half-built root is orphaned in the scene FOREVER, drawing a
+            // second seabed and a second wreck behind the real ones. That is what AR uncovered:
+            // "underwaterHidden=4/4" was true of the live map while a ghost map kept painting.
+            InFlightRoot = root;
 
             SceneEnv env = scene?.Env;
 
@@ -377,6 +398,9 @@ namespace DiveMap.Runtime
             // G1 — the pins a diver left here. The scene JSON has carried them all along and
             // nothing drew them, so an annotated map looked exactly like a bare one.
             PinMarker.BuildAll(scene, root.transform);
+
+            // Handed over — it is the caller's now, so cancelling a LATER build must not destroy it.
+            InFlightRoot = null;
 
             onDone?.Invoke(new BuildResult
             {

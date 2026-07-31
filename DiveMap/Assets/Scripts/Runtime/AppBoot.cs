@@ -383,7 +383,15 @@ namespace DiveMap.Runtime
 
         private void Retry()
         {
+            // StopAllCoroutines kills whatever build was in flight, and a stopped coroutine does
+            // not clean up after itself: the "Map" root it had already created, with its seabed,
+            // its water and every item loaded so far, stays in the scene with nobody holding it.
+            // Reloading a map is exactly what the shop does after a purchase, so this leaked a
+            // whole ghost map on a path users take often — two seabeds, two wrecks, twice the
+            // draw calls, and no error anywhere. AR is what finally made it visible.
             StopAllCoroutines();
+            _rebuild = null;
+            if (_builder != null) _builder.DiscardInFlight();
             StartCoroutine(Boot());
         }
 
@@ -437,7 +445,15 @@ namespace DiveMap.Runtime
         public void RebuildFromMemory()
         {
             if (CurrentScene == null) { Retry(); return; }
-            if (_rebuild != null) StopCoroutine(_rebuild);
+            if (_rebuild != null)
+            {
+                // Stopping a coroutine does not undo what it has already done. The build it was
+                // running had already created its "Map" root and hung a seabed, a water disc and
+                // every loaded item off it — all of which would keep rendering behind the new map
+                // with nobody holding a reference to them.
+                StopCoroutine(_rebuild);
+                if (_builder != null) _builder.DiscardInFlight();
+            }
             _rebuild = StartCoroutine(RebuildRoutine());
         }
         private Coroutine _rebuild;
