@@ -123,6 +123,7 @@ namespace DiveMap.Runtime.Ui
             _areaLabel = AddStepper("Area", y, rowH, () => StepArea(-0.1f), () => StepArea(0.1f));
             y += rowH + gap * 2f;
 
+            AddRow("Cover", y, rowH, CaptureCover, UiStrings.Tr("ตั้งรูปหน้าปก")); y += rowH + gap;
             _clearLabel = AddRow("Clear", y, rowH, ClearAll, UiStrings.Tr("ล้างทั้งหมด"), DangerFg);
             y += rowH;
 
@@ -357,6 +358,18 @@ namespace DiveMap.Runtime.Ui
             MapEditor.MarkSculpted();
             SeabedSculptor.Redraw();
             Refresh();
+        }
+
+        /// <summary>
+        /// Photograph the map as it looks right now and make that its cover. The sheet closes
+        /// first: a cover with this panel across it would be worse than no cover at all.
+        /// </summary>
+        private void CaptureCover()
+        {
+            var runner = FindFirstObjectByType<AppBoot>();
+            if (runner == null) return;
+            Close();
+            runner.StartCoroutine(ThumbnailCapture.CaptureAndSave(_ => { }));
         }
 
         /// <summary>Two taps — this empties the whole map.</summary>

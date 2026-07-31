@@ -105,6 +105,17 @@ namespace DiveMap.Runtime
             yield return Patch(shortId, body, -1, onDone);
         }
 
+        /// <summary>
+        /// Set the map's cover image. <paramref name="thumbUrl"/> must already be a CDN url from
+        /// the media route — the PATCH stores the string as given, so anything else would put a
+        /// dead link on every card in the hub.
+        /// </summary>
+        public static IEnumerator SetThumbnail(string shortId, string thumbUrl, Action<Result> onDone)
+        {
+            var body = new JObject { ["thumbUrl"] = thumbUrl };
+            yield return Patch(shortId, body, -1, onDone);
+        }
+
         /// <summary>Create an empty map. <paramref name="onDone"/> gets its shortId, or null.</summary>
         public static IEnumerator Create(string name, Action<string, string> onDone)
         {

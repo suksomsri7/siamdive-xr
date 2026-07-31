@@ -179,6 +179,9 @@ namespace DiveMap.Core
                 { "เพิ่มรูป",               "Add a photo" },
                 { "เพิ่มรูปแล้ว",            "Photo added" },
                 { "อัปโหลดไม่สำเร็จ",        "Upload failed" },
+                { "ตั้งรูปหน้าปกแล้ว",        "Cover photo set" },
+                { "กำลังบันทึก…",           "Saving…" },
+                { "ตั้งรูปหน้าปก",           "Set cover photo" },
 
                 // account (J) — wording taken from the RN app's mapI18n.ts
                 { "เข้าสู่ระบบ / สมัครสมาชิก", "Sign in / Sign up" },

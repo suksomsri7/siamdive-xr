@@ -430,8 +430,22 @@ namespace DiveMap.Runtime.Ui
             OpenMapList();
         }
 
+        /// <summary>
+        /// The web's <c>leaveModal</c>: never walk away from unsaved work in silence. Autosave
+        /// usually has it already — this covers the gap between the last edit and the 1.3 s tick,
+        /// and tells the player plainly when the map is one it cannot save to.
+        /// </summary>
+        private void GuardUnsaved()
+        {
+            if (!MapEditor.IsDirty) return;
+            if (MapEditor.SaveRefused) { Toast.ShowTr("แมพนี้แก้ไม่ได้ — เก็บไว้ในเครื่องนี้แทน"); return; }
+            MapEditor.Flush();
+            Toast.ShowTr("กำลังบันทึก…");
+        }
+
         public void OpenMapList()
         {
+            GuardUnsaved();
             CloseActions();   // opening a screen collapses the column (and keeps QC shots clean)
             if (_nav == null || _mapsLayer == null) return;
             _nav.Push("maps", _mapsLayer);
@@ -986,6 +1000,14 @@ namespace DiveMap.Runtime.Ui
                     Debug.Log("[UI] qcui shot -> " + prefix + "_pin.png");
                     yield return new WaitForSecondsRealtime(1.0f);
                     PinPlacer.Remove(pinId);
+                    yield return new WaitForSecondsRealtime(0.6f);
+
+                    // 6.945) J3 — the map cover. Runs the WHOLE path (capture → upload → PATCH),
+                    // because the interesting failures are all at the seams: chrome left in the
+                    // frame, a half-read framebuffer, a url the PATCH rejects.
+                    string cover = null;
+                    yield return ThumbnailCapture.CaptureAndSave(u => cover = u);
+                    Debug.Log($"[QC] cover url={cover ?? "(none)"}");
                     yield return new WaitForSecondsRealtime(0.6f);
 
                     // 6.95) map settings — the sheet that carries name / public / search /

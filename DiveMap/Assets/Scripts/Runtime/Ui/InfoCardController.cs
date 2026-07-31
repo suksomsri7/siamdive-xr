@@ -47,6 +47,7 @@ namespace DiveMap.Runtime.Ui
         private Button _closeButton;
         private Button _editButton;
         private string _openId;
+        private UnityEngine.UI.RawImage _thumb;
         private UiNav _nav;
 
         private AssetManifest _manifest;
@@ -129,6 +130,17 @@ namespace DiveMap.Runtime.Ui
                          new Vector2(UiKit.Css(30f), UiKit.Css(30f)),
                          new Vector2(-UiKit.Css(46f), 0f));
             _editButton.gameObject.SetActive(false);
+
+            // The web's card carries a picture; so does this one now that the palette proved the
+            // server renders one per asset (models/thumbs/<id>.png). Same cache as everywhere else.
+            _thumb = UiKit.MakeRaw(rt, "Thumb", new Color(1f, 1f, 1f, 0f));
+            RectTransform thrt = _thumb.rectTransform;
+            thrt.anchorMin = new Vector2(0f, 0.5f);
+            thrt.anchorMax = new Vector2(0f, 0.5f);
+            thrt.pivot = new Vector2(0f, 0.5f);
+            thrt.sizeDelta = new Vector2(UiKit.Css(44f), UiKit.Css(44f));
+            thrt.anchoredPosition = new Vector2(UiKit.Css(10f), 0f);
+            _thumb.gameObject.SetActive(false);
 
             _layer.gameObject.SetActive(false);
             StartCoroutine(LoadManifest());
@@ -343,6 +355,27 @@ namespace DiveMap.Runtime.Ui
 
             Debug.Log($"[UI] card name={_openName} kind={_openKindKey} depth={_openDepth:F1} " +
                       $"asset={assetId} id={id}");
+
+            // Cover image for the tapped object, if the server rendered one.
+            if (_thumb != null)
+            {
+                _thumb.gameObject.SetActive(false);
+                _thumb.texture = null;
+                _thumb.color = new Color(1f, 1f, 1f, 0f);
+                string thumbUrl = Palette.ThumbUrl(assetId, module != null, MapApiClient.DefaultBaseUrl);
+                ThumbnailCache cache = UiShell.Instance != null ? UiShell.Instance.Thumbs : null;
+                if (cache != null && !string.IsNullOrEmpty(thumbUrl))
+                {
+                    RawImage target = _thumb;
+                    cache.Request(thumbUrl, tex =>
+                    {
+                        if (target == null || tex == null) return;
+                        target.texture = tex;
+                        target.color = Color.white;
+                        target.gameObject.SetActive(true);
+                    });
+                }
+            }
 
             // Editable maps get the ✎ button; everyone else just reads the card.
             var boot = FindFirstObjectByType<AppBoot>();
