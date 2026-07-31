@@ -148,6 +148,16 @@ namespace DiveMap.Runtime
 
             _orbit = _cam.GetComponent<OrbitCamera>();
             _orbitWas = _orbit != null && _orbit.enabled;
+            if (_orbit != null)
+            {
+                // Borrow these HERE, with everything else. Reading them later looked equivalent
+                // and was not: ApplyPlacement() runs first and already writes `distance`, so the
+                // backup taken after it stored the AR distance and "restoring" it was a no-op.
+                // CI said `[QC] ar restored … pos=False` twice before this moved.
+                _orbitTarget = _orbit.target;
+                _orbitDistance = _orbit.distance;
+                _orbitMin = _orbit.minDistance;
+            }
 
             HideUnderwaterWorld();
 
@@ -170,9 +180,6 @@ namespace DiveMap.Runtime
             }
             else if (_orbit != null)
             {
-                _orbitTarget = _orbit.target;
-                _orbitDistance = _orbit.distance;
-                _orbitMin = _orbit.minDistance;
                 _orbit.enabled = true;
                 _orbit.target = _center;
                 _orbit.minDistance = 0.05f;
@@ -200,14 +207,20 @@ namespace DiveMap.Runtime
             GameObject root = GameObject.Find("Map");
             if (root != null)
             {
+                var missing = new System.Collections.Generic.List<string>();
                 foreach (string name in UnderwaterParts)
                 {
                     Transform t = root.transform.Find(name);
-                    if (t == null) continue;
+                    if (t == null) { missing.Add(name); continue; }
                     _hidden.Add(t.gameObject);
                     _hiddenWas.Add(t.gameObject.activeSelf);
                     t.gameObject.SetActive(false);
                 }
+                // Naming what was NOT found is the point: a count alone ("3 of 4") leaves the
+                // next person to work out which piece is still drawing over the room.
+                if (missing.Count > 0)
+                    Debug.Log("[AR] no such map part: " + string.Join(", ", missing) +
+                              " — nothing to hide, which is fine if this map has none");
             }
 
             _backdrop = _cam.GetComponent<Backdrop>();

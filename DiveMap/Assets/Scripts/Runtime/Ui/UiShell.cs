@@ -739,6 +739,14 @@ namespace DiveMap.Runtime.Ui
             return n;
         }
 
+        /// <summary>How many of the named parts this map actually has (QC only).</summary>
+        private static int ArPartsPresent(Transform map, string[] names)
+        {
+            int n = 0;
+            foreach (string s in names) if (map != null && map.Find(s) != null) n++;
+            return n;
+        }
+
         /// <summary>How many parts came back exactly as they were found (QC only).</summary>
         private static int ArPartsMatch(Transform map, string[] names, System.Collections.Generic.List<bool> was)
         {
@@ -1183,7 +1191,8 @@ namespace DiveMap.Runtime.Ui
                 Debug.Log($"[QC] ar entered={entered} mode={ModeManager.Current} " +
                           $"controls={ArControls.IsOpen} chrome={ModeRules.AllowsMenu(ModeManager.Current)} " +
                           $"fit={fit:F5} (1 world unit reads as {apparent * 100:F2} cm) " +
-                          $"underwaterHidden={ArPartsHidden(arMap, arParts)}/{arParts.Length} " +
+                          $"underwaterHidden={ArPartsHidden(arMap, arParts)}/{ArPartsPresent(arMap, arParts)} " +
+                          $"(of {arParts.Length} looked for; see [AR] for any this map lacks) " +
                           $"fog={RenderSettings.fog} compass={(CompassWidget.Instance == null || !CompassWidget.Instance.IsVisible)}");
                 Debug.Log("[QC] ar NOT COVERED HERE: camera feed and gyroscope — headless has " +
                           "neither. Both need a device run; see docs/WO-AR-HOLOMAP.md.");
