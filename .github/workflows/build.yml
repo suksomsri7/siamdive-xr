@@ -17,7 +17,11 @@ on:
         default: false
 
 concurrency:
-  group: divemap-ci-${{ github.ref }}
+  # Split by EVENT, not just by ref. With one group per ref, pushing anything — a doc, a fix for
+  # the next round — cancelled a TestFlight build already 15 minutes into IL2CPP, and the run
+  # simply reads "cancelled" with no hint that a push did it. Pushes still cancel each other
+  # (only the newest commit is worth testing); a hand-fired build now runs to the end.
+  group: divemap-ci-${{ github.ref }}-${{ github.event_name }}
   cancel-in-progress: true
 
 permissions:
