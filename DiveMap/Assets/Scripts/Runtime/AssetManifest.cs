@@ -25,6 +25,12 @@ namespace DiveMap.Runtime
 
         public int Count => _byId.Count;
 
+        /// <summary>
+        /// Every module, for callers that browse the registry rather than resolve one id —
+        /// the palette groups the whole thing into its display categories.
+        /// </summary>
+        public IEnumerable<Module> All => _byId.Values;
+
         public sealed class Module
         {
             public string Id;

@@ -155,8 +155,12 @@ namespace DiveMap.Runtime.Ui
             // The web puts #_shopBtn at right 10 / top 82, but that is its BUILDER chrome; here
             // the same rail already carries the camera at top 104, and a shop button overlapping
             // the shutter is worse than one slot lower. Mirrors the radar on the left rail.
+            // The cart opens the PALETTE, not the openShop() list: on the web the palette is
+            // where a player buys (placing an object deducts the coins), and the plain list is a
+            // secondary path. Porting the list first was the mistake §4.97 records.
             RoundButton(root, "TourShop", "cart", Chrome, 56f, 2.5f, new Vector2(1f, 1f),
-                        new Vector2(-UiKit.Css(14f), -UiKit.Css(174f)), ShopSheet.Open);
+                        new Vector2(-UiKit.Css(14f), -UiKit.Css(174f)),
+                        () => PaletteSheet.Open(UiShell.Instance != null ? UiShell.Instance.Thumbs : null));
 
             // ── minimap: bottom 16, centred, 118 px ─────────────────────────────
             Image mini = UiKit.MakeCircle(root, "Minimap", Chrome);

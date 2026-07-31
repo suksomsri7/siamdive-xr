@@ -1,6 +1,5 @@
 using System.Collections.Generic;
 using DiveMap.Core;
-using Newtonsoft.Json.Linq;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -224,63 +223,16 @@ namespace DiveMap.Runtime.Ui
             }
         }
 
+        /// <summary>
+        /// The secondary buy path (the web's <c>openShop()</c> list). It deliberately owns no
+        /// transaction logic of its own — spend, store and rebuild all live in
+        /// <see cref="PlaceItem"/>, shared with the palette, so the two doors can never disagree
+        /// about what an animal costs or where it lands.
+        /// </summary>
         private void TryBuy(string id)
         {
-            int before = TrashGameSystem.Coins;
-            int after = Shop.Buy(before, id, out bool bought);
-            if (!bought)
-            {
-                Shake(id);
-                Toast.ShowTr("เหรียญไม่พอ");
-                return;
-            }
-
-            TrashGameSystem.Coins = after;
-            WalletClient.Spend(before - after);   // queued, debounced, re-queued on failure
-            CoinCounter.Show(after);
-            AudioBank.PlaySfx("coin");
-            Debug.Log($"[Shop] bought {id} for {before - after} → coins={after}");
-
-            Release(id);
-            Refresh();
-        }
-
-        /// <summary>
-        /// Put the purchase in the water: record it against this map, then rebuild the map so it
-        /// is built by the same pipeline as every other item. The rebuild costs a few seconds and
-        /// drops the player out of the tour, which is why the toast says so plainly rather than
-        /// letting the screen go quiet on them.
-        /// </summary>
-        private static void Release(string assetId)
-        {
-            var boot = FindFirstObjectByType<AppBoot>();
-            if (boot == null)
-            {
-                Toast.ShowTr("ซื้อแล้ว");
-                Debug.LogWarning("[Shop] no AppBoot — the purchase is stored but cannot be placed now");
-                return;
-            }
-
-            Camera cam = Camera.main;
-            Vector3 at = cam != null ? cam.transform.position : Vector3.zero;
-            float yaw = cam != null
-                ? Mathf.Atan2(cam.transform.forward.z, cam.transform.forward.x)
-                : 0f;
-
-            ShopStock.DropPoint(at.x, at.y, at.z, yaw, ShopStock.DropDistance,
-                                out double x, out double y, out double z);
-
-            // A stamp rather than a counter: two purchases in the same second must still get
-            // different ids, or Inject's duplicate guard would drop the second one.
-            long stamp = System.DateTime.UtcNow.Ticks;
-            JObject item = ShopStock.MakeItem(assetId, x, y, z, yaw, 1.0, stamp);
-            ShopStock.Add(boot.CurrentMapId, item);
-            Debug.Log($"[Shop] released {assetId} at ({x:F0},{y:F0},{z:F0}) on map {boot.CurrentMapId}");
-
-            Close();
-            Toast.ShowTr("ปล่อยลงแมพแล้ว — กำลังโหลดใหม่");
-            if (ModeManager.Instance != null) ModeManager.Instance.Exit();
-            boot.ReloadCurrentMap();
+            if (PlaceItem.TryPlace(id)) Close();
+            else { Shake(id); Refresh(); }
         }
 
         /// <summary>The web's ±4 px, 180 ms shake on a row you cannot afford.</summary>

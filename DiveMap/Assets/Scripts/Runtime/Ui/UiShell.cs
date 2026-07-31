@@ -34,6 +34,13 @@ namespace DiveMap.Runtime.Ui
         /// </summary>
         public RectTransform OverlayRoot => _safe;
 
+        /// <summary>
+        /// The shared image cache. The palette pulls the server's pre-rendered item thumbnails
+        /// through the same queue as the map hub's cards — one cap on concurrent downloads for
+        /// the whole app rather than one per screen.
+        /// </summary>
+        public ThumbnailCache Thumbs => _thumbs;
+
         private Canvas _canvas;
         private RectTransform _safe;
         private UiNav _nav;
@@ -779,7 +786,40 @@ namespace DiveMap.Runtime.Ui
                 }
                 else Debug.LogWarning("[UI] qcui could not find a scad shoal to charge");
 
-                // 6.9) E5 — the shop sheet, over the tour where a player actually meets it.
+                // 6.9) E5 — the PALETTE, which is the shop a player actually meets (placing is
+                // buying). Thumbnails come off the CDN, so wait for a few before the shot or the
+                // grid photographs as a wall of fallback glyphs.
+                PaletteSheet.Open(_thumbs);
+                float tp = Time.realtimeSinceStartup;
+                while (Time.realtimeSinceStartup - tp < 8f)
+                {
+                    if (PaletteSheet.Current != null && _thumbs != null &&
+                        _thumbs.LoadedCount >= 8) break;
+                    yield return new WaitForSecondsRealtime(0.25f);
+                }
+                PaletteSheet pal = PaletteSheet.Current;
+                Debug.Log($"[UI] qcui palette open={(pal != null)} chips={(pal != null ? pal.ChipCount : -1)} " +
+                          $"cards={(pal != null ? pal.CardCount : -1)} kind={(pal != null ? pal.CurrentKind : null)} " +
+                          $"thumbs={(_thumbs != null ? _thumbs.LoadedCount : -1)}");
+                ScreenCapture.CaptureScreenshot(prefix + "_palette.png");
+                Debug.Log("[UI] qcui shot -> " + prefix + "_palette.png");
+                yield return new WaitForSecondsRealtime(1.2f);
+
+                // …and the paid tab, where the 🪙 price badges live.
+                if (pal != null)
+                {
+                    pal.QcShowKind(DiveMap.Core.Palette.MarineLife);
+                    yield return new WaitForSecondsRealtime(2.5f);
+                    Debug.Log($"[UI] qcui palette animals cards={pal.CardCount} " +
+                              $"thumbs={(_thumbs != null ? _thumbs.LoadedCount : -1)}");
+                    ScreenCapture.CaptureScreenshot(prefix + "_palette_buy.png");
+                    Debug.Log("[UI] qcui shot -> " + prefix + "_palette_buy.png");
+                    yield return new WaitForSecondsRealtime(1.2f);
+                }
+                PaletteSheet.Close();
+                yield return new WaitForSecondsRealtime(0.4f);
+
+                // The older openShop() list is still reachable and still has to work.
                 ShopSheet.Open();
                 yield return new WaitForSecondsRealtime(0.8f);
                 ScreenCapture.CaptureScreenshot(prefix + "_shop.png");
@@ -833,13 +873,27 @@ namespace DiveMap.Runtime.Ui
                 Debug.Log($"[QC] buy test map={mapId} item={want} price={price} " +
                           $"coins={before} stock={stockBefore}");
 
-                ShopSheet.Open();
+                // Buy through the PALETTE — that is the door a player uses, so that is the door
+                // the money path has to be proven through. Pressing the card rather than calling
+                // the method keeps the button wiring inside the test.
+                PaletteSheet.Open(_thumbs);
                 yield return new WaitForSecondsRealtime(0.6f);
-                // Press the row itself rather than calling the internal method, so the button
-                // wiring is part of what is tested.
-                Button row = FindRowButton(want);
-                if (row != null) row.onClick.Invoke();
-                else Debug.LogWarning("[QC] buy test — could not find the shop row to press");
+                PaletteSheet buyPal = PaletteSheet.Current;
+                Button card = null;
+                if (buyPal != null)
+                {
+                    buyPal.QcShowKind(DiveMap.Core.Palette.MarineLife);
+                    yield return new WaitForSecondsRealtime(0.4f);
+                    card = buyPal.QcCard(want);
+                    if (card == null)   // the cheapest animal may live under SCHOOL
+                    {
+                        buyPal.QcShowKind(DiveMap.Core.Palette.School);
+                        yield return new WaitForSecondsRealtime(0.4f);
+                        card = buyPal.QcCard(want);
+                    }
+                }
+                if (card != null) card.onClick.Invoke();
+                else Debug.LogWarning("[QC] buy test — could not find the palette card to press");
 
                 yield return new WaitForSecondsRealtime(2f);
                 int after = TrashGameSystem.Coins;
@@ -864,32 +918,6 @@ namespace DiveMap.Runtime.Ui
             yield return new WaitForSecondsRealtime(1f);
             Debug.Log("[UI] qcui done");
             Application.Quit(0);
-        }
-
-        /// <summary>QC helper — the shop row that sells <paramref name="assetId"/>.</summary>
-        private static Button FindRowButton(string assetId)
-        {
-            // BOTH layers, not the first non-null one: the tour layer exists even when the shop
-            // was opened over the map, so "?? view" silently searched the wrong tree and the QC
-            // buy test reported "could not find the shop row" on a shop that was on screen.
-            Transform sheet = null;
-            foreach (AppMode m in new[] { ModeManager.Current, AppMode.Tour, AppMode.View })
-            {
-                RectTransform l = HudLayer.For(m);
-                if (l == null) continue;
-                sheet = FindDeep(l, "ShopSheet");
-                if (sheet != null) break;
-            }
-            if (sheet == null) return null;
-            // IReadOnlyList has no IndexOf.
-            int index = -1;
-            var cat = DiveMap.Core.Shop.Catalogue;
-            for (int i = 0; i < cat.Count; i++)
-                if (cat[i] == assetId) { index = i; break; }
-            if (index < 0) return null;
-
-            Transform row = FindDeep(sheet, "Row" + index);
-            return row != null ? row.GetComponent<Button>() : null;
         }
 
         private static Transform FindDeep(Transform where, string name)

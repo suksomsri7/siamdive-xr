@@ -207,6 +207,9 @@ namespace DiveMap.Runtime
             yield return AssetManifest.Load(m => manifest = m, e => manifestErr = e);
             if (manifestErr != null)
                 Debug.LogWarning("[AppBoot] manifest: " + manifestErr);
+            // The palette browses the same registry the scene builder resolves ids against —
+            // one load, one list, so the shop can never offer something the map cannot build.
+            if (manifest != null) Manifest = manifest;
 
             // Scene from production API (fatal on failure → retry).
             SceneData scene = null;
@@ -355,6 +358,13 @@ namespace DiveMap.Runtime
 
         /// <summary>The map on screen right now (E5 stores purchases against it).</summary>
         public string CurrentMapId => _shortId;
+
+        /// <summary>
+        /// The asset registry, once the boot sequence has read it. Static because the palette
+        /// outlives any one map load and must not re-download StreamingAssets to draw a grid.
+        /// Null until the first load finishes.
+        /// </summary>
+        public static AssetManifest Manifest { get; private set; }
 
         /// <summary>
         /// E5 — rebuild the map that is already open. Used after a purchase: the animal has been

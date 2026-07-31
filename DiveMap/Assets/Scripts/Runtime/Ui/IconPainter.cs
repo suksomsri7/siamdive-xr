@@ -152,6 +152,73 @@ namespace DiveMap.Runtime.Ui
                     strokes.Add(new[] { P(3.5f, 17.5f), P(12f, 21.5f), P(20.5f, 17.5f) });
                     break;
 
+                // ── palette chips — the web's emoji, drawn (NotoSansThai has no emoji) ──
+
+                case "rock":     // 🪨 — a faceted boulder
+                    strokes.Add(new[] { P(3.2f, 19f), P(5.4f, 11.4f), P(9.6f, 6.6f), P(15.4f, 7.4f),
+                                        P(20.4f, 13.2f), P(20.8f, 19f), P(3.2f, 19f) });
+                    strokes.Add(new[] { P(9.6f, 6.6f), P(11.2f, 13f), P(20.4f, 13.2f) });
+                    strokes.Add(new[] { P(11.2f, 13f), P(8.4f, 19f) });
+                    break;
+
+                case "coral":    // 🪸 — a branching stand
+                    strokes.Add(new[] { P(12f, 21f), P(12f, 12.4f) });
+                    strokes.Add(new[] { P(12f, 15.4f), P(7.6f, 11.2f), P(7.2f, 6.8f) });
+                    strokes.Add(new[] { P(12f, 13.6f), P(16.4f, 10.4f), P(17f, 6.2f) });
+                    strokes.Add(new[] { P(12f, 12.4f), P(12f, 5.4f) });
+                    strokes.Add(new[] { P(9.6f, 12.6f), P(9.2f, 9.2f) });
+                    strokes.Add(new[] { P(14.4f, 14.2f), P(14.6f, 11f) });
+                    break;
+
+                case "boat":     // ⛵ — hull, mast, sail
+                    strokes.Add(new[] { P(3.4f, 15.6f), P(20.6f, 15.6f), P(17.4f, 20f), P(6.6f, 20f), P(3.4f, 15.6f) });
+                    strokes.Add(Line(12, 15.6f, 12, 3.4f));
+                    fills.Add(new[] { P(12.9f, 4.6f), P(19.4f, 14f), P(12.9f, 14f) });
+                    break;
+
+                case "turtle":   // 🐢 — shell, head, four flippers
+                    strokes.Add(Circle(12f, 12.6f, 5.2f));
+                    strokes.Add(Circle(12f, 12.6f, 2.4f));
+                    strokes.Add(Circle(19.4f, 10.4f, 1.9f));                    // head
+                    strokes.Add(new[] { P(7.6f, 8.4f), P(5f, 5.8f) });
+                    strokes.Add(new[] { P(16.4f, 8.4f), P(19f, 5.8f) });
+                    strokes.Add(new[] { P(7.6f, 16.8f), P(5f, 19.4f) });
+                    strokes.Add(new[] { P(16.4f, 16.8f), P(19f, 19.4f) });
+                    break;
+
+                case "fish":     // 🐟 — body, tail, eye
+                    strokes.Add(new[] { P(16.6f, 12f), P(13f, 7.4f), P(7.2f, 7.6f), P(3.6f, 12f),
+                                        P(7.2f, 16.4f), P(13f, 16.6f), P(16.6f, 12f) });
+                    strokes.Add(new[] { P(16.6f, 12f), P(21f, 8.2f), P(21f, 15.8f), P(16.6f, 12f) });
+                    fills.Add(Dot(8.2f, 10.6f, 1.05f));
+                    break;
+
+                case "moai":     // 🗿 — the artificial-reef statue head
+                    strokes.Add(new[] { P(7.6f, 21f), P(7.6f, 8.6f), P(9.2f, 4.2f), P(14.8f, 4.2f),
+                                        P(16.4f, 8.6f), P(16.4f, 21f), P(7.6f, 21f) });
+                    strokes.Add(new[] { P(8.2f, 10.2f), P(15.8f, 10.2f) });      // brow
+                    strokes.Add(new[] { P(12f, 11.4f), P(12f, 15.4f) });         // nose
+                    strokes.Add(new[] { P(10f, 17.6f), P(14f, 17.6f) });         // mouth
+                    break;
+
+                case "sparkle":  // ✨ — the web's "Special" chip: one big four-point star + one small
+                    fills.Add(Star(10f, 10.4f, 7.2f, 2.3f));
+                    fills.Add(Star(17.6f, 17.4f, 4.2f, 1.35f));
+                    break;
+
+                case "pin":      // 📍 — teardrop map pin
+                    strokes.Add(new[] { P(12f, 21.4f), P(6.2f, 12.4f) });
+                    strokes.Add(Arc(12f, 8.8f, 5.2f, 133f, 407f));
+                    strokes.Add(new[] { P(17.8f, 12.4f), P(12f, 21.4f) });
+                    strokes.Add(Circle(12f, 8.8f, 2.1f));
+                    break;
+
+                case "mountain": // 🏔️ — "sculpt floor"
+                    strokes.Add(new[] { P(2.4f, 19.4f), P(9f, 8.2f), P(13.2f, 14.4f),
+                                        P(15.6f, 11f), P(21.6f, 19.4f), P(2.4f, 19.4f) });
+                    strokes.Add(new[] { P(7.2f, 11.2f), P(9f, 12.4f), P(10.8f, 11.2f) });   // snow line
+                    break;
+
                 // ── map hub (RN Ionicons: search / add / heart / ellipsis / person / image) ──
 
                 case "search": // Ionicons "search" — lens + handle
@@ -252,6 +319,23 @@ namespace DiveMap.Runtime.Ui
             Cubic(pts, P(16.1f, 3.5f), P(18.8f, 3.5f), P(21.2f, 5.6f), P(21.2f, 8.6f));
             Cubic(pts, P(21.2f, 8.6f), P(21.2f, 12f), P(18.5f, 15.5f), P(12f, 20.8f));
             return pts.ToArray();
+        }
+
+        /// <summary>
+        /// Four-point sparkle: long points on the axes, short ones on the diagonals — the shape
+        /// the ✨ glyph reads as at chip size. Closed, so it can be filled.
+        /// </summary>
+        private static Vector2[] Star(float cx, float cy, float outer, float inner)
+        {
+            var pts = new Vector2[9];
+            for (int i = 0; i < 8; i++)
+            {
+                float a = Mathf.PI * 0.25f * i;
+                float r = (i % 2 == 0) ? outer : inner;
+                pts[i] = new Vector2(cx + Mathf.Cos(a) * r, cy + Mathf.Sin(a) * r);
+            }
+            pts[8] = pts[0];
+            return pts;
         }
 
         /// <summary>Append a sampled cubic Bézier, skipping the start point after the first call.</summary>
