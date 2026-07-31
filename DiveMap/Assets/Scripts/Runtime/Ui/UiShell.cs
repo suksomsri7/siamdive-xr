@@ -260,6 +260,15 @@ namespace DiveMap.Runtime.Ui
                 RevisionSheet.Open();
             });
 
+            // ⚙️ map settings — name, public/private, search listing, editors, water, area, clear
+            ActionButton(9, "sliders", () =>
+            {
+                var boot = FindFirstObjectByType<AppBoot>();
+                if (boot == null || !boot.CanEditCurrent) { Toast.ShowTr("แมพนี้แก้ไม่ได้"); return; }
+                CloseActions();
+                MapSettingsSheet.Open();
+            });
+
             // 🪢 tie a rope between two objects
             ActionButton(8, "rope", () =>
             {
@@ -947,6 +956,18 @@ namespace DiveMap.Runtime.Ui
                     Debug.Log("[UI] qcui shot -> " + prefix + "_ropepanel.png");
                     yield return new WaitForSecondsRealtime(1.0f);
                     RopeSheet.Close();
+                    yield return new WaitForSecondsRealtime(0.4f);
+
+                    // 6.95) map settings — the sheet that carries name / public / search /
+                    // editors / water / area / clear.
+                    MapSettingsSheet.Open();
+                    yield return new WaitForSecondsRealtime(1.0f);
+                    Debug.Log($"[QC] map settings open={MapSettingsSheet.IsOpen} " +
+                              $"public={(MapSettingsSheet.Current != null && MapSettingsSheet.Current.PublicToggle)}");
+                    ScreenCapture.CaptureScreenshot(prefix + "_mapsettings.png");
+                    Debug.Log("[UI] qcui shot -> " + prefix + "_mapsettings.png");
+                    yield return new WaitForSecondsRealtime(1.2f);
+                    MapSettingsSheet.Close();
                     yield return new WaitForSecondsRealtime(0.4f);
 
                     RopeSystem.DetachFrom((string)its[0]["id"]);

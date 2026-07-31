@@ -154,6 +154,23 @@ namespace DiveMap.Core
                 { "ต้องเป็นคนละชิ้น",         "Pick two different objects" },
                 { "เชื่อมเชือกแล้ว",          "Rope tied" },
                 { "ผูกเชือกไม่สำเร็จ",        "Could not tie the rope" },
+                // map settings (J2/J6 + I12/I14)
+                { "ตั้งค่าแมพ",             "Map settings" },
+                { "ชื่อแมพ",               "Map name" },
+                { "สาธารณะ",              "Public" },
+                { "ส่วนตัว",               "Private" },
+                { "สาธารณะ = ใครเปิดก็แก้แมพนี้ได้ ไม่ใช่แค่ดู",
+                  "Public means anyone who opens it can EDIT it, not just view it" },
+                { "แสดงในการค้นหา",         "Listed in search" },
+                { "ไม่แสดงในการค้นหา",       "Hidden from search" },
+                { "ให้สิทธิ์แก้ไขทางอีเมล",     "Let specific emails edit" },
+                { "ระดับน้ำ",              "Water level" },
+                { "ขนาดพื้นที่",            "Area size" },
+                { "เปิดสาธารณะแล้ว",         "Now public" },
+                { "เป็นส่วนตัวแล้ว",         "Now private" },
+                { "บันทึกสิทธิ์แล้ว",         "Permissions saved" },
+                { "เฉพาะเจ้าของแมพเท่านั้น",   "Only the map owner can do that" },
+                { "บันทึกไม่สำเร็จ",         "Could not save" },
 
                 // account (J) — wording taken from the RN app's mapI18n.ts
                 { "เข้าสู่ระบบ / สมัครสมาชิก", "Sign in / Sign up" },

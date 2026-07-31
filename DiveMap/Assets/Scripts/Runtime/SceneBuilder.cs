@@ -890,6 +890,26 @@ namespace DiveMap.Runtime
                                   _sbThickness, out _);
         }
 
+        /// <summary>
+        /// Change the seabed's footprint / tilt / thickness (the web's <c>applyArea</c>). The
+        /// caller re-meshes afterwards; these are the same numbers <c>env</c> stores, so the
+        /// values here and the values saved cannot drift apart.
+        /// </summary>
+        public void SetSeabedShape(float sx, float sz, float slopeX, float slopeZ, float thickness)
+        {
+            _sbSx = sx; _sbSz = sz;
+            _sbSlopeX = slopeX; _sbSlopeZ = slopeZ;
+            _sbThickness = thickness;
+        }
+
+        public void GetSeabedShape(out float sx, out float sz, out float slopeX, out float slopeZ,
+                                   out float thickness)
+        {
+            sx = _sbSx; sz = _sbSz;
+            slopeX = _sbSlopeX; slopeZ = _sbSlopeZ;
+            thickness = _sbThickness;
+        }
+
         private static Mesh BuildPolarGrid(int rings, int seg, float sx, float sz,
                                            float slopeX, float slopeZ, float[] sculpt, float thickness,
                                            out Mesh topSurface)

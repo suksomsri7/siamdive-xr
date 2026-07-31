@@ -220,6 +220,15 @@ namespace DiveMap.Runtime.Ui
                     strokes.Add(Circle(19.6f, 5.2f, 1.8f));
                     break;
 
+                case "sliders":  // ⚙️ map settings — three sliders with their handles
+                    strokes.Add(Line(4, 7, 20, 7));
+                    strokes.Add(Line(4, 12, 20, 12));
+                    strokes.Add(Line(4, 17, 20, 17));
+                    fills.Add(Dot(9f, 7f, 2.2f));
+                    fills.Add(Dot(15.5f, 12f, 2.2f));
+                    fills.Add(Dot(7.5f, 17f, 2.2f));
+                    break;
+
                 case "check":    // ✓
                     strokes.Add(new[] { P(4.6f, 12.6f), P(9.8f, 18f), P(19.6f, 6.4f) });
                     break;
