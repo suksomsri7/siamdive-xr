@@ -777,7 +777,12 @@ namespace DiveMap.Runtime
                 seg = Mathf.Clamp(dim[1], 3, 256);
             }
 
+            // Most maps have never been sculpted, so env.sculpt is absent and ReadSculpt gives
+            // null. Allocating the grid ANYWAY (all zeros — the same flat floor) is what makes
+            // the brush able to work at all: the QC run showed samples=0 and every stroke was a
+            // no-op on an array with nothing in it.
             float[] sculpt = ReadSculpt(env);
+            if (sculpt == null || sculpt.Length < rings * seg) sculpt = new float[rings * seg];
 
             var seabed = new GameObject("Seabed");
             seabed.transform.SetParent(root, false);
