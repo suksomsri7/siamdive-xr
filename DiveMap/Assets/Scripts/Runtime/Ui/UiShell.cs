@@ -887,6 +887,9 @@ namespace DiveMap.Runtime.Ui
                         Newtonsoft.Json.Linq.JObject before1 =
                             DiveMap.Core.SceneEdit.Find(DiveMap.Core.SceneEdit.Items(eb.CurrentScene), pick);
                         double px0 = (double)before1["p"][0], pz0 = (double)before1["p"][2];
+                        // Capture the yaw BEFORE the drags: the expected value is relative to it,
+                        // and the last round's "expected 3.142" silently assumed it was zero.
+                        double yaw0 = before1["r"] != null ? (double)before1["r"][1] : 0.0;
                         int hist0 = MapEditor.HistoryCount;
 
                         GizmoController.Select(pick);
@@ -904,8 +907,9 @@ namespace DiveMap.Runtime.Ui
                         double yaw = (double)DiveMap.Core.SceneEdit
                             .Find(DiveMap.Core.SceneEdit.Items(eb.CurrentScene), pick)["r"][1];
 
-                        Debug.Log($"[QC] gizmo move ({px0:F1},{pz0:F1})→({px1:F1},{pz1:F1}) moved={(px1 != px0 || pz1 != pz0)} " +
-                                  $"· yaw={yaw:F3} (expected {DiveMap.Core.GizmoMath.YawAfterDrag(0, 210):F3}) " +
+                        Debug.Log($"[QC] gizmo move ({px0:F1},{pz0:F1})→({px1:F1},{pz1:F1}) " +
+                                  $"moved={(px1 != px0 || pz1 != pz0)} · yaw {yaw0:F3}→{yaw:F3} " +
+                                  $"(expected {DiveMap.Core.GizmoMath.YawAfterDrag(yaw0, 210):F3}) " +
                                   $"· history {hist0}→{MapEditor.HistoryCount} (expected +2, one per gesture)");
 
                         // Put the map back: undo everything this block did.

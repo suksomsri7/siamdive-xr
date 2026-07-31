@@ -84,12 +84,18 @@ namespace DiveMap.Runtime
         /// Record the current state and redraw. Called after every mutation; the snapshot is what
         /// undo returns to, and the rebuild is what the player sees.
         /// </summary>
-        public static void RecordAndApply(JArray items)
+        /// <summary>
+        /// Returns whether the snapshot was ACCEPTED. A refused push (nothing changed, or the
+        /// empty-scene guard fired) means undo will not step back over this edit — the caller
+        /// needs to know, because "it looked like it saved" is the failure mode here.
+        /// </summary>
+        public static bool RecordAndApply(JArray items)
         {
             MapEditor e = Ensure();
-            e._history.Push(items);
+            bool recorded = e._history.Push(items);
             e.MarkDirty();
             Rebuild();
+            return recorded;
         }
 
         public static bool Undo()

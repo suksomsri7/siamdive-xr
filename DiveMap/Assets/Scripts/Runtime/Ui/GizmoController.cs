@@ -39,6 +39,7 @@ namespace DiveMap.Runtime.Ui
         private double _planeY;
         private Transform _target;         // the built GameObject, found once per drag
         private float _scaleUnit = 1f;     // built localScale ÷ the JSON scale that produced it
+        private bool _armed;               // a press that was refused must not arm a drag
 
         private SelectionToolbar.Mode _mode = SelectionToolbar.Mode.Translate;
 
@@ -150,11 +151,16 @@ namespace DiveMap.Runtime.Ui
 
         private void Press(Vector2 pos, int finger)
         {
-            if (UiShell.PointerOverUi()) return;   // a drag that starts on the toolbar is a button press
-
+            // A rejected press must DISARM the gesture, not just return. Returning early left
+            // _pressPos and _startYaw holding the previous drag's values, so the next Move()
+            // measured its delta from an old anchor and rotated from an old angle — the object
+            // jumped, and which gesture it belonged to was anyone's guess.
+            _armed = false;
+            _dragging = false;
             _pressPos = pos;
             _finger = finger;
-            _dragging = false;
+
+            if (UiShell.PointerOverUi()) return;   // a drag that starts on the toolbar is a button press
 
             JObject item = CurrentItem();
             if (item == null) return;
@@ -180,6 +186,7 @@ namespace DiveMap.Runtime.Ui
             // it: SceneBuilder bakes the module's defaultScale in, so item.s is a multiplier on
             // that, not the final value. Re-deriving this mid-drag from the object we are
             // ourselves resizing would make it drift.
+            _armed = true;
             _target = FindBuilt(_id);
             _scaleUnit = 1f;
             if (_target != null)
@@ -206,7 +213,7 @@ namespace DiveMap.Runtime.Ui
 
         private void Move(Vector2 pos)
         {
-            if (_id == null) return;
+            if (_id == null || !_armed) return;
             if (_finger >= 0 && Input.touchCount > 0 && Input.GetTouch(0).fingerId != _finger) return;
 
             Vector2 d = pos - _pressPos;
@@ -250,18 +257,27 @@ namespace DiveMap.Runtime.Ui
 
         private void Release()
         {
-            if (!_dragging) { _finger = -1; return; }
-
+            bool wasDragging = _dragging;
             _dragging = false;
             _finger = -1;
+            _armed = false;
             MapEditor.Dragging = false;
 
-            JArray items = Items();
-            if (items != null)
+            if (!wasDragging)
             {
-                MapEditor.RecordAndApply(items);   // one snapshot + one save per gesture
-                Debug.Log($"[Edit] {_mode} committed for {_id}");
+                Debug.Log($"[Edit] {_mode} released with no drag (tap) for {_id}");
+                return;
             }
+
+            JArray items = Items();
+            if (items == null) { Debug.LogWarning("[Edit] no scene to commit to"); return; }
+
+            // Whether the snapshot was ACCEPTED matters: a refused push means undo will not
+            // step back over this gesture, which is the difference between "it saved" and "it
+            // looked like it saved".
+            bool recorded = MapEditor.RecordAndApply(items);
+            Debug.Log($"[Edit] {_mode} committed for {_id} recorded={recorded} " +
+                      $"history={MapEditor.HistoryCount}");
         }
 
         // ── helpers ──────────────────────────────────────────────────────────────
