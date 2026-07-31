@@ -56,6 +56,16 @@ namespace DiveMap.Runtime
             set { PlayerPrefs.SetInt(CoinsPrefKey, Mathf.Max(0, value)); PlayerPrefs.Save(); }
         }
 
+        /// <summary>
+        /// Coins picked up since this session started — what the arena exit gate warns about.
+        /// Session-scoped on purpose: the question at the gate is "you earned N just now and
+        /// have nowhere to put them", not "your lifetime total".
+        /// </summary>
+        public static int EarnedThisSession { get; private set; }
+
+        /// <summary>The coins reached an account (or the player chose to drop them).</summary>
+        public static void ClearEarned() => EarnedThisSession = 0;
+
         public static TrashGameSystem Ensure(Transform parent)
         {
             if (_instance != null) return _instance;
@@ -228,7 +238,8 @@ namespace DiveMap.Runtime
             float h = TrashGame.HeightFactor(at.y, p.FloorY, p.SpawnY);
             int gain = TrashGame.Score(p.Kind, h, _combo, p.IsCoin);
             Coins = Wallet.Earn(Coins, gain);
-            WalletClient.Earn(gain);   // queued, debounced, re-queued if the request fails
+            EarnedThisSession += gain;   // what the arena exit gate warns is about to be lost
+            WalletClient.Earn(gain);     // queued, debounced, re-queued if the request fails
 
             CoinCounter.Show(Coins);
             CoinCounter.Fly(gain);

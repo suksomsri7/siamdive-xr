@@ -435,6 +435,43 @@ namespace DiveMap.Runtime.Ui
         /// usually has it already — this covers the gap between the last edit and the 1.3 s tick,
         /// and tells the player plainly when the map is one it cannot save to.
         /// </summary>
+        /// <summary>
+        /// E6 — the arena exit gate (<c>_arenaExitGate</c> :4398). Leaving a game session with
+        /// coins earned but no account means those coins are gone: the wallet is keyed to the
+        /// device, and the player has no way back to them from another phone.
+        ///
+        /// The web's rule exactly: signed in → flush and go; nothing earned → go; otherwise ask
+        /// once, with the number, and let them leave anyway.
+        /// </summary>
+        public void ArenaExitGate(Action go)
+        {
+            int earned = TrashGameSystem.EarnedThisSession;
+
+            if (DiveMap.Core.Account.IsSignedIn) { WalletClient.Flush(); go?.Invoke(); return; }
+            if (earned <= 0) { go?.Invoke(); return; }
+
+            ActionSheet sheet = ActionSheet.Show(
+                UiStrings.Tr("เก็บเหรียญที่ได้?") + "  " + earned);
+            if (sheet == null) { go?.Invoke(); return; }
+
+            sheet.AddItem(UiStrings.Tr("เข้าสู่ระบบเก็บ"), () =>
+            {
+                // Do NOT leave yet: the coins have to reach the account first, and navigating
+                // away mid-request is exactly how they get lost.
+                LoginSheet.SignedIn += OnceThenGo;
+                LoginSheet.Open();
+                void OnceThenGo()
+                {
+                    LoginSheet.SignedIn -= OnceThenGo;
+                    WalletClient.Flush();
+                    go?.Invoke();
+                }
+            });
+            sheet.AddItem(UiStrings.Tr("ทิ้ง"), () => go?.Invoke(), true);
+            sheet.AddCancel(UiStrings.Tr("ภายหลัง"));
+            Debug.Log($"[Game] arena exit gate — {earned} coin(s) at risk");
+        }
+
         private void GuardUnsaved()
         {
             if (!MapEditor.IsDirty) return;
@@ -446,6 +483,17 @@ namespace DiveMap.Runtime.Ui
         public void OpenMapList()
         {
             GuardUnsaved();
+            // Coins earned this session vanish if the player walks away without an account.
+            if (TrashGameSystem.EarnedThisSession > 0 && !DiveMap.Core.Account.IsSignedIn)
+            {
+                ArenaExitGate(OpenMapListNow);
+                return;
+            }
+            OpenMapListNow();
+        }
+
+        private void OpenMapListNow()
+        {
             CloseActions();   // opening a screen collapses the column (and keeps QC shots clean)
             if (_nav == null || _mapsLayer == null) return;
             _nav.Push("maps", _mapsLayer);

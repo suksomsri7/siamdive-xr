@@ -186,6 +186,11 @@ namespace DiveMap.Core
                 { "โหมดออฟไลน์ — ใช้สำเนาในเครื่อง", "Offline — using the copy on this device" },
                 { "แมพนี้ยังไม่มีในเครื่อง",   "This map is not on your device yet" },
                 { "เลือกแล้ว",             "selected" },
+                // arena exit gate (E6)
+                { "เก็บเหรียญที่ได้?",        "Keep the coins you earned?" },
+                { "เข้าสู่ระบบเก็บ",          "Sign in and keep them" },
+                { "ทิ้ง",                  "Discard" },
+                { "ภายหลัง",               "Later" },
                 { "เปิดแมพนี้ตอนออนไลน์ 1 ครั้ง แล้วจะใช้แบบออฟไลน์ได้",
                   "Open it once while online and it will work offline" },
 
