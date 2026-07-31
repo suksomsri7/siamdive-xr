@@ -4,6 +4,12 @@ using UnityEditor;
 using UnityEditor.Build;
 using UnityEditor.Build.Reporting;
 using UnityEngine;
+// The EditMode tests run on a Linux image that has no iOS build support installed, so this
+// namespace does not exist there at all — an unguarded reference fails the whole test job with
+// CS0234 before a single test runs. Same guard the Android half of the build already uses.
+#if UNITY_IOS
+using UnityEditor.iOS;
+#endif
 
 namespace DiveMap.EditorTools
 {
@@ -187,14 +193,17 @@ namespace DiveMap.EditorTools
                 PlayerSettings.iOS.appleDeveloperTeamID = Environment.GetEnvironmentVariable("APPLE_TEAM_ID") ?? "";
 
                 var profileUuid = Environment.GetEnvironmentVariable("IOS_PROFILE_UUID");
+                bool profileApplied = false;
+#if UNITY_IOS
                 if (!string.IsNullOrWhiteSpace(profileUuid))
                 {
-                    PlayerSettings.iOS.iOSManualProvisioningProfileType =
-                        UnityEditor.iOS.ProvisioningProfileType.Distribution;
+                    PlayerSettings.iOS.iOSManualProvisioningProfileType = ProvisioningProfileType.Distribution;
                     PlayerSettings.iOS.iOSManualProvisioningProfileID = profileUuid;
                     Debug.Log($"[CIBuild] signing with App Store profile {profileUuid}");
+                    profileApplied = true;
                 }
-                else
+#endif
+                if (!profileApplied)
                 {
                     // Local builds open in Xcode and get signed by hand, so this is a warning and
                     // not a failure — but on CI it is the difference between a TestFlight build and
