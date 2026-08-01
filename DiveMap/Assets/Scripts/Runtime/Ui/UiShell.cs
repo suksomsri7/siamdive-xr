@@ -785,6 +785,24 @@ namespace DiveMap.Runtime.Ui
             Debug.Log($"[UI] qcui map={(mapReady ? "ready" : "TIMEOUT")} after {Time.realtimeSinceStartup - t0:F1}s");
             yield return new WaitForSecondsRealtime(1.5f);
 
+            // 1b) THE VIEW FROM ABOVE — the angle every other shot here misses.
+            // Sun shafts, the seabed rim and anything else that lies flat on the water only shows
+            // from up here, and three rounds of "still not fixed" were reported from this angle
+            // while every QC image showed the diver's eye level and looked fine.
+            OrbitCamera cam = Camera.main != null ? Camera.main.GetComponent<OrbitCamera>() : null;
+            if (cam != null)
+            {
+                cam.LookStraightDown();
+                yield return new WaitForSecondsRealtime(0.8f);
+                ScreenCapture.CaptureScreenshot(prefix + "_top.png");
+                Debug.Log("[UI] qcui shot -> " + prefix + "_top.png (view from above)");
+                yield return new WaitForSecondsRealtime(1.2f);
+            }
+            else
+            {
+                Debug.LogWarning("[UI] qcui no OrbitCamera — the view from above was NOT photographed");
+            }
+
             // 2) menu
             OpenMenu();
             yield return new WaitForSecondsRealtime(1.0f);

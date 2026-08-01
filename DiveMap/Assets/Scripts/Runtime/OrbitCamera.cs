@@ -29,6 +29,19 @@ namespace DiveMap.Runtime
         public float panSpeed = 0.0015f;     // world units per pixel per distance
 
         private float _yaw = 45f;
+
+        /// <summary>
+        /// Point the camera straight down at the map — the "from above" view a player gets by
+        /// dragging up, and the one the QC harness photographs. It exists because a whole class of
+        /// complaint (light shafts lying across the water, the seabed rim) is invisible from the
+        /// diver's eye-level angle every other QC shot is taken at, and shipping a build whose
+        /// worst angle nobody has looked at is how the same report comes back three times.
+        /// </summary>
+        public void LookStraightDown()
+        {
+            _pitch = maxPitch;
+        }
+
         private float _pitch = 35f;
 
         private float _prevPinchDist;
