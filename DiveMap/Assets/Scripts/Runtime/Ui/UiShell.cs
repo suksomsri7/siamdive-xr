@@ -804,6 +804,22 @@ namespace DiveMap.Runtime.Ui
                 yield return new WaitForSecondsRealtime(1.0f);
                 Debug.Log($"[UI] qcui top-down mode={ModeManager.Current} " +
                           $"camY={Camera.main.transform.position.y:F0} pitch=straight-down");
+
+                // Name what is actually on screen. Four rounds were spent arguing about "light
+                // shafts" that the log proves were never built — the shapes are something else and
+                // guessing at them from a picture has failed every time. Same trick that found the
+                // ghost map: ask the scene to list every big visible renderer with its full path.
+                foreach (MeshRenderer mr in UnityEngine.Object.FindObjectsByType<MeshRenderer>(FindObjectsSortMode.None))
+                {
+                    if (mr == null || !mr.enabled || !mr.gameObject.activeInHierarchy) continue;
+                    Vector3 sz = mr.bounds.size;
+                    if (Mathf.Max(sz.x, Mathf.Max(sz.y, sz.z)) < 80f) continue;
+                    string path = mr.name;
+                    for (Transform t = mr.transform.parent; t != null; t = t.parent) path = t.name + "/" + path;
+                    Debug.Log($"[UI] qcui big-renderer {path} size=({sz.x:F0},{sz.y:F0},{sz.z:F0}) " +
+                              $"y={mr.transform.position.y:F0} mat={(mr.sharedMaterial != null ? mr.sharedMaterial.name : "none")} " +
+                              $"queue={(mr.sharedMaterial != null ? mr.sharedMaterial.renderQueue : -1)}");
+                }
                 ScreenCapture.CaptureScreenshot(prefix + "_top.png");
                 Debug.Log("[UI] qcui shot -> " + prefix + "_top.png (view from above)");
                 yield return new WaitForSecondsRealtime(1.2f);
