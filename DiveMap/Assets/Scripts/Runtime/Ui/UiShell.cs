@@ -785,15 +785,25 @@ namespace DiveMap.Runtime.Ui
             Debug.Log($"[UI] qcui map={(mapReady ? "ready" : "TIMEOUT")} after {Time.realtimeSinceStartup - t0:F1}s");
             yield return new WaitForSecondsRealtime(1.5f);
 
-            // 1b) THE VIEW FROM ABOVE — the angle every other shot here misses.
-            // Sun shafts, the seabed rim and anything else that lies flat on the water only shows
-            // from up here, and three rounds of "still not fixed" were reported from this angle
-            // while every QC image showed the diver's eye level and looked fine.
+            // 1b) THE VIEW FROM ABOVE — straight down on the map, from the ORBIT camera.
+            //
+            // The first attempt at this shot photographed the drone HUD instead and I presented it
+            // as "the view from above": the demo map belongs to SIAMDIVE and cannot be edited, so
+            // ArenaEntry drops the player into the tour 600 ms after it loads, and by the time the
+            // capture ran the orbit camera was no longer driving anything. Leaving the tour first
+            // is what makes this the angle the user actually reports from.
+            if (ModeManager.Current != AppMode.View && ModeManager.Instance != null)
+            {
+                ModeManager.Instance.Exit();
+                yield return new WaitForSecondsRealtime(1.0f);
+            }
             OrbitCamera cam = Camera.main != null ? Camera.main.GetComponent<OrbitCamera>() : null;
             if (cam != null)
             {
                 cam.LookStraightDown();
-                yield return new WaitForSecondsRealtime(0.8f);
+                yield return new WaitForSecondsRealtime(1.0f);
+                Debug.Log($"[UI] qcui top-down mode={ModeManager.Current} " +
+                          $"camY={Camera.main.transform.position.y:F0} pitch=straight-down");
                 ScreenCapture.CaptureScreenshot(prefix + "_top.png");
                 Debug.Log("[UI] qcui shot -> " + prefix + "_top.png (view from above)");
                 yield return new WaitForSecondsRealtime(1.2f);
