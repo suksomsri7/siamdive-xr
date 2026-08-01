@@ -506,12 +506,19 @@ namespace DiveMap.Runtime
             if (_cam == null || _origin == null) return;
             float off = _origin.CameraFloorOffsetObject != null
                 ? _origin.CameraFloorOffsetObject.transform.localPosition.y : -1f;
-            float dist = _scale > 0f ? Vector3.Distance(_cam.transform.position, AnchorPoint) / _scale : -1f;
+            Vector3 toMap = AnchorPoint - _cam.transform.position;
+            float dist = _scale > 0f ? toMap.magnitude / _scale : -1f;
+            // Distance alone cannot tell "half a metre in front of me" from "half a metre behind
+            // my shoulder", and those need opposite fixes. The angle off the view axis can:
+            // 0° is dead ahead, past ~40° it is outside the frame, 180° is behind you.
+            float offAxis = toMap.sqrMagnitude > 1e-6f
+                ? Vector3.Angle(_cam.transform.forward, toMap) : 0f;
             int planes = _planes != null ? _planes.trackables.count : -1;
             Ui.ArControls.SetDiagnostics(
                 $"ARKit {ARSession.state} · {_step} · planes {planes}\n" +
                 $"size {ArPinch.MetresFor(_span, _scale):F2} m · scale {_scale:F0} u/m · off {off:F2} m\n" +
-                $"map {(_mapRoot == null ? "NULL" : (_mapRoot.activeSelf ? "on" : "off"))} · eye→centre {dist:F2} m");
+                $"map {(_mapRoot == null ? "NULL" : (_mapRoot.activeSelf ? "on" : "off"))} · " +
+                $"eye→centre {dist:F2} m @ {offAxis:F0}°");
         }
 
         /// <summary>

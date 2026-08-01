@@ -174,8 +174,6 @@ namespace DiveMap.Runtime
                 _orbitMin = _orbit.minDistance;
             }
 
-            HideUnderwaterWorld();
-
             // The room shows through wherever nothing is drawn.
             _cam.clearFlags = CameraClearFlags.SolidColor;
             _cam.backgroundColor = new Color(0f, 0f, 0f, 0f);
@@ -186,6 +184,22 @@ namespace DiveMap.Runtime
             // brings its own camera feed (ARCameraBackground), so the WebCamTexture quad below is
             // only for devices without tracking.
             _arkit = ArKitSession.Begin(_center, _minY, _sizeX, _sizeZ, _mapRoot);
+
+            // 🔴 The sea stays ON when ARKit is driving, and that is a change of intent, not a
+            // tweak.
+            //
+            // Stripping the seabed and the water came from the web, where AR welds the model to
+            // your face and the sea would fill the screen. On a TABLE the same objects are the
+            // opposite: the sand disc IS the diorama's base and the water surface is what makes it
+            // read as a cube of ocean rather than loose props floating over the floorboards.
+            //
+            // Reported as "the map disappeared and I cannot find it" on a sparsely built map — and
+            // it had not disappeared. It was placed correctly (the diagnostic read
+            // `map on · eye→centre 0.77 m`), the middle of it was simply EMPTY, because the middle
+            // of a dive site is seabed and the seabed was the thing being hidden. A dense map hid
+            // the fault; the next map along exposed it.
+            HideUnderwaterWorld(hideSea: !_arkit);
+
             if (_arkit)
             {
                 Debug.Log("[AR] ARKit session — plane detection + tap to place");
@@ -230,7 +244,12 @@ namespace DiveMap.Runtime
                       $"gyro={_gyro} eye={_cam.transform.position}");
         }
 
-        private void HideUnderwaterWorld()
+        /// <param name="hideSea">
+        /// Hide the seabed, water, caustics and sun shafts. True on the no-tracking path (the model
+        /// is an arm's length from your eye and the sea would swallow the room); false under ARKit,
+        /// where those four objects are the tabletop diorama itself.
+        /// </param>
+        private void HideUnderwaterWorld(bool hideSea)
         {
             // The web: `seabed.visible=false; surf.visible=false; scene.background=null;`
             // Here that is four objects: the sand, the caustic light dancing 0.4 u above it, the
@@ -239,7 +258,7 @@ namespace DiveMap.Runtime
             _hidden.Clear();
             _hiddenWas.Clear();
             GameObject root = _mapRoot != null ? _mapRoot : GameObject.Find("Map");
-            if (root != null)
+            if (root != null && hideSea)
             {
                 var missing = new System.Collections.Generic.List<string>();
                 foreach (string name in UnderwaterParts)
