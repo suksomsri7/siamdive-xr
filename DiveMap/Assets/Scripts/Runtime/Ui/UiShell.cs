@@ -240,6 +240,23 @@ namespace DiveMap.Runtime.Ui
                                              UiKit.Css(48f * ActionRows + 40f));
             _actions.anchoredPosition = new Vector2(-UiKit.Css(12f), UiKit.Css(20f + 48f + 10f));
 
+            // Which build is this? Tucked under the column, dim and small — off the map (the user
+            // asked for the status line to go) but one tap from anywhere, so a screenshot of a bug
+            // can still be tied to a build. Blank in the Editor, where nothing stamped it.
+            if (!string.IsNullOrEmpty(Core.BuildStamp.Suffix))
+            {
+                Text ver = UiKit.MakeLine(_actions, "BuildTag",
+                                          Core.BuildStamp.Suffix.TrimStart(' ', '·', ' '),
+                                          UiKit.CssFont(10f), TextAnchor.LowerRight, UiKit.TextDim);
+                ver.raycastTarget = false;
+                RectTransform vrt = ver.rectTransform;
+                vrt.anchorMin = new Vector2(1f, 0f);
+                vrt.anchorMax = new Vector2(1f, 0f);
+                vrt.pivot = new Vector2(1f, 1f);
+                vrt.sizeDelta = new Vector2(UiKit.Css(120f), UiKit.Css(14f));
+                vrt.anchoredPosition = new Vector2(0f, -UiKit.Css(2f));
+            }
+
             ActionButton(0, "list", OpenMapList);
             ActionButton(1, "mask", StartTour);
             ActionButton(2, "depth", ToggleDepthView);   // the web's #depthViewBtn

@@ -287,6 +287,7 @@ namespace DiveMap.Runtime
             TourController.Configure(result);
             ArSession.Configure(result);   // F1 — AR needs the footprint to place the viewer
             EnvMode.Reset();   // new scene, new lights/water to capture
+            DepthAtmosphere.Configure(result.WaterLevel);   // shallow bright, deep dark and blue
             Ui.PerfHud.Apply();   // A7 — rebuild the readout if the player left it on
 
             // D9/E8 — a diver who left through a warp gate lands IN the destination, at a random
