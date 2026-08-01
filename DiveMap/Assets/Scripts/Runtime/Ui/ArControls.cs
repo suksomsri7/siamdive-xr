@@ -36,20 +36,25 @@ namespace DiveMap.Runtime.Ui
         /// <summary>QC surface — the bar is on screen.</summary>
         public static bool IsOpen => _open != null;
 
-        private Text _diag, _hint, _size;
+        private Text _hint, _size;
         private Button _action;
         private Text _actionLabel;
         private ArStep _step = ArStep.Searching;
 
         /// <summary>
-        /// One line of live sensor readout, top-left under the exit button.
+        /// Put a line of live state back on the HUD.
         ///
-        /// 🔎 AR is the one feature CI cannot see: the runner has no camera and no gyroscope, so
-        /// "does this actually start on a phone" is a question no test can answer and no log
-        /// reaches. Rounds have been lost to guessing at questions a device could have answered in
-        /// one screenshot. Remove once AR is confirmed on hardware.
+        /// 🔎 Nothing calls this now. It stayed because it earned its keep: AR is the one feature
+        /// with no CI, no console and no reachable log, and this line closed four bugs in four
+        /// rounds from photographs alone. The text came off the screen the moment AR worked —
+        /// asked for directly, and right, because the point of the mode is the room. One call to
+        /// <c>SetDiagnostics(ArKitSession.Instance.Status())</c> brings it all back.
         /// </summary>
-        public static void SetDiagnostics(string line) => _open?.ShowDiag(line);
+        public static void SetDiagnostics(string line)
+        {
+            if (_open == null || _open._hint == null) return;
+            _open._hint.text = line;
+        }
 
         /// <summary>Replace the one-line instruction with something more specific than the step's
         /// own wording (e.g. "no surface where you tapped").</summary>
@@ -101,15 +106,17 @@ namespace DiveMap.Runtime.Ui
             if (_open == this) _open = null;
         }
 
-        private void ShowDiag(string line)
-        {
-            if (_diag != null) _diag.text = line;
-        }
-
         private void ShowHint(string text)
         {
             if (_hint != null) _hint.text = text;
         }
+
+        /// <summary>
+        /// Seconds the size stays on screen after the fingers stop. Long enough to read the number
+        /// you just set, short enough that the resting screen is the room and nothing else.
+        /// </summary>
+        private const float SizeLinger = 1.6f;
+        private float _sizeUntil;
 
         private void ShowSize(double metres, bool atLimit)
         {
@@ -117,6 +124,13 @@ namespace DiveMap.Runtime.Ui
             _size.gameObject.SetActive(true);
             _size.text = metres.ToString("0.00") + " " + UiStrings.Tr("ม.");
             _size.color = atLimit ? UiKit.TextDim : UiKit.TextMain;
+            _sizeUntil = Time.unscaledTime + SizeLinger;
+        }
+
+        private void Update()
+        {
+            if (_size != null && _size.gameObject.activeSelf && Time.unscaledTime > _sizeUntil)
+                _size.gameObject.SetActive(false);
         }
 
         private void ApplyStep(ArStep step, double metres)
@@ -225,14 +239,6 @@ namespace DiveMap.Runtime.Ui
             srt.anchorMax = new Vector2(0f, 1f);
             srt.pivot = new Vector2(0f, 1f);
 
-            _diag = UiKit.MakeLine(root, "ArDiag", "", UiKit.CssFont(11f),
-                                   TextAnchor.UpperLeft, UiKit.TextDim);
-            RectTransform drt = _diag.rectTransform;
-            drt.anchorMin = new Vector2(0f, 1f);
-            drt.anchorMax = new Vector2(0f, 1f);
-            drt.pivot = new Vector2(0f, 1f);
-            drt.sizeDelta = new Vector2(UiKit.Css(330f), UiKit.Css(56f));   // 3 บรรทัด
-            drt.anchoredPosition = new Vector2(UiKit.Css(12f), -UiKit.Css(46f));
             srt.sizeDelta = new Vector2(UiKit.Css(120f), UiKit.RowHeight(UiKit.CssFont(15f), 1));
             srt.anchoredPosition = new Vector2(UiKit.Css(12f), -UiKit.Css(12f));
             _size.gameObject.SetActive(false);

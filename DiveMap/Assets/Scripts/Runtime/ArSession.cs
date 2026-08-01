@@ -533,22 +533,10 @@ namespace DiveMap.Runtime
                 Quat r = GyroMath.CameraRotation(new Quat(a.x, a.y, a.z, a.w), ScreenAngle());
                 _cam.transform.rotation = new Quaternion((float)r.X, (float)r.Y, (float)r.Z, (float)r.W);
 
-                // Reported on screen because there is nowhere else to report it: no camera and no
-                // gyroscope on the runner, and no console on a TestFlight phone. If `att` never
-                // moves while the phone turns, the sensor is not delivering and the maths below it
-                // is irrelevant; if it moves and the view does not, the maths is the problem.
-                // That is one screenshot instead of a round of guessing.
-                // The ARKit reason rides along on the SAME line, because this one is rewritten
-                // every frame and would otherwise erase it (it did, and cost a round).
-                string why = string.IsNullOrEmpty(ArKitSession.OffReason)
-                    ? "" : "\nARKit OFF: " + ArKitSession.OffReason;
-                Ui.ArControls.SetDiagnostics(
-                    $"gyro on · att {a.x:F2},{a.y:F2},{a.z:F2},{a.w:F2}\n" +
-                    $"yaw {_cam.transform.eulerAngles.y:F0}° · screen {ScreenAngle():F0}°{why}");
-            }
-            else
-            {
-                Ui.ArControls.SetDiagnostics("gyro OFF — no sensor reported by this device");
+                // The sensor readout that used to sit here is gone with the rest of the AR HUD
+                // text. If this path ever needs diagnosing on a device, one call to
+                // ArControls.SetDiagnostics with these values brings it straight back — and
+                // ArKitSession.OffReason still carries why real AR declined.
             }
 
             FitFeed();

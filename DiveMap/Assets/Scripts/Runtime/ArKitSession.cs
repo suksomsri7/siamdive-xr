@@ -508,25 +508,27 @@ namespace DiveMap.Runtime
             HandlePinch();
             HandleTap();
             FollowAnchor();
-            Report();
         }
 
         /// <summary>
-        /// The numbers that decide whether the map is on screen, on screen.
+        /// The numbers that decide whether the map is where it should be — written to the log ONCE
+        /// per step, not to the screen every frame.
         ///
-        /// 🔎 AR is the one feature with no log, no console and no CI: build 201 came back as
-        /// "the map does not show" and the only way to tell a bad camera height from a bad scale
-        /// from an inactive map root was to guess. Each guess is a 50-minute build. These six
-        /// numbers separate every one of those causes in a single photograph, which is the whole
-        /// reason the line exists — and why it says `off` (the floor offset) rather than something
-        /// that merely sounds reassuring.
+        /// 🔎 These six lived on the AR HUD while the mode was being built, and earned it: they
+        /// closed four bugs in four rounds that had previously cost five rounds of guessing
+        /// (camera height, raycast space, accumulating yaw, a stale input manager). AR is the one
+        /// feature with no CI, no console and no log a person can reach, so a photograph was the
+        /// only channel there was.
         ///
-        /// `dist` is the eye-to-map-centre distance in REAL metres: if the map is where it should
-        /// be that reads as arm's length, and if the camera has been lifted it does not.
+        /// They come off the screen now that it works, because the point of the mode is the room —
+        /// asked for directly, and right. They are NOT deleted: the same line goes to the device
+        /// log, which is reachable from Xcode when a device is to hand, and one call to
+        /// <c>ArControls.SetDiagnostics(Status())</c> puts it back on the HUD if a screenshot is
+        /// ever the only channel again.
         /// </summary>
-        private void Report()
+        public string Status()
         {
-            if (_cam == null || _origin == null) return;
+            if (_cam == null || _origin == null) return "ARKit " + ARSession.state;
             float off = _origin.CameraFloorOffsetObject != null
                 ? _origin.CameraFloorOffsetObject.transform.localPosition.y : -1f;
             Vector3 toMap = AnchorPoint - _cam.transform.position;
@@ -537,11 +539,10 @@ namespace DiveMap.Runtime
             float offAxis = toMap.sqrMagnitude > 1e-6f
                 ? Vector3.Angle(_cam.transform.forward, toMap) : 0f;
             int planes = _planes != null ? _planes.trackables.count : -1;
-            Ui.ArControls.SetDiagnostics(
-                $"ARKit {ARSession.state} #{_sessions} · {_step} · planes {planes}\n" +
-                $"size {ArPinch.MetresFor(_span, _scale):F2} m · scale {_scale:F0} u/m · off {off:F2} m\n" +
-                $"map {(_mapRoot == null ? "NULL" : (_mapRoot.activeSelf ? "on" : "off"))} · " +
-                $"eye→centre {dist:F2} m @ {offAxis:F0}°");
+            return $"ARKit {ARSession.state} #{_sessions} · {_step} · planes {planes} · " +
+                   $"size {ArPinch.MetresFor(_span, _scale):F2} m · scale {_scale:F0} u/m · off {off:F2} m · " +
+                   $"map {(_mapRoot == null ? "NULL" : (_mapRoot.activeSelf ? "on" : "off"))} · " +
+                   $"eye→centre {dist:F2} m @ {offAxis:F0}°";
         }
 
         /// <summary>
@@ -787,6 +788,7 @@ namespace DiveMap.Runtime
             if (_planes != null) _planes.SetTrackablesActive(step != ArStep.Anchored);
 
             Ui.ArControls.SetStep(step, ArPinch.MetresFor(_span, _scale));
+            Debug.Log("[ARKit] " + Status());
         }
 
         // ── leaving ──────────────────────────────────────────────────────────────
