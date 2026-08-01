@@ -185,7 +185,7 @@ namespace DiveMap.Runtime
             // player can walk round it — the two things the attitude-only path can never do. It
             // brings its own camera feed (ARCameraBackground), so the WebCamTexture quad below is
             // only for devices without tracking.
-            _arkit = ArKitSession.Begin(_center, _sizeX, _sizeZ, _mapRoot);
+            _arkit = ArKitSession.Begin(_center, _minY, _sizeX, _sizeZ, _mapRoot);
             if (_arkit)
             {
                 Debug.Log("[AR] ARKit session — plane detection + tap to place");
@@ -225,7 +225,7 @@ namespace DiveMap.Runtime
             // Adjusting step minus the confirm, which is what SetHint overriding the step's own
             // wording says. Showing "looking for a surface" on a phone that will never find one is
             // the kind of lie that gets reported as a hang.
-            ArControls.SetSizeOnly(ArPinch.MetresFor(Mathf.Max(_sizeX, _sizeZ), _scale));
+            ArControls.SetSizeOnly(Metres);
             Debug.Log($"[AR] begin span=({_sizeX:F0},{_sizeZ:F0}) fit={_fit:F5} " +
                       $"gyro={_gyro} eye={_cam.transform.position}");
         }
@@ -333,13 +333,12 @@ namespace DiveMap.Runtime
 
             Touch a = Input.GetTouch(0), b = Input.GetTouch(1);
             double pixels = Vector2.Distance(a.position, b.position);
-            double span = Mathf.Max(_sizeX, _sizeZ);
 
             if (!_pinching)
             {
                 _pinching = true;
                 _pinchStartPixels = pixels;
-                _pinchStartMetres = ArPinch.MetresFor(span, _scale);
+                _pinchStartMetres = Metres;
                 return;
             }
 
@@ -357,9 +356,16 @@ namespace DiveMap.Runtime
         {
             if (!_active) return;
             double span = Mathf.Max(_sizeX, _sizeZ);
+            if (span <= 0) return;
             double m = ArPinch.Clamp(metres);
-            double next = ArPinch.ScaleFor(span, m);
-            if (next <= 0 || System.Math.Abs(next - _scale) < 1e-9) return;
+            // 🔴 NOT ArPinch.ScaleFor. The two AR paths hold RECIPROCAL scales and mixing them is
+            // silent: ArKitSession._scale is world units per metre (span / 1.1, a number in the
+            // hundreds) while this path's _scale is metres per world unit (ArPlacement.FitScale =
+            // 1.1 / span, a number near 0.003). Feeding one to the other's formula does not throw
+            // or clamp — it returns span²/1.1, a plausible-looking figure that put the readout at
+            // five digits and the camera inside the map.
+            double next = m / span;                       // metres per world unit
+            if (next <= 0 || System.Math.Abs(next - _scale) < 1e-12) return;
 
             _scale = next;
             ApplyPlacement();
@@ -368,7 +374,7 @@ namespace DiveMap.Runtime
 
         /// <summary>How wide the site reads on the table right now, in metres.</summary>
         public static double Metres => Instance != null
-            ? ArPinch.MetresFor(Mathf.Max(Instance._sizeX, Instance._sizeZ), Instance._scale) : 0;
+            ? ArPlacement.ApparentSpan(Mathf.Max(Instance._sizeX, Instance._sizeZ), Instance._scale) : 0;
 
         // ── the camera feed ──────────────────────────────────────────────────────
 
@@ -492,7 +498,15 @@ namespace DiveMap.Runtime
 
             // ARKit runs its own gesture handling on its own rig; two systems reading the same two
             // fingers would fight over the scale.
-            if (!_arkit) HandlePinch();
+            //
+            // 🔴 And it owns the diagnostic line too. This method used to write "gyro OFF — no
+            // sensor reported by this device" over the top of ARKit's readout every frame, because
+            // Begin() returns before `_gyro` is ever set on the ARKit path. The screenshot from
+            // build 201 therefore said the phone had no gyroscope while ARKit was demonstrably
+            // tracking — a diagnostic that reports on the wrong session is worse than none, and
+            // this is the second time that exact race has cost a round.
+            if (_arkit) return;
+            HandlePinch();
 
             if (_gyro)
             {

@@ -54,6 +54,7 @@ namespace DiveMap.Runtime
         private Color _camBg;
 
         private Vector3 _center;      // frame centre of the map, world space
+        private float _minY;          // lowest point of the map's content, world space
         private float _span;          // widest side of the map, world units
         private float _scale = 1f;    // world units per real metre
         private bool _running;
@@ -120,7 +121,7 @@ namespace DiveMap.Runtime
             }
         }
 
-        public static bool Begin(Vector3 center, float sizeX, float sizeZ, GameObject mapRoot)
+        public static bool Begin(Vector3 center, float minY, float sizeX, float sizeZ, GameObject mapRoot)
         {
             if (!Supported) return false;
             if (Instance == null)
@@ -130,8 +131,20 @@ namespace DiveMap.Runtime
                 Instance = go.AddComponent<ArKitSession>();
             }
             Instance._mapRoot = mapRoot;
+            Instance._minY = minY;
             return Instance.StartSession(center, Mathf.Max(sizeX, sizeZ));
         }
+
+        /// <summary>
+        /// The point of the map that lands on the tapped spot: the centre horizontally, but the
+        /// BOTTOM of the content vertically.
+        ///
+        /// Not the frame centre. Putting the centre on the table buries the lower half of the site
+        /// in the table — the web anchors on <c>box.min.y</c> for exactly this reason
+        /// (builder.html:2923, <c>-box.min.y*sc</c>), and "it sits on the table" is the entire
+        /// illusion this mode is selling.
+        /// </summary>
+        private Vector3 AnchorPoint => new Vector3(_center.x, _minY, _center.z);
 
         public static void End() => Instance?.StopSession();
 
@@ -323,6 +336,27 @@ namespace DiveMap.Runtime
             _cam.transform.localRotation = Quaternion.identity;
 
             _origin.Camera = _cam;
+
+            // 🔴 CameraYOffset MUST be zero, and it is not zero by default.
+            //
+            // This is what "the map does not appear" was on build 201. XROrigin ships with
+            // k_DefaultCameraYOffset = 1.1176 m — standing eye height, meant for room-scale VR —
+            // and applies it to the floor-offset object whenever the tracking origin mode is
+            // Device, which is the only mode ARKit reports. Everything else worked: planes were
+            // found, the tap placed, the anchor held. The camera was simply 1.1176 m above where
+            // the maths put it.
+            //
+            // And "1.1 m up" is not a small error here, because the origin is SCALED: at
+            // _scale ≈ 300 u/m that is ~345 world units, more than the whole map is wide. The site
+            // sat straight down out of the frustum while the phone pointed at the table.
+            //
+            // AR Foundation's own docs say this outright ("You should set the XROrigin.CameraYOffset
+            // value to 0 … unless your app has a specific reason to do so", features/device-tracking.md)
+            // — it is only ever set on the sample prefab, which a rig built in code never touches.
+            // The mode is named rather than left NotSpecified so this does not depend on what the
+            // subsystem happens to report on a given device.
+            _origin.RequestedTrackingOriginMode = XROrigin.TrackingOriginMode.Device;
+            _origin.CameraYOffset = 0f;
             _origin.CameraFloorOffsetObject = offset;
 
             if (_cam.GetComponent<ARCameraManager>() == null) _cam.gameObject.AddComponent<ARCameraManager>();
@@ -451,6 +485,33 @@ namespace DiveMap.Runtime
             HandlePinch();
             HandleTap();
             FollowAnchor();
+            Report();
+        }
+
+        /// <summary>
+        /// The numbers that decide whether the map is on screen, on screen.
+        ///
+        /// 🔎 AR is the one feature with no log, no console and no CI: build 201 came back as
+        /// "the map does not show" and the only way to tell a bad camera height from a bad scale
+        /// from an inactive map root was to guess. Each guess is a 50-minute build. These six
+        /// numbers separate every one of those causes in a single photograph, which is the whole
+        /// reason the line exists — and why it says `off` (the floor offset) rather than something
+        /// that merely sounds reassuring.
+        ///
+        /// `dist` is the eye-to-map-centre distance in REAL metres: if the map is where it should
+        /// be that reads as arm's length, and if the camera has been lifted it does not.
+        /// </summary>
+        private void Report()
+        {
+            if (_cam == null || _origin == null) return;
+            float off = _origin.CameraFloorOffsetObject != null
+                ? _origin.CameraFloorOffsetObject.transform.localPosition.y : -1f;
+            float dist = _scale > 0f ? Vector3.Distance(_cam.transform.position, AnchorPoint) / _scale : -1f;
+            int planes = _planes != null ? _planes.trackables.count : -1;
+            Ui.ArControls.SetDiagnostics(
+                $"ARKit {ARSession.state} · {_step} · planes {planes}\n" +
+                $"size {ArPinch.MetresFor(_span, _scale):F2} m · scale {_scale:F0} u/m · off {off:F2} m\n" +
+                $"map {(_mapRoot == null ? "NULL" : (_mapRoot.activeSelf ? "on" : "off"))} · eye→centre {dist:F2} m");
         }
 
         /// <summary>
@@ -588,7 +649,7 @@ namespace DiveMap.Runtime
             Quaternion rot = Quaternion.Euler(0f, _yaw, 0f);
             _origin.transform.rotation = rot;
             _origin.transform.localScale = Vector3.one * _scale;
-            _origin.transform.position = _center - (rot * _spot) * _scale;
+            _origin.transform.position = AnchorPoint - (rot * _spot) * _scale;
         }
 
         private void ShowMap(bool visible)

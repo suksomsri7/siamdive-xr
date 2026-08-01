@@ -97,6 +97,34 @@ namespace DiveMap.Tests
         }
 
         [Test]
+        public void TheTwoArPathsHoldReciprocalScales_AndBothReportTheSameSize()
+        {
+            // The bug this pins: ArKitSession._scale is world units per metre (span / 1.1) while
+            // ArSession._scale is metres per world unit (ArPlacement.FitScale = 1.1 / span). They
+            // are reciprocals, and feeding one to the other's formula does not throw or clamp — it
+            // returns span²/1.1, which reached a device as a five-digit "size" readout. Whatever
+            // each path calls its scale, the SIZE ON THE TABLE has to agree.
+            const double target = ArPlacement.TableSpan;   // 1.1 m, where both paths start
+
+            double unitsPerMetre = Span / target;                       // ArKitSession
+            double metresPerUnit = ArPlacement.FitScale(Span, Span);    // ArSession
+
+            Assert.AreEqual(1.0, unitsPerMetre * metresPerUnit, 1e-12, "the two are not reciprocals");
+            Assert.AreEqual(target, ArPinch.MetresFor(Span, unitsPerMetre), 1e-12);
+            Assert.AreEqual(target, ArPlacement.ApparentSpan(Span, metresPerUnit), 1e-12);
+        }
+
+        [Test]
+        public void FeedingTheWrongScaleConvention_IsNotSilentlyPlausible()
+        {
+            // Stated as the failure, so the next person sees the size of the mistake rather than a
+            // rule to obey: 340 units at the metres-per-unit scale comes out as 105,090 m.
+            double metresPerUnit = ArPlacement.FitScale(Span, Span);
+            double wrong = ArPinch.MetresFor(Span, metresPerUnit);
+            Assert.Greater(wrong, 1000, "the mix-up used to look like a sane number");
+        }
+
+        [Test]
         public void AMapOfAnySize_PinchesToTheSameMetres()
         {
             // The whole reason the gesture is expressed in metres rather than in a scale factor: a

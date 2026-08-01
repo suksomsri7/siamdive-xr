@@ -32,7 +32,16 @@ namespace DiveMap.Core
         /// </summary>
         public const double MinPixels = 8.0;
 
-        /// <summary>How wide the site reads, in metres, at <paramref name="scale"/> units per metre.</summary>
+        /// <summary>
+        /// How wide the site reads, in metres, at <paramref name="scale"/> WORLD UNITS PER METRE.
+        ///
+        /// ⚠️ That is <c>ArKitSession._scale</c>, and it is the RECIPROCAL of
+        /// <c>ArSession._scale</c> / <see cref="ArPlacement.FitScale"/> (metres per world unit).
+        /// The two AR paths genuinely hold opposite conventions, and passing the wrong one is
+        /// SILENT — it returns span²/1.1, a plausible-looking figure rather than an error, which
+        /// is exactly how a five-digit size readout reached a device. The no-tracking path uses
+        /// <see cref="ArPlacement.ApparentSpan"/> instead of this.
+        /// </summary>
         public static double MetresFor(double worldSpan, double scale)
         {
             if (scale <= 0 || double.IsNaN(scale) || double.IsInfinity(scale)) return 0;

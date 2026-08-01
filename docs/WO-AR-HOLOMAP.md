@@ -359,3 +359,32 @@ Apple ส่งอีเมลหลังอัปโหลดสำเร็�
 แก้: `CIBuild.MakeArkitOptional()` สร้าง `Assets/XR/Settings/ARKitSettings.asset` ตั้ง `requirement = Optional`
 แล้วลงทะเบียนเป็น config object key `UnityEditor.XR.ARKit.ARKitSettings` (reflection เพราะอยู่ใน editor assembly ของแพ็กเกจ)
 · ไม่ fatal ถ้าล้ม — Required ก็ยังติดตั้งและใช้งานได้บนเครื่องที่ user มี ไม่คุ้มที่จะเสีย build ทั้งรอบ
+
+### 🔴 build 201 บนเครื่องจริง — ARKit ทำงาน แต่ "แมพไม่ขึ้น" (แก้แล้ว)
+ภาพจาก user: แผ่นฟ้าขึ้นทาบโต๊ะ ✅ · แตะวางได้ ✅ · ✓ ยืนยัน → "ยึดกับพื้นแล้ว" ✅ · แผ่นฟ้าหายหลังยึด ✅
+**แต่ไม่มีแมพเลย** และตัวเลขค้างที่ `0.61 ม.`
+
+**สาเหตุ: `XROrigin.CameraYOffset` มีค่า default = `k_DefaultCameraYOffset` = 1.1176 ม.**
+(ความสูงระดับตาสำหรับ room-scale VR) และถูกใส่ให้ `CameraFloorOffsetObject` ทุกครั้งที่ tracking origin mode
+เป็น `Device` ซึ่งเป็นโหมดเดียวที่ ARKit รายงาน
+🔑 **"ยกขึ้น 1.1 ม." ไม่ใช่ error เล็ก ๆ เพราะเราสเกล origin** — ที่ `_scale ≈ 300 u/m` = **~345 หน่วยโลก**
+กว้างกว่าแมพทั้งแมพ → ไซต์ไปอยู่ใต้เท้าและหลุดเฟรม ขณะที่มือถือเล็งไปที่โต๊ะ
+📌 เอกสารของ AR Foundation เขียนไว้ตรง ๆ: *"You should set the XROrigin.CameraYOffset value to 0"*
+(`features/device-tracking.md`) — มันถูกตั้งไว้แค่บน prefab ตัวอย่าง ซึ่ง rig ที่สร้างในโค้ดไม่เคยแตะ
+แก้: `RequestedTrackingOriginMode = Device` + **`CameraYOffset = 0f`** (ตั้งชื่อโหมดเองไม่พึ่งว่า subsystem รายงานอะไร)
+
+**บั๊กที่ 2 (เจอตอนไล่ ตัวเดียวกับที่ทำให้เลขเพี้ยน): สองเส้นทาง AR ถือ scale กลับด้านกัน**
+`ArKitSession._scale` = **หน่วยโลกต่อเมตร** (span/1.1 ≈ หลักร้อย) · `ArSession._scale` = **เมตรต่อหน่วยโลก**
+(`ArPlacement.FitScale` = 1.1/span ≈ 0.003) — เป็นส่วนกลับกัน
+ป้อนผิดตัว **ไม่ throw ไม่ clamp** แต่คืน `span²/1.1` = 105,090 ซึ่งดูเหมือนตัวเลขจริง
+→ เส้นทางไม่มี ARKit ใช้ `ArPlacement.ApparentSpan` แทน `ArPinch.MetresFor` + เทส 2 ตัวตรึงไว้
+
+**บั๊กที่ 3 (cosmetic แต่หลอกคนอ่าน): จอขึ้น "gyro OFF — no sensor reported by this device"**
+ทั้งที่ ARKit กำลังแทร็กอยู่ — `ArSession.Begin()` return ก่อนตั้ง `_gyro` บนเส้นทาง ARKit
+แล้ว `LateUpdate` เขียนทับ diagnostic ของ ARKit ทุกเฟรม (**race เดิมที่เคยเสียรอบมาแล้วครั้งหนึ่ง**)
+→ `if (_arkit) return;` + `ArKitSession.Report()` เขียนตัวเลขที่ตัดสินได้จริง 6 ค่าลงจอ:
+`state · step · planes / size · scale · off / map on|off · eye→centre (เมตรจริง)`
+= แยก "กล้องถูกยก" ออกจาก "สเกลผิด" ออกจาก "map root ปิดอยู่" ได้จากรูปเดียว
+
+**บั๊กที่ 4: วางแมพด้วยจุดกึ่งกลาง ทำให้ครึ่งล่างจมโต๊ะ** → ใช้ `AnchorPoint = (center.x, minY, center.z)`
+ตามที่เว็บทำ (`-box.min.y*sc`) "มันตั้งอยู่บนโต๊ะ" คือภาพลวงทั้งหมดของโหมดนี้
