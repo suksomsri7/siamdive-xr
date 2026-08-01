@@ -593,7 +593,7 @@ namespace DiveMap.Runtime
             // Face the map towards the viewer, upright: only the yaw of the camera is kept, because
             // a map tilted to match a phone held at an angle looks broken on a flat table.
             _spot = spot;
-            _yaw = _cam != null ? _cam.transform.eulerAngles.y : 0f;
+            _yaw = SessionYaw();
             _spotPlane = hit.trackable as ARPlane;
 
             DropAnchor();          // moving invalidates whatever we were pinned to
@@ -674,6 +674,39 @@ namespace DiveMap.Runtime
 
         /// <summary>How far from the session origin a real room point can plausibly be, in metres.</summary>
         private const float MaxSessionMetres = 200f;
+
+        /// <summary>
+        /// Which way the viewer is facing, IN SESSION SPACE.
+        ///
+        /// 🔴 This used to read <c>_cam.transform.eulerAngles.y</c>, and it is the same trap as
+        /// the raycast pose: the camera is a child of the origin, so its world yaw is already
+        /// `_yaw + the session yaw`. Feeding that back in adds the current rotation to itself on
+        /// every tap — the first placement is right, the second is off by the angle you were
+        /// facing, the third by twice that. Reported as "the first time it worked, the second time
+        /// it put the floor in the wrong place", and it moves the map as well as turning it,
+        /// because the position is derived through the same rotation.
+        ///
+        /// Taken from the forward vector rather than an Euler angle on purpose. Euler decomposition
+        /// is unstable exactly when the phone is pitched steeply — which is the normal way to hold
+        /// it when you are placing something on the floor, i.e. the case that has to work.
+        /// </summary>
+        private float SessionYaw()
+        {
+            if (_cam == null) return _yaw;
+            Transform t = SessionSpace;
+            Vector3 fwd = t == null ? _cam.transform.forward
+                                    : t.InverseTransformDirection(_cam.transform.forward);
+            var flat = new Vector2(fwd.x, fwd.z);
+            if (flat.sqrMagnitude < 1e-6f)
+            {
+                // Straight down or straight up: forward has no horizontal part, so the top of the
+                // screen is what "facing" means.
+                Vector3 up = t == null ? _cam.transform.up : t.InverseTransformDirection(_cam.transform.up);
+                flat = new Vector2(up.x, up.z);
+            }
+            if (flat.sqrMagnitude < 1e-6f) return _yaw;
+            return Mathf.Atan2(flat.x, flat.y) * Mathf.Rad2Deg;   // 0° = +Z, Unity's convention
+        }
 
         /// <summary>
         /// The transform between ARKit's session space (metres, room-sized) and Unity world space

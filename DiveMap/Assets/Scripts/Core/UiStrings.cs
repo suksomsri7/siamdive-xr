@@ -68,7 +68,9 @@ namespace DiveMap.Core
 
                 // AR (F1/F4) — the web's #arctl, #exitAR, #arhint
                 { "ดูแบบ AR",                       "View in AR" },
-                { "✕ ออก AR",                       "✕ Leave AR" },
+                // "✕ ออก AR" removed with the pill it labelled — the AR exit is now a drawn
+                // ✕ icon (IconPainter "close"), because NotoSansThai has no U+2715 and the
+                // label shipped to a device reading bare "ออก AR".
                 // "ขนาด" is already in the table (the gizmo's scale label) — one key, one entry,
                 // and a duplicate throws inside the static initialiser, which takes out every test
                 // that so much as mentions UiStrings rather than failing where the mistake is.

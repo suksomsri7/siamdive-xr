@@ -175,17 +175,55 @@ namespace DiveMap.Runtime.Ui
 
         private void Build(RectTransform root)
         {
-            // ✕ ออก AR — top-left, where the tour's exit lives, so leaving is in the same place
-            // whichever mode swallowed the screen.
-            Button exit = UiKit.MakeButton(root, "ExitAr", UiStrings.Tr("✕ ออก AR"),
+            // ✕ — top-right, as a plain close button. Asked for directly, and it is the right
+            // shape: AR fills the screen with the room, so the one piece of chrome that dismisses
+            // it should be where every phone puts "close" and should cost as little of the view as
+            // possible. The old wide "✕ ออก AR" pill sat top-left over the very surface the user
+            // is trying to aim at.
+            //
+            // 🔴 The glyph is DRAWN, not typed. NotoSansThai has no U+2715, so the old label
+            // rendered as bare "ออก AR" on the device — visible in the user's screenshot and
+            // invisible in code review, exactly like the ＋ button before it. IconPainter's
+            // "close" is the web's own path (M6 6l12 12 M18 6 6 18) rasterised at runtime, so it
+            // cannot silently go missing.
+            Button exit = UiKit.MakeButton(root, "ExitAr", null,
                                            UiKit.CssFont(14f), UiKit.Glass, UiKit.TextMain,
                                            () => { if (ModeManager.Instance != null) ModeManager.Instance.Exit(); });
             RectTransform ert = exit.GetComponent<RectTransform>();
-            ert.anchorMin = new Vector2(0f, 1f);
-            ert.anchorMax = new Vector2(0f, 1f);
-            ert.pivot = new Vector2(0f, 1f);
-            ert.sizeDelta = new Vector2(UiKit.Css(112f), UiKit.Css(40f));
-            ert.anchoredPosition = new Vector2(UiKit.Css(12f), -UiKit.Css(12f));
+            ert.anchorMin = new Vector2(1f, 1f);
+            ert.anchorMax = new Vector2(1f, 1f);
+            ert.pivot = new Vector2(1f, 1f);
+            ert.sizeDelta = new Vector2(UiKit.Css(44f), UiKit.Css(44f));
+            ert.anchoredPosition = new Vector2(-UiKit.Css(12f), -UiKit.Css(12f));
+            Image exitBg = exit.GetComponent<Image>();
+            if (exitBg != null)
+            {
+                exitBg.sprite = UiKit.CircleSprite();   // a round dismiss, not a slab
+                exitBg.type = Image.Type.Simple;
+            }
+
+            var glyph = new GameObject("Glyph");
+            glyph.transform.SetParent(exit.transform, false);
+            var grt = glyph.AddComponent<RectTransform>();
+            grt.anchorMin = new Vector2(0.5f, 0.5f);
+            grt.anchorMax = new Vector2(0.5f, 0.5f);
+            grt.pivot = new Vector2(0.5f, 0.5f);
+            grt.sizeDelta = new Vector2(UiKit.Css(20f), UiKit.Css(20f));
+            grt.anchoredPosition = Vector2.zero;
+            var gimg = glyph.AddComponent<Image>();
+            gimg.sprite = IconPainter.Get("close");
+            gimg.color = UiKit.TextMain;
+            gimg.raycastTarget = false;
+
+            // ── the size readout, top-LEFT, where the exit pill used to be ───────
+            // In metres, because that is the unit the table is in. It sits away from the fingers:
+            // a number under a pinch is a number covered by a hand exactly when it is being read.
+            _size = UiKit.MakeLine(root, "ArSize", "", UiKit.CssFont(15f),
+                                   TextAnchor.UpperLeft, UiKit.TextMain);
+            RectTransform srt = _size.rectTransform;
+            srt.anchorMin = new Vector2(0f, 1f);
+            srt.anchorMax = new Vector2(0f, 1f);
+            srt.pivot = new Vector2(0f, 1f);
 
             _diag = UiKit.MakeLine(root, "ArDiag", "", UiKit.CssFont(11f),
                                    TextAnchor.UpperLeft, UiKit.TextDim);
@@ -194,19 +232,9 @@ namespace DiveMap.Runtime.Ui
             drt.anchorMax = new Vector2(0f, 1f);
             drt.pivot = new Vector2(0f, 1f);
             drt.sizeDelta = new Vector2(UiKit.Css(330f), UiKit.Css(56f));   // 3 บรรทัด
-            drt.anchoredPosition = new Vector2(UiKit.Css(12f), -UiKit.Css(58f));
-
-            // ── the size readout, top-right, opposite the exit ───────────────────
-            // In metres, because that is the unit the table is in. It sits away from the fingers:
-            // a number under a pinch is a number covered by a hand exactly when it is being read.
-            _size = UiKit.MakeLine(root, "ArSize", "", UiKit.CssFont(15f),
-                                   TextAnchor.UpperRight, UiKit.TextMain);
-            RectTransform srt = _size.rectTransform;
-            srt.anchorMin = new Vector2(1f, 1f);
-            srt.anchorMax = new Vector2(1f, 1f);
-            srt.pivot = new Vector2(1f, 1f);
+            drt.anchoredPosition = new Vector2(UiKit.Css(12f), -UiKit.Css(46f));
             srt.sizeDelta = new Vector2(UiKit.Css(120f), UiKit.RowHeight(UiKit.CssFont(15f), 1));
-            srt.anchoredPosition = new Vector2(-UiKit.Css(12f), -UiKit.Css(14f));
+            srt.anchoredPosition = new Vector2(UiKit.Css(12f), -UiKit.Css(12f));
             _size.gameObject.SetActive(false);
 
             // ── the action button, bottom centre where the size bar used to be ───
