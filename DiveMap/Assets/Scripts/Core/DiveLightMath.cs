@@ -45,7 +45,7 @@ namespace DiveMap.Core
         /// </summary>
         public static Atmosphere HeadlightOn => new Atmosphere
         {
-            FogNear = 170f, FogFar = 380f,
+            FogNear = 140f, FogFar = 280f,
             FogR = 0.094f, FogG = 0.388f, FogB = 0.541f,   // 0x18638a
             AmbientMul = 0.38f,
             DiveLight = 2.2f,
@@ -56,7 +56,10 @@ namespace DiveMap.Core
         /// is "everything" — the far rim is lit as brightly as the sand under the drone. A real
         /// dive torch is useful to about 25 m in clear water, and that is the number here.
         /// </summary>
-        public const float LampRange = 150f;
+        /// 150 u (25 m) was still "far too bright" on the phone: a torch that reaches a quarter of
+        /// the map lights the whole scene by reflection. 90 u = 15 m, which is what a real dive
+        /// light gives you before the beam is lost in the water.
+        public const float LampRange = 90f;
 
         /// <summary>Headlight OFF: 0x08303f, near 70, far 200, ambient ×0.32, dive light 0.5.</summary>
         public static Atmosphere HeadlightOff => new Atmosphere

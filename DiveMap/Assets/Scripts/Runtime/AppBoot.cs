@@ -320,14 +320,12 @@ namespace DiveMap.Runtime
             {
                 float spread = Mathf.Clamp(result.Radius * 0.45f, 60f, 220f);
                 float length = Mathf.Clamp(result.WaterLevel - result.FrameMinY + 20f, 60f, 400f);
-                // Sun shafts: OFF. Reported three times — flat blue slabs lying across the water
-                // in the map view, hard edges swinging as the billboards chase the camera. Two
-                // passes tried to save them (fade by view angle, then start them 8 m under the
-                // surface) and neither did, because the shape is wrong, not the shading: a quad
-                // has an edge and a light shaft does not. The web has none of this — it was ours,
-                // it was never asked for, and it cost the user three rounds of reporting. If it
-                // comes back it comes back as a volume, not as billboards. (GodRays.cs stays for
-                // that day; GodRayMath and its tests are untouched.)
+                // Sun shafts, back on at the user's request. They were switched off while hunting
+                // "blue wedges on the water" that turned out to be the water disc z-fighting with
+                // its own underside — the shafts were never the thing being reported. What they
+                // keep from that hunt: they fade as the view turns along them, they fade out above
+                // the surface, and they start 8 m down so nothing lies across the waterline.
+                GodRays.Attach(result.Root.transform, result.FrameCenter, spread, result.WaterLevel, length);
             }
 
             // ── QC screenshot mode (CI): -qcshot <path> → รอเฟรม settle → แคป → ปิดตัวเอง ──
@@ -499,14 +497,12 @@ namespace DiveMap.Runtime
             {
                 float spread = Mathf.Clamp(result.Radius * 0.45f, 60f, 220f);
                 float length = Mathf.Clamp(result.WaterLevel - result.FrameMinY + 20f, 60f, 400f);
-                // Sun shafts: OFF. Reported three times — flat blue slabs lying across the water
-                // in the map view, hard edges swinging as the billboards chase the camera. Two
-                // passes tried to save them (fade by view angle, then start them 8 m under the
-                // surface) and neither did, because the shape is wrong, not the shading: a quad
-                // has an edge and a light shaft does not. The web has none of this — it was ours,
-                // it was never asked for, and it cost the user three rounds of reporting. If it
-                // comes back it comes back as a volume, not as billboards. (GodRays.cs stays for
-                // that day; GodRayMath and its tests are untouched.)
+                // Sun shafts, back on at the user's request. They were switched off while hunting
+                // "blue wedges on the water" that turned out to be the water disc z-fighting with
+                // its own underside — the shafts were never the thing being reported. What they
+                // keep from that hunt: they fade as the view turns along them, they fade out above
+                // the surface, and they start 8 m down so nothing lies across the waterline.
+                GodRays.Attach(result.Root.transform, result.FrameCenter, spread, result.WaterLevel, length);
             }
 
             Debug.Log($"[AppBoot] rebuilt from memory · items={result.Loaded} failed={result.Failed}");
@@ -695,8 +691,15 @@ namespace DiveMap.Runtime
         private void RenderLoadSummary()
         {
             if (_summaryLoaded < 0) return;
-            SetStatus($"{_summaryTitle}  ·  {UiStrings.Tr("โหลดแล้ว")} {_summaryLoaded} · " +
-                      $"{UiStrings.Tr("แทนที่")} {_summaryFailed}{Core.BuildStamp.Suffix}{Core.BuildStamp.ScreenInfo}");
+            // The status line is off the screen at the user's request — it sat over the map for
+            // the whole session to report a number nobody needs after the map has drawn. The same
+            // text still goes to the log, where a QC run or a bug report can read it, and the
+            // build number moved into the menu so a screenshot can still be dated.
+            string line = $"{_summaryTitle}  ·  {UiStrings.Tr("โหลดแล้ว")} {_summaryLoaded} · " +
+                          $"{UiStrings.Tr("แทนที่")} {_summaryFailed}{Core.BuildStamp.Suffix}" +
+                          $"{Core.BuildStamp.ScreenInfo}";
+            Debug.Log("[UI] " + line);
+            SetStatus("");
         }
 
         /// <summary>

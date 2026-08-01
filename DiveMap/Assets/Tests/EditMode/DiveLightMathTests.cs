@@ -30,9 +30,9 @@ namespace DiveMap.Tests
         public void AtmospherePresets_AreTheWebsExceptTheReach()
         {
             DiveLightMath.Atmosphere on = DiveLightMath.HeadlightOn;
-            Assert.AreEqual(170f, on.FogNear, 0.01f);
+            Assert.AreEqual(140f, on.FogNear, 0.01f);
             // 380/0.38, not the web's 680/0.55: see DiveLightMath.HeadlightOn for why.
-            Assert.AreEqual(380f, on.FogFar, 0.01f);
+            Assert.AreEqual(280f, on.FogFar, 0.01f);
             Assert.AreEqual(0.38f, on.AmbientMul, 0.001f);
             Assert.AreEqual(2.2f, on.DiveLight, 0.001f);
 
