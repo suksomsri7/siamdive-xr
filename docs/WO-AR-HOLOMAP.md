@@ -324,3 +324,22 @@ manager ที่ `CreateInstance` ในโค้ดจึงมี list ว่
   คำนวณ origin ใหม่ทุกเฟรม** (ทิศทางสำคัญ: anchor เป็นตัวบอกแมพ ไม่ใช่แมพบอก anchor)
   · อ่านใน session space (`TrackablesParent.InverseTransformPoint`) ไม่ใช่ world space
   ไม่งั้นป้อน transform ด้วยผลลัพธ์ของตัวเอง แมพจะไม่ขยับเลย
+
+### 🔴 build 199 ล้ม — บทเรียนที่ปิดเรื่องไฟล์ตั้งค่า XR ได้จริง
+`** ARCHIVE FAILED **` · Xcode link ไม่เจอสัญลักษณ์ `_UnityARKit_*` ~40 ตัว
+= C# คอมไพล์ `DllImport("__Internal")` แล้ว (เพราะ define มา) แต่ **`libUnityARKit.a` ไม่ได้ถูกก๊อปเข้า Xcode project**
+
+diagnostic ที่ใส่ไว้ตอบในบรรทัดเดียวว่าทำไม:
+```
+[CIBuild] iOS scripting defines = 'UNITY_XR_ARKIT_LOADER_ENABLED' → ARKit ENABLED
+[CIBuild] XR: Unity found NO iOS settings — ARKit's native plug-in will be left out
+```
+→ `XRGeneralSettingsPerBuildTarget.XRGeneralSettingsForBuildTarget(iOS)` **คืน null**
+ทั้งที่ไฟล์ YAML ครบ · GUID สคริปต์ถูกทุกตัว · `buildTarget: 4` ถูก · ลงทะเบียนใน EditorBuildSettings แล้ว
+
+🔑 **บทเรียน: ที่ผิดคือ "วิธี" ไม่ใช่ไฟล์ใดไฟล์หนึ่ง** — เขียน .asset ด้วยมือมา 5 รอบ ทุกรอบดูถูกต้องแต่ Unity ไม่ยอมรับ
+เครื่อง build ไม่มี Editor ก็จริง **แต่ CI runner มี** และทุก operation เป็น public API →
+`CIBuild.EnsureXrSettings()` ประกอบ chain ทั้งชุดตอน build ด้วย API ของ Unity เอง
+(`LoadOrCreate` ลบทิ้ง+สร้างใหม่ถ้าไฟล์เดิม deserialize ไม่ได้ · `TryAddLoader` · `SetSettingsForBuildTarget` ·
+`EditorBuildSettings.AddConfigObject`) แล้ว **ตรวจซ้ำผ่าน lookup ของ Unity เอง** ถ้ายังไม่มี `ARKitLoader` ในลิสต์ = ล้ม build ทันที
+→ ไม่มีอะไรขึ้นกับ YAML ที่เขียนมือแล้ว (ไฟล์ใน repo อาจ stale ได้ ไม่เป็นไร เพราะโค้ดซ่อมทุกรอบ)

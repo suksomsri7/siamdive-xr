@@ -205,7 +205,6 @@ namespace DiveMap.EditorTools
                 // UnityEditor.iOS` makes every plain `BuildPipeline` in this file ambiguous. Being
                 // in the core editor assembly, this needs no platform guard.
                 StampBuildNumber(buildNumber);
-                PreloadXrSettings();
                 if (!ArkitDefinePresent())
                 {
                     Fail("UNITY_XR_ARKIT_LOADER_ENABLED is missing from the iOS scripting defines. " +
@@ -215,6 +214,12 @@ namespace DiveMap.EditorTools
                          "scriptingDefineSymbols/iPhone in ProjectSettings.asset.");
                     return;
                 }
+                if (!EnsureXrSettings(out string xrWhy))
+                {
+                    Fail("XR settings are not usable: " + xrWhy);
+                    return;
+                }
+                PreloadXrSettings();
 
                 var profileUuid = Environment.GetEnvironmentVariable("IOS_PROFILE_UUID");
                 if (!string.IsNullOrWhiteSpace(profileUuid))
@@ -359,42 +364,134 @@ namespace DiveMap.EditorTools
             string defines = PlayerSettings.GetScriptingDefineSymbols(NamedBuildTarget.iOS) ?? "";
             bool ok = Array.IndexOf(defines.Split(';'), "UNITY_XR_ARKIT_LOADER_ENABLED") >= 0;
             Debug.Log($"[CIBuild] iOS scripting defines = '{defines}' → ARKit {(ok ? "ENABLED" : "OFF")}");
-            ReportXrLoaders();
             return ok;
         }
 
-        /// <summary>
-        /// Print the loader list Unity will read, from the same place its own build hook reads it.
-        ///
-        /// The define above is only half of what turns ARKit on. The other half is that
-        /// <c>ARKitBuildProcessor</c> looks up the iOS XR settings and copies
-        /// <c>libUnityARKit.a</c> into the Xcode project only if it finds an ARKitLoader in them —
-        /// and the settings here were hand-written on a machine with no Unity Editor, so "does
-        /// Unity agree that they contain a loader" is a real question with no other way to ask it.
-        /// If it does not, the link step fails 25 minutes later with undefined symbols and nothing
-        /// pointing at this file. Two seconds of log, at the start, in Unity's own words.
-        /// </summary>
-        private static void ReportXrLoaders()
+        // ── XR settings, built through Unity's own API ───────────────────────────
+        //
+        // 🔴 Five attempts were spent hand-writing these four .asset files, and build 199 finally
+        // said why in one line: "Unity found NO iOS settings". The YAML was byte-plausible — right
+        // script GUIDs, right BuildTargetGroup number, registered in EditorBuildSettings — and
+        // Unity still would not resolve the chain, so ARKitBuildProcessor left libUnityARKit.a out
+        // and the Xcode link failed on ~40 undefined _UnityARKit_* symbols.
+        //
+        // The mistake was the whole approach, not any one file. These assets are normally produced
+        // by Unity's XR Plug-in Management window, which the build machine does not have — but the
+        // CI RUNNER does have an Editor, and the same operations are public API. So the settings
+        // are assembled here, at build time, by the code path Unity itself uses. Nothing then
+        // depends on hand-written YAML deserialising correctly.
+        //
+        // Order matters and is not obvious: the loader has to exist as a saved asset before
+        // TryAddLoader will keep it (XR Management stores a reference, not a copy), and the
+        // config object has to be registered before ARKitBuildProcessor's own hook looks it up.
+        private const string XrLoaderPath = "Assets/XR/Loaders/ARKitLoader.asset";
+        private const string XrManagerPath = "Assets/XR/Settings/XRManagerSettings-iOS.asset";
+        private const string XrGeneralPath = "Assets/XR/Settings/XRGeneralSettings-iOS.asset";
+        private const string XrPerTargetPath = "Assets/XR/XRGeneralSettingsPerBuildTarget.asset";
+
+        private static bool EnsureXrSettings(out string why)
         {
-            try
+            why = null;
+            // Reflection, not a direct reference: this file also compiles on the Linux test image
+            // where no iOS module exists. The assembly scan is the fallback for the day the
+            // assembly-qualified name stops resolving — a null here would otherwise read as
+            // "the package is missing", which is a different and much more misleading problem.
+            Type loaderType = Type.GetType("UnityEngine.XR.ARKit.ARKitLoader, Unity.XR.ARKit");
+            if (loaderType == null)
             {
-                var settings = UnityEditor.XR.Management.XRGeneralSettingsPerBuildTarget
-                    .XRGeneralSettingsForBuildTarget(BuildTargetGroup.iOS);
-                if (settings == null || settings.Manager == null)
+                foreach (var asm in AppDomain.CurrentDomain.GetAssemblies())
                 {
-                    Debug.LogWarning("[CIBuild] XR: Unity found NO iOS settings — ARKit's native " +
-                                     "plug-in will be left out of the Xcode project");
-                    return;
+                    loaderType = asm.GetType("UnityEngine.XR.ARKit.ARKitLoader");
+                    if (loaderType != null) break;
                 }
-                var names = new System.Collections.Generic.List<string>();
-                foreach (var l in settings.Manager.activeLoaders) names.Add(l == null ? "null" : l.GetType().Name);
-                Debug.Log($"[CIBuild] XR iOS loaders = [{string.Join(", ", names)}] " +
-                          $"(ARKitLoader must be in here, or libUnityARKit.a is not copied)");
             }
-            catch (Exception ex)
+            if (loaderType == null)
             {
-                Debug.LogWarning("[CIBuild] XR: could not read the loader list — " + ex.Message);
+                why = "ARKitLoader type not found — the com.unity.xr.arkit package did not load. " +
+                      "Check Packages/manifest.json.";
+                return false;
             }
+
+            Directory.CreateDirectory(Path.Combine(Application.dataPath, "XR/Loaders"));
+            Directory.CreateDirectory(Path.Combine(Application.dataPath, "XR/Settings"));
+            AssetDatabase.Refresh();   // CreateAsset needs the folders known to the AssetDatabase
+
+            var loader = LoadOrCreate<UnityEngine.XR.Management.XRLoader>(XrLoaderPath, loaderType);
+            var manager = LoadOrCreate<UnityEngine.XR.Management.XRManagerSettings>(XrManagerPath, null);
+            var general = LoadOrCreate<UnityEngine.XR.Management.XRGeneralSettings>(XrGeneralPath, null);
+            var perTarget = LoadOrCreate<UnityEditor.XR.Management.XRGeneralSettingsPerBuildTarget>(XrPerTargetPath, null);
+            if (loader == null || manager == null || general == null || perTarget == null)
+            {
+                why = "could not create the XR settings assets under Assets/XR/";
+                return false;
+            }
+
+            bool already = false;
+            foreach (var l in manager.activeLoaders) if (l == loader) already = true;
+            if (!already && !manager.TryAddLoader(loader))
+            {
+                why = "XRManagerSettings.TryAddLoader refused the ARKit loader";
+                return false;
+            }
+
+            general.Manager = manager;
+            perTarget.SetSettingsForBuildTarget(BuildTargetGroup.iOS, general);
+
+            EditorUtility.SetDirty(loader);
+            EditorUtility.SetDirty(manager);
+            EditorUtility.SetDirty(general);
+            EditorUtility.SetDirty(perTarget);
+            AssetDatabase.SaveAssets();
+            EditorBuildSettings.AddConfigObject(
+                UnityEngine.XR.Management.XRGeneralSettings.settingsKey, perTarget, true);
+
+            // Verify through UNITY'S OWN lookup, not ours. Everything above can succeed while the
+            // thing ARKitBuildProcessor actually calls still returns null — which is precisely the
+            // failure this method exists to end, so it is checked rather than assumed.
+            var seen = UnityEditor.XR.Management.XRGeneralSettingsPerBuildTarget
+                .XRGeneralSettingsForBuildTarget(BuildTargetGroup.iOS);
+            if (seen == null) { why = "XRGeneralSettingsForBuildTarget(iOS) still returns null"; return false; }
+            if (seen.Manager == null) { why = "the iOS settings have no manager"; return false; }
+
+            var names = new System.Collections.Generic.List<string>();
+            foreach (var l in seen.Manager.activeLoaders) names.Add(l == null ? "null" : l.GetType().Name);
+            if (!names.Contains("ARKitLoader"))
+            {
+                why = "no ARKitLoader in the iOS loader list — got [" + string.Join(", ", names) + "]";
+                return false;
+            }
+            Debug.Log($"[CIBuild] XR iOS loaders = [{string.Join(", ", names)}] — libUnityARKit.a will be copied");
+            return true;
+        }
+
+        /// <summary>
+        /// The asset at <paramref name="path"/>, created if it is missing OR unreadable.
+        /// A hand-written file that Unity cannot deserialise loads as null, and creating over it
+        /// is the repair — leaving it in place is how five builds kept inheriting the same broken
+        /// chain. <paramref name="concreteType"/> is for types this assembly must not name
+        /// (ARKitLoader lives in an iOS-only assembly).
+        /// </summary>
+        private static T LoadOrCreate<T>(string path, Type concreteType) where T : ScriptableObject
+        {
+            var existing = AssetDatabase.LoadAssetAtPath<T>(path);
+            if (existing != null && (concreteType == null || existing.GetType() == concreteType))
+                return existing;
+
+            if (existing != null || File.Exists(path))
+            {
+                Debug.LogWarning($"[CIBuild] XR: replacing unusable asset {path}");
+                AssetDatabase.DeleteAsset(path);
+            }
+
+            var made = concreteType != null
+                ? ScriptableObject.CreateInstance(concreteType) as T
+                : ScriptableObject.CreateInstance<T>();
+            if (made == null) return null;
+
+            AssetDatabase.CreateAsset(made, path);
+            AssetDatabase.ImportAsset(path);
+            Debug.Log($"[CIBuild] XR: created {path} ({made.GetType().Name})");
+            return AssetDatabase.LoadAssetAtPath<T>(path);
         }
 
         private static void StampBuildNumber(string buildNumber)
