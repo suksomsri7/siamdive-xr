@@ -222,6 +222,28 @@ namespace DiveMap.Runtime
             Debug.Log("[Tour] scene atmosphere restored");
         }
 
+        /// <summary>
+        /// The lamps belong to the drone. If the drone is not out, neither are they.
+        ///
+        /// 🔴 The tour's own exit already deactivates this object, and yet a QC dump taken in View
+        /// mode found BeamA and BeamB alive and 278 units wide, hanging in the middle of the map.
+        /// From above they read as two enormous blue wedges radiating from the centre — reported
+        /// four times as "light shafts on the water", chased through three fixes to the sun shafts
+        /// and one to the water mesh, none of which were ever the thing on screen.
+        ///
+        /// So the rule stops depending on someone remembering to call the exit path: the lamps
+        /// check the mode themselves, every frame, and switch off the moment it is not Tour.
+        /// </summary>
+        private void LateUpdate()
+        {
+            if (ModeManager.Current != AppMode.Tour && gameObject.activeSelf)
+            {
+                RestoreScene();
+                gameObject.SetActive(false);
+                Debug.Log("[Dive] lamps off — left the tour (mode=" + ModeManager.Current + ")");
+            }
+        }
+
         private void OnDestroy() => RestoreScene();
 
         // ── meshes / material ────────────────────────────────────────────────────
