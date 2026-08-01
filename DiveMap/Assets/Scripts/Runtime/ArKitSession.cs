@@ -138,21 +138,48 @@ namespace DiveMap.Runtime
         /// a few seconds of its life, and an ARKit session running behind the map view would hold
         /// the camera, drain the battery and ask for a camera permission nobody wanted yet.
         /// </summary>
+        private static XRManagerSettings _manager;
+
         private static bool InitialiseXr()
         {
-            XRGeneralSettings settings = XRGeneralSettings.Instance;
-            if (settings == null || settings.Manager == null)
-            {
-                return Off("ไม่พบการตั้งค่า XR (settings/manager = null)");
-            }
-            if (settings.Manager.activeLoader != null) return true;
+            if (_manager != null && _manager.activeLoader != null) return true;
 
-            settings.Manager.InitializeLoaderSync();
-            if (settings.Manager.activeLoader == null)
+            // Path 1 — the settings asset, if Unity managed to deliver one.
+            XRGeneralSettings settings = XRGeneralSettings.Instance;
+            if (settings != null && settings.Manager != null)
+            {
+                _manager = settings.Manager;
+            }
+            else
+            {
+                // Path 2 — build the manager ourselves.
+                //
+                // 🔴 Two builds were spent trying to get the settings ASSET through to the player:
+                // written by hand (no Editor on the build machine), registered in
+                // EditorBuildSettings, then force-added to Preloaded Assets — and the phone still
+                // reported "settings/manager = null" every time. That whole chain exists only to
+                // hand XR Management a loader list, and a loader list is three lines of code.
+                //
+                // Reflection, not a direct reference: ARKitLoader lives in an iOS-only assembly, so
+                // naming the type would stop the Linux test and QC builds from compiling at all.
+                _manager = ScriptableObject.CreateInstance<XRManagerSettings>();
+                System.Type loaderType = System.Type.GetType(
+                    "UnityEngine.XR.ARKit.ARKitLoader, Unity.XR.ARKit");
+                if (loaderType == null) return Off("ไม่พบคลาส ARKitLoader (build นี้ไม่มีโมดูล ARKit)");
+
+                var loader = ScriptableObject.CreateInstance(loaderType) as XRLoader;
+                if (loader == null) return Off("สร้าง ARKitLoader ไม่ได้");
+                if (!_manager.TryAddLoader(loader)) return Off("เพิ่ม loader เข้า manager ไม่ได้");
+                Debug.Log("[ARKit] built an XR manager in code (no settings asset needed)");
+            }
+
+            if (_manager.activeLoader == null) _manager.InitializeLoaderSync();
+            if (_manager.activeLoader == null)
             {
                 return Off("loader เริ่มไม่ได้ (InitializeLoaderSync ไม่ได้ loader)");
             }
-            settings.Manager.StartSubsystems();
+            _manager.StartSubsystems();
+            OffReason = "";
             return true;
         }
 
@@ -295,11 +322,10 @@ namespace DiveMap.Runtime
             if (_origin != null) Destroy(_origin.gameObject);
             if (_session != null) Destroy(_session);
 
-            XRGeneralSettings settings = XRGeneralSettings.Instance;
-            if (settings != null && settings.Manager != null && settings.Manager.activeLoader != null)
+            if (_manager != null && _manager.activeLoader != null)
             {
-                settings.Manager.StopSubsystems();
-                settings.Manager.DeinitializeLoader();
+                _manager.StopSubsystems();
+                _manager.DeinitializeLoader();
             }
             Debug.Log($"[ARKit] end placed={_placed}");
         }

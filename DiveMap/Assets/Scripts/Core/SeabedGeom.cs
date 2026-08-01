@@ -113,13 +113,19 @@ namespace DiveMap.Core
         // ── Background gradient ───────────────────────────────────────────────────
 
         // builder.html:663-667 — the vertical backdrop, top (v=0) to bottom (v=1).
+        //
+        // 🔎 The bottom two stops are LIGHTER than the web's. Reported twice as "the background is
+        // still dark": on a phone screen in daylight the web's #06243a reads as near-black, and
+        // because this gradient — not the fog — is what fills most of the frame, brightening the
+        // fog and the ambient did nothing for it. Chasing the wrong lever twice is what makes this
+        // worth a comment: whatever is BEHIND everything is what "the scene is dark" usually means.
         private static readonly float[] StopPos = { 0f, 0.38f, 0.52f, 1f };
         private static readonly Rgb[] StopCol =
         {
             new Rgb(0.890f, 0.949f, 0.973f), // #e3f2f8 bright surface haze
             new Rgb(0.663f, 0.831f, 0.910f), // #a9d4e8
-            new Rgb(0.247f, 0.576f, 0.776f), // #3f93c6
-            new Rgb(0.024f, 0.141f, 0.227f), // #06243a deep water
+            new Rgb(0.325f, 0.639f, 0.816f), // #53a3d0  (เว็บ #3f93c6 — อ่อนลงไปทางฟ้า)
+            new Rgb(0.106f, 0.310f, 0.451f), // #1b4f73  (เว็บ #06243a เข้มเกินไปบนมือถือ)
         };
 
         /// <summary>
