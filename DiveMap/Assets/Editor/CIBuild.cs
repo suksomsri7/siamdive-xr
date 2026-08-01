@@ -204,6 +204,8 @@ namespace DiveMap.EditorTools
                 // compile on the Linux test image where no iOS module exists, and `using
                 // UnityEditor.iOS` makes every plain `BuildPipeline` in this file ambiguous. Being
                 // in the core editor assembly, this needs no platform guard.
+                StampBuildNumber(buildNumber);
+
                 var profileUuid = Environment.GetEnvironmentVariable("IOS_PROFILE_UUID");
                 if (!string.IsNullOrWhiteSpace(profileUuid))
                 {
@@ -278,6 +280,29 @@ namespace DiveMap.EditorTools
         /// with Unity's working directory set to the project folder, put the Xcode project
         /// somewhere no later step was looking.
         /// </summary>
+        /// <summary>
+        /// Put the CI build number where the running app can read it (Core.BuildStamp), so every
+        /// screenshot says which build it came from. Written into Resources during the build only:
+        /// the runner starts from a fresh checkout each time, so nothing is left behind in git.
+        /// </summary>
+        private static void StampBuildNumber(string buildNumber)
+        {
+            try
+            {
+                string dir = Path.Combine(Application.dataPath, "Resources");
+                Directory.CreateDirectory(dir);
+                File.WriteAllText(Path.Combine(dir, DiveMap.Core.BuildStamp.ResourceName + ".txt"),
+                                  buildNumber ?? "");
+                AssetDatabase.ImportAsset("Assets/Resources/" + DiveMap.Core.BuildStamp.ResourceName + ".txt");
+                Debug.Log($"[CIBuild] stamped build number {buildNumber}");
+            }
+            catch (Exception e)
+            {
+                // A missing stamp is a worse screenshot, not a broken build.
+                Debug.LogWarning("[CIBuild] could not stamp the build number: " + e.Message);
+            }
+        }
+
         private static string ResolveOutputPathDir(string fallback)
         {
             string p = Environment.GetEnvironmentVariable("DM_BUILD_PATH");
