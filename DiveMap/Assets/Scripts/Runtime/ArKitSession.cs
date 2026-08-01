@@ -68,8 +68,11 @@ namespace DiveMap.Runtime
             get
             {
 #if UNITY_IOS && !UNITY_EDITOR
-                return ARSession.state != ARSessionState.Unsupported;
+                bool ok = ARSession.state != ARSessionState.Unsupported;
+                if (!ok) Ui.ArControls.SetDiagnostics("ARKit OFF: เครื่องไม่รองรับ (state=" + ARSession.state + ")");
+                return ok;
 #else
+                Ui.ArControls.SetDiagnostics("ARKit OFF: build นี้ไม่ได้เปิด iOS path");
                 return false;
 #endif
             }
@@ -124,6 +127,7 @@ namespace DiveMap.Runtime
             if (settings == null || settings.Manager == null)
             {
                 Debug.LogWarning("[ARKit] no XR settings — falling back to the attitude session");
+                Ui.ArControls.SetDiagnostics("ARKit OFF: ไม่พบการตั้งค่า XR");
                 return false;
             }
             if (settings.Manager.activeLoader != null) return true;
@@ -132,6 +136,7 @@ namespace DiveMap.Runtime
             if (settings.Manager.activeLoader == null)
             {
                 Debug.LogWarning("[ARKit] loader would not initialise — falling back");
+                Ui.ArControls.SetDiagnostics("ARKit OFF: loader เริ่มไม่ได้");
                 return false;
             }
             settings.Manager.StartSubsystems();
