@@ -36,13 +36,13 @@ namespace DiveMap.Tests
             Assert.AreEqual(140f, on.FogNear, 0.01f);
             // 380/0.38, not the web's 680/0.55: see DiveLightMath.HeadlightOn for why.
             Assert.AreEqual(280f, on.FogFar, 0.01f);
-            Assert.AreEqual(0.38f, on.AmbientMul, 0.001f);
+            Assert.AreEqual(0.52f, on.AmbientMul, 0.001f);
             Assert.AreEqual(2.2f, on.DiveLight, 0.001f);
 
             DiveLightMath.Atmosphere off = DiveLightMath.HeadlightOff;
             Assert.AreEqual(70f, off.FogNear, 0.01f);
             Assert.AreEqual(200f, off.FogFar, 0.01f);
-            Assert.AreEqual(0.32f, off.AmbientMul, 0.001f);
+            Assert.AreEqual(0.40f, off.AmbientMul, 0.001f);
             Assert.AreEqual(0.5f, off.DiveLight, 0.001f);
 
             // 0x18638a vs 0x08303f — on is a lit blue, off is nearly black-green.

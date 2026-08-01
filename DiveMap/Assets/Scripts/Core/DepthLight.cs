@@ -27,11 +27,14 @@ namespace DiveMap.Core
 
         /// <summary>Depth in metres at which each channel falls to 1/e of its surface value.</summary>
         public const float RedDepth = 5f;
-        public const float GreenDepth = 22f;
-        public const float BlueDepth = 45f;
+        public const float GreenDepth = 26f;
+        public const float BlueDepth = 55f;
 
         /// <summary>Never darker than this, or the deep is unplayable rather than atmospheric.</summary>
-        public const float Floor = 0.18f;
+        /// 0.18 was too dark on the phone — the whole scene read as deep navy. The curve still
+        /// separates shallow from deep (that is the point), it just does it from a brighter start:
+        /// tropical water is bright, and a dive site nobody can see is not realism.
+        public const float Floor = 0.35f;
 
         /// <summary>
         /// Multiplier for (r, g, b) at <paramref name="depthUnits"/> below the surface.
