@@ -1,5 +1,6 @@
 using System.Collections;
 using System.Collections.Generic;
+using System.Reflection;
 using DiveMap.Core;
 using Unity.XR.CoreUtils;
 using UnityEngine;
@@ -40,7 +41,9 @@ namespace DiveMap.Runtime
         private XROrigin _origin;
         private ARPlaneManager _planes;
         private ARRaycastManager _raycast;
+        private ARAnchorManager _anchors;
         private ARCameraBackground _background;
+        private GameObject _planeTemplate, _templateHolder;
 
         private Camera _cam;
         private Transform _camParent;
@@ -54,9 +57,31 @@ namespace DiveMap.Runtime
         private float _span;          // widest side of the map, world units
         private float _scale = 1f;    // world units per real metre
         private bool _running;
-        private bool _placed;
+
+        // Where the map is standing, in SESSION space (metres, ARKit's own frame). Kept rather than
+        // recovered from the origin transform: recovering it means inverting the very transform the
+        // pinch is about to rewrite, and one arithmetic slip there moves the map instead of
+        // resizing it. Two floats are cheaper than that class of bug.
+        private Vector3 _spot;
+        private float _yaw;
+        private GameObject _mapRoot;
+
+        private ArStep _step = ArStep.Searching;
+        private ARAnchor _anchor;
+        private ARPlane _spotPlane;
+
+        // The live pinch: sampled when the second finger lands, not accumulated per frame.
+        private bool _pinching;
+        private double _pinchStartPixels, _pinchStartMetres;
 
         private readonly List<ARRaycastHit> _hits = new List<ARRaycastHit>();
+
+        /// <summary>QC/UI surface — which step of "put it on the table" the user is on.</summary>
+        public static ArStep Step => Instance != null ? Instance._step : ArStep.Searching;
+
+        /// <summary>How wide the site currently reads on the table, in metres.</summary>
+        public static double Metres =>
+            Instance != null ? ArPinch.MetresFor(Instance._span, Instance._scale) : 0;
 
         /// <summary>
         /// Why ARKit is not running, kept so the fallback can show it.
@@ -95,7 +120,7 @@ namespace DiveMap.Runtime
             }
         }
 
-        public static bool Begin(Vector3 center, float sizeX, float sizeZ)
+        public static bool Begin(Vector3 center, float sizeX, float sizeZ, GameObject mapRoot)
         {
             if (!Supported) return false;
             if (Instance == null)
@@ -104,6 +129,7 @@ namespace DiveMap.Runtime
                 DontDestroyOnLoad(go);
                 Instance = go.AddComponent<ArKitSession>();
             }
+            Instance._mapRoot = mapRoot;
             return Instance.StartSession(center, Mathf.Max(sizeX, sizeZ));
         }
 
@@ -127,7 +153,7 @@ namespace DiveMap.Runtime
             BuildRig();
             StartCoroutine(WaitForTracking());
             _running = true;
-            _placed = false;
+            SetStep(ArStep.Searching);
             Debug.Log($"[ARKit] begin span={_span:F0} scale={_scale:F0} u/m target={TargetMetres} m");
             return true;
         }
@@ -144,43 +170,131 @@ namespace DiveMap.Runtime
         {
             if (_manager != null && _manager.activeLoader != null) return true;
 
-            // Path 1 — the settings asset, if Unity managed to deliver one.
+            // Path 1 — the settings asset, if Unity managed to deliver one through Preloaded
+            // Assets (CIBuild.PreloadXrSettings puts it there). Its XRGeneralSettings.Awake sets
+            // the static instance on the way in, which is the object AR Foundation looks at.
             XRGeneralSettings settings = XRGeneralSettings.Instance;
-            if (settings != null && settings.Manager != null)
+            string via;
+            if (settings != null && settings.Manager != null && settings.Manager.activeLoaders.Count > 0)
             {
                 _manager = settings.Manager;
+                via = "settings asset";
             }
             else
             {
                 // Path 2 — build the manager ourselves.
-                //
-                // 🔴 Two builds were spent trying to get the settings ASSET through to the player:
-                // written by hand (no Editor on the build machine), registered in
-                // EditorBuildSettings, then force-added to Preloaded Assets — and the phone still
-                // reported "settings/manager = null" every time. That whole chain exists only to
-                // hand XR Management a loader list, and a loader list is three lines of code.
-                //
-                // Reflection, not a direct reference: ARKitLoader lives in an iOS-only assembly, so
-                // naming the type would stop the Linux test and QC builds from compiling at all.
-                _manager = ScriptableObject.CreateInstance<XRManagerSettings>();
-                System.Type loaderType = System.Type.GetType(
-                    "UnityEngine.XR.ARKit.ARKitLoader, Unity.XR.ARKit");
-                if (loaderType == null) return Off("ไม่พบคลาส ARKitLoader (build นี้ไม่มีโมดูล ARKit)");
+                _manager = ManagerInCode();
+                if (_manager == null) return false;   // ManagerInCode already said why
 
-                var loader = ScriptableObject.CreateInstance(loaderType) as XRLoader;
-                if (loader == null) return Off("สร้าง ARKitLoader ไม่ได้");
-                if (!_manager.TryAddLoader(loader)) return Off("เพิ่ม loader เข้า manager ไม่ได้");
-                Debug.Log("[ARKit] built an XR manager in code (no settings asset needed)");
+                // 🔑 Owning the manager is not enough, and this is the part the earlier attempt
+                // missed. Nothing in AR Foundation asks US for the loader: ARSession,
+                // ARPlaneManager and ARRaycastManager all reach it through
+                // XRGeneralSettings.Instance.Manager.activeLoader (see LoaderUtility and
+                // SubsystemUtils in the package). A manager held in a private static of this class
+                // is invisible to every one of them — the subsystems would come back null and AR
+                // would fail one layer further down, looking like a different bug.
+                if (settings == null) settings = PublishGlobalSettings();
+                if (settings == null) return Off("สร้าง XRGeneralSettings ไม่ได้");
+                settings.Manager = _manager;
+                via = "code";
             }
+
+            if (XRGeneralSettings.Instance == null || XRGeneralSettings.Instance.Manager == null)
+                return Off("XRGeneralSettings.Instance ว่าง — ARFoundation จะหา loader ไม่เจอ");
 
             if (_manager.activeLoader == null) _manager.InitializeLoaderSync();
             if (_manager.activeLoader == null)
             {
-                return Off("loader เริ่มไม่ได้ (InitializeLoaderSync ไม่ได้ loader)");
+                // 🔴 The failure that cost four TestFlight builds landed exactly here, and said
+                // nothing useful. ARKitLoader.Initialize() asks the SubsystemManager for a
+                // descriptor called "ARKit-Session"; that descriptor is registered by
+                // ARKitSessionSubsystem.RegisterDescriptor(), which returns early unless
+                // Api.AtLeast11_0() is true — and every DllImport in the ARKit package, that one
+                // included, is compiled out unless UNITY_XR_ARKIT_LOADER_ENABLED is defined for
+                // iOS. Without the define the call is a stub returning false, so the loader
+                // declines with no error at all and the app falls back to the gyroscope.
+                // CIBuild refuses to build without the define now; this message is here for the
+                // day somebody builds from an editor that has not got it.
+                return Off("loader เริ่มไม่ได้ — ไม่มี subsystem 'ARKit-Session' " +
+                           "(มักแปลว่า build นี้ไม่มี define UNITY_XR_ARKIT_LOADER_ENABLED " +
+                           "หรือไม่ได้ใส่ libUnityARKit.a)");
             }
             _manager.StartSubsystems();
+            Debug.Log($"[ARKit] XR up via {via}: loader={_manager.activeLoader.GetType().Name}");
             OffReason = "";
             return true;
+        }
+
+        /// <summary>
+        /// An <see cref="XRManagerSettings"/> with an ARKit loader in it, made at runtime.
+        ///
+        /// Reflection for the type, not a direct reference: ARKitLoader lives in an iOS-only
+        /// assembly, so naming it would stop the Linux test and QC builds compiling at all.
+        /// </summary>
+        private static XRManagerSettings ManagerInCode()
+        {
+            var mgr = ScriptableObject.CreateInstance<XRManagerSettings>();
+            System.Type loaderType = System.Type.GetType("UnityEngine.XR.ARKit.ARKitLoader, Unity.XR.ARKit");
+            if (loaderType == null) { Off("ไม่พบคลาส ARKitLoader (build นี้ไม่มีโมดูล ARKit)"); return null; }
+
+            var loader = ScriptableObject.CreateInstance(loaderType) as XRLoader;
+            if (loader == null) { Off("สร้าง ARKitLoader ไม่ได้"); return null; }
+
+            if (!AddLoader(mgr, loader)) { Off("เพิ่ม loader เข้า manager ไม่ได้"); return null; }
+            Debug.Log("[ARKit] built an XR manager in code (no settings asset needed)");
+            return mgr;
+        }
+
+        /// <summary>
+        /// Put <paramref name="loader"/> into <paramref name="mgr"/>'s load order.
+        ///
+        /// 🔴 <c>TryAddLoader</c> alone cannot do this and returning false is all it will tell you
+        /// — which is precisely what build 196 reported on screen ("เพิ่ม loader เข้า manager
+        /// ไม่ได้"). XR Management keeps a second, private set of loaders it considers REGISTERED,
+        /// filled by <c>Awake()</c> from the serialized list, and <c>TryAddLoader</c> refuses
+        /// anything that is not already in it (outside the editor, where an extra branch registers
+        /// on the fly). A manager created in code has an empty serialized list, so Awake registers
+        /// nothing and every add is rejected: the API is deliberately immutable at runtime.
+        ///
+        /// So do what Awake would have done and then use the public API. Falling back to writing
+        /// the serialized list directly keeps this working if the private field is ever renamed —
+        /// the version check that matters is <see cref="XRManagerSettings.activeLoaders"/> at the
+        /// end, which is public and is what everything downstream reads.
+        /// </summary>
+        private static bool AddLoader(XRManagerSettings mgr, XRLoader loader)
+        {
+            var registered = typeof(XRManagerSettings)
+                .GetField("m_RegisteredLoaders", BindingFlags.NonPublic | BindingFlags.Instance)
+                ?.GetValue(mgr) as ICollection<XRLoader>;
+            if (registered != null && !registered.Contains(loader)) registered.Add(loader);
+
+            if (!mgr.TryAddLoader(loader))
+            {
+                var list = typeof(XRManagerSettings)
+                    .GetField("m_Loaders", BindingFlags.NonPublic | BindingFlags.Instance);
+                if (list == null) return false;
+                list.SetValue(mgr, new List<XRLoader> { loader });
+            }
+
+            IReadOnlyList<XRLoader> active = mgr.activeLoaders;
+            return active != null && active.Count > 0 && active[0] == loader;
+        }
+
+        /// <summary>
+        /// Make <see cref="XRGeneralSettings.Instance"/> exist so AR Foundation can find the loader
+        /// through it. In a player <c>Awake()</c> assigns the static itself the moment the object is
+        /// created; the setter is editor-only, so anywhere else the field is written directly.
+        /// </summary>
+        private static XRGeneralSettings PublishGlobalSettings()
+        {
+            var s = ScriptableObject.CreateInstance<XRGeneralSettings>();
+            if (!ReferenceEquals(XRGeneralSettings.Instance, s))
+            {
+                typeof(XRGeneralSettings)
+                    .GetField("s_Instance", BindingFlags.NonPublic | BindingFlags.Static)
+                    ?.SetValue(null, s);
+            }
+            return XRGeneralSettings.Instance;
         }
 
         private void BuildRig()
@@ -225,12 +339,90 @@ namespace DiveMap.Runtime
 
             _planes = originGo.AddComponent<ARPlaneManager>();
             _planes.requestedDetectionMode = PlaneDetectionMode.Horizontal;
+            _planes.planePrefab = BuildPlaneTemplate();
             _raycast = originGo.AddComponent<ARRaycastManager>();
+            _anchors = originGo.AddComponent<ARAnchorManager>();
 
-            // Park the world out of the way until the first tap: at scale, an unplaced map would
-            // otherwise engulf the room.
+            // Nothing is placed yet, so nothing is shown. The old code parked the map 1.2 m below
+            // and 1.5 m ahead, which put a reef in the middle of the room before the user had said
+            // where it should go — and made the surfaces ARKit was still finding impossible to see
+            // behind it. Hiding the map until the tap is what makes "detect the floor, then choose
+            // a spot" a step the user can actually perform.
             _origin.transform.localScale = Vector3.one * _scale;
-            PlaceAt(new Vector3(0f, -1.2f, 1.5f), 0f);
+            _spot = new Vector3(0f, -1.2f, 1.5f);
+            _yaw = 0f;
+            ApplyPlacement();
+            ShowMap(false);
+        }
+
+        /// <summary>
+        /// The translucent patch drawn over each surface ARKit finds.
+        ///
+        /// It exists because the first step of the flow is a promise: "point at the floor and I
+        /// will show you what I found". Without it the user is asked to tap a surface with no way
+        /// to know whether one has been detected — which reads as the app ignoring taps.
+        ///
+        /// 🔑 The template is parked under an INACTIVE holder. AR Foundation copies the prefab's
+        /// own <c>activeSelf</c> onto each instance (ARTrackableManager.CreateGameObjectDeactivated),
+        /// so a template switched off would produce invisible planes; a template switched on and
+        /// left loose in the scene would draw a stray quad at the origin. A parent that is off
+        /// gives both: activeSelf stays true, activeInHierarchy does not.
+        /// </summary>
+        private GameObject BuildPlaneTemplate()
+        {
+            _templateHolder = new GameObject("ArPlaneTemplate");
+            _templateHolder.transform.SetParent(transform, false);
+            _templateHolder.SetActive(false);
+
+            var go = new GameObject("ArPlane");
+            go.transform.SetParent(_templateHolder.transform, false);
+            go.AddComponent<MeshFilter>();
+            var mr = go.AddComponent<MeshRenderer>();
+            mr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            mr.receiveShadows = false;
+            mr.lightProbeUsage = UnityEngine.Rendering.LightProbeUsage.Off;
+            mr.reflectionProbeUsage = UnityEngine.Rendering.ReflectionProbeUsage.Off;
+            Material planeMat = PlaneMaterial();
+            if (planeMat == null)
+                Debug.LogWarning("[ARKit] no plane material — surfaces will be found but not shown, " +
+                                 "so the first step of the flow will look like nothing is happening");
+            mr.sharedMaterial = planeMat;
+            // Adding the visualiser brings ARPlane with it ([RequireComponent]), in that order, so
+            // the visualiser's Awake finds the plane component it needs.
+            go.AddComponent<ARPlaneMeshVisualizer>();
+            _planeTemplate = go;
+            return go;
+        }
+
+        private static Material _planeMat;
+        /// <summary>
+        /// Alpha-blended, unlit-ish, on the DM_StandardTransparent base — the same recipe the god
+        /// rays and the warp gate use. Deliberately NOT a shader of its own: this project has been
+        /// bitten before by a custom shader being stripped from the build and every surface using
+        /// it turning magenta on the device, which is the one place it cannot be tested.
+        /// </summary>
+        private static Material PlaneMaterial()
+        {
+            if (_planeMat != null) return _planeMat;
+            Material src = Resources.Load<Material>("DM_StandardTransparent");
+            var mat = src != null ? new Material(src) : null;
+            if (mat == null || mat.shader == null) return null;
+
+            if (mat.HasProperty("_Mode")) mat.SetFloat("_Mode", 3f);
+            if (mat.HasProperty("_SrcBlend")) mat.SetFloat("_SrcBlend", (float)(int)UnityEngine.Rendering.BlendMode.SrcAlpha);
+            if (mat.HasProperty("_DstBlend")) mat.SetFloat("_DstBlend", (float)(int)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
+            if (mat.HasProperty("_ZWrite")) mat.SetFloat("_ZWrite", 0f);
+            mat.DisableKeyword("_ALPHATEST_ON");
+            mat.EnableKeyword("_ALPHABLEND_ON");
+            mat.DisableKeyword("_ALPHAPREMULTIPLY_ON");
+            if (mat.HasProperty("_Glossiness")) mat.SetFloat("_Glossiness", 0f);
+            if (mat.HasProperty("_Metallic")) mat.SetFloat("_Metallic", 0f);
+            mat.renderQueue = 3000;
+            // The UI accent (#39b0e8, UI_PARITY.md) at low alpha: enough to see the shape of the
+            // floor through the camera feed, not enough to hide what is on it.
+            mat.color = new Color(0.224f, 0.690f, 0.910f, 0.22f);
+            _planeMat = mat;
+            return mat;
         }
 
         private IEnumerator WaitForTracking()
@@ -242,61 +434,178 @@ namespace DiveMap.Runtime
                 yield return null;
             }
             Debug.Log($"[ARKit] tracking state={ARSession.state} after {Time.realtimeSinceStartup - t0:F1}s");
-            if (_running && ARSession.state == ARSessionState.SessionTracking)
-                Ui.ArControls.SetHint("เล็งกล้องไปที่พื้นเรียบ แล้วแตะเพื่อวางแผนที่");
         }
 
         // ── placing ──────────────────────────────────────────────────────────────
 
         private void Update()
         {
-            if (!_running || _raycast == null) return;
-            if (Input.touchCount == 0) return;
+            if (!_running) return;
+
+            // Searching → Aiming the moment ARKit reports its first surface. Driven off the plane
+            // count rather than a callback because the wording on screen has to keep up with what
+            // the user can see, and what they can see is the blue patch appearing.
+            if (_step == ArStep.Searching && _planes != null && _planes.trackables.count > 0)
+                SetStep(ArStep.Aiming);
+
+            HandlePinch();
+            HandleTap();
+            FollowAnchor();
+        }
+
+        /// <summary>
+        /// Two fingers resize the site. Available from the moment it is placed, including after
+        /// confirming — the anchor pins WHERE it is, and changing your mind about how big it should
+        /// be is not a reason to start over.
+        /// </summary>
+        private void HandlePinch()
+        {
+            if (_step == ArStep.Searching || _step == ArStep.Aiming) { _pinching = false; return; }
+            if (Input.touchCount < 2) { _pinching = false; return; }
+
+            Touch a = Input.GetTouch(0), b = Input.GetTouch(1);
+            double pixels = Vector2.Distance(a.position, b.position);
+
+            if (!_pinching)
+            {
+                _pinching = true;
+                _pinchStartPixels = pixels;
+                _pinchStartMetres = ArPinch.MetresFor(_span, _scale);
+                return;
+            }
+
+            double metres = ArPinch.Pinch(_pinchStartMetres, _pinchStartPixels, pixels);
+            var next = (float)ArPinch.ScaleFor(_span, metres);
+            if (next <= 0f || Mathf.Approximately(next, _scale)) return;
+
+            _scale = next;
+            ApplyPlacement();      // about the SAME room point, so it grows where it stands
+            Ui.ArControls.SetSize(metres, ArPinch.AtLimit(metres));
+        }
+
+        /// <summary>One finger picks the spot — before the confirm, and again after it if the user
+        /// taps somewhere else, which quietly drops the old anchor and starts a new one.</summary>
+        private void HandleTap()
+        {
+            if (_raycast == null || Input.touchCount != 1) return;
 
             Touch t = Input.GetTouch(0);
             if (t.phase != TouchPhase.Began) return;
             if (UnityEngine.EventSystems.EventSystem.current != null &&
                 UnityEngine.EventSystems.EventSystem.current.IsPointerOverGameObject(t.fingerId)) return;
 
-            if (!_raycast.Raycast(t.position, _hits, TrackableType.PlaneWithinPolygon)) return;
+            if (!_raycast.Raycast(t.position, _hits, TrackableType.PlaneWithinPolygon))
+            {
+                if (_step == ArStep.Aiming) Ui.ArControls.SetHint(UiStrings.Tr("ยังไม่เจอพื้นตรงนั้น — เล็งกล้องไปที่พื้นเรียบ"));
+                return;
+            }
 
-            Pose hit = _hits[0].pose;
+            ARRaycastHit hit = _hits[0];
             // Face the map towards the viewer, upright: only the yaw of the camera is kept, because
             // a map tilted to match a phone held at an angle looks broken on a flat table.
-            float yaw = _cam != null ? _cam.transform.eulerAngles.y : 0f;
-            PlaceAt(hit.position, yaw);
-            _placed = true;
-            Ui.ArControls.SetHint("แตะที่พื้นอีกครั้งเพื่อย้าย");
-            Debug.Log($"[ARKit] placed at {hit.position} yaw={yaw:F0}° scale={_scale:F0}");
+            _spot = hit.pose.position;
+            _yaw = _cam != null ? _cam.transform.eulerAngles.y : 0f;
+            _spotPlane = hit.trackable as ARPlane;
+
+            DropAnchor();          // moving invalidates whatever we were pinned to
+            ApplyPlacement();
+            ShowMap(true);
+            SetStep(ArStep.Adjusting);
+            Debug.Log($"[ARKit] placed at {_spot} yaw={_yaw:F0}° " +
+                      $"metres={ArPinch.MetresFor(_span, _scale):F2} plane={(_spotPlane != null ? "yes" : "no")}");
         }
 
         /// <summary>
-        /// Put the map's centre at a point in the ROOM. Everything else follows from the origin
-        /// transform: world = origin.TransformPoint(session), so the origin has to be positioned
-        /// such that transforming the tapped session point lands on the map centre.
+        /// ✓ — pin the site to the room with an ARAnchor.
+        ///
+        /// 🔑 This is what fixes "the object does not stay still when I walk". Without an anchor the
+        /// map hangs off ARKit's origin, and ARKit revises that origin as it learns the room — so
+        /// the wreck slides a few centimetres every time the tracker corrects itself. An anchor is
+        /// a promise from ARKit to keep ONE point pinned to the physical surface and to move it
+        /// with every correction; attaching it to the plane that was tapped (rather than to a bare
+        /// pose) is stronger still, because the plane is a thing ARKit keeps re-measuring.
         /// </summary>
-        private void PlaceAt(Vector3 sessionPoint, float yawDeg)
-        {
-            if (_origin == null) return;
-            Quaternion rot = Quaternion.Euler(0f, yawDeg, 0f);
-            _origin.transform.rotation = rot;
-            _origin.transform.localScale = Vector3.one * _scale;
-            _origin.transform.position = _center - (rot * sessionPoint) * _scale;
-        }
-
-        /// <summary>One press of − / + : the same model, bigger or smaller on the table.</summary>
-        public static void Zoom(bool closer)
+        public static void Confirm()
         {
             ArKitSession s = Instance;
-            if (s == null || !s._running) return;
-            float next = Mathf.Clamp(s._scale * (closer ? 0.75f : 1.35f),
-                                     s._span / 6f, s._span / 0.25f);
-            if (Mathf.Approximately(next, s._scale)) return;
-            s._scale = next;
-            // Re-place around the same room point so the model grows where it stands.
-            Vector3 sessionPoint = Quaternion.Inverse(s._origin.transform.rotation) *
-                                   ((s._center - s._origin.transform.position) / s._scale);
-            s.PlaceAt(sessionPoint, s._origin.transform.eulerAngles.y);
+            if (s == null || !s._running || s._step == ArStep.Searching || s._step == ArStep.Aiming) return;
+
+            s.DropAnchor();
+            if (s._anchors != null && s._spotPlane != null)
+                s._anchor = s._anchors.AttachAnchor(s._spotPlane, new Pose(s._spot, Quaternion.identity));
+
+            s.SetStep(ArStep.Anchored);
+            Debug.Log($"[ARKit] confirmed — anchor={(s._anchor != null ? s._anchor.trackableId.ToString() : "NONE (plane lost)")} " +
+                      $"metres={ArPinch.MetresFor(s._span, s._scale):F2}");
+            if (s._anchor == null)
+                Ui.Toast.ShowTr("ยึดกับพื้นไม่ได้ — วางไว้ตรงนี้ก่อน");
+        }
+
+        /// <summary>Reopen the adjustment step (the "ย้าย/ปรับ" button once anchored).</summary>
+        public static void Adjust()
+        {
+            ArKitSession s = Instance;
+            if (s == null || !s._running || s._step != ArStep.Anchored) return;
+            s.DropAnchor();
+            s.SetStep(ArStep.Adjusting);
+        }
+
+        private void DropAnchor()
+        {
+            if (_anchor == null) return;
+            if (_anchors != null) _anchors.TryRemoveAnchor(_anchor);
+            _anchor = null;
+        }
+
+        /// <summary>
+        /// Once anchored, the ANCHOR decides where the map is — every frame.
+        ///
+        /// The direction of this is the whole point and is easy to get backwards. We do not move the
+        /// anchor to the map; we read where ARKit currently believes the anchor is and rebuild the
+        /// origin from it. So when the tracker corrects itself — which it does constantly, and more
+        /// as you walk — the map is corrected with the room instead of drifting away from it.
+        ///
+        /// Read in SESSION space, not world space. The anchor's GameObject is parented under the
+        /// origin we are about to rewrite, so using its world position would feed the transform its
+        /// own output and the map would never move at all.
+        /// </summary>
+        private void FollowAnchor()
+        {
+            if (_step != ArStep.Anchored || _anchor == null || _origin == null) return;
+            Transform parent = _origin.TrackablesParent != null ? _origin.TrackablesParent : _origin.transform;
+            _spot = parent.InverseTransformPoint(_anchor.transform.position);
+            ApplyPlacement();
+        }
+
+        /// <summary>
+        /// Put the map's centre at <see cref="_spot"/> in the ROOM. Everything else follows from the
+        /// origin transform: world = origin.TransformPoint(session), so the origin has to be placed
+        /// such that transforming the chosen session point lands on the map centre.
+        /// </summary>
+        private void ApplyPlacement()
+        {
+            if (_origin == null) return;
+            Quaternion rot = Quaternion.Euler(0f, _yaw, 0f);
+            _origin.transform.rotation = rot;
+            _origin.transform.localScale = Vector3.one * _scale;
+            _origin.transform.position = _center - (rot * _spot) * _scale;
+        }
+
+        private void ShowMap(bool visible)
+        {
+            if (_mapRoot != null && _mapRoot.activeSelf != visible) _mapRoot.SetActive(visible);
+        }
+
+        private void SetStep(ArStep step)
+        {
+            _step = step;
+
+            // The blue patches were guidance. Once the site is pinned they are clutter lying under
+            // the thing the user came to look at — so they go, while detection keeps running (the
+            // manager stays enabled) because a tap must still be able to move the map afterwards.
+            if (_planes != null) _planes.SetTrackablesActive(step != ArStep.Anchored);
+
+            Ui.ArControls.SetStep(step, ArPinch.MetresFor(_span, _scale));
         }
 
         // ── leaving ──────────────────────────────────────────────────────────────
@@ -305,6 +614,16 @@ namespace DiveMap.Runtime
         {
             if (!_running) return;
             _running = false;
+
+            // The map was ours to hide, so it is ours to give back. Leaving AR with the root still
+            // switched off is the map-view equivalent of a black screen — and it would have no
+            // error attached to it, because from every other system's point of view the scene
+            // loaded correctly.
+            ShowMap(true);
+            DropAnchor();
+            _spotPlane = null;
+            _pinching = false;
+            if (_templateHolder != null) { Destroy(_templateHolder); _templateHolder = null; _planeTemplate = null; }
 
             if (_cam != null)
             {
@@ -327,7 +646,8 @@ namespace DiveMap.Runtime
                 _manager.StopSubsystems();
                 _manager.DeinitializeLoader();
             }
-            Debug.Log($"[ARKit] end placed={_placed}");
+            Debug.Log($"[ARKit] end step={_step}");
+            _step = ArStep.Searching;
         }
 
         private void OnDestroy()

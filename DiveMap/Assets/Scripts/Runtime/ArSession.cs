@@ -84,6 +84,10 @@ namespace DiveMap.Runtime
         private Vector3 _orbitTarget;
         private float _orbitDistance, _orbitMin;
 
+        // The live pinch on the no-tracking path.
+        private bool _pinching;
+        private double _pinchStartPixels, _pinchStartMetres;
+
         public static ArSession Ensure()
         {
             if (Instance != null) return Instance;
@@ -181,7 +185,7 @@ namespace DiveMap.Runtime
             // player can walk round it — the two things the attitude-only path can never do. It
             // brings its own camera feed (ARCameraBackground), so the WebCamTexture quad below is
             // only for devices without tracking.
-            _arkit = ArKitSession.Begin(_center, _sizeX, _sizeZ);
+            _arkit = ArKitSession.Begin(_center, _sizeX, _sizeZ, _mapRoot);
             if (_arkit)
             {
                 Debug.Log("[AR] ARKit session — plane detection + tap to place");
@@ -216,6 +220,12 @@ namespace DiveMap.Runtime
             if (Ui.CompassWidget.Instance != null) Ui.CompassWidget.Instance.SetVisible(false);
 
             ArControls.Open();
+            // No tracking here, so there is no floor to find and no anchor to set: the site is
+            // already in front of the viewer and the only thing left to do is size it. That is the
+            // Adjusting step minus the confirm, which is what SetHint overriding the step's own
+            // wording says. Showing "looking for a surface" on a phone that will never find one is
+            // the kind of lie that gets reported as a hang.
+            ArControls.SetSizeOnly(ArPinch.MetresFor(Mathf.Max(_sizeX, _sizeZ), _scale));
             Debug.Log($"[AR] begin span=({_sizeX:F0},{_sizeZ:F0}) fit={_fit:F5} " +
                       $"gyro={_gyro} eye={_cam.transform.position}");
         }
@@ -303,21 +313,62 @@ namespace DiveMap.Runtime
                 _orbit.distance = (float)(ArPlacement.Distance / _scale);
         }
 
-        /// <summary>One press of − or + (the web's <c>arMinus</c>/<c>arPlus</c>).</summary>
-        public void Zoom(bool closer)
+        /// <summary>
+        /// Two fingers resize the site on the phones that have no tracking, exactly as they do on
+        /// the ones that do (<c>ArKitSession.HandlePinch</c>).
+        ///
+        /// 🔴 The − / + stepper it replaces is gone from BOTH paths deliberately. Keeping it here
+        /// "because this path is only a fallback" would mean the same app taught two different
+        /// gestures depending on which phone it woke up on — and the fallback is the path a user is
+        /// least able to explain, so it is the last place to put a control nobody else has.
+        ///
+        /// Same absolute-from-gesture-start rule as the ARKit path: sample the finger distance and
+        /// the size when the second finger lands, then map ratio → size. Per-frame accumulation
+        /// drifts, and a pinch that does not return to where it started when the fingers do feels
+        /// broken without anyone being able to say why.
+        /// </summary>
+        private void HandlePinch()
         {
-            if (!_active) return;
-            if (_arkit) { ArKitSession.Zoom(closer); return; }
-            double next = ArPlacement.Zoom(_scale, _fit, closer);
-            if (System.Math.Abs(next - _scale) < 1e-12)
+            if (Input.touchCount < 2) { _pinching = false; return; }
+
+            Touch a = Input.GetTouch(0), b = Input.GetTouch(1);
+            double pixels = Vector2.Distance(a.position, b.position);
+            double span = Mathf.Max(_sizeX, _sizeZ);
+
+            if (!_pinching)
             {
-                Toast.ShowTr(closer ? "ใหญ่สุดแล้ว" : "เล็กสุดแล้ว");
+                _pinching = true;
+                _pinchStartPixels = pixels;
+                _pinchStartMetres = ArPinch.MetresFor(span, _scale);
                 return;
             }
+
+            SetMetres(ArPinch.Pinch(_pinchStartMetres, _pinchStartPixels, pixels));
+        }
+
+        /// <summary>
+        /// Make the site read as <paramref name="metres"/> across.
+        ///
+        /// The pinch is a gesture wrapped around this, and QC drives it here — a headless runner
+        /// has no fingers, so the alternative is either not testing the sizing at all or testing a
+        /// second copy of the clamp that can be right while the one the user reaches is wrong.
+        /// </summary>
+        public void SetMetres(double metres)
+        {
+            if (!_active) return;
+            double span = Mathf.Max(_sizeX, _sizeZ);
+            double m = ArPinch.Clamp(metres);
+            double next = ArPinch.ScaleFor(span, m);
+            if (next <= 0 || System.Math.Abs(next - _scale) < 1e-9) return;
+
             _scale = next;
             ApplyPlacement();
-            ArControls.Refresh();
+            ArControls.SetSize(m, ArPinch.AtLimit(m));
         }
+
+        /// <summary>How wide the site reads on the table right now, in metres.</summary>
+        public static double Metres => Instance != null
+            ? ArPinch.MetresFor(Mathf.Max(Instance._sizeX, Instance._sizeZ), Instance._scale) : 0;
 
         // ── the camera feed ──────────────────────────────────────────────────────
 
@@ -438,6 +489,10 @@ namespace DiveMap.Runtime
         private void LateUpdate()
         {
             if (!_active || _cam == null) return;
+
+            // ARKit runs its own gesture handling on its own rig; two systems reading the same two
+            // fingers would fight over the scale.
+            if (!_arkit) HandlePinch();
 
             if (_gyro)
             {

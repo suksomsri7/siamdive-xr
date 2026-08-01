@@ -120,7 +120,15 @@ namespace DiveMap.Runtime
             // ship with fog enabled so the linear-fog shader variants survive build stripping.
             RenderSettings.fog = true;
             RenderSettings.fogMode = FogMode.Linear;
-            RenderSettings.fogColor = new Color(0.071f, 0.227f, 0.333f); // 0x123a55
+            // 🔴 NOT the web's #123a55 any more. That colour is about a third as bright as the
+            // backdrop gradient drawn behind everything, so distant geometry faded toward navy over
+            // a bright cyan background and read as a black silhouette. The fog now reads off the
+            // same ramp as the backdrop (WaterFog) — this is the surface end of it, and
+            // DepthAtmosphere moves it down the ramp as the camera descends.
+            {
+                SeabedGeom.Rgb f = WaterFog.ColorAt(0f);
+                RenderSettings.fogColor = new Color(f.R, f.G, f.B);
+            }
             RenderSettings.fogStartDistance = 500f;
             RenderSettings.fogEndDistance = 9000f;
 

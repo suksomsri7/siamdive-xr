@@ -5,23 +5,28 @@ using UnityEngine.UI;
 namespace DiveMap.Runtime.Ui
 {
     /// <summary>
-    /// F4 — the AR overlay: the size bar, the way out, and the one line of guidance.
+    /// The AR overlay: what to do next, how big it is, and the way out.
     ///
-    /// The web (builder.html:349, CSS :97):
-    /// <code>
-    ///   &lt;div id="arctl"&gt;&lt;button id="arMinus"&gt;−&lt;/button&gt;&lt;span&gt;ขนาด&lt;/span&gt;
-    ///                        &lt;button id="arPlus"&gt;＋&lt;/button&gt;&lt;/div&gt;
-    ///   #arctl{ left:50%; bottom: calc(28px + env(safe-area-inset-bottom)); }
-    ///   body.holo #arctl{ display:none !important }
-    /// </code>
+    /// 🔴 The − / + stepper is GONE, and that is the point of this version. The web has one
+    /// (builder.html:349 <c>#arMinus</c>/<c>#arPlus</c>) because the web has no tracking: with the
+    /// model welded in front of the face, a stepper is the only size control available. With ARKit
+    /// the site stands on a real table, and the gesture everybody already knows — two fingers —
+    /// says what a stepper only approximates. Removing the two buttons also gives the room back the
+    /// bottom of the screen, which in the one mode whose whole purpose is seeing the room is not a
+    /// small thing.
     ///
-    /// The last line matters and is easy to skim past: AR and holomap are separate modes with
-    /// separate bars. When holomap is built (deferred — docs/WO-AR-HOLOMAP.md), it gets its own
-    /// controls; merging them would put a "ขนาด" stepper on a mode whose zoom works differently.
+    /// What replaces it is a sequence, because placing something in a room IS a sequence:
+    ///   1. <see cref="ArStep.Searching"/> — "point at the floor". Nothing can be done yet and the
+    ///      screen says so, rather than inviting a tap that would be ignored.
+    ///   2. <see cref="ArStep.Aiming"/>    — a surface has been found (the blue patch is visible).
+    ///                                       "Tap where you want it."
+    ///   3. <see cref="ArStep.Adjusting"/> — placed. Pinch to size, tap to move, ✓ to commit. The
+    ///                                       size is shown in METRES: "1.10 m" is checkable against
+    ///                                       the actual table, which "×1.22" never was.
+    ///   4. <see cref="ArStep.Anchored"/>  — pinned to an ARAnchor. The prompt becomes the way back.
     ///
-    /// Deliberate additions over the web, both because AR is the one mode with no other chrome on
-    /// screen: the buttons grey out at the zoom stops (the web lets you shrink the site to 8 cm
-    /// with no clue how to get back), and the hint line names the gesture rather than the feature.
+    /// Everything is positioned through <see cref="UiKit.Css"/> (UI_PARITY.md): the canvas scales
+    /// with the device, so a hard-coded unit is a different size on every phone.
     /// </summary>
     [DisallowMultipleComponent]
     public sealed class ArControls : MonoBehaviour
@@ -31,24 +36,42 @@ namespace DiveMap.Runtime.Ui
         /// <summary>QC surface — the bar is on screen.</summary>
         public static bool IsOpen => _open != null;
 
-        private Text _minus, _plus, _diag, _hint;
+        private Text _diag, _hint, _size;
+        private Button _action;
+        private Text _actionLabel;
+        private ArStep _step = ArStep.Searching;
 
         /// <summary>
         /// One line of live sensor readout, top-left under the exit button.
         ///
-        /// 🔎 Temporary, and here on purpose. AR is the one feature CI cannot see: the runner has
-        /// no camera and no gyroscope, so "does the attitude sensor deliver on this phone" is a
-        /// question no test can answer and no log reaches. Two rounds were already lost today to
-        /// guessing at questions a device could have answered in one screenshot. Remove once the
-        /// sensor is confirmed on hardware.
+        /// 🔎 AR is the one feature CI cannot see: the runner has no camera and no gyroscope, so
+        /// "does this actually start on a phone" is a question no test can answer and no log
+        /// reaches. Rounds have been lost to guessing at questions a device could have answered in
+        /// one screenshot. Remove once AR is confirmed on hardware.
         /// </summary>
         public static void SetDiagnostics(string line) => _open?.ShowDiag(line);
 
-        /// <summary>
-        /// Replace the one-line instruction. With real tracking the instruction changes as the
-        /// session does — "point at a flat surface" is a lie once the map is already on the table.
-        /// </summary>
+        /// <summary>Replace the one-line instruction with something more specific than the step's
+        /// own wording (e.g. "no surface where you tapped").</summary>
         public static void SetHint(string text) => _open?.ShowHint(text);
+
+        /// <summary>Move to a step: rewrites the instruction and the button in one place, so the
+        /// two can never describe different states.</summary>
+        public static void SetStep(ArStep step, double metres) => _open?.ApplyStep(step, metres);
+
+        /// <summary>Live during a pinch. <paramref name="atLimit"/> greys the readout at a stop —
+        /// the alternative is a map that silently stops responding to the fingers.</summary>
+        public static void SetSize(double metres, bool atLimit) => _open?.ShowSize(metres, atLimit);
+
+        /// <summary>
+        /// The overlay for a phone with no tracking: size, and nothing else.
+        ///
+        /// That path has no floor to find and no anchor to set — the site is already in front of
+        /// the viewer — so it gets neither the step wording nor the confirm button. Showing
+        /// "looking for a surface" on a device that will never find one reads as a hang, and a ✓
+        /// that pins nothing is a button that lies about what it did.
+        /// </summary>
+        public static void SetSizeOnly(double metres) => _open?.ApplySizeOnly(metres);
 
         public static void Open()
         {
@@ -73,9 +96,6 @@ namespace DiveMap.Runtime.Ui
             _open = null;
         }
 
-        /// <summary>Re-read the zoom stops after a − / + press.</summary>
-        public static void Refresh() => _open?.UpdateLimits();
-
         private void OnDestroy()
         {
             if (_open == this) _open = null;
@@ -89,6 +109,68 @@ namespace DiveMap.Runtime.Ui
         private void ShowHint(string text)
         {
             if (_hint != null) _hint.text = text;
+        }
+
+        private void ShowSize(double metres, bool atLimit)
+        {
+            if (_size == null) return;
+            _size.gameObject.SetActive(true);
+            _size.text = metres.ToString("0.00") + " " + UiStrings.Tr("ม.");
+            _size.color = atLimit ? UiKit.TextDim : UiKit.TextMain;
+        }
+
+        private void ApplyStep(ArStep step, double metres)
+        {
+            _step = step;
+            switch (step)
+            {
+                case ArStep.Searching:
+                    ShowHint(UiStrings.Tr("เล็งกล้องไปที่พื้นเรียบ กำลังหาพื้น…"));
+                    ShowAction(false, "");
+                    if (_size != null) _size.gameObject.SetActive(false);
+                    break;
+
+                case ArStep.Aiming:
+                    ShowHint(UiStrings.Tr("เจอพื้นแล้ว — แตะตรงที่อยากวางแผนที่"));
+                    ShowAction(false, "");
+                    if (_size != null) _size.gameObject.SetActive(false);
+                    break;
+
+                case ArStep.Adjusting:
+                    ShowHint(UiStrings.Tr("สองนิ้วย่อ-ขยาย · แตะเพื่อย้าย · กดยืนยันเมื่อพอใจ"));
+                    ShowAction(true, UiStrings.Tr("✓ ยืนยัน"));
+                    ShowSize(metres, ArPinch.AtLimit(metres));
+                    break;
+
+                case ArStep.Anchored:
+                    ShowHint(UiStrings.Tr("ยึดกับพื้นแล้ว — เดินรอบดูได้เลย"));
+                    ShowAction(true, UiStrings.Tr("ย้ายตำแหน่ง"));
+                    ShowSize(metres, ArPinch.AtLimit(metres));
+                    break;
+            }
+        }
+
+        private void ApplySizeOnly(double metres)
+        {
+            _step = ArStep.Adjusting;
+            ShowHint(UiStrings.Tr("สองนิ้วย่อ-ขยาย"));
+            ShowAction(false, "");
+            ShowSize(metres, ArPinch.AtLimit(metres));
+        }
+
+        private void ShowAction(bool visible, string label)
+        {
+            if (_action == null) return;
+            _action.gameObject.SetActive(visible);
+            if (_actionLabel != null) _actionLabel.text = label;
+        }
+
+        /// <summary>The one button under the hint does whichever thing the current step needs.
+        /// Two buttons that are never both useful is two buttons too many on a phone.</summary>
+        private void OnAction()
+        {
+            if (_step == ArStep.Anchored) ArKitSession.Adjust();
+            else ArKitSession.Confirm();
         }
 
         private void Build(RectTransform root)
@@ -114,70 +196,43 @@ namespace DiveMap.Runtime.Ui
             drt.sizeDelta = new Vector2(UiKit.Css(330f), UiKit.Css(56f));   // 3 บรรทัด
             drt.anchoredPosition = new Vector2(UiKit.Css(12f), -UiKit.Css(58f));
 
-            // ── the size bar, centred at the bottom like the web's #arctl ────────
-            Image bar = UiKit.MakeRounded(root, "ArCtl", UiKit.Glass, 24f);
-            RectTransform brt = bar.rectTransform;
-            brt.anchorMin = new Vector2(0.5f, 0f);
-            brt.anchorMax = new Vector2(0.5f, 0f);
-            brt.pivot = new Vector2(0.5f, 0f);
-            brt.sizeDelta = new Vector2(UiKit.Css(196f), UiKit.Css(52f));
-            brt.anchoredPosition = new Vector2(0f, UiKit.Css(28f));
+            // ── the size readout, top-right, opposite the exit ───────────────────
+            // In metres, because that is the unit the table is in. It sits away from the fingers:
+            // a number under a pinch is a number covered by a hand exactly when it is being read.
+            _size = UiKit.MakeLine(root, "ArSize", "", UiKit.CssFont(15f),
+                                   TextAnchor.UpperRight, UiKit.TextMain);
+            RectTransform srt = _size.rectTransform;
+            srt.anchorMin = new Vector2(1f, 1f);
+            srt.anchorMax = new Vector2(1f, 1f);
+            srt.pivot = new Vector2(1f, 1f);
+            srt.sizeDelta = new Vector2(UiKit.Css(120f), UiKit.RowHeight(UiKit.CssFont(15f), 1));
+            srt.anchoredPosition = new Vector2(-UiKit.Css(12f), -UiKit.Css(14f));
+            _size.gameObject.SetActive(false);
 
-            _minus = Step(bar.transform, "ArMinus", "–", 0f, () => Zoom(false));
-            Text label = UiKit.MakeLine(bar.transform, "Label", UiStrings.Tr("ขนาด"),
-                                        UiKit.CssFont(14f), TextAnchor.MiddleCenter, UiKit.TextDim);
-            RectTransform lrt = label.rectTransform;
-            lrt.anchorMin = new Vector2(0.5f, 0.5f);
-            lrt.anchorMax = new Vector2(0.5f, 0.5f);
-            lrt.pivot = new Vector2(0.5f, 0.5f);
-            lrt.sizeDelta = new Vector2(UiKit.Css(80f), UiKit.Css(24f));
-            lrt.anchoredPosition = Vector2.zero;
-            // "+" not the web's fullwidth "＋": NotoSansThai has no glyph for U+FF0B, and the
-            // first QC shot showed the button as an empty box. A missing glyph is invisible in
-            // code review and only shows in a screenshot — which is why the shot is taken.
-            _plus = Step(bar.transform, "ArPlus", "+", 1f, () => Zoom(true));
+            // ── the action button, bottom centre where the size bar used to be ───
+            _action = UiKit.MakeButton(root, "ArAction", "", UiKit.CssFont(15f),
+                                       UiKit.Accent, UiKit.OnAccent, OnAction);
+            RectTransform art = _action.GetComponent<RectTransform>();
+            art.anchorMin = new Vector2(0.5f, 0f);
+            art.anchorMax = new Vector2(0.5f, 0f);
+            art.pivot = new Vector2(0.5f, 0f);
+            art.sizeDelta = new Vector2(UiKit.Css(196f), UiKit.Css(52f));
+            art.anchoredPosition = new Vector2(0f, UiKit.Css(28f));
+            _action.gameObject.SetActive(false);
+            _actionLabel = _action.GetComponentInChildren<Text>();
 
-            // #arhint — the web's one-liner. Says what to DO ("point the camera at a flat
-            // surface"), because a user holding a phone at a reef needs an instruction, not a
-            // label saying they are in AR mode.
-            _hint = UiKit.MakeLine(root, "ArHint", UiStrings.Tr("เล็งกล้องไปที่พื้นเรียบ"),
-                                       UiKit.CssFont(13f), TextAnchor.MiddleCenter, UiKit.TextDim);
+            // #arhint — the web's one-liner, now carrying the step. Says what to DO, because a user
+            // holding a phone at a table needs an instruction, not a label saying they are in AR.
+            _hint = UiKit.MakeLine(root, "ArHint", "", UiKit.CssFont(13f),
+                                   TextAnchor.MiddleCenter, UiKit.TextDim);
             RectTransform hrt = _hint.rectTransform;
             hrt.anchorMin = new Vector2(0.5f, 0f);
             hrt.anchorMax = new Vector2(0.5f, 0f);
             hrt.pivot = new Vector2(0.5f, 0f);
-            hrt.sizeDelta = new Vector2(UiKit.Css(280f), UiKit.Css(22f));
-            hrt.anchoredPosition = new Vector2(0f, UiKit.Css(88f));
+            hrt.sizeDelta = new Vector2(UiKit.Css(340f), UiKit.RowHeight(UiKit.CssFont(13f), 1));
+            hrt.anchoredPosition = new Vector2(0f, UiKit.Css(92f));
 
-            UpdateLimits();
-        }
-
-        private Text Step(Transform parent, string name, string glyph, float side, UnityEngine.Events.UnityAction on)
-        {
-            Button b = UiKit.MakeButton(parent, name, glyph, UiKit.CssFont(22f),
-                                        new Color(1f, 1f, 1f, 0.08f), UiKit.TextMain, on);
-            RectTransform rt = b.GetComponent<RectTransform>();
-            rt.anchorMin = new Vector2(side, 0.5f);
-            rt.anchorMax = new Vector2(side, 0.5f);
-            rt.pivot = new Vector2(side, 0.5f);
-            rt.sizeDelta = new Vector2(UiKit.Css(48f), UiKit.Css(40f));
-            rt.anchoredPosition = new Vector2(side == 0f ? UiKit.Css(6f) : -UiKit.Css(6f), 0f);
-            return b.GetComponentInChildren<Text>();
-        }
-
-        private static void Zoom(bool closer)
-        {
-            if (ArSession.Instance != null) ArSession.Instance.Zoom(closer);
-        }
-
-        /// <summary>Grey out whichever end the user has reached — the web shows no stop at all.</summary>
-        private void UpdateLimits()
-        {
-            double scale = ArSession.Scale, fit = ArSession.FitScale;
-            if (_minus != null)
-                _minus.color = ArPlacement.AtLimit(scale, fit, false) ? UiKit.TextDim : UiKit.TextMain;
-            if (_plus != null)
-                _plus.color = ArPlacement.AtLimit(scale, fit, true) ? UiKit.TextDim : UiKit.TextMain;
+            ApplyStep(ArKitSession.Step, ArKitSession.Metres);
         }
     }
 }

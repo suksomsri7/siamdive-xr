@@ -264,3 +264,63 @@ EditMode tests เขียว = แพ็กเกจ resolve ได้แล�
   (เปลี่ยน `s`) · ถ้าเครื่องไม่รองรับ ARKit ให้ตกกลับไปทาง gyro เดิมทั้งดุ้น
 - ⚠️ ของที่ CI พิสูจน์ไม่ได้เลย: กล้อง/พื้น/การเดิน — ต้องเทสบนเครื่องจริงเท่านั้น
   บรรทัดค่าเซนเซอร์บนจอ AR (ArControls.SetDiagnostics) ยังอยู่ ใช้ต่อได้เพื่อดูสถานะ ARKit
+
+---
+
+## 🔴 1 ส.ค. (เย็น) — เจอสาเหตุจริงที่ ARKit ไม่เคยสตาร์ท (อ่านก่อนแตะ ARKit อีก)
+
+**ไล่ผิดชั้นมา 4 รอบ** ทุกความพยายามก่อนหน้านี้อยู่กับ "จะส่งไฟล์ตั้งค่า XR ให้ถึง player ยังไง"
+(เขียน asset มือ → EditorBuildSettings → PreloadedAssets → สร้าง manager เองในโค้ด)
+แต่ **ไฟล์ตั้งค่าไม่ใช่สิ่งที่เปิด ARKit** ตัวที่เปิดคือ scripting define ตัวเดียว:
+
+### `UNITY_XR_ARKIT_LOADER_ENABLED` (ของ NamedBuildTarget `iPhone`)
+
+หลักฐานจากซอร์สแพ็กเกจ (`com.unity.xr.arkit@6.0.8`) ไม่ใช่การเดา:
+
+1. `Runtime/ARKitApi.cs:49` — `Api.AtLeast11_0()` เป็น `DllImport` **เฉพาะเมื่อมี define**
+   ถ้าไม่มี บรรทัด 147 คืน `false` ตายตัว
+2. `Runtime/ARKitSessionSubsystem.cs:392` — `RegisterDescriptor()` **`if (!Api.AtLeast11_0()) return;`**
+   → ไม่มี descriptor ชื่อ `"ARKit-Session"` ในระบบเลย
+3. `Runtime/ARKitLoader.cs:137` — `Initialize()` หา subsystem ไม่เจอ → `sessionSubsystem == null`
+   → คืน `false` **โดยไม่มี error ใด ๆ** → แอปตกกลับไปใช้ไจโรอย่างที่ออกแบบไว้
+4. `Editor/ARKitBuildProcessor.cs:204` — `ShouldIncludeRuntimePluginsInBuild()` คืน `false`
+   ถ้า `loaderEnabled` เป็น false → **`libUnityARKit.a` ไม่ถูกก๊อปเข้า Xcode project ด้วยซ้ำ**
+   (`loaderEnabled` ตั้งจาก `UpdateARKitDefines()` ซึ่งใน batch mode ถูกเรียกจาก `PreprocessBuild`
+   ที่อยู่ใน `#if UNITY_IOS && UNITY_XR_ARKIT_LOADER_ENABLED` — วนกลับมาที่ define ตัวเดิม)
+
+ปกติ Unity Editor ใส่ define นี้เองจาก `LoaderEnabledCheck` ซึ่งเป็น **EditorCoroutine ที่
+`return` ทันทีใน batch mode** (`Editor/ARKitBuildProcessor.cs:318`) → บนเครื่องที่ไม่มี Editor
+มันจึงไม่เคยถูกใส่ **ต้อง commit ไว้ใน `ProjectSettings.asset` เอง**:
+
+```yaml
+  scriptingDefineSymbols:
+    iPhone: UNITY_XR_ARKIT_LOADER_ENABLED
+```
+
+⚠️ define ไม่พอถ้าไฟล์ตั้งค่า XR พัง: `UpdateARKitDefines()` ยังต้องอ่าน
+`XRGeneralSettingsPerBuildTarget` → `Manager.activeLoaders` เจอ `ARKitLoader` ถึงจะก๊อป `.a`
+→ `CIBuild.ReportXrLoaders()` พิมพ์รายชื่อ loader ที่ Unity เห็นจริงตอนเริ่ม build
+และ `ArkitDefinePresent()` **ล้ม build ทันที** ถ้า define หาย (แทนที่จะเสีย 45 นาทีแล้วได้แอปไม่มี AR)
+
+### บั๊กรอบ 196 (`เพิ่ม loader เข้า manager ไม่ได้`) — คนละตัว แต่จริงเหมือนกัน
+`XRManagerSettings.TryAddLoader()` (mgmt 4.7.0 บรรทัด 256) ปฏิเสธ loader ที่ไม่อยู่ใน
+`m_RegisteredLoaders` ซึ่ง `Awake()` เติมจาก **list ที่ serialize ไว้เท่านั้น** —
+manager ที่ `CreateInstance` ในโค้ดจึงมี list ว่าง Awake ลงทะเบียนศูนย์ตัว ทุกการ add ถูกปฏิเสธ
+(API ตั้งใจให้ immutable ตอน runtime) → แก้ด้วยการเติม `m_RegisteredLoaders` ผ่าน reflection
+ก่อน แล้วค่อยเรียก API สาธารณะ + มี fallback เขียน `m_Loaders` ตรง ๆ
+
+และที่สำคัญกว่า: **ARFoundation ไม่ได้ถาม manager ของเรา** ทุกตัว (`ARSession`, `ARPlaneManager`,
+`ARRaycastManager`) หา loader ผ่าน `XRGeneralSettings.Instance.Manager.activeLoader`
+(`Runtime/ARFoundation/LoaderUtility.cs:23`) → ต้อง publish ลง static ตัวนั้นด้วย
+ไม่งั้นพังลึกลงไปอีกชั้นและดูเหมือนบั๊กคนละตัว
+
+### flow ใหม่ที่ทำแล้ว (ตามที่ user ออกแบบ)
+`Core/ArStep` = Searching → Aiming → Adjusting → Anchored
+- ตรวจเจอพื้น → วาดแผ่นฟ้าโปร่ง (`ARPlaneMeshVisualizer` + DM_StandardTransparent)
+  · template ต้องอยู่ใต้ parent ที่ปิดอยู่ เพราะ AF ก๊อป `activeSelf` ของ prefab ไปให้ instance
+- แตะ = เลือกจุด (แมพซ่อนอยู่จนกว่าจะแตะ ไม่ใช่ลอยอยู่กลางห้องแบบเดิม)
+- **สองนิ้วย่อขยาย** (`Core/ArPinch` — หน่วยเป็นเมตรบนโต๊ะ ไม่ใช่ตัวคูณ) · **เอาปุ่ม −/+ ออกทั้ง 2 เส้นทาง**
+- ✓ ยืนยัน → `ARAnchorManager.AttachAnchor(plane, pose)` แล้ว **อ่านตำแหน่ง anchor กลับมา
+  คำนวณ origin ใหม่ทุกเฟรม** (ทิศทางสำคัญ: anchor เป็นตัวบอกแมพ ไม่ใช่แมพบอก anchor)
+  · อ่านใน session space (`TrackablesParent.InverseTransformPoint`) ไม่ใช่ world space
+  ไม่งั้นป้อน transform ด้วยผลลัพธ์ของตัวเอง แมพจะไม่ขยับเลย
