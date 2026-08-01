@@ -31,7 +31,7 @@ namespace DiveMap.Runtime.Ui
         /// <summary>QC surface — the bar is on screen.</summary>
         public static bool IsOpen => _open != null;
 
-        private Text _minus, _plus, _diag;
+        private Text _minus, _plus, _diag, _hint;
 
         /// <summary>
         /// One line of live sensor readout, top-left under the exit button.
@@ -43,6 +43,12 @@ namespace DiveMap.Runtime.Ui
         /// sensor is confirmed on hardware.
         /// </summary>
         public static void SetDiagnostics(string line) => _open?.ShowDiag(line);
+
+        /// <summary>
+        /// Replace the one-line instruction. With real tracking the instruction changes as the
+        /// session does — "point at a flat surface" is a lie once the map is already on the table.
+        /// </summary>
+        public static void SetHint(string text) => _open?.ShowHint(text);
 
         public static void Open()
         {
@@ -78,6 +84,11 @@ namespace DiveMap.Runtime.Ui
         private void ShowDiag(string line)
         {
             if (_diag != null) _diag.text = line;
+        }
+
+        private void ShowHint(string text)
+        {
+            if (_hint != null) _hint.text = text;
         }
 
         private void Build(RectTransform root)
@@ -129,9 +140,9 @@ namespace DiveMap.Runtime.Ui
             // #arhint — the web's one-liner. Says what to DO ("point the camera at a flat
             // surface"), because a user holding a phone at a reef needs an instruction, not a
             // label saying they are in AR mode.
-            Text hint = UiKit.MakeLine(root, "ArHint", UiStrings.Tr("เล็งกล้องไปที่พื้นเรียบ"),
+            _hint = UiKit.MakeLine(root, "ArHint", UiStrings.Tr("เล็งกล้องไปที่พื้นเรียบ"),
                                        UiKit.CssFont(13f), TextAnchor.MiddleCenter, UiKit.TextDim);
-            RectTransform hrt = hint.rectTransform;
+            RectTransform hrt = _hint.rectTransform;
             hrt.anchorMin = new Vector2(0.5f, 0f);
             hrt.anchorMax = new Vector2(0.5f, 0f);
             hrt.pivot = new Vector2(0.5f, 0f);

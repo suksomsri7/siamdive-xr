@@ -57,6 +57,8 @@ namespace DiveMap.Runtime
         private Transform _feed;
         private WebCamTexture _webcam;
         private bool _gyro;
+        /// <summary>True when ARKit is driving instead of the attitude fallback.</summary>
+        private bool _arkit;
 
         // Everything borrowed from the scene, so Restore() can be exact rather than approximate.
         private CameraClearFlags _clearFlags;
@@ -175,6 +177,19 @@ namespace DiveMap.Runtime
             _cam.backgroundColor = new Color(0f, 0f, 0f, 0f);
             RenderSettings.fog = false;
 
+            // Real AR first. ARKit knows where the room is, so the map can sit on a table and the
+            // player can walk round it — the two things the attitude-only path can never do. It
+            // brings its own camera feed (ARCameraBackground), so the WebCamTexture quad below is
+            // only for devices without tracking.
+            _arkit = ArKitSession.Begin(_center, _sizeX, _sizeZ);
+            if (_arkit)
+            {
+                Debug.Log("[AR] ARKit session — plane detection + tap to place");
+                ArControls.Open();
+                if (Ui.CompassWidget.Instance != null) Ui.CompassWidget.Instance.SetVisible(false);
+                return;
+            }
+
             ApplyPlacement();
             StartCoroutine(StartCameraFeed());
 
@@ -292,6 +307,7 @@ namespace DiveMap.Runtime
         public void Zoom(bool closer)
         {
             if (!_active) return;
+            if (_arkit) { ArKitSession.Zoom(closer); return; }
             double next = ArPlacement.Zoom(_scale, _fit, closer);
             if (System.Math.Abs(next - _scale) < 1e-12)
             {
@@ -464,6 +480,11 @@ namespace DiveMap.Runtime
         {
             _active = false;
             ArControls.Close();
+            if (_arkit)
+            {
+                ArKitSession.End();
+                _arkit = false;
+            }
             StopFeed();
 
             if (_feed != null) { Destroy(_feed.gameObject); _feed = null; }
