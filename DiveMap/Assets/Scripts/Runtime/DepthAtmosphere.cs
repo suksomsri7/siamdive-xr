@@ -73,9 +73,15 @@ namespace DiveMap.Runtime
             DepthLight.Attenuation(depth, out float r, out float g, out float b);
             var tint = new Color(r, g, b, 1f);
 
-            RenderSettings.ambientSkyColor = _baseSky * tint;
-            RenderSettings.ambientEquatorColor = _baseEquator * tint;
-            RenderSettings.ambientGroundColor = _baseGround * tint;
+            // Only HALF the attenuation goes on the ambient. The headlamp system already dims the
+            // whole scene by its own multiplier, so applying the depth curve on top at full
+            // strength stacked two dimmers and the water came out near-black — reported as "still
+            // too dark" on a build that had already been brightened once. The depth cue lives
+            // mostly in the fog and the colour shift, which is where the eye reads it anyway.
+            Color soft = Color.Lerp(Color.white, tint, 0.5f);
+            RenderSettings.ambientSkyColor = _baseSky * soft;
+            RenderSettings.ambientEquatorColor = _baseEquator * soft;
+            RenderSettings.ambientGroundColor = _baseGround * soft;
 
             // The water itself goes deeper blue-green as the red drains out of the light in it.
             RenderSettings.fogColor = _baseFog * new Color(r, Mathf.Lerp(r, g, 0.5f), b, 1f);

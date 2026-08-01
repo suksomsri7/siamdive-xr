@@ -47,7 +47,7 @@ namespace DiveMap.Core
         {
             FogNear = 140f, FogFar = 280f,
             FogR = 0.094f, FogG = 0.388f, FogB = 0.541f,   // 0x18638a
-            AmbientMul = 0.52f,
+            AmbientMul = 0.72f,
             DiveLight = 2.2f,
         };
 
@@ -66,7 +66,7 @@ namespace DiveMap.Core
         {
             FogNear = 70f, FogFar = 200f,
             FogR = 0.031f, FogG = 0.188f, FogB = 0.247f,   // 0x08303f
-            AmbientMul = 0.40f,
+            AmbientMul = 0.55f,
             DiveLight = 0.5f,
         };
 
