@@ -696,7 +696,7 @@ namespace DiveMap.Runtime
         {
             if (_summaryLoaded < 0) return;
             SetStatus($"{_summaryTitle}  ·  {UiStrings.Tr("โหลดแล้ว")} {_summaryLoaded} · " +
-                      $"{UiStrings.Tr("แทนที่")} {_summaryFailed}{Core.BuildStamp.Suffix}");
+                      $"{UiStrings.Tr("แทนที่")} {_summaryFailed}{Core.BuildStamp.Suffix}{Core.BuildStamp.ScreenInfo}");
         }
 
         /// <summary>

@@ -18,6 +18,25 @@ namespace DiveMap.Core
 
         private static string _cached;
 
+        /// <summary>
+        /// The numbers behind the black frame around the picture. Two fixes have now been aimed at
+        /// this from guesses and neither hit, so the app reports what it actually has: the drawable
+        /// it was given, the safe area iOS declared, and the render-scale factor. If the drawable is
+        /// smaller than the screen the frame is a resolution problem; if it matches and the safe
+        /// area is inset, it is a layout problem. One screenshot decides it instead of a third guess.
+        /// Temporary — remove once the cause is known.
+        /// </summary>
+        public static string ScreenInfo
+        {
+            get
+            {
+                var sa = UnityEngine.Screen.safeArea;
+                return $" · {UnityEngine.Screen.width}×{UnityEngine.Screen.height}" +
+                       $" safe {sa.width:F0}×{sa.height:F0}@{sa.x:F0},{sa.y:F0}" +
+                       $" dpi×{UnityEngine.QualitySettings.resolutionScalingFixedDPIFactor:F2}";
+            }
+        }
+
         /// <summary>e.g. " · b163", or "" when the build was not stamped.</summary>
         public static string Suffix
         {
