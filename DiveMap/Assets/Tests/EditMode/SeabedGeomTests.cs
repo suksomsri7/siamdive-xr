@@ -116,15 +116,15 @@ namespace DiveMap.Tests
         {
             AssertRgb(0.890f, 0.949f, 0.973f, SeabedGeom.GradientStop(0f));      // #e3f2f8
             AssertRgb(0.663f, 0.831f, 0.910f, SeabedGeom.GradientStop(0.38f));   // #a9d4e8
-            AssertRgb(0.247f, 0.576f, 0.776f, SeabedGeom.GradientStop(0.52f));   // #3f93c6
-            AssertRgb(0.024f, 0.141f, 0.227f, SeabedGeom.GradientStop(1f));      // #06243a
+            AssertRgb(0.325f, 0.639f, 0.816f, SeabedGeom.GradientStop(0.52f));   // #53a3d0
+            AssertRgb(0.106f, 0.310f, 0.451f, SeabedGeom.GradientStop(1f));      // #1b4f73
         }
 
         [Test]
         public void GradientStop_ClampsOutsideZeroToOne()
         {
             AssertRgb(0.890f, 0.949f, 0.973f, SeabedGeom.GradientStop(-2f));
-            AssertRgb(0.024f, 0.141f, 0.227f, SeabedGeom.GradientStop(9f));
+            AssertRgb(0.106f, 0.310f, 0.451f, SeabedGeom.GradientStop(9f));
         }
 
         [Test]
