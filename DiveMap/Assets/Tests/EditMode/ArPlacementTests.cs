@@ -139,62 +139,12 @@ namespace DiveMap.Tests
             Assert.AreEqual(Center.Z, eye.Z, 1e-12);
         }
 
-        // ── the − / + buttons ────────────────────────────────────────────────────
-
-        [Test]
-        public void ZoomStepsMatchTheWeb()
-        {
-            double fit = ArPlacement.FitScale(SizeX, SizeZ);
-            Assert.AreEqual(fit * 1.22, ArPlacement.Zoom(fit, fit, closer: true), 1e-12);
-            Assert.AreEqual(fit * 0.82, ArPlacement.Zoom(fit, fit, closer: false), 1e-12);
-        }
-
-        [Test]
-        public void InAndOutNearlyCancel_AsTheWebIntended()
-        {
-            // 1.22 × 0.82 = 1.0004. The asymmetry is deliberate; a user who presses + then − should
-            // land back where they started, near enough not to notice.
-            double fit = ArPlacement.FitScale(SizeX, SizeZ);
-            double there = ArPlacement.Zoom(fit, fit, true);
-            double back = ArPlacement.Zoom(there, fit, false);
-            Assert.AreEqual(fit, back, fit * 0.001);
-        }
-
-        [Test]
-        public void ZoomingOutForeverCannotLoseTheMap()
-        {
-            // The web has no limit: eleven presses of − leave the site 8 cm wide with no hint that
-            // + is the way back. This is a deliberate difference from the web.
-            double fit = ArPlacement.FitScale(SizeX, SizeZ);
-            double v = fit;
-            for (int i = 0; i < 50; i++) v = ArPlacement.Zoom(v, fit, closer: false);
-
-            Assert.AreEqual(fit * ArPlacement.MinZoom, v, 1e-15);
-            Assert.Greater(ArPlacement.ApparentSpan(SizeX, v), 0.2, "still a hand-sized object");
-            Assert.IsTrue(ArPlacement.AtLimit(v, fit, closer: false));
-            Assert.IsFalse(ArPlacement.AtLimit(v, fit, closer: true), "+ must still be offered");
-        }
-
-        [Test]
-        public void ZoomingInForeverStopsBeforeTheMapSwallowsTheRoom()
-        {
-            double fit = ArPlacement.FitScale(SizeX, SizeZ);
-            double v = fit;
-            for (int i = 0; i < 50; i++) v = ArPlacement.Zoom(v, fit, closer: true);
-
-            Assert.AreEqual(fit * ArPlacement.MaxZoom, v, 1e-15);
-            Assert.IsTrue(ArPlacement.AtLimit(v, fit, closer: true));
-            Assert.IsFalse(ArPlacement.AtLimit(v, fit, closer: false));
-        }
-
-        [Test]
-        public void ZoomSurvivesNonsense()
-        {
-            double fit = ArPlacement.FitScale(SizeX, SizeZ);
-            Assert.AreEqual(fit, ArPlacement.Zoom(0, fit, true), 1e-15);
-            Assert.AreEqual(fit, ArPlacement.Zoom(double.NaN, fit, false), 1e-15);
-            Assert.IsTrue(ArPlacement.AtLimit(1, 0, true), "no map, no zoom");
-        }
+        // ── the − / + buttons are gone ───────────────────────────────────────────
+        //
+        // They were replaced by a two-finger pinch (Core/ArPinch, ArPinchTests). The stepper's
+        // ratios, its clamps and the tests that pinned them went with it rather than being left
+        // behind as a passing suite for a control nobody can press — a green test for dead code is
+        // worse than no test, because it reads as coverage.
 
         // ── clipping ─────────────────────────────────────────────────────────────
 

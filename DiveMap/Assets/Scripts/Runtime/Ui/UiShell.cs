@@ -1288,17 +1288,24 @@ namespace DiveMap.Runtime.Ui
                 Debug.Log("[UI] qcui shot -> " + prefix + "_ar.png");
                 yield return new WaitForSecondsRealtime(1.2f);
 
-                // − and + must move the viewer and must stop rather than run away.
-                double s0 = ArSession.Scale;
-                if (ArSession.Instance != null) ArSession.Instance.Zoom(true);
+                // The pinch must resize, and must STOP rather than let the map be lost. Driven
+                // through SetMetres — the same function the gesture ends in — because the runner
+                // has no fingers and a separate copy of the clamp would prove nothing about the
+                // one the user reaches. The step size is not asserted: a pinch has none.
+                double m0 = ArSession.Metres;
+                ArSession.Instance?.SetMetres(m0 * 1.6);
                 yield return new WaitForSecondsRealtime(0.5f);
-                double s1 = ArSession.Scale;
-                for (int i = 0; i < 40; i++) ArSession.Instance?.Zoom(false);
+                double m1 = ArSession.Metres;
+                ArSession.Instance?.SetMetres(0.0001);      // far past the small stop
                 yield return new WaitForSecondsRealtime(0.5f);
-                double s2 = ArSession.Scale;
-                Debug.Log($"[QC] ar zoom {s0:F5} → {s1:F5} (expected ×1.22 = {s0 * 1.22:F5}) " +
-                          $"→ 40 presses of − floors at {s2:F5} " +
-                          $"(expected {fit * DiveMap.Core.ArPlacement.MinZoom:F5}, i.e. it cannot be lost)");
+                double m2 = ArSession.Metres;
+                ArSession.Instance?.SetMetres(9999);        // far past the large one
+                yield return new WaitForSecondsRealtime(0.3f);
+                double m3 = ArSession.Metres;
+                Debug.Log($"[QC] ar pinch {m0:F2} m → {m1:F2} m (asked for {m0 * 1.6:F2}) " +
+                          $"→ floors at {m2:F2} m (expected {DiveMap.Core.ArPinch.MinMetres:F2}) " +
+                          $"→ ceilings at {m3:F2} m (expected {DiveMap.Core.ArPinch.MaxMetres:F2}) " +
+                          $"· step={ArKitSession.Step} (no ARKit here, so Searching is correct)");
 
                 if (ModeManager.Instance != null) ModeManager.Instance.Exit();
                 yield return new WaitForSecondsRealtime(1.2f);

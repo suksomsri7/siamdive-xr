@@ -81,6 +81,26 @@ namespace DiveMap.Core
                   "Camera unavailable — showing the model only" },
                 { "เข้า AR ตอนนี้ไม่ได้",              "AR cannot start right now" },
 
+                // AR placement flow (tap → pinch → confirm → ARAnchor). One line per STEP, because
+                // each one has to tell the user the single thing that is possible right now — the
+                // old overlay said "point at a flat surface" from the moment AR opened until it
+                // closed, including while the map was already on the table.
+                { "เล็งกล้องไปที่พื้นเรียบ กำลังหาพื้น…",   "Point at a flat surface — looking for one…" },
+                { "เจอพื้นแล้ว — แตะตรงที่อยากวางแผนที่",  "Surface found — tap where you want the map" },
+                { "ยังไม่เจอพื้นตรงนั้น — เล็งกล้องไปที่พื้นเรียบ",
+                  "No surface there yet — aim at a flat one" },
+                { "สองนิ้วย่อ-ขยาย · แตะเพื่อย้าย · กดยืนยันเมื่อพอใจ",
+                  "Pinch to resize · tap to move · confirm when it looks right" },
+                { "✓ ยืนยัน",                        "✓ Confirm" },
+                // The no-tracking path: sizing is the only thing it can offer.
+                { "สองนิ้วย่อ-ขยาย",                  "Pinch to resize" },
+                { "ยึดกับพื้นแล้ว — เดินรอบดูได้เลย",     "Pinned to the floor — walk around it" },
+                { "ย้ายตำแหน่ง",                     "Move it" },
+                { "ยึดกับพื้นไม่ได้ — วางไว้ตรงนี้ก่อน",   "Could not pin it — leaving it where it is" },
+                // The metre unit on the size readout is already in this table further down (the
+                // depth label owns "ม." → "m"). One key, one entry: a duplicate throws inside the
+                // static initialiser and takes out every test that so much as mentions UiStrings.
+
                 // shell / menu
                 { "เมนู",                  "Menu" },
                 { "รายการแมพ",             "Maps" },

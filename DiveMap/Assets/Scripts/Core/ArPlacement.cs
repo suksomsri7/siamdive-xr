@@ -39,16 +39,10 @@ namespace DiveMap.Core
         /// <summary>Metres in front of the viewer.</summary>
         public const double Distance = 1.4;
 
-        /// <summary>The web's zoom steps (builder.html:3465-3466), deliberately asymmetric.</summary>
-        public const double ZoomInStep = 1.22;
-        public const double ZoomOutStep = 0.82;
-
-        /// <summary>
-        /// Zoom limits, as a multiple of the fitted size. The web has none: pressing − eleven
-        /// times leaves the site 8 cm wide with no way to know which button undoes it. Clamping is
-        /// a deliberate difference from the web, recorded in IMPROVEMENTS.
-        /// </summary>
-        public const double MinZoom = 0.25, MaxZoom = 8.0;
+        // The web's − / + zoom steps (builder.html:3465-3466) used to live here. They are gone with
+        // the buttons: sizing is a two-finger pinch now, and its maths is <see cref="ArPinch"/>,
+        // which works in METRES ACROSS THE TABLE rather than in multiples of a fitted scale — the
+        // quantity the user is actually adjusting, and the one the limits mean something in.
 
         /// <summary>
         /// Metres per world unit for a site whose footprint is <paramref name="sizeX"/> ×
@@ -85,24 +79,6 @@ namespace DiveMap.Core
 
         /// <summary>Apparent width in metres of a site <paramref name="span"/> units across.</summary>
         public static double ApparentSpan(double span, double scale) => span * scale;
-
-        /// <summary>
-        /// One press of − or +. Clamped against the fitted scale so the map can always be found
-        /// again; returns <paramref name="current"/> unchanged at the stop rather than creeping.
-        /// </summary>
-        public static double Zoom(double current, double fit, bool closer)
-        {
-            if (fit <= 0 || current <= 0 || double.IsNaN(current)) return fit;
-            double next = current * (closer ? ZoomInStep : ZoomOutStep);
-            return Math.Min(fit * MaxZoom, Math.Max(fit * MinZoom, next));
-        }
-
-        /// <summary>True when the user is at a stop and the button should read as disabled.</summary>
-        public static bool AtLimit(double current, double fit, bool closer)
-        {
-            if (fit <= 0) return true;
-            return closer ? current >= fit * MaxZoom - 1e-12 : current <= fit * MinZoom + 1e-12;
-        }
 
         /// <summary>
         /// Near/far planes for the AR eye. The viewer stands <c>1.4/scale</c> world units out, which

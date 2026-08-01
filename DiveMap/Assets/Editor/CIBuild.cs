@@ -206,6 +206,15 @@ namespace DiveMap.EditorTools
                 // in the core editor assembly, this needs no platform guard.
                 StampBuildNumber(buildNumber);
                 PreloadXrSettings();
+                if (!ArkitDefinePresent())
+                {
+                    Fail("UNITY_XR_ARKIT_LOADER_ENABLED is missing from the iOS scripting defines. " +
+                         "Without it the ARKit native plug-in is left out of the Xcode project and " +
+                         "the loader silently declines to start — the app would install and have no " +
+                         "AR, which is the failure this build is here to stop. Add it under " +
+                         "scriptingDefineSymbols/iPhone in ProjectSettings.asset.");
+                    return;
+                }
 
                 var profileUuid = Environment.GetEnvironmentVariable("IOS_PROFILE_UUID");
                 if (!string.IsNullOrWhiteSpace(profileUuid))
@@ -320,6 +329,72 @@ namespace DiveMap.EditorTools
                 PlayerSettings.SetPreloadedAssets(preloaded.ToArray());
             }
             Debug.Log($"[CIBuild] XR settings preloaded ({preloaded.Count} assets) — ARKit can start");
+        }
+
+        /// <summary>
+        /// Fail the build NOW if the one define ARKit actually hangs off is missing.
+        ///
+        /// 🔴 This is the thing four TestFlight builds were spent not finding. Everything about the
+        /// XR settings chain was correct — the asset, the loader in its list, EditorBuildSettings,
+        /// preloaded assets — and ARKit still could not start, because none of that is what turns
+        /// ARKit ON. <c>UNITY_XR_ARKIT_LOADER_ENABLED</c> is, and it was absent:
+        ///
+        ///   • every <c>DllImport("__Internal")</c> in the ARKit package is inside
+        ///     <c>#if UNITY_XR_ARKIT_LOADER_ENABLED</c>, so without it <c>Api.AtLeast11_0()</c> is a
+        ///     stub returning <c>false</c> → <c>ARKitSessionSubsystem.RegisterDescriptor()</c>
+        ///     returns early → no descriptor exists → <c>ARKitLoader.Initialize()</c> finds no
+        ///     session subsystem and returns false. No error, no exception: the loader simply
+        ///     declines, and the app falls back to the gyroscope exactly as designed.
+        ///   • <c>ARKitBuildProcessor</c> gates the copy of <c>libUnityARKit.a</c> into the Xcode
+        ///     project on the same flag, so the native half was not even in the app.
+        ///
+        /// Unity's own editor sets this define from a coroutine that never runs in batch mode, so
+        /// it has to be committed in ProjectSettings.asset instead. It cannot be repaired from
+        /// here — the editor assemblies were compiled before this method runs — so the only useful
+        /// thing to do is stop, loudly, two minutes in rather than after a 45-minute build that
+        /// would install and quietly have no AR.
+        /// </summary>
+        private static bool ArkitDefinePresent()
+        {
+            string defines = PlayerSettings.GetScriptingDefineSymbols(NamedBuildTarget.iOS) ?? "";
+            bool ok = Array.IndexOf(defines.Split(';'), "UNITY_XR_ARKIT_LOADER_ENABLED") >= 0;
+            Debug.Log($"[CIBuild] iOS scripting defines = '{defines}' → ARKit {(ok ? "ENABLED" : "OFF")}");
+            ReportXrLoaders();
+            return ok;
+        }
+
+        /// <summary>
+        /// Print the loader list Unity will read, from the same place its own build hook reads it.
+        ///
+        /// The define above is only half of what turns ARKit on. The other half is that
+        /// <c>ARKitBuildProcessor</c> looks up the iOS XR settings and copies
+        /// <c>libUnityARKit.a</c> into the Xcode project only if it finds an ARKitLoader in them —
+        /// and the settings here were hand-written on a machine with no Unity Editor, so "does
+        /// Unity agree that they contain a loader" is a real question with no other way to ask it.
+        /// If it does not, the link step fails 25 minutes later with undefined symbols and nothing
+        /// pointing at this file. Two seconds of log, at the start, in Unity's own words.
+        /// </summary>
+        private static void ReportXrLoaders()
+        {
+            try
+            {
+                var settings = UnityEditor.XR.Management.XRGeneralSettingsPerBuildTarget
+                    .XRGeneralSettingsForBuildTarget(BuildTargetGroup.iOS);
+                if (settings == null || settings.Manager == null)
+                {
+                    Debug.LogWarning("[CIBuild] XR: Unity found NO iOS settings — ARKit's native " +
+                                     "plug-in will be left out of the Xcode project");
+                    return;
+                }
+                var names = new System.Collections.Generic.List<string>();
+                foreach (var l in settings.Manager.activeLoaders) names.Add(l == null ? "null" : l.GetType().Name);
+                Debug.Log($"[CIBuild] XR iOS loaders = [{string.Join(", ", names)}] " +
+                          $"(ARKitLoader must be in here, or libUnityARKit.a is not copied)");
+            }
+            catch (Exception ex)
+            {
+                Debug.LogWarning("[CIBuild] XR: could not read the loader list — " + ex.Message);
+            }
         }
 
         private static void StampBuildNumber(string buildNumber)

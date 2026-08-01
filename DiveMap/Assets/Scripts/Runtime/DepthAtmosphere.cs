@@ -83,8 +83,25 @@ namespace DiveMap.Runtime
             RenderSettings.ambientEquatorColor = _baseEquator * soft;
             RenderSettings.ambientGroundColor = _baseGround * soft;
 
-            // The water itself goes deeper blue-green as the red drains out of the light in it.
-            RenderSettings.fogColor = _baseFog * new Color(r, Mathf.Lerp(r, g, 0.5f), b, 1f);
+            // 🔴 The fog colour comes off the BACKDROP'S OWN RAMP, not from multiplying the base
+            // colour down.
+            //
+            // The old line did the physically-tempting thing — take the authored fog colour and
+            // attenuate it like light — and it is what turned the wreck and the fish into black
+            // silhouettes. Two independent things were painting the same pixels: the backdrop
+            // gradient runs #eaf7fb→#1b5a85, and this was multiplying #123a55 down from there. So a
+            // fish 200 units out faded toward a colour roughly a third as bright as the background
+            // directly behind it. Nothing was unlit; the fog was simply the wrong colour, and no
+            // amount of brightening the lights could have fixed it.
+            //
+            // Reading the ramp instead makes the two agree BY CONSTRUCTION: whatever the gradient
+            // says the water looks like at this depth is what things fade into. Editing a stop in
+            // SeabedGeom now moves both. See WaterFog for why the sample sits at the horizon rather
+            // than at the top or bottom of the ramp.
+            SeabedGeom.Rgb ramp = WaterFog.ColorAt(depth);
+            var mood = new SeabedGeom.Rgb(_baseFog.r, _baseFog.g, _baseFog.b);
+            SeabedGeom.Rgb fog = WaterFog.Blend(ramp, mood, WaterFog.MoodWeight);
+            RenderSettings.fogColor = new Color(fog.R, fog.G, fog.B, 1f);
 
             float vis = DepthLight.VisibilityScale(depth);
             RenderSettings.fogStartDistance = _baseFogStart * vis;
