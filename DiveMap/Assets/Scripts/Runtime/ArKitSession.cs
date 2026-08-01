@@ -59,6 +59,24 @@ namespace DiveMap.Runtime
         private readonly List<ARRaycastHit> _hits = new List<ARRaycastHit>();
 
         /// <summary>
+        /// Why ARKit is not running, kept so the fallback can show it.
+        ///
+        /// 🔴 The first attempt wrote this straight to the AR HUD — and ArSession's own per-frame
+        /// readout ("gyro on · att …") overwrote it on the very next frame, so the reason was on
+        /// screen for about 16 milliseconds and the screenshot came back showing the gyro line as
+        /// if nothing had been added. A diagnostic that loses a race with the thing it is
+        /// diagnosing is worse than none: it looks like the build did not change.
+        /// </summary>
+        public static string OffReason { get; private set; } = "";
+
+        private static bool Off(string reason)
+        {
+            OffReason = reason;
+            Debug.LogWarning("[ARKit] " + reason);
+            return false;
+        }
+
+        /// <summary>
         /// Whether this device can do real AR. False on everything except an ARKit iPhone/iPad,
         /// which is exactly when the old attitude-only path should be used instead — a phone
         /// without tracking still gets a model it can look around, rather than an error.
@@ -68,12 +86,11 @@ namespace DiveMap.Runtime
             get
             {
 #if UNITY_IOS && !UNITY_EDITOR
-                bool ok = ARSession.state != ARSessionState.Unsupported;
-                if (!ok) Ui.ArControls.SetDiagnostics("ARKit OFF: เครื่องไม่รองรับ (state=" + ARSession.state + ")");
-                return ok;
+                if (ARSession.state == ARSessionState.Unsupported)
+                    return Off("ไม่รองรับ ARKit (state=" + ARSession.state + ")");
+                return true;
 #else
-                Ui.ArControls.SetDiagnostics("ARKit OFF: build นี้ไม่ได้เปิด iOS path");
-                return false;
+                return Off("build นี้ไม่ได้คอมไพล์ iOS path");
 #endif
             }
         }
@@ -99,7 +116,7 @@ namespace DiveMap.Runtime
             if (_running) return true;
 
             _cam = Camera.main;
-            if (_cam == null) return false;
+            if (_cam == null) return Off("ไม่มีกล้องหลัก");
 
             _center = center;
             _span = Mathf.Max(1f, span);
@@ -126,18 +143,14 @@ namespace DiveMap.Runtime
             XRGeneralSettings settings = XRGeneralSettings.Instance;
             if (settings == null || settings.Manager == null)
             {
-                Debug.LogWarning("[ARKit] no XR settings — falling back to the attitude session");
-                Ui.ArControls.SetDiagnostics("ARKit OFF: ไม่พบการตั้งค่า XR");
-                return false;
+                return Off("ไม่พบการตั้งค่า XR (settings/manager = null)");
             }
             if (settings.Manager.activeLoader != null) return true;
 
             settings.Manager.InitializeLoaderSync();
             if (settings.Manager.activeLoader == null)
             {
-                Debug.LogWarning("[ARKit] loader would not initialise — falling back");
-                Ui.ArControls.SetDiagnostics("ARKit OFF: loader เริ่มไม่ได้");
-                return false;
+                return Off("loader เริ่มไม่ได้ (InitializeLoaderSync ไม่ได้ loader)");
             }
             settings.Manager.StartSubsystems();
             return true;

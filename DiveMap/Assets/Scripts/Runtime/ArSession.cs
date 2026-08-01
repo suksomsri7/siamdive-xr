@@ -450,9 +450,13 @@ namespace DiveMap.Runtime
                 // moves while the phone turns, the sensor is not delivering and the maths below it
                 // is irrelevant; if it moves and the view does not, the maths is the problem.
                 // That is one screenshot instead of a round of guessing.
+                // The ARKit reason rides along on the SAME line, because this one is rewritten
+                // every frame and would otherwise erase it (it did, and cost a round).
+                string why = string.IsNullOrEmpty(ArKitSession.OffReason)
+                    ? "" : "\nARKit OFF: " + ArKitSession.OffReason;
                 Ui.ArControls.SetDiagnostics(
                     $"gyro on · att {a.x:F2},{a.y:F2},{a.z:F2},{a.w:F2}\n" +
-                    $"yaw {_cam.transform.eulerAngles.y:F0}° · screen {ScreenAngle():F0}°");
+                    $"yaw {_cam.transform.eulerAngles.y:F0}° · screen {ScreenAngle():F0}°{why}");
             }
             else
             {

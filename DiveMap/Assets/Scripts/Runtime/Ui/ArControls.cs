@@ -111,7 +111,7 @@ namespace DiveMap.Runtime.Ui
             drt.anchorMin = new Vector2(0f, 1f);
             drt.anchorMax = new Vector2(0f, 1f);
             drt.pivot = new Vector2(0f, 1f);
-            drt.sizeDelta = new Vector2(UiKit.Css(300f), UiKit.Css(34f));
+            drt.sizeDelta = new Vector2(UiKit.Css(330f), UiKit.Css(56f));   // 3 บรรทัด
             drt.anchoredPosition = new Vector2(UiKit.Css(12f), -UiKit.Css(58f));
 
             // ── the size bar, centred at the bottom like the web's #arctl ────────
