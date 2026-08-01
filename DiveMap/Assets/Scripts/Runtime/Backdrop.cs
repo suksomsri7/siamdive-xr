@@ -31,7 +31,6 @@ namespace DiveMap.Runtime
         /// the property, and a depth-writing quad in front of the map would clip the far half
         /// of the seabed. Anything past 0.95×far is being clipped by the camera anyway.
         /// </summary>
-        private const float DistanceFraction = 0.95f;
 
         private Camera _cam;
         private Transform _quad;
@@ -102,7 +101,19 @@ namespace DiveMap.Runtime
         private void Fit()
         {
             float far = Mathf.Max(1f, _cam.farClipPlane);
-            float dist = Mathf.Clamp(far * DistanceFraction, _cam.nearClipPlane * 4f + 0.01f, far * 0.98f);
+            // 🔴 CLOSE to the camera, not out at the far plane.
+            //
+            // The quad used to sit at 95% of the far plane — about 8,550 units out — and the
+            // underwater fog reaches full strength at 280. So the fog painted the ENTIRE backdrop
+            // one flat colour and the gradient behind it was never visible: "there is no grading at
+            // all, it is all one colour", reported after two rounds of tuning stops that could not
+            // possibly show up.
+            //
+            // Distance does not matter for what this draws: it is a screen-space fill, sized to the
+            // frustum at whatever distance it sits, in the Background queue with ZWrite off, so
+            // everything in the scene paints over it either way. Putting it just past the near
+            // plane means fog contributes ~nothing and the ramp is seen as authored.
+            float dist = _cam.nearClipPlane * 4f + 0.01f;
             float aspect = _cam.aspect;
             float fov = _cam.fieldOfView;
             if (Mathf.Approximately(aspect, _lastAspect) &&
