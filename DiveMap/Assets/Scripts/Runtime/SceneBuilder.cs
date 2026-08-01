@@ -1285,11 +1285,36 @@ namespace DiveMap.Runtime
             }
             // Second, reverse-wound copy so the disc renders from above AND below without
             // needing a Cull-Off shader variant (which the build strips → magenta lesson).
+            //
+            // 🔴 On its OWN VERTICES, a hair lower — not on the same ones. Two sets of triangles at
+            // identical positions are the textbook z-fight: the GPU has to pick a winner per pixel
+            // with no depth difference to go on, and it picks per triangle, so the disc breaks into
+            // alternating light and dark WEDGES radiating from the fan's centre vertex. They swing
+            // as the camera moves, which reads exactly like rotating blue light shafts lying on the
+            // water — reported five times, chased through the sun shafts, the water mesh and the
+            // drone lamps, none of which were ever it. The phone shows it and the software
+            // renderer on CI does not, which is why every QC image came back clean.
+            //
+            // Same family as the black tail fin: two faces sharing one set of vertices is never
+            // free. 0.35 u apart at a 240 u water level is invisible and unambiguous to the depth
+            // buffer.
             if (doubleSided)
             {
+                int under = verts.Length;
+                var v2 = new Vector3[verts.Length * 2];
+                var uv2 = new Vector2[uvs.Length * 2];
+                for (int i = 0; i < verts.Length; i++)
+                {
+                    v2[i] = verts[i];
+                    v2[under + i] = verts[i] - new Vector3(0f, 0.35f, 0f);
+                    uv2[i] = uvs[i];
+                    uv2[under + i] = uvs[i];
+                }
+                verts = v2;
+                uvs = uv2;
                 for (int j = 0; j < seg; j++)
                 {
-                    triList.Add(0); triList.Add(1 + (j + 1) % seg); triList.Add(1 + j);
+                    triList.Add(under); triList.Add(under + 1 + (j + 1) % seg); triList.Add(under + 1 + j);
                 }
             }
 
