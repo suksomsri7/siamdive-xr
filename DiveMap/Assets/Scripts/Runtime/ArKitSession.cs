@@ -42,7 +42,11 @@ namespace DiveMap.Runtime
         private ARPlaneManager _planes;
         private ARRaycastManager _raycast;
         private ARAnchorManager _anchors;
+        private ARInputManager _input;
         private ARCameraBackground _background;
+        /// <summary>How many times AR has been entered this app run — the diagnostic shows it,
+        /// because "works the first time, wrong the second" is a whole class of bug on its own.</summary>
+        private int _sessions;
         private GameObject _planeTemplate, _templateHolder;
 
         private Camera _cam;
@@ -166,6 +170,7 @@ namespace DiveMap.Runtime
             BuildRig();
             StartCoroutine(WaitForTracking());
             _running = true;
+            _sessions++;
             SetStep(ArStep.Searching);
             Debug.Log($"[ARKit] begin span={_span:F0} scale={_scale:F0} u/m target={TargetMetres} m");
             return true;
@@ -313,7 +318,25 @@ namespace DiveMap.Runtime
         private void BuildRig()
         {
             _session = gameObject.AddComponent<ARSession>();
-            gameObject.AddComponent<ARInputManager>();
+
+            // 🔴 ARInputManager is [DisallowMultipleComponent], and this used to add one every
+            // time without ever removing it. That single line is what "the first time is right,
+            // the second time the floor is in the wrong place" was, reported three times:
+            //
+            //   • the second AddComponent silently fails and the FIRST instance stays
+            //   • that instance grabbed its XRInputSubsystem in OnEnable — from the loader that
+            //     StopSession has since deinitialised — and OnEnable never runs again
+            //   • so the NEW session's input subsystem is never Start()ed
+            //   • ARPoseDriver reads the camera pose from InputDevices, which that subsystem
+            //     feeds, so the camera stops following the phone
+            //   • and everything derived from the camera — where a tap ray goes, which way the map
+            //     faces, where the detected plane appears relative to you — is then wrong
+            //
+            // Nothing about it looks like a leak: the session tracks, planes are found, the
+            // numbers on screen are all plausible. Only the POSE is stale.
+            _input = gameObject.GetComponent<ARInputManager>();
+            if (_input == null) _input = gameObject.AddComponent<ARInputManager>();
+            else { _input.enabled = false; _input.enabled = true; }   // force OnEnable to re-acquire
 
             var originGo = new GameObject("XROrigin");
             originGo.transform.SetParent(transform, false);
@@ -515,7 +538,7 @@ namespace DiveMap.Runtime
                 ? Vector3.Angle(_cam.transform.forward, toMap) : 0f;
             int planes = _planes != null ? _planes.trackables.count : -1;
             Ui.ArControls.SetDiagnostics(
-                $"ARKit {ARSession.state} · {_step} · planes {planes}\n" +
+                $"ARKit {ARSession.state} #{_sessions} · {_step} · planes {planes}\n" +
                 $"size {ArPinch.MetresFor(_span, _scale):F2} m · scale {_scale:F0} u/m · off {off:F2} m\n" +
                 $"map {(_mapRoot == null ? "NULL" : (_mapRoot.activeSelf ? "on" : "off"))} · " +
                 $"eye→centre {dist:F2} m @ {offAxis:F0}°");
@@ -798,6 +821,14 @@ namespace DiveMap.Runtime
 
             if (_origin != null) Destroy(_origin.gameObject);
             if (_session != null) Destroy(_session);
+            if (_input != null) Destroy(_input);
+
+            // Every field that held a component of the rig, cleared. A destroyed Unity object
+            // compares equal to null, so leaving them set is survivable — but the ONE that was not
+            // destroyed was invisible precisely because everything else in this list was, and the
+            // next person reading it could not tell the difference.
+            _session = null; _origin = null; _planes = null; _raycast = null;
+            _anchors = null; _input = null; _background = null;
 
             if (_manager != null && _manager.activeLoader != null)
             {
