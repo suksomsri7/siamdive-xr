@@ -343,3 +343,19 @@ diagnostic ที่ใส่ไว้ตอบในบรรทัดเดี
 (`LoadOrCreate` ลบทิ้ง+สร้างใหม่ถ้าไฟล์เดิม deserialize ไม่ได้ · `TryAddLoader` · `SetSettingsForBuildTarget` ·
 `EditorBuildSettings.AddConfigObject`) แล้ว **ตรวจซ้ำผ่าน lookup ของ Unity เอง** ถ้ายังไม่มี `ARKitLoader` ในลิสต์ = ล้ม build ทันที
 → ไม่มีอะไรขึ้นกับ YAML ที่เขียนมือแล้ว (ไฟล์ใน repo อาจ stale ได้ ไม่เป็นไร เพราะโค้ดซ่อมทุกรอบ)
+
+### ⚠️ ITMS-90984 (build 201) — คำเตือน ไม่ใช่การตีกลับ แต่ซ่อนบั๊กของโปรดักต์ไว้
+Apple ส่งอีเมลหลังอัปโหลดสำเร็จ: *"Although delivery was successful…"* → **build 201 อยู่บน TestFlight เทสได้ปกติ**
+`UPLOAD SUCCEEDED with no errors, 1 warning` · เนื้อหา: `UIRequiredDeviceCapabilities: [arkit]` ไม่รองรับบน visionOS
+
+แต่สิ่งที่คำเตือนนี้ชี้ไปคือบั๊กจริง: `ARKitSettings.Requirement.Required` เป็น**ค่าแรกของ enum = ค่า default**
+และเราไม่เคยลงทะเบียน ARKitSettings asset ไว้ → `GetOrCreateSettings()` คืน instance ชั่วคราวที่เป็น Required เสมอ
+→ ใส่ `arkit` ลง plist = **เครื่องที่ไม่มี ARKit ติดตั้งแอปไม่ได้เลย**
+
+🔑 **ขัดกับดีไซน์ของแอปเอง** — `ArSession` มีทางสำรอง gyro/drag-to-orbit + toast "เครื่องนี้ไม่มีเซนเซอร์"
+เขียนไว้สำหรับเครื่องพวกนั้นโดยเฉพาะ พอบังคับ Required โค้ดชุดนั้นเข้าไม่ถึงเลยบน iOS
+(iPad mini 4 / Air 2 รัน iOS 15 ได้ แต่ไม่มี ARKit)
+
+แก้: `CIBuild.MakeArkitOptional()` สร้าง `Assets/XR/Settings/ARKitSettings.asset` ตั้ง `requirement = Optional`
+แล้วลงทะเบียนเป็น config object key `UnityEditor.XR.ARKit.ARKitSettings` (reflection เพราะอยู่ใน editor assembly ของแพ็กเกจ)
+· ไม่ fatal ถ้าล้ม — Required ก็ยังติดตั้งและใช้งานได้บนเครื่องที่ user มี ไม่คุ้มที่จะเสีย build ทั้งรอบ

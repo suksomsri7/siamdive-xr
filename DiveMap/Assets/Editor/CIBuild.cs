@@ -461,7 +461,63 @@ namespace DiveMap.EditorTools
                 return false;
             }
             Debug.Log($"[CIBuild] XR iOS loaders = [{string.Join(", ", names)}] — libUnityARKit.a will be copied");
+            MakeArkitOptional();
             return true;
+        }
+
+        /// <summary>
+        /// ARKit is a FEATURE of this app, not a requirement to run it — say so in the plist.
+        ///
+        /// 🔴 Build 201 came back from App Store Connect with ITMS-90984, and behind that warning
+        /// is a real product bug. <c>ARKitSettings.Requirement.Required</c> is the first value of
+        /// the enum, so it is what a default-constructed settings object holds — and with no
+        /// settings asset registered, <c>GetOrCreateSettings()</c> hands the build processor
+        /// exactly that throwaway default. It then writes <c>arkit</c> into
+        /// UIRequiredDeviceCapabilities, which tells Apple the app must not be installable without
+        /// ARKit.
+        ///
+        /// That contradicts this app's own design. <c>ArSession</c> has a whole attitude-only path
+        /// written for devices with no tracking — the gyroscope fallback, the drag-to-orbit
+        /// fallback, the "no motion sensor on this device" toast. Requiring ARKit makes every line
+        /// of it unreachable on iOS and locks out hardware that runs the rest of the app fine
+        /// (an iPad mini 4 runs iOS 15 and has no ARKit).
+        ///
+        /// Reflection because ARKitSettings lives in the ARKit package's own editor assembly, and
+        /// this file has to keep compiling on the Linux test image.
+        /// </summary>
+        private static void MakeArkitOptional()
+        {
+            const string key = "UnityEditor.XR.ARKit.ARKitSettings";
+            const string path = "Assets/XR/Settings/ARKitSettings.asset";
+            try
+            {
+                Type t = null;
+                foreach (var asm in AppDomain.CurrentDomain.GetAssemblies())
+                {
+                    t = asm.GetType(key);
+                    if (t != null) break;
+                }
+                if (t == null) { Debug.LogWarning("[CIBuild] ARKitSettings type not found — plist stays Required"); return; }
+
+                var settings = LoadOrCreate<ScriptableObject>(path, t);
+                if (settings == null) { Debug.LogWarning("[CIBuild] could not create " + path); return; }
+
+                var prop = t.GetProperty("requirement");
+                if (prop == null) { Debug.LogWarning("[CIBuild] ARKitSettings.requirement missing"); return; }
+                prop.SetValue(settings, Enum.Parse(prop.PropertyType, "Optional"));
+
+                EditorUtility.SetDirty(settings);
+                AssetDatabase.SaveAssets();
+                EditorBuildSettings.AddConfigObject(key, settings, true);
+                Debug.Log($"[CIBuild] ARKit requirement = {prop.GetValue(settings)} " +
+                          "(no 'arkit' in UIRequiredDeviceCapabilities — the gyro fallback stays reachable)");
+            }
+            catch (Exception ex)
+            {
+                // Not fatal: a Required build still installs and still works on every device the
+                // user actually has. Losing the build over a plist nicety would be the wrong trade.
+                Debug.LogWarning("[CIBuild] could not set ARKit to Optional — " + ex.Message);
+            }
         }
 
         /// <summary>
