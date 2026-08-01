@@ -81,7 +81,7 @@ namespace DiveMap.Runtime
             _quad = go.transform;
 
             Fit();
-            Debug.Log($"[Scene] backdrop ready via={via} stops=4 tex={TexWidth}x{TexHeight}");
+            Debug.Log($"[Scene] backdrop ready via={via} stops=6 tex={TexWidth}x{TexHeight}");
             return true;
         }
 

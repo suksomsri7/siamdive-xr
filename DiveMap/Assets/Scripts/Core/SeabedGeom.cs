@@ -119,13 +119,15 @@ namespace DiveMap.Core
         // because this gradient — not the fog — is what fills most of the frame, brightening the
         // fog and the ambient did nothing for it. Chasing the wrong lever twice is what makes this
         // worth a comment: whatever is BEHIND everything is what "the scene is dark" usually means.
-        private static readonly float[] StopPos = { 0f, 0.38f, 0.52f, 1f };
+        private static readonly float[] StopPos = { 0f, 0.22f, 0.42f, 0.62f, 0.80f, 1f };
         private static readonly Rgb[] StopCol =
         {
-            new Rgb(0.890f, 0.949f, 0.973f), // #e3f2f8 bright surface haze
-            new Rgb(0.663f, 0.831f, 0.910f), // #a9d4e8
-            new Rgb(0.325f, 0.639f, 0.816f), // #53a3d0  (เว็บ #3f93c6 — อ่อนลงไปทางฟ้า)
-            new Rgb(0.106f, 0.310f, 0.451f), // #1b4f73  (เว็บ #06243a เข้มเกินไปบนมือถือ)
+            new Rgb(0.918f, 0.969f, 0.984f), // #eaf7fb  ผิวน้ำ — แสงแดดส่องถึงเต็มที่
+            new Rgb(0.749f, 0.902f, 0.949f), // #bfe6f2  น้ำตื้น
+            new Rgb(0.498f, 0.776f, 0.890f), // #7fc6e3  ฟ้าใส
+            new Rgb(0.290f, 0.624f, 0.804f), // #4a9fcd  เริ่มลึก
+            new Rgb(0.169f, 0.463f, 0.659f), // #2b76a8  ลึก
+            new Rgb(0.106f, 0.353f, 0.522f), // #1b5a85  ลึกสุด — ยังมองเห็น ไม่ใช่ดำ
         };
 
         /// <summary>
