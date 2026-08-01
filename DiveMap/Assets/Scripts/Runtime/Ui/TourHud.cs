@@ -252,8 +252,27 @@ namespace DiveMap.Runtime.Ui
             _vignette.raycastTarget = false;
             _vignette.sprite = VignetteSprite();
             _vignette.type = Image.Type.Simple;
-            UiKit.Stretch(_vignette.rectTransform);   // CSS inset:0 — no bleed past the screen
-            _vignette.rectTransform.SetAsFirstSibling();
+            RectTransform vrt = _vignette.rectTransform;
+            UiKit.Stretch(vrt);
+            // 🔴 …and then push it well past its parent. This HUD lives inside the SAFE AREA node,
+            // which on an iPhone in landscape is inset ~100 px on the notch side and a strip at the
+            // bottom. A vignette that stops at the safe area tints the middle of the screen and
+            // leaves an untinted border all the way round — which is not a black frame at all, it
+            // is a LIGHTER one, and that is exactly what the screenshots show: the picture looks
+            // like a rectangle inside a paler surround.
+            //
+            // Reported five times. Two fixes were aimed at Screen.SetResolution and the render
+            // scale on the theory that the drawable was smaller than the display; both missed,
+            // because the drawable was always full size. The give-away was in the pixels the whole
+            // time: the border is brighter than the middle, so nothing is missing from it —
+            // something is only covering the middle.
+            //
+            // CI cannot reproduce it: a desktop window has no safe area, so the parent already
+            // fills the screen and the QC images looked correct every single time.
+            float over = UiKit.Css(140f);   // comfortably past any notch or home indicator
+            vrt.offsetMin = new Vector2(-over, -over);
+            vrt.offsetMax = new Vector2(over, over);
+            vrt.SetAsFirstSibling();
         }
 
         private static Sprite _vignetteSprite;
