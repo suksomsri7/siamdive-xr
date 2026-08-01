@@ -214,3 +214,53 @@ CI ตรวจให้แล้ว: เข้า/ออกโหมด · ต�
 5. ท่าทาง 1 นิ้ว=หมุนแมพ / 2 นิ้ว=pinch
 
 **ประเมิน**: ข้อ 1 ~1 ชม. (พิสูจน์ได้ครบ) · ข้อ 2-5 ~1 วัน · เทสเครื่องจริงอีกรอบ
+
+---
+
+## ARKit — ก้าวที่ 1 เสร็จแล้ว, ก้าวที่ 2 ยังไม่เริ่ม (1 ส.ค. 2026)
+
+user เคาะให้ทำ ARKit จริงหลังเทสบนไอโฟนแล้วพบว่า "ขยับเข้าออกไม่ได้ วางบนโต๊ะไม่ได้"
+— ซึ่งถูกต้องตามที่ระบบเป็น: เซนเซอร์หมุนบอกได้แค่ว่าหันไปทางไหน ไม่รู้ว่าเครื่องอยู่ตรงไหน
+และไม่รู้จักพื้นจริง
+
+### ✅ ก้าวที่ 1 (commit 5df8d65) — ลงแพ็กเกจ + ตั้งค่า XR
+EditMode tests เขียว = แพ็กเกจ resolve ได้และคอมไพล์ผ่านทุก job
+
+- `com.unity.xr.arfoundation` / `com.unity.xr.arkit` **6.0.8** · `com.unity.xr.management` **4.7.0**
+- เครื่อง build ไม่มี Unity Editor → เขียน asset เองทั้งหมด (กด UI ไม่ได้)
+  - `Assets/XR/Loaders/ARKitLoader.asset`
+  - `Assets/XR/Settings/XRManagerSettings-iOS.asset` (m_Loaders → ARKitLoader)
+  - `Assets/XR/Settings/XRGeneralSettings-iOS.asset` (m_Manager → ตัวบน)
+  - `Assets/XR/XRGeneralSettingsPerBuildTarget.asset` (buildTarget: **4** = iOS)
+  - ลงทะเบียนใน `ProjectSettings/EditorBuildSettings.asset` →
+    `m_configObjects: com.unity.xr.management.loader_settings`
+- GUID สคริปต์ (ดึงจาก .meta ในแพ็กเกจจริง ห้ามพิมพ์เอง):
+  `ARKitLoader a18c4d6661b404073b154020b9e2d993` ·
+  `XRGeneralSettings d236b7d11115f2143951f1e14045df39` ·
+  `XRManagerSettings f4c3631f5e58749a59194e0cf6baf6d5` ·
+  `XRGeneralSettingsPerBuildTarget d2dc886499c26824283350fa532d087d`
+- **`m_InitManagerOnStart = 0` และ `m_AutomaticLoading = 0` โดยตั้งใจ** — ถ้าให้ XR เริ่มเอง
+  ตอนบูต กล้อง ARKit จะยึดกล้องหลักตั้งแต่หน้าแรก ทั้งที่แอปเป็นเกมใต้น้ำเกือบตลอดเวลา
+  → ต้อง `XRGeneralSettings.Instance.Manager.InitializeLoaderSync()` เองตอนกดปุ่ม AR
+  และ `DeinitializeLoader()` ตอนออก
+
+### 🔜 ก้าวที่ 2 — ตัว AR จริง (ยังไม่เขียนโค้ด)
+ตรวจ API จากแพ็กเกจ 6.0.8 มาแล้ว ไม่ต้องเดา:
+
+- **`ARPoseDriver`** มีอยู่ใน `Runtime/ARFoundation/ARPoseDriver.cs` → ขับกล้องด้วยท่าทางจาก
+  ARKit ได้โดย**ไม่ต้องลง Input System** (โปรเจกต์นี้ `activeInputHandler: 0` = Input Manager เดิม
+  ถ้าไปใช้ TrackedPoseDriver ของ Input System จะต้องสลับ backend ทั้งโปรเจกต์)
+- ชิ้นส่วนที่ต้องสร้างตอนกดปุ่ม AR: `ARSession` · `XROrigin` (จาก com.unity.xr.core-utils) ·
+  กล้องหลักย้ายไปเป็นลูกของ XROrigin + `ARCameraManager` + `ARCameraBackground` + `ARPoseDriver` ·
+  `ARPlaneManager` (ตรวจจับพื้น) · `ARRaycastManager` (แตะเพื่อวาง)
+- **คณิตศาสตร์การวาง — อย่าย่อแมพ ย่อ XROrigin แทน** (กฎเดิมของโปรเจกต์: `WhaleController`
+  เขียน world position และ `FishSchoolSystem` ป้อน world matrix เข้า RenderMeshInstanced
+  ย่อ root = สัตว์ตัวเท่าเดิมทะลุโต๊ะ):
+  - อยากให้แมพกว้าง `span` หน่วย ปรากฏกว้าง 1.1 เมตร → `s = span / 1.1`
+  - ตั้ง `origin.localScale = s`, `origin.rotation` = yaw อย่างเดียว (ห้ามเอียง)
+  - อยากให้จุดกลางแมพ `C` (world) ไปโผล่ที่จุดที่ผู้ใช้แตะ `P` (session space):
+    **`origin.position = C - (origin.rotation * P) * s`**
+- ปุ่ม/UX: reticle บอกว่าเจอพื้นแล้ว · แตะ = วาง · แตะซ้ำ = ย้าย · ปุ่มขนาดเดิมยังใช้ได้
+  (เปลี่ยน `s`) · ถ้าเครื่องไม่รองรับ ARKit ให้ตกกลับไปทาง gyro เดิมทั้งดุ้น
+- ⚠️ ของที่ CI พิสูจน์ไม่ได้เลย: กล้อง/พื้น/การเดิน — ต้องเทสบนเครื่องจริงเท่านั้น
+  บรรทัดค่าเซนเซอร์บนจอ AR (ArControls.SetDiagnostics) ยังอยู่ ใช้ต่อได้เพื่อดูสถานะ ARKit
