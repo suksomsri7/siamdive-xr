@@ -46,7 +46,7 @@ namespace DiveMap.Core
         public static Atmosphere HeadlightOn => new Atmosphere
         {
             FogNear = 140f, FogFar = 280f,
-            FogR = 0.094f, FogG = 0.388f, FogB = 0.541f,   // 0x18638a
+            FogR = 0.180f, FogG = 0.478f, FogB = 0.643f,   // อ่อนลงไปทางฟ้าตามที่ user ขอ
             AmbientMul = 0.72f,
             DiveLight = 2.2f,
         };
@@ -65,7 +65,7 @@ namespace DiveMap.Core
         public static Atmosphere HeadlightOff => new Atmosphere
         {
             FogNear = 70f, FogFar = 200f,
-            FogR = 0.031f, FogG = 0.188f, FogB = 0.247f,   // 0x08303f
+            FogR = 0.078f, FogG = 0.271f, FogB = 0.353f,   // ปิดไฟก็ยังไม่ทึบเท่าเดิม
             AmbientMul = 0.55f,
             DiveLight = 0.5f,
         };

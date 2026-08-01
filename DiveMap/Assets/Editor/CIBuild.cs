@@ -205,6 +205,7 @@ namespace DiveMap.EditorTools
                 // UnityEditor.iOS` makes every plain `BuildPipeline` in this file ambiguous. Being
                 // in the core editor assembly, this needs no platform guard.
                 StampBuildNumber(buildNumber);
+                PreloadXrSettings();
 
                 var profileUuid = Environment.GetEnvironmentVariable("IOS_PROFILE_UUID");
                 if (!string.IsNullOrWhiteSpace(profileUuid))
@@ -285,6 +286,42 @@ namespace DiveMap.EditorTools
         /// screenshot says which build it came from. Written into Resources during the build only:
         /// the runner starts from a fresh checkout each time, so nothing is left behind in git.
         /// </summary>
+        /// <summary>
+        /// Put the XR settings into Preloaded Assets so <c>XRGeneralSettings.Instance</c> is not
+        /// null at runtime.
+        ///
+        /// 🔴 This is what "ARKit OFF: ไม่พบการตั้งค่า XR (settings/manager = null)" on the phone
+        /// was telling us. The asset exists, the loader is listed in it, EditorBuildSettings points
+        /// at it — and none of that reaches the PLAYER. XR Management normally adds the asset to
+        /// preloaded assets from a build hook that runs when the settings were created through its
+        /// own window; these were hand-written (no Unity Editor on this machine), so that path
+        /// never ran and the player booted with no XR settings at all. Every symptom followed from
+        /// it: no plane detection, nothing anchored, the map floating with the camera — because the
+        /// app quietly fell back to the attitude-only session, exactly as designed.
+        ///
+        /// Doing it here means it happens on every CI build regardless of who created the asset.
+        /// </summary>
+        private static void PreloadXrSettings()
+        {
+            const string path = "Assets/XR/Settings/XRGeneralSettings-iOS.asset";
+            var settings = AssetDatabase.LoadAssetAtPath<UnityEngine.Object>(path);
+            if (settings == null)
+            {
+                Debug.LogWarning("[CIBuild] no XR settings at " + path + " — AR will fall back");
+                return;
+            }
+
+            var preloaded = new System.Collections.Generic.List<UnityEngine.Object>(
+                PlayerSettings.GetPreloadedAssets());
+            preloaded.RemoveAll(o => o == null);
+            if (!preloaded.Contains(settings))
+            {
+                preloaded.Add(settings);
+                PlayerSettings.SetPreloadedAssets(preloaded.ToArray());
+            }
+            Debug.Log($"[CIBuild] XR settings preloaded ({preloaded.Count} assets) — ARKit can start");
+        }
+
         private static void StampBuildNumber(string buildNumber)
         {
             try
