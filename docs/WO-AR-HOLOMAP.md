@@ -388,3 +388,21 @@ Apple ส่งอีเมลหลังอัปโหลดสำเร็�
 
 **บั๊กที่ 4: วางแมพด้วยจุดกึ่งกลาง ทำให้ครึ่งล่างจมโต๊ะ** → ใช้ `AnchorPoint = (center.x, minY, center.z)`
 ตามที่เว็บทำ (`-box.min.y*sc`) "มันตั้งอยู่บนโต๊ะ" คือภาพลวงทั้งหมดของโหมดนี้
+
+### 🔴 build 204 — diagnostic ตอบเองในรูปเดียว: `eye→centre 2,719,509,000.00 m`
+```
+ARKit SessionTracking · Adjusting · planes 1        ← ARKit ทำงานเต็มที่
+size 0.15 m · scale 4035 u/m · off 0.00 m           ← off=0 แปลว่า CameraYOffset แก้ได้แล้ว
+map on · eye→centre 2719509000.00 m                 ← กล้องอยู่ห่างแมพ 2.7 พันล้านเมตร
+```
+**สาเหตุ: `ARRaycastHit.pose` อยู่ใน Unity WORLD space ไม่ใช่ session space**
+`pose => TrackablesParent.TransformPose(sessionRelativePose)` — มันผ่าน origin transform มาแล้ว
+เอากลับเข้า `ApplyPlacement()` ที่คิดว่าเป็น session space = **ยกกำลังสอง transform**
+→ `origin.position = AnchorPoint − worldPoint × scale` ที่ scale ≈ 550 = หลักกิโลเมตรตั้งแต่แตะครั้งแรก
+และแตะซ้ำคูณอีก 550 ทุกครั้ง → 2.7e9
+🔑 **ไม่มีอะไรที่จุดเรียกใช้บอกได้เลยว่าผิด** — ทั้งคู่คือ Pose ของจุดที่แตะ หน่วยเมตรเหมือนกัน อ่านใน debugger ก็ดูถูกทั้งคู่
+**ต่างกันแค่ SPACE** → แก้: ใช้ `hit.sessionRelativePose.position`
+· `AttachAnchor(plane, pose)` เป็นด้านกลับ **ต้องการ world space** (มันเรียก InverseTransformPose เอง) → ต้องแปลงกลับ
+· รวมการแปลงไว้ที่เดียว `ToSession()` / `ToWorld()` + guard `MaxSessionMetres = 200`
+  (ห้องคือห้อง ไม่ใช่ดาวเคราะห์ · ค่าเพี้ยนที่หลุดเข้า transform ทำลาย float precision ทั้ง session)
+📌 บทเรียน: **ค่าที่ข้ามเส้น session↔world ต้องผ่านฟังก์ชันเดียวเสมอ** ไม่ใช่แปลงตรงจุดที่ใช้

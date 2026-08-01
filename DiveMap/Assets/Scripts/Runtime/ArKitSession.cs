@@ -562,9 +562,37 @@ namespace DiveMap.Runtime
             }
 
             ARRaycastHit hit = _hits[0];
+
+            // 🔴 sessionRelativePose, NOT pose. This one line was "the map does not appear", twice.
+            //
+            // ARRaycastHit.pose is documented as "in Unity WORLD space" — it is
+            // `TrackablesParent.TransformPose(sessionRelativePose)`, so it has already been through
+            // the very origin transform this method is about to rewrite. Feeding it back in as if
+            // it were session space squares the transform: the origin lands at
+            // AnchorPoint − worldPoint × scale, which at scale ≈ 550 is already kilometres out, and
+            // every further tap multiplies by another 550. The phone reported it as
+            // `eye→centre 2,719,509,000.00 m`.
+            //
+            // Nothing about it looks wrong at the call site — both are a Pose of the point you
+            // tapped, in metres, and both read correctly in a debugger. Only the SPACE differs.
+            // The same distinction is why Confirm() converts back to world for AttachAnchor and
+            // why FollowAnchor reads the anchor through InverseTransformPoint.
+            Vector3 spot = hit.sessionRelativePose.position;
+
+            // ARKit's session frame is a room, not a planet. Anything past this is a space mix-up
+            // or a tracking fault, and letting it reach the transform destroys float precision for
+            // the rest of the session — better to refuse the tap and say so.
+            if (!(spot.magnitude < MaxSessionMetres))
+            {
+                Debug.LogWarning($"[ARKit] refusing an implausible tap at {spot} " +
+                                 $"({spot.magnitude:F0} m from the session origin)");
+                Ui.ArControls.SetHint(UiStrings.Tr("ยังไม่เจอพื้นตรงนั้น — เล็งกล้องไปที่พื้นเรียบ"));
+                return;
+            }
+
             // Face the map towards the viewer, upright: only the yaw of the camera is kept, because
             // a map tilted to match a phone held at an angle looks broken on a flat table.
-            _spot = hit.pose.position;
+            _spot = spot;
             _yaw = _cam != null ? _cam.transform.eulerAngles.y : 0f;
             _spotPlane = hit.trackable as ARPlane;
 
@@ -593,7 +621,12 @@ namespace DiveMap.Runtime
 
             s.DropAnchor();
             if (s._anchors != null && s._spotPlane != null)
-                s._anchor = s._anchors.AttachAnchor(s._spotPlane, new Pose(s._spot, Quaternion.identity));
+            {
+                // AttachAnchor takes a pose "in Unity world space" and does the inverse transform
+                // itself — the mirror image of the raycast, and the other half of the same trap.
+                s._anchor = s._anchors.AttachAnchor(
+                    s._spotPlane, new Pose(s.ToWorld(s._spot), Quaternion.identity));
+            }
 
             s.SetStep(ArStep.Anchored);
             Debug.Log($"[ARKit] confirmed — anchor={(s._anchor != null ? s._anchor.trackableId.ToString() : "NONE (plane lost)")} " +
@@ -633,9 +666,33 @@ namespace DiveMap.Runtime
         private void FollowAnchor()
         {
             if (_step != ArStep.Anchored || _anchor == null || _origin == null) return;
-            Transform parent = _origin.TrackablesParent != null ? _origin.TrackablesParent : _origin.transform;
-            _spot = parent.InverseTransformPoint(_anchor.transform.position);
+            Vector3 spot = ToSession(_anchor.transform.position);
+            if (!(spot.magnitude < MaxSessionMetres)) return;   // a lost anchor must not move the map
+            _spot = spot;
             ApplyPlacement();
+        }
+
+        /// <summary>How far from the session origin a real room point can plausibly be, in metres.</summary>
+        private const float MaxSessionMetres = 200f;
+
+        /// <summary>
+        /// The transform between ARKit's session space (metres, room-sized) and Unity world space
+        /// (map units, scaled). Every value crossing that line goes through here, because the two
+        /// are the same numbers in different units and nothing at a call site distinguishes them.
+        /// </summary>
+        private Transform SessionSpace => _origin == null ? null
+            : (_origin.TrackablesParent != null ? _origin.TrackablesParent : _origin.transform);
+
+        private Vector3 ToSession(Vector3 world)
+        {
+            Transform t = SessionSpace;
+            return t == null ? world : t.InverseTransformPoint(world);
+        }
+
+        private Vector3 ToWorld(Vector3 session)
+        {
+            Transform t = SessionSpace;
+            return t == null ? session : t.TransformPoint(session);
         }
 
         /// <summary>
