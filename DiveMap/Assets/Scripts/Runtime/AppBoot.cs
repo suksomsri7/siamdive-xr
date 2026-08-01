@@ -320,7 +320,14 @@ namespace DiveMap.Runtime
             {
                 float spread = Mathf.Clamp(result.Radius * 0.45f, 60f, 220f);
                 float length = Mathf.Clamp(result.WaterLevel - result.FrameMinY + 20f, 60f, 400f);
-                GodRays.Attach(result.Root.transform, result.FrameCenter, spread, result.WaterLevel, length);
+                // Sun shafts: OFF. Reported three times — flat blue slabs lying across the water
+                // in the map view, hard edges swinging as the billboards chase the camera. Two
+                // passes tried to save them (fade by view angle, then start them 8 m under the
+                // surface) and neither did, because the shape is wrong, not the shading: a quad
+                // has an edge and a light shaft does not. The web has none of this — it was ours,
+                // it was never asked for, and it cost the user three rounds of reporting. If it
+                // comes back it comes back as a volume, not as billboards. (GodRays.cs stays for
+                // that day; GodRayMath and its tests are untouched.)
             }
 
             // ── QC screenshot mode (CI): -qcshot <path> → รอเฟรม settle → แคป → ปิดตัวเอง ──
@@ -492,7 +499,14 @@ namespace DiveMap.Runtime
             {
                 float spread = Mathf.Clamp(result.Radius * 0.45f, 60f, 220f);
                 float length = Mathf.Clamp(result.WaterLevel - result.FrameMinY + 20f, 60f, 400f);
-                GodRays.Attach(result.Root.transform, result.FrameCenter, spread, result.WaterLevel, length);
+                // Sun shafts: OFF. Reported three times — flat blue slabs lying across the water
+                // in the map view, hard edges swinging as the billboards chase the camera. Two
+                // passes tried to save them (fade by view angle, then start them 8 m under the
+                // surface) and neither did, because the shape is wrong, not the shading: a quad
+                // has an edge and a light shaft does not. The web has none of this — it was ours,
+                // it was never asked for, and it cost the user three rounds of reporting. If it
+                // comes back it comes back as a volume, not as billboards. (GodRays.cs stays for
+                // that day; GodRayMath and its tests are untouched.)
             }
 
             Debug.Log($"[AppBoot] rebuilt from memory · items={result.Loaded} failed={result.Failed}");

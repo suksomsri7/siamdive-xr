@@ -35,7 +35,10 @@ namespace DiveMap.Runtime.Ui
             rt.pivot = new Vector2(0.5f, 1f);
             rt.sizeDelta = new Vector2(UiKit.Css(96f), UiKit.Css(28f));
             // Under the hint line, which owns top 15 (the web stacks them the same way).
-            rt.anchoredPosition = new Vector2(0f, -UiKit.Css(52f));
+            // 52 px put the coins under the (now removed) hint line and left them floating in the
+            // middle of the view. Tucked up to the top rail instead, level with the exit button
+            // and the depth pill, where the eye already goes for status.
+            rt.anchoredPosition = new Vector2(0f, -UiKit.Css(16f));
 
             Text label = UiKit.MakeText(rt, "Value", "0", UiKit.CssFont(14f), TextAnchor.MiddleCenter, Gold);
             label.fontStyle = FontStyle.Bold;

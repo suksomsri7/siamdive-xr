@@ -259,12 +259,34 @@ namespace DiveMap.Runtime.Ui
             QualitySettings.shadowDistance = lite ? 0f : _defShadowDistance;
             QualitySettings.antiAliasing = lite ? 0 : _defAntiAliasing;
 
-            SettingsStore.ScaledResolution(_defWidth, _defHeight, gfx, out int w, out int h);
-            if (w != Screen.width || h != Screen.height)
-                Screen.SetResolution(w, h, Screen.fullScreen);
+            // 🔴 Never Screen.SetResolution on a phone. Two things go wrong and the second one is
+            // what the user saw as "the picture is a rectangle inside a black frame":
+            //
+            //   • the size captured on the first call belongs to the orientation the app happened
+            //     to be in. Re-imposing it after a rotation asks a landscape display to show a
+            //     portrait buffer, and iOS letterboxes the difference — a black border on all four
+            //     sides, while the UI canvas (which never went through this) still covers the
+            //     whole screen. That mismatch is exactly what the screenshots show.
+            //   • even at the right aspect it fights the OS over a decision the OS owns.
+            //
+            // The mobile way to render fewer pixels is to say so as a FACTOR and let the platform
+            // keep the geometry: the buffer shrinks, the view still fills the display, and
+            // rotation stays the OS's business.
+            float scale = SettingsStore.IsLite(gfx) ? SettingsStore.LiteRenderScale : 1f;
+            if (Application.isMobilePlatform)
+            {
+                QualitySettings.resolutionScalingFixedDPIFactor = scale;
+            }
+            else
+            {
+                SettingsStore.ScaledResolution(_defWidth, _defHeight, gfx, out int w, out int h);
+                if (w != Screen.width || h != Screen.height)
+                    Screen.SetResolution(w, h, Screen.fullScreen);
+            }
 
             Debug.Log($"[UI] gfx={SettingsStore.NormalizeGfx(gfx)} shadows={QualitySettings.shadows} " +
-                      $"aa={QualitySettings.antiAliasing} res={w}x{h}");
+                      $"aa={QualitySettings.antiAliasing} scale={scale:F2} " +
+                      $"screen={Screen.width}x{Screen.height}");
         }
     }
 }
