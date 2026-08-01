@@ -16,7 +16,10 @@ namespace DiveMap.Tests
             DiveLightMath.Atmosphere on = DiveLightMath.HeadlightOn;
             DiveLightMath.Atmosphere off = DiveLightMath.HeadlightOff;
 
-            Assert.Greater(on.FogFar, off.FogFar * 1.5f, "with the lamps on you must see further");
+            // 1.5× was written when the lamps reached 380 u. The user asked for a torch, not a
+            // floodlight, so the reach came down to 280 — still clearly further than the 200 u you
+            // get with the lamps off, which is what this test is actually about.
+            Assert.Greater(on.FogFar, off.FogFar * 1.25f, "with the lamps on you must see further");
             Assert.Less(on.FogFar, 500f,
                         "and NOT to the far rim of the map — a torch that lights everything is "
                         + "not a torch, which is what the phone build showed");
