@@ -27,8 +27,24 @@ namespace DiveMap.Core
     {
         // ── the web's constants ───────────────────────────────────────────────────
 
-        /// <summary>Diver speed above which a shoal treats the drone as a predator (web: camVel&gt;11).</summary>
-        public const double DiverPanicSpeed = 11.0;
+        /// <summary>
+        /// The web's threshold as a FRACTION of the drone's top speed: <c>camVel &gt; 11</c> against
+        /// its <c>SP = 30</c>. Kept as the ratio rather than the number because the number was only
+        /// ever "a bit over a third of full throttle" — see <see cref="DiverPanicSpeed"/>.
+        /// </summary>
+        public const double PanicSpeedFraction = 11.0 / 30.0;
+
+        /// <summary>
+        /// Diver speed above which a shoal treats the drone as a predator (web: camVel&gt;11).
+        ///
+        /// ⚠️ DERIVED, not a literal. The drone's top speed dropped 30 → 9 u/s when the flight
+        /// model was re-scaled to real metres (see <see cref="DroneFlight"/>); a hard 11 would then
+        /// sit ABOVE anything the drone can reach and no shoal would ever scatter again — C5 would
+        /// still pass its unit tests and be dead on the device. Expressed as the web's fraction of
+        /// full throttle it keeps meaning what it meant: charge at more than about a third of your
+        /// speed and the reef notices.
+        /// </summary>
+        public static double DiverPanicSpeed => DroneFlight.Speed * PanicSpeedFraction;
 
         /// <summary>Panic above which the shoal balls up (web: <c>S._panic&gt;0.6</c>).</summary>
         public const double BallUpPanic = 0.6;

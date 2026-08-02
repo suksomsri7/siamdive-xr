@@ -48,10 +48,33 @@ namespace DiveMap.Tests
         [Test]
         public void HoveringIsAccepted_ChargingIsNot()
         {
+            double threshold = FleeMath.DiverPanicSpeed;
             Assert.IsFalse(FleeMath.DiverIsThreatening(0));
-            Assert.IsFalse(FleeMath.DiverIsThreatening(11), "the web's test is strictly greater");
-            Assert.IsTrue(FleeMath.DiverIsThreatening(11.01));
-            Assert.IsTrue(FleeMath.DiverIsThreatening(30));
+            Assert.IsFalse(FleeMath.DiverIsThreatening(threshold), "the web's test is strictly greater");
+            Assert.IsTrue(FleeMath.DiverIsThreatening(threshold + 0.01));
+            Assert.IsTrue(FleeMath.DiverIsThreatening(DroneFlight.Speed));
+        }
+
+        /// <summary>
+        /// 🔴 The threshold is a FRACTION of the drone's top speed, not the web's literal 11 u/s.
+        /// When the flight model was re-scaled to real metres (30 → 9 u/s) a hard 11 became
+        /// unreachable: every unit test would still have passed and no fish would ever have fled
+        /// again. This pins the relationship instead of the number.
+        /// </summary>
+        [Test]
+        public void PanicSpeed_TracksTheDronesTopSpeed()
+        {
+            Assert.AreEqual(11.0 / 30.0, FleeMath.PanicSpeedFraction, 1e-9, "the web's own ratio");
+            Assert.AreEqual(DroneFlight.Speed * FleeMath.PanicSpeedFraction, FleeMath.DiverPanicSpeed, 1e-9);
+
+            Assert.Less(FleeMath.DiverPanicSpeed, DroneFlight.Speed,
+                        "a drone that cannot reach the threshold can never frighten anything");
+            Assert.Greater(FleeMath.DiverPanicSpeed, DroneFlight.Speed * 0.2,
+                           "…and a threshold this low would leave the reef permanently panicked");
+
+            // Hovering and sightseeing are tolerated; a charge is not.
+            Assert.IsFalse(FleeMath.DiverIsThreatening(DroneFlight.Speed * 0.25));
+            Assert.IsTrue(FleeMath.DiverIsThreatening(DroneFlight.Speed * 0.9));
         }
 
         [Test]
@@ -59,7 +82,9 @@ namespace DiveMap.Tests
         {
             double p = FleeMath.SchoolPanic(
                 predatorDistance: 0, hasPredator: false,
-                diverDistance: 1, diverSpeed: 4, diverActive: true,
+                // Relative to the threshold, not a literal: the drone's top speed is a tuning
+                // number and this test is about "drifting", which is whatever is below the line.
+                diverDistance: 1, diverSpeed: FleeMath.DiverPanicSpeed * 0.5, diverActive: true,
                 spreadR: 60, fishLen: 3);
             Assert.AreEqual(0.0, p, 1e-9, "drifting up to a shoal must not scatter it");
         }
@@ -69,7 +94,9 @@ namespace DiveMap.Tests
         {
             double p = FleeMath.SchoolPanic(
                 predatorDistance: 0, hasPredator: false,
-                diverDistance: 1, diverSpeed: 20, diverActive: true,
+                // Full throttle — the fastest the drone can actually go, so this is a charge the
+                // player can really perform rather than one only the old 30 u/s model could.
+                diverDistance: 1, diverSpeed: DroneFlight.Speed, diverActive: true,
                 spreadR: 60, fishLen: 3);
             Assert.Greater(p, 0.9);
         }

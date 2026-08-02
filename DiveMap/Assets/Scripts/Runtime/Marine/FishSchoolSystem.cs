@@ -82,6 +82,19 @@ namespace DiveMap.Runtime.Marine
             public Vector3      Anchor;      // school centre (for QC nearest-school framing)
             public float        HomeR;       // shoal radius (for QC framing distance)
             public string       Species;     // asset id, e.g. "school:scad"
+
+            // ── Swim style (SwimStyle) ────────────────────────────────────────────
+            // The beat is INTEGRATED here rather than read off _Time in the shader, which is
+            // what makes it legal for Effort to change the rate mid-swim: sin(_Time.y·rate)
+            // jumps by hundreds of radians when `rate` moves at t = 900 s and the tail
+            // teleports. See SwimStyle.BeatPhaseStep.
+            public double       WavePhase;   // radians, wrapped to [0,2π)
+            public float        BeatHz;      // cruise tail-beats/sec for this species AT THIS SIZE
+            public float        Cruise;      // the school's own cruise speed (u/s) — Effort's divisor
+            public float        MaxBank;     // radians of roll this species allows in a turn
+            public float[]      Yaw;         // per-fish heading last frame (for the bank)
+            public float[]      YawRate;     // per-fish smoothed turn rate (rad/s)
+            public bool         YawPrimed;   // false until Yaw[] holds a real reading
         }
         private readonly List<SchoolRender> _render = new List<SchoolRender>();
 
@@ -154,34 +167,103 @@ namespace DiveMap.Runtime.Marine
         private const float WiggleRate = 7.0f;   // builder.html wiggle default
         private const float WiggleAmp  = 0.18f;  // radians (~10°), transform-level approximation
 
+        private const double TwoPi = 6.283185307179586;
+
+        // Cached property ids. _WavePhase and _WaveEffort are written every frame per school, and
+        // Material.SetFloat(string) hashes the name on every call.
+        private static readonly int IdWaveLen    = Shader.PropertyToID("_WaveLen");
+        private static readonly int IdWaveSpan   = Shader.PropertyToID("_WaveSpan");
+        private static readonly int IdWaveAmp    = Shader.PropertyToID("_WaveAmp");
+        private static readonly int IdWaveCycles = Shader.PropertyToID("_WaveCycles");
+        private static readonly int IdWaveAnchor = Shader.PropertyToID("_WaveAnchor");
+        private static readonly int IdWaveRecoil = Shader.PropertyToID("_WaveRecoil");
+        private static readonly int IdWaveGust   = Shader.PropertyToID("_WaveGust");
+        private static readonly int IdWaveEffort = Shader.PropertyToID("_WaveEffort");
+        private static readonly int IdWavePhase  = Shader.PropertyToID("_WavePhase");
+        private static readonly int IdWaveMode   = Shader.PropertyToID("_WaveMode");
+        private static readonly int IdWaveFwd    = Shader.PropertyToID("_WaveFwd");
+        private static readonly int IdWaveSide   = Shader.PropertyToID("_WaveSide");
+        private static readonly int IdWaveDir    = Shader.PropertyToID("_WaveDir");
+
         /// <summary>
-        /// Set the body wave to this species' own size.
+        /// Point the body wave down THIS species' body, at the size it is actually drawn.
         ///
-        /// One set of numbers cannot fit a sardine and a whale shark, and the thing that decides
-        /// the beat is REAL length, not model units: small fish beat fast and short, large ones
-        /// slow and long. Roughly one beat per second at 4 m, scaling with 1/√length — the same
-        /// shape as the swimming-speed relationship that makes a whale look unhurried next to a
-        /// minnow doing the identical thing.
+        /// Everything numeric comes from <see cref="SwimStyle"/>; this method only converts it
+        /// into the mesh's own coordinate system, which is the part that cannot be unit-tested
+        /// and the part the old version got wrong twice over:
         ///
-        /// <paramref name="bakedLen"/> is in MODEL units and goes to `_WaveLen`, because the
-        /// shader works in the mesh's own space; <paramref name="worldLen"/> is metres-ish and
-        /// only picks the tempo.
+        /// 🔴 <paramref name="bakedLen"/> is measured AFTER the glTF node transform. The shader
+        /// bends <c>v.vertex</c>, which is BEFORE it. Any scale on that node made <c>u</c> stop
+        /// reaching 1.0 at the tail, so the u² envelope — the whole reason the deflection piles
+        /// up in the back third instead of hinging in the middle — landed in the wrong place.
+        ///
+        /// 🔴 The wave axes are not (0,0,1)/(1,0,0) either. The renderer right-multiplies
+        /// <paramref name="bake"/> onto the instance TRS, so the direction that comes out as
+        /// "forward" in the swim heading is <c>bake⁻¹ · +Z</c> in mesh space. A fish authored
+        /// inside a rotated node would otherwise have been bent across its width.
         /// </summary>
-        private static void TuneWave(Material m, float bakedLen, float worldLen)
+        private static void TuneWave(ref SchoolRender sr, Mesh mesh, Matrix4x4 bake,
+                                     float bakedLen, float worldLen, int si)
         {
-            if (!BendsInShader(m) || bakedLen < 1e-4f) return;
-            float len = Mathf.Max(0.2f, worldLen);
-            m.SetFloat("_WaveLen", bakedLen);
-            m.SetFloat("_WaveSpeed", Mathf.Clamp(14f / Mathf.Sqrt(len), 1.5f, 16f));
-            // A small fish throws its tail proportionally further than a big one.
-            m.SetFloat("_WaveAmp", Mathf.Clamp(0.16f / Mathf.Sqrt(Mathf.Max(1f, len * 0.5f)), 0.04f, 0.16f));
-            m.SetFloat("_WaveCycles", len > 12f ? 0.7f : 1.0f);   // big bodies bend in one long arc
-            m.SetFloat("_WaveAnchor", 1f);
+            Material m = sr.Mat;
+            if (m == null || mesh == null || !Bends(m) || bakedLen < 1e-4f) return;
+
+            // Mesh-space axes that map to the swim frame's forward / right / up.
+            Matrix4x4 inv = bake.inverse;
+            Vector3 fwd  = SafeDir(inv.MultiplyVector(Vector3.forward), Vector3.forward);
+            Vector3 side = SafeDir(inv.MultiplyVector(Vector3.right),   Vector3.right);
+            Vector3 up   = SafeDir(inv.MultiplyVector(Vector3.up),      Vector3.up);
+
+            // Body length / half-span IN MESH UNITS. mesh.bounds is metadata, not vertex data —
+            // safe on the Draco meshes, which are non-readable and throw on .vertices.
+            Vector3 ms = mesh.bounds.size;
+            float meshLen  = (float)SwimStyle.AxisExtent(ms.x, ms.y, ms.z, fwd.x, fwd.y, fwd.z);
+            float meshSpan = 0.5f * (float)SwimStyle.AxisExtent(ms.x, ms.y, ms.z, side.x, side.y, side.z);
+            if (meshLen < 1e-4f) meshLen = bakedLen;
+
+            SwimWave w = SwimStyle.For(sr.Species, worldLen);
+
+            // Where the thrust goes: a fish and a shark sweep SIDEWAYS, a whale's fluke and a
+            // ray's wings go UP AND DOWN. Getting this one line wrong is the difference between
+            // a manta and a floating carpet.
+            Vector3 thrust = w.Gait == SwimGait.Body ? side : up;
+
+            m.SetFloat(IdWaveLen,    meshLen);
+            m.SetFloat(IdWaveSpan,   Mathf.Max(1e-4f, meshSpan));
+            m.SetFloat(IdWaveAmp,    (float)w.Amp);
+            m.SetFloat(IdWaveCycles, (float)w.Cycles);
+            m.SetFloat(IdWaveAnchor, 1f);
+            m.SetFloat(IdWaveRecoil, (float)w.Recoil);
+            m.SetFloat(IdWaveGust,   (float)w.Gust);
+            m.SetFloat(IdWaveMode,   w.Gait == SwimGait.Wing ? 1f : 0f);
+            m.SetFloat(IdWaveEffort, 1f);
+            m.SetFloat(IdWavePhase,  0f);
+            m.SetVector(IdWaveFwd,  fwd);
+            m.SetVector(IdWaveSide, side);
+            m.SetVector(IdWaveDir,  thrust);
+
+            sr.WavePhase = 0.0;
+
+            // The QC oracle for this whole path. A screenshot cannot show a beat rate, and the
+            // amplitude is the number that decides whether the animal reads as swimming or as a
+            // rubber band: ampWorld is the tail-tip travel to ONE side in world units, so a 65 u
+            // shark should print ~5.5 and a 4.2 u scad ~0.46.
+            Debug.Log($"[Swim] school={si} species={sr.Species} gait={w.Gait} " +
+                      $"worldLen={worldLen:F2} meshLen={meshLen:F3} bakedLen={bakedLen:F3} " +
+                      $"beatHz={w.BeatHz:F2} amp={w.Amp:F3} ampWorld={(w.Amp * worldLen):F2} " +
+                      $"cycles={w.Cycles:F2} bankDeg={(w.MaxBankRad * Mathf.Rad2Deg):F0} " +
+                      $"fwd={fwd} thrust={thrust}");
         }
 
-        /// <summary>Does this school's material bend the mesh itself?</summary>
-        private static bool BendsInShader(Material m) =>
-            m != null && m.shader != null && m.shader.name == "DiveMap/FishWave";
+        /// <summary>
+        /// Does this material carry the body wave? Asked by PROPERTY, not by shader name: the
+        /// schools use DiveMap/FishWave and the hero animals DiveMap/FishWaveDetail, and a name
+        /// test silently stopped bending the moment a second variant existed.
+        /// </summary>
+        private static bool Bends(Material m) => m != null && m.HasProperty(IdWavePhase);
+
+        private static Vector3 SafeDir(Vector3 v, Vector3 fallback)
+            => v.sqrMagnitude > 1e-8f ? v.normalized : fallback;
 
         // ── Setup ─────────────────────────────────────────────────────────────────
 
@@ -333,6 +415,12 @@ namespace DiveMap.Runtime.Marine
                           $"speedCap={maxSpeed:F1} homeR={homeR:F1} sepR={sepR:F2} capY={capY:F1} " +
                           $"anchor={s.Anchor}");
 
+                // How this species swims, at the size it is drawn. Resolved HERE and not only in
+                // ApplyGlbTemplate, because the beat rate and the bank are transform-level: a
+                // school still waiting on its GLB (or one that never gets a template) must still
+                // lean into its turns rather than skid round flat like a compass needle.
+                SwimWave wave = SwimStyle.For(s.Species, fishWorld);
+
                 _render.Add(new SchoolRender
                 {
                     Mat = mat,
@@ -348,6 +436,13 @@ namespace DiveMap.Runtime.Marine
                     Anchor = s.Anchor,
                     HomeR = homeR,
                     Species = s.Species,
+                    WavePhase = 0.0,
+                    BeatHz = (float)wave.BeatHz,
+                    Cruise = maxSpeed,
+                    MaxBank = (float)wave.MaxBankRad,
+                    Yaw = new float[Mathf.Max(0, s.Count)],
+                    YawRate = new float[Mathf.Max(0, s.Count)],
+                    YawPrimed = false,
                 });
             }
 
@@ -385,11 +480,20 @@ namespace DiveMap.Runtime.Marine
                 if (fishWorld <= 0f) continue;
 
                 sr.Mesh = mesh;
-                if (mat != null) sr.Mat = mat;
-                TuneWave(sr.Mat, bakedLen, fishWorld);
+                // 🔴 One material PER SCHOOL, not the template's shared instance. _WavePhase is
+                // written every frame and Graphics.RenderMeshInstanced reads the material when it
+                // RENDERS, not when it is submitted — so two schools sharing a material would both
+                // draw with whichever phase was written last, and the tuning (_WaveLen, _WaveAmp)
+                // of whichever school ran last would win for both. The barracuda schools on HTMS
+                // Chang are the same species at different item scales, so that is not theoretical.
+                // Configure already clones per school for exactly this reason; the instanced
+                // variant survives because it is ticked on the Resources material ASSET, and a
+                // clone inherits it.
+                if (mat != null) sr.Mat = new Material(mat) { enableInstancing = true };
                 sr.Bake = bake;
                 sr.HasBake = true;
                 sr.DrawScale = fishWorld / bakedLen;
+                TuneWave(ref sr, mesh, bake, bakedLen, fishWorld, si);
                 _render[si] = sr;
                 lastScale = sr.DrawScale;
                 applied++;
@@ -489,8 +593,25 @@ namespace DiveMap.Runtime.Marine
             for (int si = 0; si < _render.Count; si++)
             {
                 SchoolRender sr = _render[si];
-                bool bends = BendsInShader(sr.Mat);
+                bool bends = Bends(sr.Mat);
                 Matrix4x4[] mats = sr.Matrices;
+
+                // ── Drive the beat ────────────────────────────────────────────────
+                // Effort: how hard this school is actually swimming. DartMul is 1 at cruise and
+                // rises as the shoal panics, so a frightened school beats faster AND harder — the
+                // thing that makes a scatter read as a scatter rather than a speed-up.
+                float effort = (float)SwimStyle.Effort(sr.Cruise * _schools[si].DartMul, sr.Cruise);
+                if (bends)
+                {
+                    // dt, not Time.deltaTime: the boids move on the sim step (real-delta clamped
+                    // to [0.5,2.5]×), so beating on the wall clock would drift out of step with
+                    // the swimming on a stuttering frame.
+                    sr.WavePhase += SwimStyle.BeatPhaseStep(sr.BeatHz * effort, dt);
+                    if (sr.WavePhase >= TwoPi) sr.WavePhase %= TwoPi;   // never let a float lose its beat
+                    sr.Mat.SetFloat(IdWavePhase, (float)sr.WavePhase);
+                    sr.Mat.SetFloat(IdWaveEffort, effort);
+                }
+
                 for (int k = 0; k < sr.Count; k++)
                 {
                     FishState f = _cur[sr.Start + k];
@@ -499,6 +620,34 @@ namespace DiveMap.Runtime.Marine
                     Quaternion rot = vel.sqrMagnitude > 1e-6f
                         ? Quaternion.LookRotation(vel, Vector3.up)
                         : Quaternion.identity;
+
+                    // ── Lean into the turn ────────────────────────────────────────
+                    // A fish does not pivot flat. Rolling into the corner is one of the three
+                    // things the eye actually reads as "alive", and it is free here because the
+                    // heading is already being rebuilt every frame.
+                    //
+                    // This cannot become the stuck barrel-roll that bit the web build: the roll
+                    // is a pure tanh of the CURRENT turn rate (SwimStyle.BankRad), so there is no
+                    // accumulator to get stuck, and the sim's own TurnCap bounds the input.
+                    if (sr.MaxBank > 1e-4f && sr.Yaw != null && k < sr.Yaw.Length)
+                    {
+                        float yaw = Mathf.Atan2(vel.x, vel.z);
+                        float rate = 0f;
+                        if (sr.YawPrimed)
+                        {
+                            float dYaw = Mathf.DeltaAngle(sr.Yaw[k] * Mathf.Rad2Deg,
+                                                          yaw * Mathf.Rad2Deg) * Mathf.Deg2Rad;
+                            // Smoothed, because a far school only re-thinks every 6th frame and
+                            // dead-reckons in between: the raw rate would spike on think frames
+                            // and be zero on the others, flicking the roll.
+                            rate = Mathf.Lerp(sr.YawRate[k], dYaw / Mathf.Max(dt, 1e-4f), 0.25f);
+                        }
+                        sr.Yaw[k] = yaw;
+                        sr.YawRate[k] = rate;
+                        float bank = (float)SwimStyle.BankRad(rate, sr.MaxBank) * Mathf.Rad2Deg;
+                        rot *= Quaternion.Euler(0f, 0f, bank);
+                    }
+
                     // Only the fish that cannot bend get the old plank-waggle.
                     if (!bends)
                     {
@@ -511,6 +660,8 @@ namespace DiveMap.Runtime.Marine
                     // TRS, so the fish keeps its authored orientation inside the swim heading.
                     if (sr.HasBake) mats[k] = mats[k] * sr.Bake;
                 }
+                sr.YawPrimed = true;
+                _render[si] = sr;
 
                 if (sr.Count <= 0) continue;
                 Mesh mesh = sr.Mesh != null ? sr.Mesh : _fishMesh;

@@ -7,8 +7,8 @@ Material:
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_Name: DM_FishWave
-  m_Shader: {fileID: 4800000, guid: 7f3a1c9d5e2b4068a1c7d93e6b0f4a52, type: 3}
+  m_Name: DM_FishWaveDetail
+  m_Shader: {fileID: 4800000, guid: 683827f9ac2f4ff3b737b1a6e6995cfa, type: 3}
   m_Parent: {fileID: 0}
   m_ModifiedSerializedProperties: 0
   m_ValidKeywords: []
@@ -24,6 +24,14 @@ Material:
     serializedVersion: 3
     m_TexEnvs:
     - _MainTex:
+        m_Texture: {fileID: 0}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
+    - _BumpMap:
+        m_Texture: {fileID: 0}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
+    - _EmissionMap:
         m_Texture: {fileID: 0}
         m_Scale: {x: 1, y: 1}
         m_Offset: {x: 0, y: 0}
@@ -44,6 +52,7 @@ Material:
     - _WaveMode: 0
     m_Colors:
     - _Color: {r: 1, g: 1, b: 1, a: 1}
+    - _EmissionColor: {r: 0, g: 0, b: 0, a: 1}
     - _WaveFwd: {r: 0, g: 0, b: 1, a: 0}
     - _WaveSide: {r: 1, g: 0, b: 0, a: 0}
     - _WaveDir: {r: 1, g: 0, b: 0, a: 0}
