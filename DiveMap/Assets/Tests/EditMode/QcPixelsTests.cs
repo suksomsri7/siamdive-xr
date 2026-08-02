@@ -151,7 +151,13 @@ namespace DiveMap.Tests
             Assert.AreEqual(20.0, s.PureBlackPercent, 1e-9);
             Assert.AreEqual(20.0, s.SubjectPercent, 1e-9);
             Assert.AreEqual(100.0, s.BlackOfSubjectPercent, 1e-9);
-            Assert.IsTrue(QcPixels.Passes(true, 4, s));   // it WAS photographed — that is the point
+            // It WAS photographed — the framing gate has nothing to complain about.
+            Assert.AreEqual(20.0, s.SubjectPercent, 1e-9);
+            Assert.GreaterOrEqual(s.SubjectPercent, QcPixels.MinSubjectPercent);
+            // …and the mottling gate refuses it anyway, which is the whole point of adding it:
+            // an all-black wreck used to score "OK" on everything the pass knew how to ask.
+            Assert.IsFalse(QcPixels.Passes(true, 4, s));
+            Assert.AreEqual("mottled", QcPixels.Reason(true, 4, s));
         }
 
         [Test]
@@ -175,8 +181,12 @@ namespace DiveMap.Tests
         {
             byte[] off = Water(100);
             byte[] on = Water(100);
-            Paint(on, 0, 50, 10, 20, 30);
+            // Lit, not black: this test is about the "nothing arrived" reasons, so the model has
+            // to be one the brightness gate is happy with or it would answer "mottled" to
+            // everything.
+            Paint(on, 0, 50, 120, 150, 170);
             QcPixels.Shot good = QcPixels.Measure(on, off);
+            Assert.AreEqual(0.0, good.DarkOfSubjectPercent, 1e-9);
 
             Assert.AreEqual("download-or-parse", QcPixels.Reason(false, 0, good));
             Assert.AreEqual("no-renderer", QcPixels.Reason(true, 0, good));
@@ -192,11 +202,22 @@ namespace DiveMap.Tests
             Paint(on, 0, 400, 0, 0, 0);
             QcPixels.Shot s = QcPixels.Measure(on, off);
 
+            // A frame that is 40% pure black is a FAIL now, and the headline fields still read the
+            // way the work order fixed them.
             string line = QcPixels.Line("cc0_kraken_xr0", loaded: true, renderers: 7, shot: s);
-            StringAssert.StartsWith("[QCModel] cc0_kraken_xr0 pureBlack=40.00% loaded=OK", line);
+            StringAssert.StartsWith("[QCModel] cc0_kraken_xr0 pureBlack=40.00% loaded=FAIL", line);
             StringAssert.Contains("subject=40.00%", line);
             StringAssert.Contains("blackOfSubject=100.00%", line);
+            StringAssert.Contains("darkOfSubject=100.00%", line);
+            StringAssert.Contains("reason=mottled", line);
             StringAssert.Contains("renderers=7", line);
+
+            // The same model, lit: OK, and the dark number is what changed the verdict.
+            byte[] lit = Water(1000);
+            Paint(lit, 0, 400, 120, 150, 170);
+            QcPixels.Shot ok = QcPixels.Measure(lit, off);
+            StringAssert.Contains("loaded=OK", QcPixels.Line("cc0_kraken_xr0", true, 7, ok));
+            StringAssert.Contains("darkOfSubject=0.00%", QcPixels.Line("cc0_kraken_xr0", true, 7, ok));
         }
 
         [Test]
@@ -281,10 +302,90 @@ namespace DiveMap.Tests
             Assert.Greater(QcPixels.FrameDistance(10, 400, 1.0), 0.0);    // FOV out of range
         }
 
+        // ── mottling ─────────────────────────────────────────────────────────────
+
+        [Test]
+        public void PureBlackAtZeroDoesNotMeanTheModelLooksRight()
+        {
+            // 🔴 The run this metric was added for: 30756993584 came back pureBlack 0.00% and
+            // nearBlack 0.00% on all six models, and the kraken and the statue were still covered
+            // in hard-edged navy patches. Lifting a black patch to sRGB 45 satisfies every number
+            // the pass used to have; it satisfies nothing a human is looking at.
+            byte[] off = Water(1000);
+            byte[] on = Water(1000);
+            Paint(on, 0, 200, 45, 50, 55);      // navy blotch — off zero, still a blotch
+            Paint(on, 200, 300, 120, 150, 170); // lit surface
+
+            QcPixels.Shot s = QcPixels.Measure(on, off);
+            Assert.AreEqual(0.0, s.PureBlackPercent, 1e-9);
+            Assert.AreEqual(0.0, s.NearBlackPercent, 1e-9);
+            Assert.AreEqual(0.0, s.BlackOfSubjectPercent, 1e-9);
+            // …and the new number is the one that speaks.
+            Assert.AreEqual(40.0, s.DarkOfSubjectPercent, 1e-9);
+            Assert.IsFalse(QcPixels.Passes(true, 1, s));
+            Assert.AreEqual("mottled", QcPixels.Reason(true, 1, s));
+        }
+
+        [Test]
+        public void TheDarkCeilingSitsBetweenTheFloorAndRealShading()
+        {
+            // Nothing in the offending shots sits below 40 — that is the ambient + reflection-cube
+            // floor, and an offline render of the same models at the same camera reproduces it
+            // exactly — so a ceiling at or below 40 would count nothing at all.
+            Assert.Greater(QcPixels.DarkMax, 40);
+            // And above ~70 it would start counting honest crevice shading as a defect.
+            Assert.LessOrEqual(QcPixels.DarkMax, 70);
+
+            // Strictly below the ceiling, on every channel: a pixel that is dark in red but bright
+            // in blue is water-coloured shading, not a blotch.
+            byte[] off = Water(100);
+            byte[] on = Water(100);
+            Paint(on, 0, 20, (byte)(QcPixels.DarkMax - 1), (byte)(QcPixels.DarkMax - 1), (byte)(QcPixels.DarkMax - 1));
+            Paint(on, 20, 20, 10, 10, 200);   // dark red/green, bright blue — not a blotch
+            Paint(on, 40, 20, 120, 150, 170);
+            QcPixels.Shot s = QcPixels.Measure(on, off);
+            Assert.AreEqual(100.0 * 20 / 60, s.DarkOfSubjectPercent, 1e-9);
+        }
+
+        [Test]
+        public void TheMottlingGateLeavesRoomForAGenuinelyShadowedModel()
+        {
+            // An offline render of the kraken — same camera, same lights, same gamma BRDF, with
+            // its own sun shadow map — measures 1.32-1.44% dark. Real crevice shading has to pass.
+            var honest = new QcPixels.Shot
+            { SubjectPercent = 12.5, DarkOfSubjectPercent = 1.44, Pixels = 921600 };
+            Assert.IsTrue(QcPixels.Passes(true, 1, honest));
+            Assert.AreEqual("", QcPixels.Reason(true, 1, honest));
+
+            // The kraken as CI last photographed it: 14.75%. That has to fail.
+            var mottled = new QcPixels.Shot
+            { SubjectPercent = 12.56, DarkOfSubjectPercent = 14.75, Pixels = 921600 };
+            Assert.IsFalse(QcPixels.Passes(true, 1, mottled));
+            Assert.AreEqual("mottled", QcPixels.Reason(true, 1, mottled));
+
+            // The threshold sits between the two, not on top of either.
+            Assert.Greater(QcPixels.MaxDarkPercent, 1.44);
+            Assert.Less(QcPixels.MaxDarkPercent, 14.75);
+        }
+
+        [Test]
+        public void AMissingModelIsStillReportedAsMissingNotAsMottled()
+        {
+            // Order matters in Reason(): an empty frame has 0% dark, so if "mottled" were checked
+            // first a model that never arrived would be reported as a lighting problem.
+            byte[] empty = Water(1000);
+            QcPixels.Shot none = QcPixels.Measure(empty, Water(1000));
+            Assert.AreEqual("not-in-frame", QcPixels.Reason(true, 1, none));
+            Assert.AreEqual("download-or-parse", QcPixels.Reason(false, 1, none));
+        }
+
         // ── the A/B probe ────────────────────────────────────────────────────────
 
         private static QcPixels.Shot Probed(double black, double subject = 10.0, int px = 1000)
             => new QcPixels.Shot { BlackOfSubjectPercent = black, SubjectPercent = subject, Pixels = px };
+
+        private static QcPixels.Shot Dark(double dark, double subject = 12.56, int px = 921600)
+            => new QcPixels.Shot { DarkOfSubjectPercent = dark, SubjectPercent = subject, Pixels = px };
 
         [Test]
         public void AProbeOnlyAccusesTheInputTheBlackFollowed()
@@ -332,7 +433,8 @@ namespace DiveMap.Tests
         public void TheProbeLineCarriesEveryNumberItsVerdictRestsOn()
         {
             string line = QcPixels.ProbeLine("cc0_kraken_xr0", Probed(10.92, 12.56),
-                                             Probed(0.10, 12.56), Probed(10.80, 12.55));
+                                             Probed(0.10, 12.56), Probed(10.80, 12.55),
+                                             Probed(0.00, 12.56), Probed(0.00, 12.56));
             StringAssert.StartsWith("[QCProbe] cc0_kraken_xr0", line);
             StringAssert.Contains("base=10.92%", line);
             StringAssert.Contains("whiteAlbedo=0.10%", line);
@@ -341,6 +443,77 @@ namespace DiveMap.Tests
             // changed more than the one input it was supposed to, and its verdict is worthless.
             StringAssert.Contains("subject base=12.56%", line);
             StringAssert.Contains("verdict=base-colour-texture", line);
+        }
+
+        // ── probe 3: where the shading normal comes from ─────────────────────────
+
+        [Test]
+        public void StandardCleanAndGltfastMottledConvictsTheShader()
+        {
+            // The prediction on the table: an offline render of the kraken with nothing but its
+            // mesh normals measures 1.44% dark against the app's 14.75%. If Unity's own Standard
+            // shader reproduces the clean number on the same mesh and glTFast's does not, the
+            // difference is the shader and nothing else — the two frames share the white,
+            // textureless material.
+            Assert.AreEqual("gltfast-shader",
+                QcPixels.NormalSourceVerdict(Dark(14.75), meshNormals: Dark(1.44), whiteGltf: Dark(13.9)));
+        }
+
+        [Test]
+        public void BothStillMottledSendsUsBackToTheDecoder()
+        {
+            // No textures, no maps, both shaders — and the patches are still there. Then what is
+            // wrong arrived with the geometry, and com.unity.cloud.draco is next.
+            Assert.AreEqual("mesh-normals",
+                QcPixels.NormalSourceVerdict(Dark(14.75), meshNormals: Dark(13.2), whiteGltf: Dark(14.1)));
+        }
+
+        [Test]
+        public void BothCleanMeansATextureWasCarryingItAfterAll()
+        {
+            Assert.AreEqual("textures",
+                QcPixels.NormalSourceVerdict(Dark(14.75), meshNormals: Dark(1.2), whiteGltf: Dark(1.3)));
+        }
+
+        [Test]
+        public void ACleanModelIsNotInterrogated()
+        {
+            // htms732 measures 0.00% dark. Running a verdict on it would invent a culprit.
+            Assert.AreEqual("no-mottle",
+                QcPixels.NormalSourceVerdict(Dark(0.0), Dark(0.0), Dark(0.0)));
+            Assert.AreEqual("no-mottle",
+                QcPixels.NormalSourceVerdict(Dark(QcPixels.MaxDarkPercent), Dark(9.9), Dark(9.9)));
+        }
+
+        [Test]
+        public void AMagentaOrMissingProbeFrameIsNeverAnAnswer()
+        {
+            // 🔴 The failure this pass must not have. If the Standard material got stripped from
+            // the build the model renders magenta — bright, not dark, so it would score a clean
+            // 0.00% and "prove" the shader theory. Pixels==0 (the harness refused to run it) and a
+            // silhouette that moved both land on probe-failed instead.
+            Assert.AreEqual("probe-failed",
+                QcPixels.NormalSourceVerdict(Dark(14.75), meshNormals: default, whiteGltf: Dark(13.9)));
+            Assert.AreEqual("probe-failed",
+                QcPixels.NormalSourceVerdict(Dark(14.75), meshNormals: Dark(1.44), whiteGltf: default));
+            // Silhouette drifted by more than half a percent of the frame: the probe changed what
+            // is on screen, so it changed more than the one thing it was meant to.
+            Assert.AreEqual("probe-failed",
+                QcPixels.NormalSourceVerdict(Dark(14.75), meshNormals: Dark(1.44, 9.0), whiteGltf: Dark(13.9)));
+
+            Assert.IsTrue(QcPixels.SubjectHeld(Dark(14.75), Dark(1.44, 12.56 + 0.4)));
+            Assert.IsFalse(QcPixels.SubjectHeld(Dark(14.75), Dark(1.44, 12.56 + 0.9)));
+        }
+
+        [Test]
+        public void TheProbeLineCarriesTheDarkNumberForEveryFrame()
+        {
+            string line = QcPixels.ProbeLine("cc0_kraken_xr0",
+                Dark(14.75), Dark(9.9), Dark(9.8), Dark(1.44), Dark(13.9));
+            StringAssert.Contains("darkOfSubject base=14.75%", line);
+            StringAssert.Contains("meshNormals=1.44%", line);
+            StringAssert.Contains("whiteGltf=13.90%", line);
+            StringAssert.Contains("normalVerdict=gltfast-shader", line);
         }
 
         // ── framing a box instead of a sphere ────────────────────────────────────

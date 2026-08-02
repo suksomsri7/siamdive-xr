@@ -247,14 +247,21 @@ namespace DiveMap.Runtime
                           $"scale={scale:F2} camY={cam.transform.position.y:F1} " +
                           $"load={loadSecs:F1}s url={url}");
 
-                // A/B probes: same camera, same model, one shading input removed at a time.
-                // See QcPixels.ProbeLine for why the pass earns two extra frames per model.
+                // A/B probes: same camera, same model, one shading input removed at a time, then
+                // the same white textureless material on each of the two shaders. Four extra
+                // frames a model — ~7 s across the pass, against a 170 s budget it currently uses
+                // 17 s of. See QcPixels.ProbeLine and QcPixels.NormalSourceVerdict.
                 QcPixels.Shot whiteAlbedo = default, noMetalRough = default;
+                QcPixels.Shot meshNormals = default, whiteGltf = default;
                 yield return Probe(cam, rt, readback, renderers, withoutModel, ProbeKind.WhiteAlbedo,
                                    s => whiteAlbedo = s);
                 yield return Probe(cam, rt, readback, renderers, withoutModel, ProbeKind.NoMetalRough,
                                    s => noMetalRough = s);
-                Debug.Log(QcPixels.ProbeLine(name, shot, whiteAlbedo, noMetalRough));
+                yield return Probe(cam, rt, readback, renderers, withoutModel, ProbeKind.WhiteGltf,
+                                   s => whiteGltf = s);
+                yield return ProbeMeshNormals(cam, rt, readback, renderers, withoutModel,
+                                              s => meshNormals = s);
+                Debug.Log(QcPixels.ProbeLine(name, shot, whiteAlbedo, noMetalRough, meshNormals, whiteGltf));
             }
             else
             {
@@ -278,7 +285,85 @@ namespace DiveMap.Runtime
         // ── A/B probes ───────────────────────────────────────────────────────────
 
         /// <summary>Which shading input the probe frame removes.</summary>
-        private enum ProbeKind { WhiteAlbedo, NoMetalRough }
+        private enum ProbeKind { WhiteAlbedo, NoMetalRough, WhiteGltf }
+
+        /// <summary>Base-colour tint, glTFast's name then Standard's.</summary>
+        private static readonly string[] ColorProps = { "baseColorFactor", "_Color" };
+
+        /// <summary>First of <paramref name="names"/> this material actually has, or null.</summary>
+        private static string PropOn(Material m, string[] names)
+        {
+            foreach (string n in names) if (m.HasProperty(n)) return n;
+            return null;
+        }
+
+        /// <summary>Texture slots glTFast fills, in its own property names and Standard's.</summary>
+        private static readonly string[][] AllTextureSlots =
+        {
+            new[] { "baseColorTexture", "_MainTex" },
+            new[] { "metallicRoughnessTexture", "_MetallicGlossMap" },
+            new[] { "normalTexture", "_BumpMap" },
+            new[] { "emissiveTexture", "_EmissionMap" },
+            new[] { "occlusionTexture", "_OcclusionMap" },
+        };
+
+        /// <summary>
+        /// Probe 3 — the model rendered by Unity's OWN Standard shader on a plain white material:
+        /// no textures at all, metallic 0, smoothness matching the roughness 0.6 the import now
+        /// sets. Nothing is left that could carry the mottling except the mesh's own normals, and
+        /// this is the only frame in the pass whose shading does not go through glTFast.
+        ///
+        /// Paired with <see cref="ProbeKind.WhiteGltf"/>, which is the identical white textureless
+        /// material on glTFast's shader: the two differ by the SHADER and by nothing else, so
+        /// <see cref="QcPixels.NormalSourceVerdict"/> can finally separate "the shader's normal
+        /// path" from "the normals the Draco decode produced".
+        ///
+        /// 🔴 The material comes from <see cref="SceneBuilder.OpaqueMaterial"/>, i.e. the same
+        /// Resources asset the seabed and the ropes use, NOT <c>Shader.Find("Standard")</c> — a
+        /// shader reached only from code is stripped from a player build and renders magenta, and
+        /// a magenta frame that scored well would be the worst possible outcome here. If the
+        /// material or its shader does not survive the build, this reports an empty shot, which
+        /// <see cref="QcPixels.NormalSourceVerdict"/> reads as <c>probe-failed</c> rather than as
+        /// an answer.
+        /// </summary>
+        private static IEnumerator ProbeMeshNormals(Camera cam, RenderTexture rt, Texture2D readback,
+                                                    List<Renderer> renderers, byte[] withoutModel,
+                                                    System.Action<QcPixels.Shot> onShot)
+        {
+            Material white = SceneBuilder.OpaqueMaterial();
+            if (white == null || white.shader == null || !white.shader.isSupported)
+            {
+                Debug.LogWarning("[QCProbe] mesh-normal probe skipped — no usable Standard material " +
+                                 "(a magenta frame must not be scored)");
+                onShot(default);
+                yield break;
+            }
+            white.color = Color.white;
+            if (white.HasProperty("_Metallic")) white.SetFloat("_Metallic", GlbShading.ProbeValidatedMetallic);
+            if (white.HasProperty("_Glossiness")) white.SetFloat("_Glossiness", 1f - GlbShading.ProbeValidatedRoughness);
+            if (white.HasProperty("_MainTex")) white.SetTexture("_MainTex", null);
+
+            var saved = new List<Material[]>();
+            foreach (Renderer r in renderers)
+            {
+                if (r == null) { saved.Add(null); continue; }
+                saved.Add(r.sharedMaterials);
+                var swap = new Material[Mathf.Max(1, r.sharedMaterials.Length)];
+                for (int i = 0; i < swap.Length; i++) swap[i] = white;
+                r.sharedMaterials = swap;
+            }
+
+            byte[] probed = null;
+            yield return Capture(cam, rt, readback, null, bytes => probed = bytes);
+            onShot(QcPixels.Measure(probed, withoutModel));
+
+            for (int i = 0; i < renderers.Count; i++)
+            {
+                if (renderers[i] == null || saved[i] == null) continue;
+                renderers[i].sharedMaterials = saved[i];
+            }
+            Object.Destroy(white);
+        }
 
         /// <summary>
         /// Take one probe frame with <paramref name="kind"/>'s input removed, measure it against
@@ -300,6 +385,63 @@ namespace DiveMap.Runtime
             {
                 if (r == null) continue;
                 foreach (Material m in r.materials) if (m != null) mats.Add(m);
+            }
+
+            // Probe 3b: everything off at once — every texture slot cleared, colour white, the same
+            // metallic/roughness scalars, on glTFast's own shader. The one thing it still shares
+            // with the shipped material is the shader, which is exactly what ProbeMeshNormals is
+            // the control for.
+            if (kind == ProbeKind.WhiteGltf)
+            {
+                var savedAll = new List<Texture[]>();
+                var savedTint = new List<Color>();
+                var savedMr = new List<Vector2>();
+                foreach (Material m in mats)
+                {
+                    var slots = new Texture[AllTextureSlots.Length];
+                    for (int k = 0; k < AllTextureSlots.Length; k++)
+                    {
+                        string pk = PropOn(m, AllTextureSlots[k]);
+                        slots[k] = pk != null ? m.GetTexture(pk) : null;
+                        if (pk != null) m.SetTexture(pk, null);
+                    }
+                    savedAll.Add(slots);
+                    string cp = PropOn(m, ColorProps);
+                    savedTint.Add(cp != null ? m.GetColor(cp) : Color.white);
+                    if (cp != null) m.SetColor(cp, Color.white);
+                    savedMr.Add(new Vector2(
+                        m.HasProperty("metallicFactor") ? m.GetFloat("metallicFactor") : 0f,
+                        m.HasProperty("roughnessFactor") ? m.GetFloat("roughnessFactor") : 0f));
+                    if (m.HasProperty("metallicFactor")) m.SetFloat("metallicFactor", GlbShading.ProbeValidatedMetallic);
+                    if (m.HasProperty("roughnessFactor")) m.SetFloat("roughnessFactor", GlbShading.ProbeValidatedRoughness);
+                    m.DisableKeyword("_METALLICGLOSSMAP");
+                    m.DisableKeyword("_NORMALMAP");
+                    m.DisableKeyword("_EMISSION");
+                    m.DisableKeyword("_OCCLUSION");
+                }
+
+                byte[] shotBytes = null;
+                yield return Capture(cam, rt, readback, null, bytes => shotBytes = bytes);
+                onShot(QcPixels.Measure(shotBytes, withoutModel));
+
+                for (int i = 0; i < mats.Count; i++)
+                {
+                    Material m = mats[i];
+                    for (int k = 0; k < AllTextureSlots.Length; k++)
+                    {
+                        string pk = PropOn(m, AllTextureSlots[k]);
+                        if (pk != null) m.SetTexture(pk, savedAll[i][k]);
+                    }
+                    string cp = PropOn(m, ColorProps);
+                    if (cp != null) m.SetColor(cp, savedTint[i]);
+                    if (m.HasProperty("metallicFactor")) m.SetFloat("metallicFactor", savedMr[i].x);
+                    if (m.HasProperty("roughnessFactor")) m.SetFloat("roughnessFactor", savedMr[i].y);
+                    if (savedAll[i][1] != null) m.EnableKeyword("_METALLICGLOSSMAP");
+                    if (savedAll[i][2] != null) m.EnableKeyword("_NORMALMAP");
+                    if (savedAll[i][3] != null) m.EnableKeyword("_EMISSION");
+                    if (savedAll[i][4] != null) m.EnableKeyword("_OCCLUSION");
+                }
+                yield break;
             }
 
             var savedTex = new List<Texture>();

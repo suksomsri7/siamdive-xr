@@ -63,6 +63,25 @@ namespace DiveMap.Core
         /// </summary>
         public const double MinSubjectPercent = 3.0;
 
+        /// <summary>
+        /// Brightest-channel ceiling for "this pixel reads as a dark blotch, not as shading".
+        /// Chosen off the measured floor rather than by taste: in the offending shots NOTHING on
+        /// any model sits below 40 (the ambient + reflection-cube floor, and an offline render of
+        /// the same models at the same camera reproduces that floor exactly), while the patches a
+        /// human objected to sit in the 40-60 band. Below 40 there is nothing to count and above
+        /// 60 real crevice shading starts.
+        /// </summary>
+        public const byte DarkMax = 60;
+
+        /// <summary>
+        /// How much of the model may read as a dark blotch. A correct offline render of these
+        /// models — same camera, same lights, same gamma BRDF, its own sun shadow map — measures
+        /// 1.3-1.4% on the kraken, so real crevice shading lives well under 2%. 2.5% leaves room
+        /// for a genuinely shadowed model without leaving room for the 14.75% the kraken currently
+        /// scores.
+        /// </summary>
+        public const double MaxDarkPercent = 2.5;
+
         /// <summary>What one QC shot measured. Percentages are 0..100.</summary>
         public struct Shot
         {
@@ -74,6 +93,16 @@ namespace DiveMap.Core
             public double SubjectPercent;
             /// <summary>Pure black as a percentage of the MODEL, which is the number that accuses.</summary>
             public double BlackOfSubjectPercent;
+            /// <summary>
+            /// Percentage of the MODEL whose brightest channel is below <see cref="DarkMax"/> —
+            /// the mottling number. Pure black going to 0.00% is not the same thing as the model
+            /// looking right, and the run that proved it is 30756993584: every model came back
+            /// pureBlack 0.00% and nearBlack 0.00%, and the kraken and the statue were still
+            /// covered in hard-edged navy patches a human spotted immediately. A metric that can
+            /// be satisfied by lifting the patches one shade off zero is a metric that will be
+            /// gamed by accident.
+            /// </summary>
+            public double DarkOfSubjectPercent;
             /// <summary>Frame size in pixels, 0 when the buffers were unusable.</summary>
             public int Pixels;
         }
@@ -119,7 +148,7 @@ namespace DiveMap.Core
 
             if (withoutModel == null || withoutModel.Length != withModel.Length) return shot;
 
-            int subject = 0, blackSubject = 0;
+            int subject = 0, blackSubject = 0, darkSubject = 0;
             for (int i = 0; i < n; i++)
             {
                 int p = i * Channels;
@@ -132,10 +161,12 @@ namespace DiveMap.Core
                 if (dr <= tolerance && dg <= tolerance && db <= tolerance) continue;
                 subject++;
                 if (withModel[p] == 0 && withModel[p + 1] == 0 && withModel[p + 2] == 0) blackSubject++;
+                if (withModel[p] < DarkMax && withModel[p + 1] < DarkMax && withModel[p + 2] < DarkMax) darkSubject++;
             }
 
             shot.SubjectPercent = 100.0 * subject / n;
             shot.BlackOfSubjectPercent = subject == 0 ? 0.0 : 100.0 * blackSubject / subject;
+            shot.DarkOfSubjectPercent = subject == 0 ? 0.0 : 100.0 * darkSubject / subject;
             return shot;
         }
 
@@ -147,17 +178,22 @@ namespace DiveMap.Core
         /// parses to an empty scene (renderers), and a model framed off-screen (subject).
         /// </summary>
         public static bool Passes(bool loaded, int renderers, Shot shot,
-                                  double minSubjectPercent = MinSubjectPercent)
-            => loaded && renderers > 0 && shot.Pixels > 0 && shot.SubjectPercent >= minSubjectPercent;
+                                  double minSubjectPercent = MinSubjectPercent,
+                                  double maxDarkPercent = MaxDarkPercent)
+            => loaded && renderers > 0 && shot.Pixels > 0 && shot.SubjectPercent >= minSubjectPercent
+               && shot.DarkOfSubjectPercent <= maxDarkPercent;
 
         /// <summary>Why it failed, in one token, or "" when it did not.</summary>
         public static string Reason(bool loaded, int renderers, Shot shot,
-                                    double minSubjectPercent = MinSubjectPercent)
+                                    double minSubjectPercent = MinSubjectPercent,
+                                    double maxDarkPercent = MaxDarkPercent)
         {
             if (!loaded) return "download-or-parse";
             if (renderers <= 0) return "no-renderer";
             if (shot.Pixels <= 0) return "readback-empty";
             if (shot.SubjectPercent < minSubjectPercent) return "not-in-frame";
+            // Last, because it is the only one that says the model ARRIVED and still looks wrong.
+            if (shot.DarkOfSubjectPercent > maxDarkPercent) return "mottled";
             return "";
         }
 
@@ -177,6 +213,7 @@ namespace DiveMap.Core
                    "% loaded=" + (ok ? "OK" : "FAIL") +
                    " subject=" + Pct(shot.SubjectPercent) +
                    "% blackOfSubject=" + Pct(shot.BlackOfSubjectPercent) +
+                   "% darkOfSubject=" + Pct(shot.DarkOfSubjectPercent) +
                    "% nearBlack=" + Pct(shot.NearBlackPercent) +
                    "% renderers=" + renderers.ToString(CultureInfo.InvariantCulture) +
                    " px=" + shot.Pixels.ToString(CultureInfo.InvariantCulture) +
@@ -213,15 +250,81 @@ namespace DiveMap.Core
         /// the lighting terms — which is itself a result, and one that costs one round instead of
         /// three.
         /// </summary>
-        public static string ProbeLine(string name, Shot baseShot, Shot whiteAlbedo, Shot noMetalRough)
+        public static string ProbeLine(string name, Shot baseShot, Shot whiteAlbedo, Shot noMetalRough,
+                                       Shot meshNormals, Shot whiteGltf)
             => "[QCProbe] " + (string.IsNullOrEmpty(name) ? "(unnamed)" : name) +
                " blackOfSubject base=" + Pct(baseShot.BlackOfSubjectPercent) +
                "% whiteAlbedo=" + Pct(whiteAlbedo.BlackOfSubjectPercent) +
                "% noMetalRough=" + Pct(noMetalRough.BlackOfSubjectPercent) +
+               "% meshNormals=" + Pct(meshNormals.BlackOfSubjectPercent) +
+               "% whiteGltf=" + Pct(whiteGltf.BlackOfSubjectPercent) +
+               "% | darkOfSubject base=" + Pct(baseShot.DarkOfSubjectPercent) +
+               "% whiteAlbedo=" + Pct(whiteAlbedo.DarkOfSubjectPercent) +
+               "% noMetalRough=" + Pct(noMetalRough.DarkOfSubjectPercent) +
+               "% meshNormals=" + Pct(meshNormals.DarkOfSubjectPercent) +
+               "% whiteGltf=" + Pct(whiteGltf.DarkOfSubjectPercent) +
                "% | subject base=" + Pct(baseShot.SubjectPercent) +
                "% whiteAlbedo=" + Pct(whiteAlbedo.SubjectPercent) +
                "% noMetalRough=" + Pct(noMetalRough.SubjectPercent) +
-               "% verdict=" + ProbeVerdict(baseShot, whiteAlbedo, noMetalRough);
+               "% meshNormals=" + Pct(meshNormals.SubjectPercent) +
+               "% whiteGltf=" + Pct(whiteGltf.SubjectPercent) +
+               "% verdict=" + ProbeVerdict(baseShot, whiteAlbedo, noMetalRough) +
+               " normalVerdict=" + NormalSourceVerdict(baseShot, meshNormals, whiteGltf);
+
+        /// <summary>
+        /// The mottling half of the probe, and the one that is meant to end the investigation.
+        ///
+        /// 🔴 Where this stands. Pure black is gone (run 30756993584, verdict=no-black on all six)
+        /// and the models are still covered in hard-edged navy patches: kraken
+        /// <see cref="Shot.DarkOfSubjectPercent"/> 14.75%, hardeep 8.69%, against 1.44% for an
+        /// offline render of the same GLB at the same camera with the same lights, the same gamma
+        /// BRDF and its own sun shadow map. Every INPUT has been eliminated by measurement —
+        /// albedo, metallic-roughness, the normal map, the reflection cube (cutting its intensity
+        /// makes the dark fraction WORSE: 1.32% → 18.27% → 37.61% at 1.0 → 0.7 → 0.5), and the sun
+        /// shadow strength (1.44% → 1.34% from 0.5 → 0.15, i.e. nothing).
+        ///
+        /// What has never been separated is WHERE THE SHADING NORMAL COMES FROM. So two more
+        /// frames, identical in every respect except one:
+        ///   • <paramref name="meshNormals"/> — Unity's own Standard shader, white, metallic 0,
+        ///     roughness 0.6, no textures at all. Nothing left but the mesh's own normals.
+        ///   • <paramref name="whiteGltf"/> — the SAME white, textureless material on glTFast's
+        ///     <c>glTF/PbrMetallicRoughness</c>.
+        /// The pair differs by the shader and by nothing else, which is what makes the answer
+        /// unambiguous instead of another correlation.
+        /// </summary>
+        /// <returns>
+        /// <c>no-mottle</c> — nothing to explain.
+        /// <c>gltfast-shader</c> — Standard renders clean, glTFast does not: the shader's normal
+        /// path is the killer and the fix is to stop these models using it.
+        /// <c>textures</c> — both clean, so a texture was carrying it after all.
+        /// <c>mesh-normals</c> — both still mottled with no textures and no maps left: the normals
+        /// arriving from the Draco decode are wrong, and the decoder is next.
+        /// <c>probe-failed</c> — a frame did not land, or the silhouette moved (a probe that
+        /// changed what is on screen changed more than the one thing it was supposed to, and its
+        /// verdict is worthless — a magenta error-shader frame lands here).
+        /// <c>inconclusive</c> — Standard mottled but glTFast clean, which no hypothesis predicts.
+        /// </returns>
+        public static string NormalSourceVerdict(Shot baseShot, Shot meshNormals, Shot whiteGltf,
+                                                 double maxDarkPercent = MaxDarkPercent)
+        {
+            if (baseShot.DarkOfSubjectPercent <= maxDarkPercent) return "no-mottle";
+            if (meshNormals.Pixels == 0 || whiteGltf.Pixels == 0) return "probe-failed";
+            if (!SubjectHeld(baseShot, meshNormals) || !SubjectHeld(baseShot, whiteGltf)) return "probe-failed";
+
+            bool meshClean = meshNormals.DarkOfSubjectPercent <= maxDarkPercent;
+            bool gltfClean = whiteGltf.DarkOfSubjectPercent <= maxDarkPercent;
+            if (meshClean && !gltfClean) return "gltfast-shader";
+            if (meshClean && gltfClean) return "textures";
+            if (!meshClean && !gltfClean) return "mesh-normals";
+            return "inconclusive";
+        }
+
+        /// <summary>
+        /// Did the probe photograph the same silhouette? Half a percent of the frame is well inside
+        /// llvmpipe's frame-to-frame wobble and well outside "the model moved or vanished".
+        /// </summary>
+        public static bool SubjectHeld(Shot baseShot, Shot probe, double tolerancePercent = 0.5)
+            => System.Math.Abs(baseShot.SubjectPercent - probe.SubjectPercent) <= tolerancePercent;
 
         /// <summary>
         /// Which input the black followed, in one token. A probe only ACQUITS an input when the
