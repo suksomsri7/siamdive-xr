@@ -434,7 +434,8 @@ namespace DiveMap.Tests
         {
             string line = QcPixels.ProbeLine("cc0_kraken_xr0", Probed(10.92, 12.56),
                                              Probed(0.10, 12.56), Probed(10.80, 12.55),
-                                             Probed(0.00, 12.56), Probed(0.00, 12.56), Probed(0.00, 12.56));
+                                             Probed(0.00, 12.56), Probed(0.00, 12.56), Probed(0.00, 12.56),
+                                             Probed(0.00, 12.56), Probed(0.00, 12.56));
             StringAssert.StartsWith("[QCProbe] cc0_kraken_xr0", line);
             StringAssert.Contains("base=10.92%", line);
             StringAssert.Contains("whiteAlbedo=0.10%", line);
@@ -509,13 +510,17 @@ namespace DiveMap.Tests
         public void TheProbeLineCarriesTheDarkNumberForEveryFrame()
         {
             string line = QcPixels.ProbeLine("cc0_kraken_xr0",
-                Dark(14.75), Dark(9.9), Dark(9.8), Dark(1.44), Dark(13.9), Dark(12.1));
+                Dark(14.75), Dark(9.9), Dark(9.8), Dark(1.44), Dark(13.9), Dark(12.1),
+                Dark(13.8), Dark(1.10));
             StringAssert.Contains("darkOfSubject base=14.75%", line);
             StringAssert.Contains("meshNormals=1.44%", line);
             StringAssert.Contains("whiteGltf=13.90%", line);
             StringAssert.Contains("normalVerdict=gltfast-shader", line);
             StringAssert.Contains("greyAlbedo=12.10%", line);
             StringAssert.Contains("mottleVerdict=lighting", line);
+            StringAssert.Contains("mipBias-4=13.80%", line);
+            StringAssert.Contains("mipBias-10=1.10%", line);
+            StringAssert.Contains("biasVerdict=bias-fixes-it", line);
         }
 
         [Test]
@@ -540,6 +545,32 @@ namespace DiveMap.Tests
             Assert.AreEqual("no-mottle", QcPixels.MottleVerdict(Dark(0.0), Dark(0.0)));
             Assert.AreEqual("probe-failed", QcPixels.MottleVerdict(Dark(14.75), default));
             Assert.AreEqual("probe-failed", QcPixels.MottleVerdict(Dark(14.75), Dark(0.9, 9.0)));
+        }
+
+        [Test]
+        public void TheBiasProbeSeparatesADeadApiFromAnInnocentOne()
+        {
+            // The prediction the arithmetic makes: −4 leaves a seam at LOD 5-6 and changes little,
+            // −10 defeats even the worst seam. If −10 comes back clean, a bias IS the fix.
+            Assert.AreEqual("bias-fixes-it",
+                QcPixels.BiasVerdict(Dark(14.75), bias4: Dark(13.8), bias10: Dark(1.10)));
+
+            // Moved a long way without getting there: mips are involved, a uniform bias is not
+            // enough — which is what the seam-LOD arithmetic predicts.
+            Assert.AreEqual("bias-helps",
+                QcPixels.BiasVerdict(Dark(14.75), bias4: Dark(13.0), bias10: Dark(7.5)));
+
+            // 🔴 Did not move at ALL: either mipMapBias never reached a texture Unity is only
+            // wrapping — the same trap graphicsFormat set two rounds ago — or mip selection is
+            // innocent. Either way the answer is not "try a bigger number".
+            Assert.AreEqual("bias-no-effect",
+                QcPixels.BiasVerdict(Dark(14.75), bias4: Dark(14.7), bias10: Dark(14.6)));
+            Assert.Greater(QcPixels.BiasMovedPercent, 0.0);
+
+            Assert.AreEqual("no-mottle", QcPixels.BiasVerdict(Dark(0.0), Dark(0.0), Dark(0.0)));
+            Assert.AreEqual("probe-failed", QcPixels.BiasVerdict(Dark(14.75), default, Dark(1.1)));
+            Assert.AreEqual("probe-failed",
+                QcPixels.BiasVerdict(Dark(14.75), Dark(1.1, 9.0), Dark(1.1)));
         }
 
         // ── framing a box instead of a sphere ────────────────────────────────────

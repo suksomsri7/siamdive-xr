@@ -251,7 +251,8 @@ namespace DiveMap.Core
         /// three.
         /// </summary>
         public static string ProbeLine(string name, Shot baseShot, Shot whiteAlbedo, Shot noMetalRough,
-                                       Shot meshNormals, Shot whiteGltf, Shot greyAlbedo)
+                                       Shot meshNormals, Shot whiteGltf, Shot greyAlbedo,
+                                       Shot bias4, Shot bias10)
             => "[QCProbe] " + (string.IsNullOrEmpty(name) ? "(unnamed)" : name) +
                " blackOfSubject base=" + Pct(baseShot.BlackOfSubjectPercent) +
                "% whiteAlbedo=" + Pct(whiteAlbedo.BlackOfSubjectPercent) +
@@ -265,6 +266,8 @@ namespace DiveMap.Core
                "% meshNormals=" + Pct(meshNormals.DarkOfSubjectPercent) +
                "% whiteGltf=" + Pct(whiteGltf.DarkOfSubjectPercent) +
                "% greyAlbedo=" + Pct(greyAlbedo.DarkOfSubjectPercent) +
+               "% mipBias-4=" + Pct(bias4.DarkOfSubjectPercent) +
+               "% mipBias-10=" + Pct(bias10.DarkOfSubjectPercent) +
                "% | subject base=" + Pct(baseShot.SubjectPercent) +
                "% whiteAlbedo=" + Pct(whiteAlbedo.SubjectPercent) +
                "% noMetalRough=" + Pct(noMetalRough.SubjectPercent) +
@@ -273,7 +276,52 @@ namespace DiveMap.Core
                "% greyAlbedo=" + Pct(greyAlbedo.SubjectPercent) +
                "% verdict=" + ProbeVerdict(baseShot, whiteAlbedo, noMetalRough) +
                " normalVerdict=" + NormalSourceVerdict(baseShot, meshNormals, whiteGltf) +
-               " mottleVerdict=" + MottleVerdict(baseShot, greyAlbedo);
+               " mottleVerdict=" + MottleVerdict(baseShot, greyAlbedo) +
+               " biasVerdict=" + BiasVerdict(baseShot, bias4, bias10);
+
+        /// <summary>
+        /// Does pulling the sampler into sharper mips remove the blotches?
+        ///
+        /// 🔴 Why two biases and why this is a PROBE and not the fix. Measuring the actual mip
+        /// levels involved says a uniform bias cannot do the job, and the arithmetic is short
+        /// enough to check: on the QC frame the ordinary sampling LOD is 1.01, while at a UV chart
+        /// seam the two pixels of a GPU quad land in different charts, so ΔUV of 0.05-0.5 across
+        /// one pixel becomes 102-1024 texels — LOD 6.7 to 10.0. <c>mipMapBias</c> shifts EVERY
+        /// sample by the same amount, so −4 leaves a seam at LOD 5-6 (still deep in the atlas
+        /// average, where 11% of the sampled surface reads below half brightness) and the −8 or so
+        /// it would take to rescue a seam drags ordinary sampling to LOD 0 and aliases the whole
+        /// model. There is no value that separates the two cases.
+        ///
+        /// So this ships as two measured frames rather than as a fix: −4 is the value that was
+        /// proposed, −10 is enough to defeat even the worst seam. If −10 comes back clean the
+        /// arithmetic above is wrong somewhere and a bias IS the answer; if both come back
+        /// unchanged then either <c>mipMapBias</c> does not reach a texture Unity is only wrapping
+        /// (the same way <c>graphicsFormat</c> does not), or mip selection is not the mechanism —
+        /// and the difference between those two shows up as −10 changing nothing at all versus
+        /// −10 changing the picture without fixing it.
+        /// </summary>
+        /// <returns><c>no-mottle</c>, <c>bias-fixes-it</c>, <c>bias-helps</c> (moved but not
+        /// enough), <c>bias-no-effect</c> (the API did not reach the sampler, or mips are
+        /// innocent), or <c>probe-failed</c>.</returns>
+        public static string BiasVerdict(Shot baseShot, Shot bias4, Shot bias10,
+                                         double maxDarkPercent = MaxDarkPercent)
+        {
+            double b = baseShot.DarkOfSubjectPercent;
+            if (b <= maxDarkPercent) return "no-mottle";
+            if (bias4.Pixels == 0 || bias10.Pixels == 0) return "probe-failed";
+            if (!SubjectHeld(baseShot, bias4) || !SubjectHeld(baseShot, bias10)) return "probe-failed";
+
+            if (bias4.DarkOfSubjectPercent <= maxDarkPercent ||
+                bias10.DarkOfSubjectPercent <= maxDarkPercent) return "bias-fixes-it";
+            // "Did it move at all" is the question that separates a dead API from an innocent one.
+            double best = System.Math.Min(bias4.DarkOfSubjectPercent, bias10.DarkOfSubjectPercent);
+            return b - best < BiasMovedPercent ? "bias-no-effect" : "bias-helps";
+        }
+
+        /// <summary>How much the dark fraction must move for the bias to have done anything at
+        /// all. Below this the two frames are the same picture and the API never reached the
+        /// sampler.</summary>
+        public const double BiasMovedPercent = 1.0;
 
         /// <summary>
         /// Whether the mottling survives when the albedo stops varying but keeps its BRIGHTNESS.

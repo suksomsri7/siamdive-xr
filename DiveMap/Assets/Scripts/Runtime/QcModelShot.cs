@@ -253,6 +253,7 @@ namespace DiveMap.Runtime
                 // 17 s of. See QcPixels.ProbeLine and QcPixels.NormalSourceVerdict.
                 QcPixels.Shot whiteAlbedo = default, noMetalRough = default;
                 QcPixels.Shot meshNormals = default, whiteGltf = default, greyAlbedo = default;
+                QcPixels.Shot bias4 = default, bias10 = default;
                 yield return Probe(cam, rt, readback, renderers, withoutModel, ProbeKind.WhiteAlbedo,
                                    s => whiteAlbedo = s);
                 yield return Probe(cam, rt, readback, renderers, withoutModel, ProbeKind.NoMetalRough,
@@ -263,8 +264,10 @@ namespace DiveMap.Runtime
                                    s => greyAlbedo = s);
                 yield return ProbeMeshNormals(cam, rt, readback, renderers, withoutModel,
                                               s => meshNormals = s);
+                yield return ProbeMipBias(cam, rt, readback, renderers, withoutModel, -4f, s => bias4 = s);
+                yield return ProbeMipBias(cam, rt, readback, renderers, withoutModel, -10f, s => bias10 = s);
                 Debug.Log(QcPixels.ProbeLine(name, shot, whiteAlbedo, noMetalRough, meshNormals,
-                                             whiteGltf, greyAlbedo));
+                                             whiteGltf, greyAlbedo, bias4, bias10));
             }
             else
             {
@@ -511,6 +514,52 @@ namespace DiveMap.Runtime
                     if (savedTex[i] != null) m.EnableKeyword("_METALLICGLOSSMAP");
                 }
             }
+        }
+
+        /// <summary>
+        /// Pull the base-colour sampler into sharper mips for one frame and see what the blotches
+        /// do. The reasoning, and why this is not shipped as a fix, is in
+        /// <see cref="QcPixels.BiasVerdict"/>.
+        ///
+        /// <c>mipMapBias</c> is Unity-side sampler state rather than anything baked into the GPU
+        /// object, so unlike <c>graphicsFormat</c> it ought to reach a texture that arrived through
+        /// <c>CreateExternalTexture</c> — "ought to" being exactly the kind of claim this pass
+        /// exists to stop people making, hence the frame. Restored afterwards because the map view
+        /// is photographed after this pass and shares these textures.
+        /// </summary>
+        private static IEnumerator ProbeMipBias(Camera cam, RenderTexture rt, Texture2D readback,
+                                                List<Renderer> renderers, byte[] withoutModel,
+                                                float bias, System.Action<QcPixels.Shot> onShot)
+        {
+            var touched = new List<Texture>();
+            var saved = new List<float>();
+            foreach (Renderer r in renderers)
+            {
+                if (r == null) continue;
+                foreach (Material m in r.materials)
+                {
+                    if (m == null) continue;
+                    string p = PropOn(m, AllTextureSlots[0]);
+                    Texture tex = p != null ? m.GetTexture(p) : null;
+                    if (tex == null || touched.Contains(tex)) continue;
+                    touched.Add(tex);
+                    saved.Add(tex.mipMapBias);
+                    tex.mipMapBias = bias;
+                }
+            }
+            if (touched.Count == 0)
+            {
+                // No base-colour texture to bias — nothing to learn, and an empty shot reads as
+                // probe-failed rather than as a clean result.
+                onShot(default);
+                yield break;
+            }
+
+            byte[] probed = null;
+            yield return Capture(cam, rt, readback, null, bytes => probed = bytes);
+            onShot(QcPixels.Measure(probed, withoutModel));
+
+            for (int i = 0; i < touched.Count; i++) touched[i].mipMapBias = saved[i];
         }
 
         // ── capture ──────────────────────────────────────────────────────────────
