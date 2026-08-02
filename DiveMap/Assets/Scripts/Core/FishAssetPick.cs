@@ -60,14 +60,24 @@ namespace DiveMap.Core
             if (string.IsNullOrWhiteSpace(assetId)) return false;
             switch (assetId.Trim().ToLowerInvariant())
             {
+                // 🔴 Re-measured 2 ส.ค. against the rebuilt CDN files. These numbers are not
+                // decoration: Pick() multiplies Tris0 by the school size to decide whether a
+                // school drops to LOD1, so a table that still says 670 while the file is 3,000
+                // under-counts the load by 4.5× and keeps LOD0 on a school that should have
+                // stepped down. The old figures came from files that were built from the WEB
+                // pipeline's already-decimated output — they were never the ceiling, just the
+                // last thing anyone had measured.
+                //
+                // The fish on HTMS Chang are why: reported as "สัตว์ทะเลก็ยังแตกละเอียด" on a map
+                // where nothing had been touched, and the reason was 450–670 triangles per fish.
                 case "school:scad":
-                    spec = new Spec { Tris0 = 670, Tris1 = 670, LocalLen = 1.911f };
+                    spec = new Spec { Tris0 = 3000, Tris1 = 3000, LocalLen = 1.911f };
                     return true;
                 case "school:barracuda":
-                    spec = new Spec { Tris0 = 450, Tris1 = 450, LocalLen = 1.862f };
+                    spec = new Spec { Tris0 = 3000, Tris1 = 3000, LocalLen = 1.862f };
                     return true;
                 case "pod:yellowtail":
-                    spec = new Spec { Tris0 = 8800, Tris1 = 3999, LocalLen = 1.899f };
+                    spec = new Spec { Tris0 = 8000, Tris1 = 6442, LocalLen = 1.899f };
                     return true;
                 default:
                     return false;
@@ -92,7 +102,12 @@ namespace DiveMap.Core
 
             // Heavy LOD0 × a whole school = the triangle budget blows up, so those take LOD1.
             long load = (long)Math.Max(1, count) * spec.Tris0;
-            bool wantLod1 = load > Lod1TriBudget && spec.Tris0 > Lod1MinTris && lod1 != null;
+            // `Tris1 < Tris0` is new, and it matters now that some species have no lighter variant
+            // to fall back to. The rebuilt scad and barracuda come from a 3,000-triangle source, so
+            // their LOD1 is also 3,000 — swapping would fetch a SECOND file over the network and
+            // draw exactly the same number of triangles. The count guard alone would have done it.
+            bool wantLod1 = load > Lod1TriBudget && spec.Tris0 > Lod1MinTris
+                            && spec.Tris1 < spec.Tris0 && lod1 != null;
             if (lod0 == null) wantLod1 = true;   // only LOD1 shipped
             if (lod1 == null) wantLod1 = false;  // only LOD0 shipped
 
