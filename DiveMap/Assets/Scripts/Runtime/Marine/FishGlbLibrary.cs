@@ -270,7 +270,17 @@ namespace DiveMap.Runtime.Marine
         /// </summary>
         private static Material MakeInstancingMaterial(Texture tex)
         {
-            Material src = Resources.Load<Material>("DM_Standard");
+            // 🐟 DM_FishWave first: same Standard lighting, plus a travelling bend down the body.
+            // It lives in Resources for exactly the reason DM_Standard does — a shader only
+            // referenced from code is stripped from the build and comes back magenta on the
+            // device. If it is missing for any reason we fall through to the flat material and the
+            // fish simply do not bend, which is today's behaviour rather than a broken one.
+            Material src = Resources.Load<Material>("DM_FishWave");
+            if (src == null || src.shader == null)
+            {
+                Debug.LogWarning("[Marine] ไม่พบ DM_FishWave — ปลาจะไม่โค้งตัว ใช้ DM_Standard แทน");
+                src = Resources.Load<Material>("DM_Standard");
+            }
             Material mat = src != null ? new Material(src) : new Material(Shader.Find("Standard"));
             if (mat == null || mat.shader == null) return null;
 

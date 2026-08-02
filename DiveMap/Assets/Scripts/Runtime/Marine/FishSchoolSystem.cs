@@ -144,8 +144,44 @@ namespace DiveMap.Runtime.Marine
                    n.Contains("swiftshader") || n.Contains("software") || n.Contains("microsoft basic");
         }
 
+        // 🔴 The rigid waggle, kept ONLY for materials that cannot bend.
+        //
+        // Rotating the whole fish about its up axis is not swimming — nose and tail swing together
+        // and the body stays a plank. It was the best a transform-level approximation could do,
+        // and it is why the schools were reported as "ปลาไม่ว่าย" while visibly moving. With
+        // DM_FishWave the bend happens in the vertex shader, per fish, and applying this on top
+        // would add a second, contradictory motion.
         private const float WiggleRate = 7.0f;   // builder.html wiggle default
         private const float WiggleAmp  = 0.18f;  // radians (~10°), transform-level approximation
+
+        /// <summary>
+        /// Set the body wave to this species' own size.
+        ///
+        /// One set of numbers cannot fit a sardine and a whale shark, and the thing that decides
+        /// the beat is REAL length, not model units: small fish beat fast and short, large ones
+        /// slow and long. Roughly one beat per second at 4 m, scaling with 1/√length — the same
+        /// shape as the swimming-speed relationship that makes a whale look unhurried next to a
+        /// minnow doing the identical thing.
+        ///
+        /// <paramref name="bakedLen"/> is in MODEL units and goes to `_WaveLen`, because the
+        /// shader works in the mesh's own space; <paramref name="worldLen"/> is metres-ish and
+        /// only picks the tempo.
+        /// </summary>
+        private static void TuneWave(Material m, float bakedLen, float worldLen)
+        {
+            if (!BendsInShader(m) || bakedLen < 1e-4f) return;
+            float len = Mathf.Max(0.2f, worldLen);
+            m.SetFloat("_WaveLen", bakedLen);
+            m.SetFloat("_WaveSpeed", Mathf.Clamp(14f / Mathf.Sqrt(len), 1.5f, 16f));
+            // A small fish throws its tail proportionally further than a big one.
+            m.SetFloat("_WaveAmp", Mathf.Clamp(0.16f / Mathf.Sqrt(Mathf.Max(1f, len * 0.5f)), 0.04f, 0.16f));
+            m.SetFloat("_WaveCycles", len > 12f ? 0.7f : 1.0f);   // big bodies bend in one long arc
+            m.SetFloat("_WaveAnchor", 1f);
+        }
+
+        /// <summary>Does this school's material bend the mesh itself?</summary>
+        private static bool BendsInShader(Material m) =>
+            m != null && m.shader != null && m.shader.name == "DiveMap/FishWave";
 
         // ── Setup ─────────────────────────────────────────────────────────────────
 
@@ -350,6 +386,7 @@ namespace DiveMap.Runtime.Marine
 
                 sr.Mesh = mesh;
                 if (mat != null) sr.Mat = mat;
+                TuneWave(sr.Mat, bakedLen, fishWorld);
                 sr.Bake = bake;
                 sr.HasBake = true;
                 sr.DrawScale = fishWorld / bakedLen;
@@ -452,6 +489,7 @@ namespace DiveMap.Runtime.Marine
             for (int si = 0; si < _render.Count; si++)
             {
                 SchoolRender sr = _render[si];
+                bool bends = BendsInShader(sr.Mat);
                 Matrix4x4[] mats = sr.Matrices;
                 for (int k = 0; k < sr.Count; k++)
                 {
@@ -461,9 +499,12 @@ namespace DiveMap.Runtime.Marine
                     Quaternion rot = vel.sqrMagnitude > 1e-6f
                         ? Quaternion.LookRotation(vel, Vector3.up)
                         : Quaternion.identity;
-                    // Transform-level wiggle: side-to-side waggle about local up.
-                    float wig = Mathf.Sin(t * WiggleRate + f.Phase) * WiggleAmp * Mathf.Rad2Deg;
-                    rot *= Quaternion.Euler(0f, wig, 0f);
+                    // Only the fish that cannot bend get the old plank-waggle.
+                    if (!bends)
+                    {
+                        float wig = Mathf.Sin(t * WiggleRate + f.Phase) * WiggleAmp * Mathf.Rad2Deg;
+                        rot *= Quaternion.Euler(0f, wig, 0f);
+                    }
                     float sc = sr.DrawScale * (sr.SizeMul != null && k < sr.SizeMul.Length ? sr.SizeMul[k] : 1f);
                     mats[k] = Matrix4x4.TRS(pos, rot, Vector3.one * sc);
                     // GLB template: bake the mesh node's own transform in AFTER the instance
