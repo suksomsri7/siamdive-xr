@@ -251,25 +251,63 @@ namespace DiveMap.Core
         /// three.
         /// </summary>
         public static string ProbeLine(string name, Shot baseShot, Shot whiteAlbedo, Shot noMetalRough,
-                                       Shot meshNormals, Shot whiteGltf)
+                                       Shot meshNormals, Shot whiteGltf, Shot greyAlbedo)
             => "[QCProbe] " + (string.IsNullOrEmpty(name) ? "(unnamed)" : name) +
                " blackOfSubject base=" + Pct(baseShot.BlackOfSubjectPercent) +
                "% whiteAlbedo=" + Pct(whiteAlbedo.BlackOfSubjectPercent) +
                "% noMetalRough=" + Pct(noMetalRough.BlackOfSubjectPercent) +
                "% meshNormals=" + Pct(meshNormals.BlackOfSubjectPercent) +
                "% whiteGltf=" + Pct(whiteGltf.BlackOfSubjectPercent) +
+               "% greyAlbedo=" + Pct(greyAlbedo.BlackOfSubjectPercent) +
                "% | darkOfSubject base=" + Pct(baseShot.DarkOfSubjectPercent) +
                "% whiteAlbedo=" + Pct(whiteAlbedo.DarkOfSubjectPercent) +
                "% noMetalRough=" + Pct(noMetalRough.DarkOfSubjectPercent) +
                "% meshNormals=" + Pct(meshNormals.DarkOfSubjectPercent) +
                "% whiteGltf=" + Pct(whiteGltf.DarkOfSubjectPercent) +
+               "% greyAlbedo=" + Pct(greyAlbedo.DarkOfSubjectPercent) +
                "% | subject base=" + Pct(baseShot.SubjectPercent) +
                "% whiteAlbedo=" + Pct(whiteAlbedo.SubjectPercent) +
                "% noMetalRough=" + Pct(noMetalRough.SubjectPercent) +
                "% meshNormals=" + Pct(meshNormals.SubjectPercent) +
                "% whiteGltf=" + Pct(whiteGltf.SubjectPercent) +
+               "% greyAlbedo=" + Pct(greyAlbedo.SubjectPercent) +
                "% verdict=" + ProbeVerdict(baseShot, whiteAlbedo, noMetalRough) +
-               " normalVerdict=" + NormalSourceVerdict(baseShot, meshNormals, whiteGltf);
+               " normalVerdict=" + NormalSourceVerdict(baseShot, meshNormals, whiteGltf) +
+               " mottleVerdict=" + MottleVerdict(baseShot, greyAlbedo);
+
+        /// <summary>
+        /// Whether the mottling survives when the albedo stops varying but keeps its BRIGHTNESS.
+        ///
+        /// 🔴 This exists because the probe it corrects fooled us. Run 30759921618 came back
+        /// <c>whiteAlbedo=0.00%</c> on every model and that was read as "the base-colour texture is
+        /// the carrier". It is not evidence of anything: this is a GAMMA colour space project, the
+        /// forward pass is <c>albedo × light</c>, and an albedo of 1.0 puts every pixel above the
+        /// dark ceiling no matter what the lighting does. Rendering the kraken offline with the
+        /// same lights and mesh and nothing changed but a flat albedo shows it outright —
+        ///
+        ///   flat albedo   1.00    0.80    0.65    0.50   real texture
+        ///   dark          0.00%   0.00%   0.51%   3.85%     1.44%
+        ///
+        /// — the "fix" was the WHITE, not the removal of the texture. 0.65 is the kraken's own
+        /// measured mean, so a probe at that value keeps the model's brightness and throws away
+        /// only its variation. If the patches survive it, the texture is innocent and the contrast
+        /// is coming from the lighting; if they vanish, the texture's own dark regions are the
+        /// carrier after all and the answer is edge dilation at the source.
+        /// </summary>
+        /// <returns><c>no-mottle</c>, <c>albedo-variation</c> (patches follow the texture),
+        /// <c>lighting</c> (patches survive a flat albedo of the same brightness), or
+        /// <c>probe-failed</c>.</returns>
+        public static string MottleVerdict(Shot baseShot, Shot greyAlbedo,
+                                           double maxDarkPercent = MaxDarkPercent)
+        {
+            if (baseShot.DarkOfSubjectPercent <= maxDarkPercent) return "no-mottle";
+            if (greyAlbedo.Pixels == 0 || !SubjectHeld(baseShot, greyAlbedo)) return "probe-failed";
+            return greyAlbedo.DarkOfSubjectPercent <= maxDarkPercent ? "albedo-variation" : "lighting";
+        }
+
+        /// <summary>The kraken's own measured mean albedo — a flat stand-in that keeps its
+        /// brightness. 0.65 in gamma, which is what <c>Baked_BaseColor</c> averages.</summary>
+        public const float MeanAlbedo = 0.65f;
 
         /// <summary>
         /// The mottling half of the probe, and the one that is meant to end the investigation.

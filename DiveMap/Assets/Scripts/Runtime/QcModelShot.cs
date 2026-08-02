@@ -252,16 +252,19 @@ namespace DiveMap.Runtime
                 // frames a model — ~7 s across the pass, against a 170 s budget it currently uses
                 // 17 s of. See QcPixels.ProbeLine and QcPixels.NormalSourceVerdict.
                 QcPixels.Shot whiteAlbedo = default, noMetalRough = default;
-                QcPixels.Shot meshNormals = default, whiteGltf = default;
+                QcPixels.Shot meshNormals = default, whiteGltf = default, greyAlbedo = default;
                 yield return Probe(cam, rt, readback, renderers, withoutModel, ProbeKind.WhiteAlbedo,
                                    s => whiteAlbedo = s);
                 yield return Probe(cam, rt, readback, renderers, withoutModel, ProbeKind.NoMetalRough,
                                    s => noMetalRough = s);
                 yield return Probe(cam, rt, readback, renderers, withoutModel, ProbeKind.WhiteGltf,
                                    s => whiteGltf = s);
+                yield return Probe(cam, rt, readback, renderers, withoutModel, ProbeKind.GreyAlbedo,
+                                   s => greyAlbedo = s);
                 yield return ProbeMeshNormals(cam, rt, readback, renderers, withoutModel,
                                               s => meshNormals = s);
-                Debug.Log(QcPixels.ProbeLine(name, shot, whiteAlbedo, noMetalRough, meshNormals, whiteGltf));
+                Debug.Log(QcPixels.ProbeLine(name, shot, whiteAlbedo, noMetalRough, meshNormals,
+                                             whiteGltf, greyAlbedo));
             }
             else
             {
@@ -285,7 +288,7 @@ namespace DiveMap.Runtime
         // ── A/B probes ───────────────────────────────────────────────────────────
 
         /// <summary>Which shading input the probe frame removes.</summary>
-        private enum ProbeKind { WhiteAlbedo, NoMetalRough, WhiteGltf }
+        private enum ProbeKind { WhiteAlbedo, NoMetalRough, WhiteGltf, GreyAlbedo }
 
         /// <summary>Base-colour tint, glTFast's name then Standard's.</summary>
         private static readonly string[] ColorProps = { "baseColorFactor", "_Color" };
@@ -449,8 +452,14 @@ namespace DiveMap.Runtime
             var savedColor = new List<Color>();
             var savedB = new List<float>();
 
-            string texProp = kind == ProbeKind.WhiteAlbedo ? "baseColorTexture" : "metallicRoughnessTexture";
-            string texAlt = kind == ProbeKind.WhiteAlbedo ? "_MainTex" : "_MetallicGlossMap";
+            bool albedoKind = kind == ProbeKind.WhiteAlbedo || kind == ProbeKind.GreyAlbedo;
+            // The tint the probe paints on. White answers "is the model dark because its albedo is
+            // dark", which is arithmetic, not evidence; mid-grey keeps the model's own measured
+            // brightness and removes only the texture's VARIATION, which is the actual question.
+            float g = (float)QcPixels.MeanAlbedo;
+            Color tint = kind == ProbeKind.GreyAlbedo ? new Color(g, g, g, 1f) : Color.white;
+            string texProp = albedoKind ? "baseColorTexture" : "metallicRoughnessTexture";
+            string texAlt = albedoKind ? "_MainTex" : "_MetallicGlossMap";
 
             foreach (Material m in mats)
             {
@@ -458,14 +467,14 @@ namespace DiveMap.Runtime
                 savedTex.Add(p != null ? m.GetTexture(p) : null);
                 if (p != null) m.SetTexture(p, null);
 
-                if (kind == ProbeKind.WhiteAlbedo)
+                if (albedoKind)
                 {
-                    // Factor to white as well: clearing the slot alone leaves baseColorFactor
-                    // tinting a "white" default, which is not the same experiment.
+                    // Factor set as well: clearing the slot alone leaves baseColorFactor tinting a
+                    // "white" default, which is not the same experiment.
                     string c = m.HasProperty("baseColorFactor") ? "baseColorFactor"
                              : (m.HasProperty("_Color") ? "_Color" : null);
                     savedColor.Add(c != null ? m.GetColor(c) : Color.white);
-                    if (c != null) m.SetColor(c, Color.white);
+                    if (c != null) m.SetColor(c, tint);
                     savedA.Add(0f);
                     savedB.Add(0f);
                 }
@@ -489,7 +498,7 @@ namespace DiveMap.Runtime
                 Material m = mats[i];
                 string p = m.HasProperty(texProp) ? texProp : (m.HasProperty(texAlt) ? texAlt : null);
                 if (p != null) m.SetTexture(p, savedTex[i]);
-                if (kind == ProbeKind.WhiteAlbedo)
+                if (albedoKind)
                 {
                     string c = m.HasProperty("baseColorFactor") ? "baseColorFactor"
                              : (m.HasProperty("_Color") ? "_Color" : null);

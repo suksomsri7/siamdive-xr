@@ -434,7 +434,7 @@ namespace DiveMap.Tests
         {
             string line = QcPixels.ProbeLine("cc0_kraken_xr0", Probed(10.92, 12.56),
                                              Probed(0.10, 12.56), Probed(10.80, 12.55),
-                                             Probed(0.00, 12.56), Probed(0.00, 12.56));
+                                             Probed(0.00, 12.56), Probed(0.00, 12.56), Probed(0.00, 12.56));
             StringAssert.StartsWith("[QCProbe] cc0_kraken_xr0", line);
             StringAssert.Contains("base=10.92%", line);
             StringAssert.Contains("whiteAlbedo=0.10%", line);
@@ -509,11 +509,37 @@ namespace DiveMap.Tests
         public void TheProbeLineCarriesTheDarkNumberForEveryFrame()
         {
             string line = QcPixels.ProbeLine("cc0_kraken_xr0",
-                Dark(14.75), Dark(9.9), Dark(9.8), Dark(1.44), Dark(13.9));
+                Dark(14.75), Dark(9.9), Dark(9.8), Dark(1.44), Dark(13.9), Dark(12.1));
             StringAssert.Contains("darkOfSubject base=14.75%", line);
             StringAssert.Contains("meshNormals=1.44%", line);
             StringAssert.Contains("whiteGltf=13.90%", line);
             StringAssert.Contains("normalVerdict=gltfast-shader", line);
+            StringAssert.Contains("greyAlbedo=12.10%", line);
+            StringAssert.Contains("mottleVerdict=lighting", line);
+        }
+
+        [Test]
+        public void AWhiteAlbedoProbeProvesNothingAndAGreyOneDoes()
+        {
+            // 🔴 The correction. Run 30759921618 read whiteAlbedo=0.00% as "the base-colour texture
+            // is the carrier". In a gamma project the forward pass is albedo × light, so an albedo
+            // of 1.0 lifts every pixel over the ceiling whatever the lighting is doing — an offline
+            // render of the kraken with the same lights and mesh and only the albedo flattened
+            // measures 0.00% at 1.00, 0.00% at 0.80, 0.51% at 0.65 and 3.85% at 0.50. The white
+            // frame was measuring the white.
+            //
+            // MeanAlbedo is the model's own measured brightness, so this probe keeps how bright the
+            // model is and removes only how much its texture VARIES.
+            Assert.AreEqual(0.65f, QcPixels.MeanAlbedo, 1e-6f);
+
+            // Patches survive a flat albedo of the same brightness ⇒ the texture is innocent.
+            Assert.AreEqual("lighting", QcPixels.MottleVerdict(Dark(14.75), Dark(12.1)));
+            // Patches follow the texture's own dark regions ⇒ edge dilation at the source.
+            Assert.AreEqual("albedo-variation", QcPixels.MottleVerdict(Dark(14.75), Dark(0.9)));
+            // Clean model, no interrogation; broken probe, no verdict.
+            Assert.AreEqual("no-mottle", QcPixels.MottleVerdict(Dark(0.0), Dark(0.0)));
+            Assert.AreEqual("probe-failed", QcPixels.MottleVerdict(Dark(14.75), default));
+            Assert.AreEqual("probe-failed", QcPixels.MottleVerdict(Dark(14.75), Dark(0.9, 9.0)));
         }
 
         // ── framing a box instead of a sphere ────────────────────────────────────
