@@ -564,6 +564,9 @@ namespace DiveMap.Runtime
                 // of the GLB's own (often centred) pivot half-sinking into the sand.
                 if (ground && parent != null) GroundToBase(parent);
 
+                // Nothing on a reef is a mirror.
+                if (parent != null) TameMetal(parent.gameObject, item?.AssetId);
+
                 // B8 — the hero statues: gold glow, and the beard/robe drifting in the current.
                 // Applied AFTER the model exists, because both walk its real renderers/bounds.
                 if (parent != null)
@@ -671,6 +674,62 @@ namespace DiveMap.Runtime
         /// position with Y=0 places the model's BASE on the seabed (not its centre).
         /// No-op when there is nothing renderable yet.
         /// </summary>
+        /// <summary>
+        /// Undo the "everything is metal" default that scanned models arrive with.
+        ///
+        /// 🔴 Reported as "ตัวโมเดลมีสีดำแล้วก็ขอบสีขาว มันดูไม่สมจริงใต้น้ำ", and the cause is a
+        /// glTF export artefact meeting this scene's lighting head on. `cc0:rock_b` — a rock,
+        /// placed fifteen times on the map the user was flying through — declares
+        /// <c>metallicFactor = 0.4</c> and ships NO metallic-roughness texture, so the 0.4 applies
+        /// to every texel. A 40%-metal surface has 40% less diffuse, and its specular reflects
+        /// whatever the environment is: here that is <c>AppBoot</c>'s deliberately bright
+        /// blue-white reflection cube at <c>reflectionIntensity = 1</c>. Dark albedo + no diffuse
+        /// + a bright cube = a black object with a white rim. Exactly the photograph.
+        ///
+        /// The rule is narrow on purpose. A material that ships a metallic-roughness TEXTURE has
+        /// been authored: IMG_1330's texture says metal = 0.00 everywhere, so its
+        /// <c>metallicFactor = 1</c> multiplies out to nothing and must be left alone. Only the
+        /// factor-without-a-texture case is touched, because that is the one nobody chose — it is
+        /// what the scanner wrote when it had no opinion.
+        ///
+        /// Not zero, and not a look change for its own sake: 0.06 keeps a wet sheen so the rock
+        /// still reads as underwater rather than as chalk.
+        /// </summary>
+        private static void TameMetal(GameObject root, string assetId)
+        {
+            if (root == null) return;
+            int fixedCount = 0;
+            foreach (Renderer r in root.GetComponentsInChildren<Renderer>(true))
+            {
+                foreach (Material m in r.materials)
+                {
+                    if (m == null) continue;
+                    // glTFast's own PBR shader, and the Standard fallback, name these differently.
+                    foreach (string factor in MetalFactorNames)
+                    {
+                        if (!m.HasProperty(factor)) continue;
+                        if (m.GetFloat(factor) <= 0.05f) continue;
+                        if (HasMetalMap(m)) continue;      // authored — leave it alone
+                        m.SetFloat(factor, 0.06f);
+                        fixedCount++;
+                    }
+                }
+            }
+            if (fixedCount > 0)
+                Debug.Log($"[SceneBuilder] {assetId}: หรี่ metallic ที่ไม่มี texture กำกับ {fixedCount} วัสดุ");
+        }
+
+        private static readonly string[] MetalFactorNames = { "metallicFactor", "_Metallic" };
+        private static readonly string[] MetalMapNames =
+            { "metallicRoughnessTexture", "_MetallicGlossMap", "occlusionRoughnessMetallicTexture" };
+
+        private static bool HasMetalMap(Material m)
+        {
+            foreach (string n in MetalMapNames)
+                if (m.HasProperty(n) && m.GetTexture(n) != null) return true;
+            return false;
+        }
+
         private static void GroundToBase(Transform pivot)
         {
             if (!TryLocalBounds(pivot, out Bounds local)) return;
