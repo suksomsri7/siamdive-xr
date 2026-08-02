@@ -28,14 +28,34 @@ namespace DiveMap.Core
     /// one of those decisions is pinned by EditMode tests instead of by a 35-minute CI round and
     /// a user flying into a wall.
     ///
-    /// ⚠️ Two limits worth knowing before expecting miracles:
+    /// ⚠️ One limit worth knowing before expecting miracles:
     ///   • <see cref="DroneFlight.CamRadius"/> is 3.2, and the collision test grows every box by
     ///     it on all six sides. A hole narrower than ~6.4 units plus the bar thickness stays shut
     ///     no matter how good the hull is — that is the camera's near volume, not the geometry.
-    ///   • The drone only ever tests AABBs, so a hull on a yawed object is stored as the
-    ///     axis-aligned box of each rotated part. At yaw 0/90/180/270 that is exact; in between it
-    ///     is CONSERVATIVE (slightly fat), never leaky. Fat is the safe direction: the worst case
-    ///     is the old behaviour back again for that one object, not a diver inside the scenery.
+    ///
+    /// ── 2026-08 — "เรือเอียงแล้วตัน" ────────────────────────────────────────────────────────
+    ///
+    /// This file used to hand the drone WORLD boxes: it rotated each hull box and then kept the
+    /// axis-aligned box AROUND the rotated one. That was called "fat but never leaky", and the
+    /// second half is true — but the first half was measured on T-13 and it is not slightly fat,
+    /// it is a different shape:
+    ///
+    ///   cc0:wreck_hardeep, laid over on its side (tilt 99.5°)   collision volume ×4.03 … ×7.49
+    ///   openCore 0.741 flat  →  0.005 tilted                    the same hull, the same file
+    ///
+    /// A long thin box turned 45° in three axes has an AABB several times its own volume, and 96
+    /// of them merge into one brick. No hull generator can fix that — the bloat is a property of
+    /// the ROTATION, not of the file (a finer grid makes the boxes thinner, which makes it worse).
+    ///
+    /// So the boxes are no longer sent to world space at all. They stay in the object's OWN frame
+    /// — <see cref="ToFrame"/>, with the placement's scale baked in so the frame is in world units
+    /// — and <see cref="DroneFlight.Step"/> brings the diver INTO that frame (one inverse rotation
+    /// per object, not per box) and does the same six-face test it always did. At tilt 0 that is
+    /// bit-for-bit the old behaviour; at any other angle it is the exact OBB test rather than a
+    /// box several times too big.
+    ///
+    /// 🔴 There is deliberately NO "hull → world AABB" function left in this file. Re-adding one is
+    /// re-adding the bug: a caller that only has an AABB cannot tell a diagonal spar from a wall.
     /// </summary>
     public static class SolidBoxes
     {
@@ -52,12 +72,16 @@ namespace DiveMap.Core
 
         // ── The budget ────────────────────────────────────────────────────────────────
         //
-        // 🔴 Read this before raising anything here. DroneFlight.Step walks the whole box array
-        // EVERY FRAME of the dive, on a phone.
+        // 🔴 Read this before raising anything here. DroneFlight.Step walks these EVERY FRAME of
+        // the dive, on a phone.
         //
         //   today          494 objects × 1 box   =    494 boxes   (map T-13, the biggest we ship)
         //   naive hulls    494 objects × 64      = 31,616 boxes   — 64× the work, every frame
         //   here           ≤ 2,048 detailed + 1 box for every object left over  ≈ 2,542 worst case
+        //
+        // In practice it is now cheaper than that line suggests: the drone walks one entry per
+        // OBJECT (494) and only opens the hull of the few whose world bounds it is actually inside,
+        // so a hull's box count is paid by whoever is standing next to it and by nobody else.
         //
         // The way out is not a smaller number, it is a smaller QUESTION: you can only swim through
         // a hole you are next to. So the nearest objects carry their real hull and everything else
@@ -86,7 +110,7 @@ namespace DiveMap.Core
 
         // ── Types ─────────────────────────────────────────────────────────────────────
 
-        /// <summary>One box. Normalised 0..1 as parsed; world units once through <see cref="ToWorld"/>.</summary>
+        /// <summary>One box. Normalised 0..1 as parsed; world units once through <see cref="ToFrame"/>.</summary>
         public struct Box
         {
             public Vec3 Min, Max;
@@ -115,11 +139,51 @@ namespace DiveMap.Core
         /// One placed object's two shapes: the box it has today, and the hull it could have.
         /// <see cref="Fine"/> null means no hull — the object is still solid, through
         /// <see cref="Coarse"/>. There is no state in which an object becomes passable by accident.
+        ///
+        /// The two live in DIFFERENT spaces, on purpose:
+        ///   • <see cref="Coarse"/> is a WORLD AABB (the renderer bounds), which is all it has ever
+        ///     been. It is also the cheap reject test for the hull, because the hull is fitted
+        ///     inside the same content and therefore never reaches outside it.
+        ///   • <see cref="Fine"/> is in the object's OWN frame — world units (the placement's scale
+        ///     is already baked in by <see cref="ToFrame"/>), measured from <see cref="Origin"/>,
+        ///     turned by <see cref="Rot"/>. Never flattened into world axes; see the class remarks.
+        ///
+        /// Because the hull is stored in the object's frame it also survives the object MOVING:
+        /// only <see cref="Origin"/>/<see cref="Rot"/> change, the boxes do not need rebuilding.
         /// </summary>
         public struct Group
         {
             public Box Coarse;
             public Box[] Fine;
+            /// <summary>World position of the frame <see cref="Fine"/> is measured in.</summary>
+            public Vec3 Origin;
+            /// <summary>Frame → world rotation. Identity for an unrotated placement.</summary>
+            public Quat Rot;
+        }
+
+        /// <summary>
+        /// One object as the DRONE carries it for this stretch of the dive — the output of
+        /// <see cref="Select"/>.
+        ///
+        /// <see cref="Boxes"/> null means "this object is a single box this time": the collider IS
+        /// <see cref="Bound"/>, in world axes, exactly the shape every object had before hulls
+        /// existed. Otherwise <see cref="Bound"/> is only a reject test and the real shape is
+        /// <see cref="Boxes"/> in the object's frame.
+        ///
+        /// A struct holding a REFERENCE to the group's own array: selecting costs no allocation,
+        /// which matters because it runs a couple of times a second for the whole dive.
+        /// </summary>
+        public struct Solid
+        {
+            /// <summary>World AABB containing the object. Reject test — and the collider when
+            /// <see cref="Boxes"/> is null.</summary>
+            public Box Bound;
+            /// <summary>Frame-space hull, or null for "use <see cref="Bound"/>".</summary>
+            public Box[] Boxes;
+            public Vec3 Origin;
+            public Quat Rot;
+            /// <summary>Which group this came from — the caller's own arrays are indexed by it.</summary>
+            public int Index;
         }
 
         /// <summary>
@@ -270,21 +334,29 @@ namespace DiveMap.Core
         // ── Putting the hull where the object stands ──────────────────────────────────
 
         /// <summary>
-        /// Hull → world boxes. <paramref name="fit"/> is the object's content bounds in its OWN
-        /// pivot space (i.e. after grounding), <paramref name="pos"/>/<paramref name="rot"/>/
-        /// <paramref name="scale"/> are that pivot's world transform — Unity's own order,
+        /// Hull → the object's OWN frame, in world units. <paramref name="fit"/> is the object's
+        /// content bounds in its pivot space (i.e. after grounding) and <paramref name="scale"/>
+        /// is the placement's world scale, from Unity's own order
         /// <c>world = pos + rot · (scale ⊙ local)</c>.
         ///
-        /// Each rotated box comes back as its world AABB, because that is the only shape
-        /// <see cref="DroneFlight"/> tests. See the class remarks for why fat-but-never-leaky is
-        /// the right side to err on.
+        /// Everything up to and including the scale is applied here, because all of it keeps a box
+        /// a box: a box scaled per axis is still an axis-aligned box (a NEGATIVE axis mirrors it,
+        /// hence the min/max tidy-up). What is deliberately NOT applied is the rotation — that is
+        /// the one step that would turn the box into something an AABB cannot describe, and it is
+        /// where the ×4-to-×7 bloat came from. The caller carries <c>pos</c> and <c>rot</c> beside
+        /// the boxes (<see cref="Group.Origin"/>, <see cref="Group.Rot"/>) and the collision test
+        /// brings the DIVER into this frame instead.
+        ///
+        /// Baking the scale in rather than dividing the diver's radius by it later is not a detail:
+        /// it means the frame is metric, so the camera radius stays a sphere-sized 3.2 in it, and
+        /// a non-uniform scale (T-13 places a wreck at 37.7 × 100.9 × 37.7) needs no special case.
         ///
         /// Null in, null out: a caller with no hull keeps the box it already has.
         /// </summary>
-        public static Box[] ToWorld(Model model, Box fit, Vec3 pos, Quat rot, Vec3 scale)
-            => ToWorld(model, fit, pos, rot, scale, Mirror.Importer);
+        public static Box[] ToFrame(Model model, Box fit, Vec3 scale)
+            => ToFrame(model, fit, scale, Mirror.Importer);
 
-        public static Box[] ToWorld(Model model, Box fit, Vec3 pos, Quat rot, Vec3 scale, Mirror mirror)
+        public static Box[] ToFrame(Model model, Box fit, Vec3 scale, Mirror mirror)
         {
             if (model == null || model.IsEmpty) return null;
 
@@ -300,24 +372,18 @@ namespace DiveMap.Core
                 MapAxis(n.Min.Y, n.Max.Y, mirror.Y, fit.Min.Y, spanY, out double ly0, out double ly1);
                 MapAxis(n.Min.Z, n.Max.Z, mirror.Z, fit.Min.Z, spanZ, out double lz0, out double lz1);
 
-                double minX = double.MaxValue, minY = double.MaxValue, minZ = double.MaxValue;
-                double maxX = double.MinValue, maxY = double.MinValue, maxZ = double.MinValue;
+                Order(lx0 * scale.X, lx1 * scale.X, out double x0, out double x1);
+                Order(ly0 * scale.Y, ly1 * scale.Y, out double y0, out double y1);
+                Order(lz0 * scale.Z, lz1 * scale.Z, out double z0, out double z1);
 
-                for (int c = 0; c < 8; c++)
-                {
-                    var local = new Vec3(((c & 1) == 0 ? lx0 : lx1) * scale.X,
-                                         ((c & 2) == 0 ? ly0 : ly1) * scale.Y,
-                                         ((c & 4) == 0 ? lz0 : lz1) * scale.Z);
-                    Vec3 w = Rotate(rot, local);
-                    double wx = pos.X + w.X, wy = pos.Y + w.Y, wz = pos.Z + w.Z;
-                    if (wx < minX) minX = wx; if (wx > maxX) maxX = wx;
-                    if (wy < minY) minY = wy; if (wy > maxY) maxY = wy;
-                    if (wz < minZ) minZ = wz; if (wz > maxZ) maxZ = wz;
-                }
-
-                outBoxes[i] = Box.FromMinMax(minX, minY, minZ, maxX, maxY, maxZ);
+                outBoxes[i] = Box.FromMinMax(x0, y0, z0, x1, y1, z1);
             }
             return outBoxes;
+        }
+
+        private static void Order(double a, double b, out double lo, out double hi)
+        {
+            if (a <= b) { lo = a; hi = b; } else { lo = b; hi = a; }
         }
 
         /// <summary>
@@ -338,8 +404,25 @@ namespace DiveMap.Core
             b = fitMin + n1 * fitSpan;
         }
 
+        /// <summary>
+        /// A point in the object's frame, in world coordinates:
+        /// <c>world = origin + rot · frame</c>. The inverse of what
+        /// <see cref="DroneFlight.Step"/> does to the diver every frame — here so a test can state
+        /// "this world point" and mean it.
+        /// </summary>
+        public static Vec3 FrameToWorld(Vec3 origin, Quat rot, Vec3 frame)
+        {
+            Vec3 r = Rotate(rot, frame);
+            return new Vec3(origin.X + r.X, origin.Y + r.Y, origin.Z + r.Z);
+        }
+
+        /// <summary>The other direction: a world point in the object's frame.</summary>
+        public static Vec3 WorldToFrame(Vec3 origin, Quat rot, Vec3 world)
+            => Rotate(new Quat(-rot.X, -rot.Y, -rot.Z, rot.W),
+                      new Vec3(world.X - origin.X, world.Y - origin.Y, world.Z - origin.Z));
+
         /// <summary>v′ = v + 2w(q⃗ × v) + 2 q⃗ × (q⃗ × v) — the standard rotate, no matrix needed.</summary>
-        private static Vec3 Rotate(Quat q, Vec3 v)
+        public static Vec3 Rotate(Quat q, Vec3 v)
         {
             double x = q.X, y = q.Y, z = q.Z, w = q.W;
             double tx = 2.0 * (y * v.Z - z * v.Y);
@@ -353,18 +436,22 @@ namespace DiveMap.Core
         // ── Choosing what the drone carries ───────────────────────────────────────────
 
         /// <summary>
-        /// Fill <paramref name="into"/> with the boxes the diver should collide with from here.
-        /// Returns how many objects got their real hull.
+        /// Fill <paramref name="into"/> with the shapes the diver should collide with from here —
+        /// ONE entry per object. Returns how many of them got their real hull.
         ///
         /// Every group contributes something — its hull if it was picked, otherwise the single box
         /// it has today — so the count of SOLID OBJECTS never changes with the budget, only their
         /// detail. That is the invariant worth keeping: a budget that could make scenery passable
         /// would trade a visible bug for one nobody can reproduce.
         ///
+        /// One entry per OBJECT rather than per box is also why a hull no longer has to be flattened
+        /// into world axes: the entry carries the object's frame with it, and the frame is what the
+        /// boxes mean. It costs nothing per refresh — the entry points at the group's own array.
+        ///
         /// Output order follows the group order, not the distance order, so the result is stable
         /// between refreshes and reproducible in a test.
         /// </summary>
-        public static int Select(IReadOnlyList<Group> groups, Vec3 eye, List<Box> into,
+        public static int Select(IReadOnlyList<Group> groups, Vec3 eye, List<Solid> into,
                                  double detailRadius = DetailRadius, int budget = DiverBoxBudget)
         {
             if (into == null) return 0;
@@ -408,10 +495,38 @@ namespace DiveMap.Core
 
             for (int i = 0; i < n; i++)
             {
-                if (detailed[i]) into.AddRange(groups[i].Fine);
-                else into.Add(groups[i].Coarse);
+                Group g = groups[i];
+                into.Add(new Solid
+                {
+                    Bound = g.Coarse,
+                    // Null is not "nothing to collide with", it is "collide with Bound" — the
+                    // single world box this object has always had.
+                    Boxes = detailed[i] ? g.Fine : null,
+                    Origin = detailed[i] ? g.Origin : default,
+                    // Normalised here and not trusted from the caller: a frame turned by a
+                    // zero-length quaternion collapses the whole hull onto the origin, and a
+                    // default(Quat) — w = 0, which is what an unset field is — is exactly that.
+                    Rot = detailed[i] ? g.Rot.Normalized() : Quat.Identity,
+                    Index = i,
+                });
             }
             return picked;
+        }
+
+        /// <summary>
+        /// How many boxes a pick actually costs per frame. The budget is stated in boxes, so the
+        /// log and the tests have to be able to count them from the per-object output.
+        /// </summary>
+        public static int BoxCount(IReadOnlyList<Solid> solids)
+        {
+            if (solids == null) return 0;
+            int total = 0;
+            for (int i = 0; i < solids.Count; i++)
+            {
+                Box[] b = solids[i].Boxes;
+                total += b == null ? 1 : b.Length;
+            }
+            return total;
         }
 
         /// <summary>Squared distance from a point to a box; 0 when the point is inside it.</summary>

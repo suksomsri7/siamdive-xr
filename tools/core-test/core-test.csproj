@@ -1,0 +1,56 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!--
+    core-test — รันเทส EditMode ที่เป็น "pure logic" (ไม่แตะ UnityEngine) ด้วย dotnet บนเครื่องนี้
+    เพราะเครื่องนี้ไม่มี Unity Editor และ 1 รอบ CI = ~35 นาที.
+
+    ตรวจได้เฉพาะไฟล์ที่ลิสต์ไว้ข้างล่าง (Core ที่ไม่ใช้ UnityEngine + เทสของมัน)
+    อย่างอื่นยังต้องรอ CI เหมือนเดิม. เพิ่มไฟล์ใหม่ = เพิ่ม Compile Include ที่นี่.
+
+        dotnet run  -c Release  (project = tools/core-test)
+  -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>disable</Nullable>
+    <AssemblyName>core-test</AssemblyName>
+    <RootNamespace>DiveMap.CoreTest</RootNamespace>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <LangVersion>9</LangVersion>
+    <NoWarn>$(NoWarn);CS0649</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="NUnit" Version="3.14.0" />
+    <PackageReference Include="NUnitLite" Version="3.14.0" />
+    <!-- SolidBoxes parses the CDN's .solids.json; Unity ships the same package. -->
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
+  </ItemGroup>
+
+  <ItemGroup Label="Core (UnityEngine-free)">
+    <Compile Include="UnityShim.cs" />
+    <Compile Include="../../DiveMap/Assets/Scripts/Core/ItemPicker.cs" />
+    <Compile Include="../../DiveMap/Assets/Scripts/Core/SeabedGeom.cs" />
+    <Compile Include="../../DiveMap/Assets/Scripts/Core/WebCoord.cs" />
+    <Compile Include="../../DiveMap/Assets/Scripts/Core/MarineMath.cs" />
+    <Compile Include="../../DiveMap/Assets/Scripts/Core/DroneFlight.cs" />
+    <Compile Include="../../DiveMap/Assets/Scripts/Core/SolidBoxes.cs" />
+    <Compile Include="../../DiveMap/Assets/Scripts/Core/FleeMath.cs" />
+    <Compile Include="../../DiveMap/Assets/Scripts/Core/SpeciesGenome.cs" />
+    <Compile Include="../../DiveMap/Assets/Scripts/Core/SwimStyle.cs" />
+    <Compile Include="../../DiveMap/Assets/Scripts/Core/FishMind.cs" />
+  </ItemGroup>
+
+  <ItemGroup Label="EditMode tests for exactly those files">
+    <Compile Include="../../DiveMap/Assets/Tests/EditMode/WebCoordTests.cs" />
+    <Compile Include="../../DiveMap/Assets/Tests/EditMode/MarineMathTests.cs" />
+    <Compile Include="../../DiveMap/Assets/Tests/EditMode/FleeMathTests.cs" />
+    <Compile Include="../../DiveMap/Assets/Tests/EditMode/SpeciesGenomeTests.cs" />
+    <Compile Include="../../DiveMap/Assets/Tests/EditMode/SwimStyleTests.cs" />
+    <Compile Include="../../DiveMap/Assets/Tests/EditMode/FishMindTests.cs" />
+    <Compile Include="../../DiveMap/Assets/Tests/EditMode/DroneFlightTests.cs" />
+    <Compile Include="../../DiveMap/Assets/Tests/EditMode/SolidBoxesTests.cs" />
+    <Compile Include="../../DiveMap/Assets/Tests/EditMode/TiltedHullTests.cs" />
+    <Compile Include="Runner.cs" />
+  </ItemGroup>
+</Project>

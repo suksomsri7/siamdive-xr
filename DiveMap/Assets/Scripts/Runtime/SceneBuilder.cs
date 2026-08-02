@@ -401,7 +401,12 @@ namespace DiveMap.Runtime
                 solids.Add(new SolidBoxes.Group
                 {
                     Coarse = new SolidBoxes.Box(ToVec(ob.min), ToVec(ob.max)),
+                    // Frame-space boxes plus the placement they are measured in. Flattening the
+                    // two together into world AABBs is what made a wreck lying on its side solid
+                    // (SolidBoxes class remarks) — the drone turns the DIVER instead.
                     Fine = fine,
+                    Origin = fine == null ? default : ToVec(go.transform.position),
+                    Rot = fine == null ? Quat.Identity : ToQuat(go.transform.rotation),
                 });
             }
             // Says something even when nothing happened (HANDOFF §4 rule 14): "0 hulls" and
@@ -413,7 +418,20 @@ namespace DiveMap.Runtime
             if (schoolRegs.Count > 0 || whaleCount > 0)
             {
                 var marine = root.AddComponent<FishSchoolSystem>();
-                marine.Configure(schoolRegs, obstacles, Camera.main, BaseMat(false), _waterLevel, whaleCount);
+                // seabedRadius is handed over so every school's brain (Core/FishMind.cs) knows where
+                // the sand ends — a wandering shoal is clamped inside it minus its own home radius.
+                marine.Configure(schoolRegs, obstacles, Camera.main, BaseMat(false), _waterLevel,
+                                 whaleCount, seabedRadius);
+
+                // Hero animals roam the same map, so they get the same two facts: the sand's radius
+                // and the structures on it (the wreck they slow down beside). Done HERE rather than
+                // in AttachWhale because the obstacles only exist once the static GLBs have landed.
+                for (int ai = 0; ai < animals.Count; ai++)
+                {
+                    if (animals[ai] == null) continue;
+                    var wc = animals[ai].GetComponent<WhaleController>();
+                    if (wc != null) wc.SetWorld(seabedRadius, _waterLevel, obstacles);
+                }
 
                 // Swap in the real fish (WO-XR-04.1): whatever is already loaded now, plus
                 // anything that lands later — a school that never gets a template keeps the
@@ -611,10 +629,12 @@ namespace DiveMap.Runtime
             data == null || data.Length == 0 ? null : System.Text.Encoding.UTF8.GetString(data);
 
         /// <summary>
-        /// This object's hull in world space, or null to keep its single AABB. Null for every one
-        /// of: no URL, a placeholder standing in for a model that never loaded (the hull describes
-        /// the model, not a grey cube), a fetch still in flight, an unreadable file, and a hull
-        /// whose proportions do not match the thing it would be wrapped around.
+        /// This object's hull in the object's OWN frame (world units, the placement's scale baked
+        /// in — the caller carries the position and rotation beside it), or null to keep its single
+        /// AABB. Null for every one of: no URL, a placeholder standing in for a model that never
+        /// loaded (the hull describes the model, not a grey cube), a fetch still in flight, an
+        /// unreadable file, and a hull whose proportions do not match the thing it would be
+        /// wrapped around.
         ///
         /// 🔴 It NEVER waits. A map build that stalls on a 4 KB side-file to make a hole slightly
         /// better shaped has traded the product for the detail; the fetch is already cached by
@@ -643,8 +663,7 @@ namespace DiveMap.Runtime
                 return null;
             }
 
-            return SolidBoxes.ToWorld(model, fit, ToVec(pivot.position), ToQuat(pivot.rotation),
-                                      ToVec(pivot.lossyScale));
+            return SolidBoxes.ToFrame(model, fit, ToVec(pivot.lossyScale));
         }
 
         /// <summary>Across the UnityEngine border into DiveMap.Core's own vector/quaternion.</summary>

@@ -122,6 +122,18 @@ namespace DiveMap.Runtime.Marine
         }
         private SchoolFear[] _fear = System.Array.Empty<SchoolFear>();
 
+        // ── Phase 2 goal 2: every school has a brain of its own (Core/FishMind.cs) ──
+        // Ten structs, stepped once per school per frame on the main thread. No allocation, no
+        // per-fish cost: what the eye reads at shoal distance is the SHOAL's intent (is it going
+        // somewhere, did it notice the wreck, is it still nervous), and that is what these hold.
+        private Mind[]       _mind   = System.Array.Empty<Mind>();
+        private MindTraits[] _traits = System.Array.Empty<MindTraits>();
+        /// <summary>The things on this map worth swimming over to look at (the wreck, big rocks).</summary>
+        private MindPoi[]    _pois   = System.Array.Empty<MindPoi>();
+        private int          _poiCount;
+        /// <summary>Radius of the sand. Every target a mind picks is clamped inside it.</summary>
+        private float        _domainR = 1f;
+
         private Camera _cam;
         // P1.2: the tour's fish-repelling bubble (zero radius = nobody is diving).
         private Vector3 _repulsorPos;
@@ -272,9 +284,17 @@ namespace DiveMap.Runtime.Marine
         /// <see cref="DiveMap.Core.MarineMath.SchoolGeometryFor"/>; big animals (whaleshark)
         /// are real GLBs built by SceneBuilder, so this class only reports their count.
         /// </summary>
+        /// <param name="domainRadius">
+        /// Radius of the seabed disc (SceneBuilder's own <c>seabedRadius</c>). Every place a school
+        /// decides to go is clamped inside it, leaving the school's own home radius of clearance at
+        /// the rim — so it is the WHOLE shoal that stays over the sand, not merely its centre. Pass
+        /// 0 and it is derived from where the schools were placed, so an old two-arg caller still
+        /// gets a map rather than an unbounded one.
+        /// </param>
         public void Configure(
             List<SchoolReg> schools, List<ObstacleBox> obstacles,
-            Camera cam, Material baseMat, float waterLevel, int whaleCount)
+            Camera cam, Material baseMat, float waterLevel, int whaleCount,
+            float domainRadius = 0f)
         {
             _cam = cam != null ? cam : Camera.main;
             _fishMesh = FishMeshFactory.Fish();
@@ -300,6 +320,16 @@ namespace DiveMap.Runtime.Marine
             _alloc = true;
 
             _fear = new SchoolFear[schools.Count];
+            _mind = new Mind[schools.Count];
+            _traits = new MindTraits[schools.Count];
+
+            // Points of interest = the biggest structures on the map. Capped at eight: T-13 is 494
+            // placed objects built from 10 assets, and a school choosing between 494 pebbles is
+            // both pointless and a per-frame scan nobody asked for. Biggest-first, because what a
+            // school swims over to look at is the wreck, not a brick.
+            BuildPois(obN);
+
+            _domainR = domainRadius > 1f ? domainRadius : 0f;
 
             var rng = new Unity.Mathematics.Random(0x51AD5EED);
             int cursor = 0;
@@ -365,7 +395,21 @@ namespace DiveMap.Runtime.Marine
                     fear.Shelter = c;
                     fear.ShelterR = b.ObsR;
                 }
+                // Seeded here so the shoal's live centre is valid on frame ZERO. The diver's
+                // distance is measured against it (a shoal that has wandered 100 u off is not
+                // where it was placed), and a zero vector on the first frame would read as a
+                // charge from the map origin.
+                fear.HomeNow = s.Anchor;
+                fear.HomeInit = true;
+                fear.HomeRNow = homeR;
                 _fear[si] = fear;
+
+                // This school's own brain. The seed is the species name folded with the school
+                // index, so two barracuda schools on the same map behave differently but the SAME
+                // map always replays identically — which is what makes the QC run reproducible and
+                // FishMindTests possible at all.
+                _traits[si] = FishMind.TraitsFor(s.Species);
+                _mind[si] = new Mind { Seed = MindSeed(s.Species, si), Poi = -1 };
 
                 // Material (clone the proven DM_Standard so instancing renders in the QC shot).
                 Material mat = baseMat != null ? new Material(baseMat) : new Material(Shader.Find("Standard"));
@@ -450,8 +494,63 @@ namespace DiveMap.Runtime.Marine
             // only reports the count so the [Marine] summary stays the QC oracle.
             _whaleCount = Mathf.Max(0, whaleCount);
 
+            // No seabed radius from the caller → derive one that at least contains every school it
+            // was given, so "stay on the map" still means something rather than nothing.
+            if (_domainR <= 1f)
+            {
+                float far = 0f;
+                for (int si = 0; si < _schools.Length; si++)
+                {
+                    float3 a = _schools[si].Anchor;
+                    far = Mathf.Max(far, Mathf.Sqrt(a.x * a.x + a.z * a.z) + _schools[si].HomeR);
+                }
+                _domainR = Mathf.Max(60f, far * 1.35f);
+            }
+
             Debug.Log($"[Marine] configured schools={schools.Count} fish={_fishCount} " +
                       $"whale={_whaleCount} obstacles={obN} waterLevel={waterLevel:F1}");
+            Debug.Log($"[Mind] configured schools={schools.Count} pois={_poiCount} " +
+                      $"domainR={_domainR:F0} (targets are clamped inside it, minus each " +
+                      $"school's own home radius)");
+        }
+
+        /// <summary>
+        /// The eight biggest obstacles, as things a school might go and look at. Selected by
+        /// insertion into a fixed array — no sort, no allocation beyond the one array, and it runs
+        /// once at Configure.
+        /// </summary>
+        private void BuildPois(int obN)
+        {
+            const int Max = 8;
+            _pois = new MindPoi[Max];
+            _poiCount = 0;
+            for (int oi = 0; oi < obN; oi++)
+            {
+                ObstacleBox b = _obstacles[oi];
+                float cx = (b.Min.x + b.Max.x) * 0.5f;
+                float cy = (b.Min.y + b.Max.y) * 0.5f;
+                float cz = (b.Min.z + b.Max.z) * 0.5f;
+                float r = Mathf.Max(b.Max.x - b.Min.x, b.Max.z - b.Min.z) * 0.5f + b.ObsR;
+                var poi = new MindPoi(cx, cy, cz, r);
+
+                if (_poiCount < Max) { _pois[_poiCount++] = poi; continue; }
+                int smallest = 0;
+                for (int k = 1; k < Max; k++)
+                    if (_pois[k].Radius < _pois[smallest].Radius) smallest = k;
+                if (r > _pois[smallest].Radius) _pois[smallest] = poi;
+            }
+        }
+
+        /// <summary>
+        /// A stable seed for one school: FNV-1a of the species name, folded with the school index.
+        /// Deterministic across runs and devices — <c>GetHashCode()</c> on a string is not.
+        /// </summary>
+        internal static uint MindSeed(string species, int schoolIndex)
+        {
+            uint h = 2166136261u;
+            if (!string.IsNullOrEmpty(species))
+                for (int i = 0; i < species.Length; i++) { h ^= species[i]; h *= 16777619u; }
+            return h ^ ((uint)schoolIndex * 0x9E3779B9u);
         }
 
         /// <summary>
@@ -708,6 +807,21 @@ namespace DiveMap.Runtime.Marine
                 float avg = _accumN > 0 ? _accumMs / _accumN : 0f;
                 Debug.Log($"[Marine] schools={_render.Count} fish={_fishCount} whale={_whaleCount} avgFrameMs={avg:F1}");
                 _accumMs = 0f; _accumN = 0;
+
+                // Heartbeat. The per-decision lines above go quiet for half a minute at a time when
+                // a school is on a long dwell, and "quiet" must never be indistinguishable from
+                // "the brain is not running" (HANDOFF §4 rule 14). One line, every school, no alloc
+                // beyond the string itself — and only every 200 frames.
+                if (_mind.Length > 0)
+                {
+                    var sb = new System.Text.StringBuilder(96);
+                    sb.Append("[Mind] alive");
+                    for (int si = 0; si < _mind.Length; si++)
+                        sb.Append(' ').Append(si).Append(':')
+                          .Append(FishMind.Label(_mind[si].State))
+                          .Append('/').Append(_mind[si].Wariness.ToString("F1"));
+                    Debug.Log(sb.ToString());
+                }
             }
         }
 
@@ -745,8 +859,15 @@ namespace DiveMap.Runtime.Marine
                 predDist = d; predPos = op; hasPred = true;
             }
 
-            float diverDist = Mathf.Sqrt((camPos.x - fx.Anchor0.x) * (camPos.x - fx.Anchor0.x) +
-                                         (camPos.z - fx.Anchor0.z) * (camPos.z - fx.Anchor0.z));
+            // 🔴 Measured from where the shoal ACTUALLY IS, not where it was placed. Before the mind
+            // landed those were the same point; now a school can legitimately be a hundred units
+            // from its placement, and measuring the diver against the placement would panic a shoal
+            // nobody was near — and ignore one being charged. (The predator scan above deliberately
+            // still uses the authored anchors: those are dragged toward cover BY fear, so measuring
+            // fear against them is the feedback loop the C5 comment warns about.)
+            Vector3 centre = fx.HomeInit ? fx.HomeNow : fx.Anchor0;
+            float diverDist = Mathf.Sqrt((camPos.x - centre.x) * (camPos.x - centre.x) +
+                                         (camPos.z - centre.z) * (camPos.z - centre.z));
 
             float panic = (float)FleeMath.SchoolPanic(
                 predDist, hasPred,
@@ -778,9 +899,49 @@ namespace DiveMap.Runtime.Marine
             fx.HomeRNow = Mathf.MoveTowards(fx.HomeRNow, wantR, sp.MaxSpeed * Mathf.Max(Time.deltaTime, 1e-4f));
             sp.HomeR = fx.HomeRNow;
 
+            // ── What this school WANTS to be doing (Core/FishMind.cs) ─────────────────
+            // The mind only ever moves a TARGET; the ease below is what turns it into motion, so a
+            // school can never be dragged faster than it could have swum. The domain is rebuilt per
+            // school (a struct — free) because the ceiling and floor are the school's own: CapY is
+            // waterLevel − fishLen and the slab is ±VertHalf around the centre, so clamping the
+            // CENTRE to those bounds is what keeps the whole pancake under the surface.
+            double minY = sp.VertHalf + sp.FishLen;
+            double maxY = sp.CapY - sp.VertHalf;
+            if (maxY < minY + 1.0) maxY = minY + 1.0;
+            MindDomain dom = FishMind.SchoolDomain(_domainR, minY, maxY,
+                                                   fx.Anchor0.x, fx.Anchor0.z, fx.HomeR0);
+
+            Mind mind = _mind[si];
+            bool minded = FishMind.Step(
+                ref mind, _traits[si], dom, _pois, _poiCount,
+                fx.Anchor0.x, fx.Anchor0.y, fx.Anchor0.z,
+                fx.HomeR0, panic, t, Time.deltaTime, out MindState was);
+            _mind[si] = mind;
+
+            // One line PER DECISION — not per frame, and not only when something dramatic happens.
+            // A reviewer has to be able to read the whole state machine off the player log, because
+            // a screenshot cannot show intent: a shoal parked over the wreck because it chose to
+            // and one parked there because the wander term is broken look identical.
+            if (minded)
+            {
+                string species = si < _render.Count ? _render[si].Species : "?";
+                // The very first line of a school's life is its birth, not a transition: the mind
+                // opens in Cruise, so "Cruise→Cruise" would be the one line in the log that reads
+                // like a bug. (A Startle on decision 0 has was != State, so it is unaffected.)
+                string from = (was == mind.State && mind.Tick == 0) ? "start" : FishMind.Label(was);
+                Debug.Log($"[Mind] school={si} species={species} " +
+                          $"state={from}→{FishMind.Label(mind.State)} " +
+                          $"target=({mind.TX:F0},{mind.TY:F0},{mind.TZ:F0}) " +
+                          $"n={mind.Tick} dwell={(mind.Until - t):F0}s wary={mind.Wariness:F2} " +
+                          $"poi={mind.Poi} panic={panic:F2} " +
+                          $"home=({fx.HomeNow.x:F0},{fx.HomeNow.z:F0}) " +
+                          $"roam={(_traits[si].RoamMul * fx.HomeR0):F0}u");
+            }
+
             // Run for cover: drag the shoal's home toward the nearest structure in proportion to
-            // fear. Fish already at the reef stay put rather than piling into it.
-            Vector3 want = fx.Anchor0;
+            // fear. Fish already at the reef stay put rather than piling into it. Applied ON TOP of
+            // whatever the mind wanted — fear overrides curiosity, never the other way round.
+            Vector3 want = new Vector3((float)mind.TX, (float)mind.TY, (float)mind.TZ);
             if (fx.HasShelter && panic > 0.001f)
             {
                 float toCover = Mathf.Sqrt((fx.Shelter.x - want.x) * (fx.Shelter.x - want.x) +

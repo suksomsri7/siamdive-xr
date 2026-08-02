@@ -1,3 +1,4 @@
+using System;
 using DiveMap.Core;
 using NUnit.Framework;
 
@@ -18,7 +19,7 @@ namespace DiveMap.Tests
             => new DroneFlight.State { Pos = new DroneFlight.Vec3(x, y, z), Yaw = yaw };
 
         private static DroneFlight.State Step(DroneFlight.State s, DroneFlight.Sticks sticks,
-                                              float seabedY = 0f, DroneFlight.Box[] solids = null)
+                                              float seabedY = 0f, DroneFlight.Solid[] solids = null)
             => DroneFlight.Step(s, sticks, Dt, seabedY, Water, solids, 1f, 1f);
 
         [Test]
@@ -301,7 +302,7 @@ namespace DiveMap.Tests
             var box = new DroneFlight.Box { MinX = -20f, MaxX = 20f, MinY = 0f, MaxY = 60f, MinZ = -20f, MaxZ = 20f };
             var s = Fresh(x: 0f, y: 30f, z: -60f);
             for (int i = 0; i < 400; i++)
-                s = Step(s, new DroneFlight.Sticks { Ry = -1f }, solids: new[] { box });
+                s = Step(s, new DroneFlight.Sticks { Ry = -1f }, solids: new[] { DroneFlight.Solid.Aabb(box) });
 
             // Flew north into the box → stopped on its −Z face, camera radius clear of it.
             Assert.LessOrEqual(s.Pos.Z, box.MinZ - DroneFlight.CamRadius + 0.001f);
@@ -318,9 +319,87 @@ namespace DiveMap.Tests
                 Pos = new DroneFlight.Vec3(0f, 61f, 0f),
                 Vel = new DroneFlight.Vec3(0f, -20f, 0f),
             };
-            s = Step(s, new DroneFlight.Sticks { Ly = 1f }, solids: new[] { box });
+            s = Step(s, new DroneFlight.Sticks { Ly = 1f }, solids: new[] { DroneFlight.Solid.Aabb(box) });
             Assert.GreaterOrEqual(s.Pos.Y, box.MaxY + DroneFlight.CamRadius - 0.001f);
             Assert.AreEqual(0f, s.Vel.Y, 0.001f);
+        }
+
+        [Test]
+        public void Solids_ASolidRestingOnTheSandStillHasNoWayOutUnderneath()
+        {
+            // The sixth face exists now, so the "never through the seabed" rule has to be shown
+            // holding rather than assumed from the fact that the face was missing. A box whose
+            // underside is buried: the downward exit lands below the floor, so it is off the menu
+            // however shallow it looks.
+            var box = new DroneFlight.Box { MinX = -20f, MaxX = 20f, MinY = 0f, MaxY = 8f, MinZ = -20f, MaxZ = 20f };
+            var s = new DroneFlight.State
+            {
+                // Deep inside, nearer the bottom face than any other — the old five faces would
+                // have sent this diver up, and so must the six.
+                Pos = new DroneFlight.Vec3(0f, 1f, 0f),
+            };
+            s = Step(s, new DroneFlight.Sticks(), seabedY: 0f,
+                     solids: new[] { DroneFlight.Solid.Aabb(box) });
+
+            Assert.GreaterOrEqual(s.Pos.Y, box.MaxY + DroneFlight.CamRadius - 0.001f,
+                                  "the shallowest face was the underside, and it is buried in sand");
+        }
+
+        [Test]
+        public void Solids_PushDownOutOfSomethingHangingInMidWater()
+        {
+            // 🔴 The other half of "ชนกำแพงล่องหน". With only five faces, ANY diver who ended up
+            // inside a solid was lifted to the top of it — over a wreck, over a swim-through, over
+            // whatever it was they were trying to pass under. The way out of the underside of an
+            // arch, hovering 60 units above the sand, is DOWN.
+            var box = new DroneFlight.Box { MinX = -40f, MaxX = 40f, MinY = 60f, MaxY = 100f, MinZ = -40f, MaxZ = 40f };
+            var s = new DroneFlight.State
+            {
+                Pos = new DroneFlight.Vec3(0f, 62f, 0f),   // just inside the underside
+            };
+            s = Step(s, new DroneFlight.Sticks(), seabedY: 0f,
+                     solids: new[] { DroneFlight.Solid.Aabb(box) });
+
+            Assert.LessOrEqual(s.Pos.Y, box.MinY - DroneFlight.CamRadius + 0.001f,
+                               "the shallowest way out was down and the diver went up instead");
+            Assert.Greater(s.Pos.Y, 0f, "…but not through the seabed");
+        }
+
+        [Test]
+        public void Solids_ARotatedHullIsTestedInItsOwnFrame()
+        {
+            // One bar, 4 units thick, turned 45° about Y. The old code stored it as the world box
+            // AROUND it — 60 units wide instead of 4 — so a diver 20 units off the bar's own face
+            // was "inside" it. In its own frame there is nothing there but water.
+            var bar = new DroneFlight.Box { MinX = -40f, MaxX = 40f, MinY = -2f, MaxY = 2f, MinZ = -2f, MaxZ = 2f };
+            float h = (float)Math.Sin(Math.PI / 8), c = (float)Math.Cos(Math.PI / 8);
+            var solid = new DroneFlight.Solid
+            {
+                // The bounds the app carries: the object's whole world AABB, which for a bar at 45°
+                // is a wide flat square. It is a reject test, not the shape.
+                Bound = new DroneFlight.Box { MinX = -30f, MaxX = 30f, MinY = -2f, MaxY = 2f, MinZ = -30f, MaxZ = 30f },
+                Boxes = new[] { bar },
+                Origin = new DroneFlight.Vec3(0f, 0f, 0f),
+                Rot = new DroneFlight.Quat(0f, h, 0f, c),
+                Rotated = true,
+            };
+
+            // World (14.14, 0, 14.14) is 20 units off the bar's own side — open water — but it is
+            // well inside the 60-unit world square, which is all the old code could see.
+            var s = new DroneFlight.State { Pos = new DroneFlight.Vec3(14.142f, 0f, 14.142f) };
+            DroneFlight.State after = Step(s, new DroneFlight.Sticks(), seabedY: -100f,
+                                           solids: new[] { solid });
+            Assert.AreEqual(14.142f, after.Pos.X, 0.01f, "pushed out of a bar that is not there");
+            Assert.AreEqual(14.142f, after.Pos.Z, 0.01f);
+
+            // …and the bar itself still stops you: world (20, 0, −20) is 28 units along it.
+            var inside = new DroneFlight.State { Pos = new DroneFlight.Vec3(20f, 0f, -20f) };
+            DroneFlight.State pushed = Step(inside, new DroneFlight.Sticks(), seabedY: -100f,
+                                            solids: new[] { solid });
+            float moved = (float)Math.Sqrt((pushed.Pos.X - 20f) * (pushed.Pos.X - 20f)
+                                         + (pushed.Pos.Z + 20f) * (pushed.Pos.Z + 20f)
+                                         + pushed.Pos.Y * pushed.Pos.Y);
+            Assert.Greater(moved, 1f, "the bar let a diver stand inside it");
         }
 
         [Test]

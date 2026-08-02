@@ -13,9 +13,17 @@ namespace DiveMap.Runtime.Marine
     /// rotation.z is never written, the "stuck barrel-roll / frozen dive-pitch" bug that
     /// bit the web build cannot recur here.
     ///
-    /// The web whaleshark actually free-roams within roamR; a deterministic ellipse loop
-    /// is a faithful, on-screen-stable interpretation for the mobile viewer + QC shot,
-    /// and the vertical bob exercises the pitch path every lap.
+    /// 🔴 Phase 2 goal 2 — it used to swim a perfect ellipse at a constant speed, and that is the
+    /// one motion the eye files instantly as "machine": you can predict where it will be in twenty
+    /// seconds. The path now comes from <see cref="FishMind.PatrolStep"/> — waypoints drawn from
+    /// the map instead of a parametrised curve, a speed that breathes, and a slowdown when it
+    /// passes something worth passing. The ellipse's own fields survive as the TUNING for that
+    /// (they set the cruise speed and the roaming range), so nothing that configured this class
+    /// before configures it wrongly now.
+    ///
+    /// Nothing in the new path can teleport: the heading turns at a capped rate, the speed is eased
+    /// under an acceleration cap, and the position is integrated from the two — asserted in
+    /// FishMindTests at the very numbers this class computes below.
     /// </summary>
     [DisallowMultipleComponent]
     public sealed class WhaleController : MonoBehaviour
@@ -23,14 +31,37 @@ namespace DiveMap.Runtime.Marine
         public Vector3 anchor;
         public float radiusX = 45f;
         public float radiusZ = 55f;
-        public float angularSpeed = 0.10f; // rad/sec (~60s per lap)
+        public float angularSpeed = 0.10f; // rad/sec — now read as "cruise = this × the roam radius"
         public float bobAmp = 6f;
         public float bobFreq = 0.25f;
 
-        private float _angle;
+        // ── Roaming (Core/FishMind.cs) ────────────────────────────────────────────
+        private Patrol     _patrol;
+        private MindDomain _domain;
+        private MindPoi[]  _pois = System.Array.Empty<MindPoi>();
+        private int        _poiCount;
+        private float      _roamR = 60f;
+        private float      _turnRate = 0.2f;
+        private float      _arriveR = 20f;
+        private float      _size = 1f;
+
+        /// <summary>Turn radius as a fraction of the animal's own length. A whale shark does not pivot.</summary>
+        private const float TurnRadiusPerLen = 0.35f;
+        /// <summary>"Close enough" to a waypoint. MUST exceed the turn radius or the animal spirals round it forever.</summary>
+        private const float ArrivePerLen = 0.50f;
+        /// <summary>Roaming range as a multiple of the old ellipse's radius. Kept modest so the QC shot still frames it.</summary>
+        private const float RoamPerLap = 2.0f;
+
         private float _t;
         private Vector3 _lastPos;
         private bool _primed;
+        /// <summary>
+        /// Init has run. Guards the patrol against a frame in which the domain is still
+        /// <c>default(MindDomain)</c> — radius 0, which would clamp the animal onto the map origin.
+        /// SceneBuilder does call Init in the same frame as AddComponent, but a class that swims to
+        /// (0,0,0) if it ever does not is not a class anyone should have to remember that about.
+        /// </summary>
+        private bool _configured;
 
         // ── Body wave (WO-XR: "ปลาว่ายไม่สมจริง ตัวแข็งมาก", 3rd report) ──────────────
         // 🔴 This is the animal in the screenshot. A big animal is a REAL GLB with `skins 0,
@@ -94,12 +125,98 @@ namespace DiveMap.Runtime.Marine
             radiusX = Mathf.Max(14f, size * 0.60f);
             radiusZ = Mathf.Max(16f, size * 0.72f);
             bobAmp = Mathf.Max(3f, size * 0.15f);
-            transform.position = PathPoint(0f);
-            _lastPos = transform.position;
+            _size = Mathf.Max(1f, size);
 
-            // Cruise speed of the loop, so Effort reads ~1 while it is going round normally.
+            // Cruise speed, unchanged from the ellipse: Effort reads ~1 while it is cruising.
             _cruise = Mathf.Max(0.2f, angularSpeed * Mathf.Max(radiusX, radiusZ));
+
+            // Roaming geometry. The two constraints that matter and are easy to get wrong:
+            //   • arrival radius MUST be larger than the turn radius, or the animal circles a
+            //     waypoint it can never reach and the patrol degenerates into… an ellipse.
+            //   • the roaming range must be a few arrival radii across, or every leg is over
+            //     before it started.
+            float turnRadius = Mathf.Max(1f, _size * TurnRadiusPerLen);
+            _turnRate = Mathf.Clamp(_cruise / turnRadius, 0.03f, 0.8f);
+            _arriveR  = Mathf.Max(_size * ArrivePerLen, turnRadius * 1.3f);
+            _roamR    = Mathf.Max(Mathf.Max(radiusX, radiusZ) * RoamPerLap, _arriveR * 3f);
+
+            // Until SetWorld arrives with the real seabed, roam a disc around the placement and
+            // stay in a depth band around it — self-contained, so a map that never calls SetWorld
+            // still gets a hero animal that goes somewhere rather than one that leaves the map.
+            _domain = new MindDomain(anchor.x, anchor.z, _roamR * 1.4f,
+                                     anchor.y - _roamR * 0.35f, anchor.y + _roamR * 0.35f);
+
+            FishMind.PatrolInit(ref _patrol, PatrolSeed(assetId ?? gameObject.name, anchor),
+                                anchor.x, anchor.y, anchor.z, _domain,
+                                anchor.x, anchor.y, anchor.z, _roamR,
+                                _pois, _poiCount, _arriveR, _cruise);
+
+            transform.position = new Vector3((float)_patrol.X, (float)_patrol.Y, (float)_patrol.Z);
+            _lastPos = transform.position;
+            _configured = true;
+
             ApplyBodyWave(assetId ?? AssetIdFromName(gameObject.name), size);
+
+            Debug.Log($"[Patrol] init anchor={anchor} size={_size:F1} cruise={_cruise:F2} " +
+                      $"turnRate={_turnRate:F3} arriveR={_arriveR:F1} roamR={_roamR:F1} " +
+                      $"domainR={_domain.Radius:F0} pois={_poiCount}");
+        }
+
+        /// <summary>
+        /// Hand the animal the map it is actually in: the sand's radius, the surface, and the
+        /// structures on it. Called by SceneBuilder once the static loads have settled — which is
+        /// AFTER <see cref="Init"/>, so the patrol is restarted from where the animal already is
+        /// rather than from the anchor. Restarting from the current position is what keeps that
+        /// hand-over invisible instead of a one-frame jump.
+        /// </summary>
+        public void SetWorld(float seabedRadius, float waterLevel, List<ObstacleBox> obstacles)
+        {
+            int n = obstacles != null ? obstacles.Count : 0;
+            const int Max = 6;
+            _pois = new MindPoi[Mathf.Min(Max, Mathf.Max(0, n))];
+            _poiCount = 0;
+            for (int i = 0; i < n; i++)
+            {
+                ObstacleBox b = obstacles[i];
+                float r = Mathf.Max(b.Max.x - b.Min.x, b.Max.z - b.Min.z) * 0.5f + b.ObsR;
+                var poi = new MindPoi((b.Min.x + b.Max.x) * 0.5f,
+                                      (b.Min.y + b.Max.y) * 0.5f,
+                                      (b.Min.z + b.Max.z) * 0.5f, r);
+                if (_poiCount < _pois.Length) { _pois[_poiCount++] = poi; continue; }
+                int smallest = 0;
+                for (int k = 1; k < _pois.Length; k++)
+                    if (_pois[k].Radius < _pois[smallest].Radius) smallest = k;
+                if (r > _pois[smallest].Radius) _pois[smallest] = poi;
+            }
+
+            // Half a body length of clearance off the sand and off the surface — a 65 u shark whose
+            // CENTRE sits on the ceiling is a 32 u fin sticking out of the water.
+            float clear = _size * 0.6f;
+            float minY = clear;
+            float maxY = Mathf.Max(minY + 1f, waterLevel - clear);
+            float r0 = seabedRadius > 1f ? seabedRadius : _roamR * 1.4f;
+            _domain = new MindDomain(0.0, 0.0, r0, minY, maxY);
+
+            Vector3 p = transform.position;
+            _patrol.Ready = false;   // PatrolStep re-inits from here on the next frame
+            _patrol.X = p.x; _patrol.Y = Mathf.Clamp(p.y, minY, maxY); _patrol.Z = p.z;
+
+            Debug.Log($"[Patrol] world seabedR={r0:F0} y=[{minY:F0},{maxY:F0}] pois={_poiCount} " +
+                      $"roamR={_roamR:F0} (re-seeded from the animal's current position)");
+        }
+
+        /// <summary>
+        /// A stable seed from the asset id and where it was placed: two whale sharks on one map get
+        /// different routes, and the same map always replays the same one.
+        /// </summary>
+        private static uint PatrolSeed(string id, Vector3 at)
+        {
+            uint h = 2166136261u;
+            if (!string.IsNullOrEmpty(id))
+                for (int i = 0; i < id.Length; i++) { h ^= id[i]; h *= 16777619u; }
+            h ^= (uint)Mathf.RoundToInt(at.x * 7.3f) * 0x9E3779B9u;
+            h ^= (uint)Mathf.RoundToInt(at.z * 3.1f) * 0x85EBCA6Bu;
+            return h;
         }
 
         /// <summary>
@@ -270,13 +387,31 @@ namespace DiveMap.Runtime.Marine
 
         private void Update()
         {
+            if (!_configured) return;
+
             float fs = (float)MarineMath.RealDeltaScale(Time.deltaTime);
             float dt = (float)MarineMath.BaseStep * fs; // real-delta step
             _t += dt;
-            _angle += angularSpeed * dt;
 
-            Vector3 pos = PathPoint(_angle);
+            // Roam. Everything about the shape of the path lives in Core/FishMind.cs, where it can
+            // be replayed and asserted; this class only owns the Unity-side transform.
+            bool newLeg = FishMind.PatrolStep(
+                ref _patrol, dt, _cruise, _turnRate, _domain,
+                anchor.x, anchor.y, anchor.z, _roamR,
+                _pois, _poiCount, _arriveR);
+
+            Vector3 pos = new Vector3((float)_patrol.X, (float)_patrol.Y, (float)_patrol.Z);
             transform.position = pos;
+
+            if (newLeg && _legLogged < 6)
+            {
+                _legLogged++;
+                float d = Mathf.Sqrt((float)((_patrol.TX - _patrol.X) * (_patrol.TX - _patrol.X) +
+                                             (_patrol.TZ - _patrol.Z) * (_patrol.TZ - _patrol.Z)));
+                Debug.Log($"[Patrol] leg={_patrol.Leg} target=({_patrol.TX:F0},{_patrol.TY:F0},{_patrol.TZ:F0}) " +
+                          $"dist={d:F0} speed={_patrol.Speed:F2}/{_cruise:F2} " +
+                          $"heading={(_patrol.Heading * Mathf.Rad2Deg):F0}° poi={_patrol.NearPoi}");
+            }
 
             Vector3 vel = _primed ? (pos - _lastPos) / Mathf.Max(1e-5f, dt) : Vector3.forward;
             _lastPos = pos;
@@ -292,7 +427,10 @@ namespace DiveMap.Runtime.Marine
             // _Time.y the tail jumps by hundreds of radians the moment the rate changes.
             if (_waveMats.Count > 0)
             {
-                float effort = (float)SwimStyle.Effort(vel.magnitude, _cruise);
+                // Read off the PATROL's own speed, not the frame's displacement: the breath and the
+                // ease-off beside the wreck are what the tail is supposed to be reporting, and a
+                // displacement reading picks up the turn as well and muddies both.
+                float effort = (float)SwimStyle.Effort(_patrol.Speed, _cruise);
                 _wavePhase += SwimStyle.BeatPhaseStep(_beatHz * effort, dt);
                 if (_wavePhase >= TwoPi) _wavePhase %= TwoPi;
                 for (int i = 0; i < _waveMats.Count; i++)
@@ -316,14 +454,6 @@ namespace DiveMap.Runtime.Marine
         }
 
         private bool _headingLogged;
-
-        private Vector3 PathPoint(float angle)
-        {
-            float y = anchor.y + Mathf.Sin(_t * bobFreq) * bobAmp;
-            return new Vector3(
-                anchor.x + Mathf.Cos(angle) * radiusX,
-                y,
-                anchor.z + Mathf.Sin(angle) * radiusZ);
-        }
+        private int  _legLogged;
     }
 }

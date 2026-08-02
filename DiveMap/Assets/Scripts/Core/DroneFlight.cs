@@ -131,10 +131,52 @@ namespace DiveMap.Core
             public Vec3(float x, float y, float z) { X = x; Y = y; Z = z; }
         }
 
-        /// <summary>One solid box in world space, already grown by the camera radius test.</summary>
+        /// <summary>
+        /// One solid box. Either in world axes (a whole object's single AABB) or in an object's own
+        /// frame (one part of a hull) — <see cref="Solid"/> says which, and the test grows it by the
+        /// camera radius on all six sides either way.
+        /// </summary>
         public struct Box
         {
             public float MinX, MinY, MinZ, MaxX, MaxY, MaxZ;
+        }
+
+        /// <summary>Frame → world rotation, Unity's component order. Assumed unit length.</summary>
+        public struct Quat
+        {
+            public float X, Y, Z, W;
+            public Quat(float x, float y, float z, float w) { X = x; Y = y; Z = z; W = w; }
+            public static Quat Identity => new Quat(0f, 0f, 0f, 1f);
+        }
+
+        /// <summary>
+        /// One solid OBJECT: either a single world box, or a hull of boxes in the object's own
+        /// frame plus the placement that frame sits in.
+        ///
+        /// 🔴 <see cref="Boxes"/> is what stops the "เรือเอียงแล้วตัน" bug coming back. A tilted
+        /// wreck's hull used to arrive here already flattened into world axes, which inflated its
+        /// collision volume ×4 to ×7 and welded 96 separate boxes into one brick. Now the boxes
+        /// arrive in the object's frame and the DIVER is brought into that frame instead — one
+        /// inverse rotation per object per frame, whatever the hull's box count.
+        ///
+        /// <see cref="Bound"/> is the object's world AABB. When <see cref="Boxes"/> is null it IS
+        /// the collider (every object before hulls existed, and everything outside the detail
+        /// radius today). When there is a hull, it is only the cheap "not near this object" reject:
+        /// the hull is fitted inside the same content the bounds were measured from, so nothing in
+        /// it can reach outside.
+        /// </summary>
+        public struct Solid
+        {
+            public Box Bound;
+            public Box[] Boxes;
+            public Vec3 Origin;
+            public Quat Rot;
+            /// <summary>False when <see cref="Rot"/> is identity — skips the quaternion entirely.</summary>
+            public bool Rotated;
+
+            /// <summary>The shape every object had before hulls: one box, world axes.</summary>
+            public static Solid Aabb(Box world)
+                => new Solid { Bound = world, Boxes = null, Rot = Quat.Identity, Rotated = false };
         }
 
         public struct State
@@ -203,7 +245,7 @@ namespace DiveMap.Core
         /// to turn round and find the exit.
         /// </summary>
         public static State Step(State s, Sticks sticks, float dt, float seabedY, float waterLevel,
-                                 Box[] solids, float scaleX, float scaleZ, float speedScale = 1f)
+                                 Solid[] solids, float scaleX, float scaleZ, float speedScale = 1f)
         {
             float lx = Shape(sticks.Lx);
             float ly = Shape(sticks.Ly);
@@ -242,34 +284,14 @@ namespace DiveMap.Core
                               s.Pos.Y + s.Vel.Y * dt,
                               s.Pos.Z + s.Vel.Z * dt);
 
-            // Solids: push out through the SHALLOWEST face, and never downward — the web lets
-            // you come to rest on top of a wreck but never shoves you through the seabed.
-            if (solids != null)
-            {
-                for (int i = 0; i < solids.Length; i++)
-                {
-                    Box o = solids[i];
-                    if (np.X <= o.MinX - CamRadius || np.X >= o.MaxX + CamRadius ||
-                        np.Y <= o.MinY - CamRadius || np.Y >= o.MaxY + CamRadius ||
-                        np.Z <= o.MinZ - CamRadius || np.Z >= o.MaxZ + CamRadius) continue;
-
-                    float pxL = np.X - (o.MinX - CamRadius);
-                    float pxR = (o.MaxX + CamRadius) - np.X;
-                    float pzL = np.Z - (o.MinZ - CamRadius);
-                    float pzR = (o.MaxZ + CamRadius) - np.Z;
-                    float pyT = (o.MaxY + CamRadius) - np.Y;
-                    float m = Math.Min(Math.Min(pxL, pxR), Math.Min(Math.Min(pzL, pzR), pyT));
-
-                    if (m == pxL) { np.X = o.MinX - CamRadius; s.Vel.X = Math.Min(0f, s.Vel.X); }
-                    else if (m == pxR) { np.X = o.MaxX + CamRadius; s.Vel.X = Math.Max(0f, s.Vel.X); }
-                    else if (m == pzL) { np.Z = o.MinZ - CamRadius; s.Vel.Z = Math.Min(0f, s.Vel.Z); }
-                    else if (m == pzR) { np.Z = o.MaxZ + CamRadius; s.Vel.Z = Math.Max(0f, s.Vel.Z); }
-                    else { np.Y = o.MaxY + CamRadius; if (s.Vel.Y < 0f) s.Vel.Y = 0f; }
-                }
-            }
-
-            // Sand and surface.
+            // Sand and surface. The floor is needed BEFORE the solids: which way out of a solid is
+            // allowed depends on where the sand is (see Resolve).
             float floor = seabedY + CamRadius + FloorClearance;
+
+            if (solids != null)
+                for (int i = 0; i < solids.Length; i++)
+                    Resolve(ref np, ref s.Vel, solids[i], floor);
+
             if (np.Y < floor) { np.Y = floor; if (s.Vel.Y < 0f) s.Vel.Y = 0f; }
             float ceiling = waterLevel - CeilingClearance;
             if (ceiling > floor && np.Y > ceiling) { np.Y = ceiling; if (s.Vel.Y > 0f) s.Vel.Y = 0f; }
@@ -289,6 +311,146 @@ namespace DiveMap.Core
 
             s.Pos = np;
             return s;
+        }
+
+        /// <summary>
+        /// A cube of half-side r reaches r·√3 along a world axis when it is turned to the worst
+        /// angle — the slack the world-space reject needs before it is allowed to skip a rotated
+        /// object.
+        /// </summary>
+        private const float Root3 = 1.7320508f;
+
+        /// <summary>
+        /// Push the diver out of one solid object, through the shallowest face that is allowed.
+        ///
+        /// ── the frame ────────────────────────────────────────────────────────────────────────
+        /// A hull arrives in the OBJECT's frame, so the diver is brought into it (one inverse
+        /// rotation for the whole hull, not one per box) and the six-face test runs there. The
+        /// frame is in world units — <c>SolidBoxes.ToFrame</c> bakes the placement's scale into the
+        /// boxes — so <see cref="CamRadius"/> is still 3.2 in it and there is no per-axis radius to
+        /// divide, which is what makes a non-uniform scale (T-13 lays a wreck out at
+        /// 37.7 × 100.9 × 37.7) safe rather than a special case.
+        ///
+        /// ── which face ───────────────────────────────────────────────────────────────────────
+        /// 🔴 The old code offered FIVE faces: ±X, ±Z and +Y. That is not "never push down", it is
+        /// "always push up": anyone who ended up inside a solid — which the tilted-hull bug made
+        /// routine — was lifted to the top of it and set down on the roof of the wreck, whatever
+        /// they were doing. The sixth face is back, and the rule it used to stand in for is now
+        /// stated directly: a face is refused when it would push the diver DOWNWARD and land them
+        /// under the sand. Sideways and upward exits are never refused, and a solid resting ON the
+        /// seabed still cannot be left through its underside — the arithmetic there is unchanged,
+        /// which is why "may rest on top, never pushed through the floor" still holds.
+        ///
+        /// Ties go to the old five faces in their old order, so the sixth only ever wins when it is
+        /// strictly the shallowest way out. If every face is refused (fully buried in the sand under
+        /// a solid) the shallowest one is taken anyway and the floor clamp downstream has the last
+        /// word — being stopped is always better than being nowhere.
+        /// </summary>
+        private static void Resolve(ref Vec3 np, ref Vec3 vel, Solid o, float floorY)
+        {
+            Box bd = o.Bound;
+            float slack = o.Rotated ? CamRadius * Root3 : CamRadius;
+            if (np.X <= bd.MinX - slack || np.X >= bd.MaxX + slack ||
+                np.Y <= bd.MinY - slack || np.Y >= bd.MaxY + slack ||
+                np.Z <= bd.MinZ - slack || np.Z >= bd.MaxZ + slack) return;
+
+            Box[] boxes = o.Boxes;
+            int n = boxes == null ? 1 : boxes.Length;
+            if (n == 0) return;
+
+            Vec3 p = new Vec3(np.X - o.Origin.X, np.Y - o.Origin.Y, np.Z - o.Origin.Z);
+            Vec3 v = vel;
+            // How much world HEIGHT one unit along each of the frame's own axes buys — the middle
+            // row of the rotation matrix. The sand rule is about world Y, and in a frame tilted 99°
+            // no local axis points that way.
+            float ux = 0f, uy = 1f, uz = 0f;
+            if (o.Rotated)
+            {
+                p = Unrotate(o.Rot, p);
+                v = Unrotate(o.Rot, v);
+                AxisHeight(o.Rot, out ux, out uy, out uz);
+            }
+
+            bool hit = false;
+            for (int k = 0; k < n; k++)
+            {
+                Box b = boxes == null ? bd : boxes[k];
+
+                float pxL = p.X - (b.MinX - CamRadius); if (pxL <= 0f) continue;
+                float pxR = (b.MaxX + CamRadius) - p.X; if (pxR <= 0f) continue;
+                float pyB = p.Y - (b.MinY - CamRadius); if (pyB <= 0f) continue;
+                float pyT = (b.MaxY + CamRadius) - p.Y; if (pyT <= 0f) continue;
+                float pzL = p.Z - (b.MinZ - CamRadius); if (pzL <= 0f) continue;
+                float pzR = (b.MaxZ + CamRadius) - p.Z; if (pzR <= 0f) continue;
+
+                // Where the diver is in world height right now — exact, because the frame is metric.
+                float wy = o.Origin.Y + ux * p.X + uy * p.Y + uz * p.Z;
+
+                int face = -1, fallback = -1;
+                float best = float.MaxValue, worst = float.MaxValue;
+                // The old five first, in the old order, so a tie never changes today's answer.
+                Consider(0, pxL, -ux, wy, floorY, ref face, ref best, ref fallback, ref worst);
+                Consider(1, pxR, ux, wy, floorY, ref face, ref best, ref fallback, ref worst);
+                Consider(4, pzL, -uz, wy, floorY, ref face, ref best, ref fallback, ref worst);
+                Consider(5, pzR, uz, wy, floorY, ref face, ref best, ref fallback, ref worst);
+                Consider(3, pyT, uy, wy, floorY, ref face, ref best, ref fallback, ref worst);
+                Consider(2, pyB, -uy, wy, floorY, ref face, ref best, ref fallback, ref worst);
+
+                switch (face >= 0 ? face : fallback)
+                {
+                    case 0: p.X = b.MinX - CamRadius; if (v.X > 0f) v.X = 0f; break;
+                    case 1: p.X = b.MaxX + CamRadius; if (v.X < 0f) v.X = 0f; break;
+                    case 2: p.Y = b.MinY - CamRadius; if (v.Y > 0f) v.Y = 0f; break;
+                    case 3: p.Y = b.MaxY + CamRadius; if (v.Y < 0f) v.Y = 0f; break;
+                    case 4: p.Z = b.MinZ - CamRadius; if (v.Z > 0f) v.Z = 0f; break;
+                    default: p.Z = b.MaxZ + CamRadius; if (v.Z < 0f) v.Z = 0f; break;
+                }
+                hit = true;
+            }
+
+            if (!hit) return;   // untouched objects must not pay a float round trip
+
+            if (o.Rotated) { p = Rotate(o.Rot, p); v = Rotate(o.Rot, v); }
+            np = new Vec3(o.Origin.X + p.X, o.Origin.Y + p.Y, o.Origin.Z + p.Z);
+            vel = v;
+        }
+
+        /// <summary>
+        /// One candidate face. <paramref name="heightGain"/> is the world Y this face's outward
+        /// direction gains per unit pushed, so <c>depth × heightGain</c> is where the diver would
+        /// end up — the sand rule, and nothing else, decides whether the face is on the menu.
+        /// </summary>
+        private static void Consider(int face, float depth, float heightGain, float wy, float floorY,
+                                     ref int bestFace, ref float bestDepth,
+                                     ref int anyFace, ref float anyDepth)
+        {
+            if (depth < anyDepth) { anyDepth = depth; anyFace = face; }
+            float gain = depth * heightGain;
+            if (gain < 0f && wy + gain < floorY) return;   // would shove the diver under the sand
+            if (depth < bestDepth) { bestDepth = depth; bestFace = face; }
+        }
+
+        /// <summary>v′ = v + 2w(q⃗ × v) + 2 q⃗ × (q⃗ × v) — the standard rotate, no matrix needed.</summary>
+        private static Vec3 Rotate(Quat q, Vec3 v)
+        {
+            float tx = 2f * (q.Y * v.Z - q.Z * v.Y);
+            float ty = 2f * (q.Z * v.X - q.X * v.Z);
+            float tz = 2f * (q.X * v.Y - q.Y * v.X);
+            return new Vec3(v.X + q.W * tx + (q.Y * tz - q.Z * ty),
+                            v.Y + q.W * ty + (q.Z * tx - q.X * tz),
+                            v.Z + q.W * tz + (q.X * ty - q.Y * tx));
+        }
+
+        /// <summary>World → the frame: the same rotate by the conjugate.</summary>
+        private static Vec3 Unrotate(Quat q, Vec3 v)
+            => Rotate(new Quat(-q.X, -q.Y, -q.Z, q.W), v);
+
+        /// <summary>The world Y component of each frame axis — the rotation matrix's middle row.</summary>
+        private static void AxisHeight(Quat q, out float ux, out float uy, out float uz)
+        {
+            ux = 2f * (q.X * q.Y + q.Z * q.W);
+            uy = 1f - 2f * (q.X * q.X + q.Z * q.Z);
+            uz = 2f * (q.Y * q.Z - q.X * q.W);
         }
 
         /// <summary>

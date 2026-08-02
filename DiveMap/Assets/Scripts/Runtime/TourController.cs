@@ -38,12 +38,16 @@ namespace DiveMap.Runtime
         private List<Vector3> _miniSchools = new List<Vector3>();
 
         private DroneFlight.State _state;
-        private DroneFlight.Box[] _solids = new DroneFlight.Box[0];
+        private DroneFlight.Solid[] _solids = new DroneFlight.Solid[0];
         // Every solid object twice over: the single AABB it has always had, and the hull that
         // leaves its openings open where the model publishes one. _solids is the slice of these
         // the drone actually carries this stretch of the dive — see RefreshSolids.
         private List<SolidBoxes.Group> _solidGroups = new List<SolidBoxes.Group>();
-        private readonly List<SolidBoxes.Box> _solidPick = new List<SolidBoxes.Box>();
+        private readonly List<SolidBoxes.Solid> _solidPick = new List<SolidBoxes.Solid>();
+        // The hulls in the drone's own single precision, converted ONCE per map. A refresh only
+        // hands these arrays out again — it must not allocate, it runs a couple of times a second
+        // for the whole dive.
+        private DroneFlight.Box[][] _fineF = new DroneFlight.Box[0][];
         private Vector3 _solidsAt;
         private bool _solidsPicked;
         private bool _anyHull;
@@ -105,7 +109,19 @@ namespace DiveMap.Runtime
             for (int i = 0; i < tc._solidGroups.Count && !tc._anyHull; i++)
                 tc._anyHull = tc._solidGroups[i].Fine != null && tc._solidGroups[i].Fine.Length > 0;
 
-            tc._solids = new DroneFlight.Box[0];
+            // Double → float once, here, rather than 2,000 boxes' worth of conversion and a fresh
+            // array per object every time the pick changes.
+            tc._fineF = new DroneFlight.Box[tc._solidGroups.Count][];
+            for (int i = 0; i < tc._solidGroups.Count; i++)
+            {
+                SolidBoxes.Box[] fine = tc._solidGroups[i].Fine;
+                if (fine == null || fine.Length == 0) continue;
+                var f = new DroneFlight.Box[fine.Length];
+                for (int k = 0; k < fine.Length; k++) f[k] = ToBox(fine[k]);
+                tc._fineF[i] = f;
+            }
+
+            tc._solids = new DroneFlight.Solid[0];
             tc._solidsPicked = false;
             tc._detailedLast = -1;
 
@@ -287,14 +303,24 @@ namespace DiveMap.Runtime
 
             int detailed = SolidBoxes.Select(_solidGroups, new Vec3(at.x, at.y, at.z), _solidPick);
 
-            if (_solids.Length != _solidPick.Count) _solids = new DroneFlight.Box[_solidPick.Count];
+            if (_solids.Length != _solidPick.Count) _solids = new DroneFlight.Solid[_solidPick.Count];
             for (int i = 0; i < _solidPick.Count; i++)
             {
-                SolidBoxes.Box b = _solidPick[i];
-                _solids[i] = new DroneFlight.Box
+                SolidBoxes.Solid p = _solidPick[i];
+                // Boxes null = this object is a single world box this refresh, exactly as before
+                // hulls existed. Otherwise the hull travels with the frame it was measured in.
+                DroneFlight.Box[] fine = p.Boxes == null ? null : _fineF[p.Index];
+                _solids[i] = new DroneFlight.Solid
                 {
-                    MinX = (float)b.Min.X, MinY = (float)b.Min.Y, MinZ = (float)b.Min.Z,
-                    MaxX = (float)b.Max.X, MaxY = (float)b.Max.Y, MaxZ = (float)b.Max.Z,
+                    Bound = ToBox(p.Bound),
+                    Boxes = fine,
+                    Origin = new DroneFlight.Vec3((float)p.Origin.X, (float)p.Origin.Y,
+                                                  (float)p.Origin.Z),
+                    Rot = new DroneFlight.Quat((float)p.Rot.X, (float)p.Rot.Y,
+                                               (float)p.Rot.Z, (float)p.Rot.W),
+                    // An unrotated placement — every module on a flat reef — skips the quaternion
+                    // altogether and is bit for bit the arithmetic this method has always done.
+                    Rotated = fine != null && !IsIdentity(p.Rot),
                 };
             }
 
@@ -305,11 +331,24 @@ namespace DiveMap.Runtime
             // first pick, including the "near=0" case that says no model on this map has a hull.
             if (detailed != _detailedLast)
             {
-                Debug.Log($"[Solids] near={detailed}/{_solidGroups.Count} boxes={_solids.Length} " +
+                Debug.Log($"[Solids] near={detailed}/{_solidGroups.Count} " +
+                          $"boxes={SolidBoxes.BoxCount(_solidPick)} " +
                           $"budget={SolidBoxes.DiverBoxBudget} radius={SolidBoxes.DetailRadius:F0}u");
                 _detailedLast = detailed;
             }
         }
+
+        private static DroneFlight.Box ToBox(SolidBoxes.Box b) => new DroneFlight.Box
+        {
+            MinX = (float)b.Min.X, MinY = (float)b.Min.Y, MinZ = (float)b.Min.Z,
+            MaxX = (float)b.Max.X, MaxY = (float)b.Max.Y, MaxZ = (float)b.Max.Z,
+        };
+
+        /// <summary>
+        /// Near enough to identity that turning the diver into this object's frame and back would
+        /// only cost float noise. Unity hands out normalised quaternions, so |w| is the whole test.
+        /// </summary>
+        private static bool IsIdentity(Quat q) => System.Math.Abs(q.W) > 0.9999999;
 
         private System.Collections.IEnumerator CoachFirstDive()
         {
