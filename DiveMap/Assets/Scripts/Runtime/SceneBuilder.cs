@@ -1017,7 +1017,7 @@ namespace DiveMap.Runtime
         private static void TameMetal(GameObject root, string assetId)
         {
             if (root == null) return;
-            int fixedCount = 0, droppedNormals = 0, materials = 0;
+            int fixedCount = 0, droppedNormals = 0, droppedMetalRough = 0, materials = 0;
             bool gamma = QualitySettings.activeColorSpace == ColorSpace.Gamma;
             foreach (Renderer r in root.GetComponentsInChildren<Renderer>(true))
             {
@@ -1035,6 +1035,7 @@ namespace DiveMap.Runtime
                         fixedCount++;
                     }
                     if (DropMisdecodedNormalMap(m, assetId, gamma)) droppedNormals++;
+                    if (ReplaceMetalRoughTexture(m, assetId)) droppedMetalRough++;
                 }
             }
             if (fixedCount > 0)
@@ -1044,8 +1045,48 @@ namespace DiveMap.Runtime
             // between "the pass is clean", "the pass skipped everything" and "the pass was never
             // called on this model" — three different bugs that cost a CI round each to tell apart.
             Debug.Log($"[Shading] {assetId}: materials={materials} tamedMetal={fixedCount} " +
-                      $"droppedNormalMap={droppedNormals} gamma={(gamma ? "t" : "f")} " +
-                      $"tilt={GlbShading.NeutralTiltDegrees():F0}°");
+                      $"droppedNormalMap={droppedNormals} droppedMetalRough={droppedMetalRough} " +
+                      $"gamma={(gamma ? "t" : "f")} tilt={GlbShading.NeutralTiltDegrees():F0}°");
+        }
+
+        /// <summary>
+        /// Swap the metallic-roughness TEXTURE for the scalar pair CI has already photographed
+        /// producing zero black patches. The evidence, the cost and the fact that the mechanism is
+        /// still unidentified are all written down in
+        /// <see cref="GlbShading.ReplaceMetalRoughTextureWithScalars"/> — read that before deciding
+        /// this is superstition, and read the <c>[QCProbe]</c> lines in the next CI log before
+        /// deciding it works.
+        ///
+        /// The keyword goes off with the texture. <c>_METALLICGLOSSMAP</c> is what forks the shader
+        /// onto the variant that samples the map at all — leaving it enabled with an empty slot
+        /// would keep the suspect variant and sample the shader's "white" default, which is metal 1
+        /// and smoothness 1: a mirror, and the opposite of the state the probe validated.
+        /// </summary>
+        private static bool ReplaceMetalRoughTexture(Material m, string assetId)
+        {
+            foreach (string n in MetalMapNames)
+            {
+                if (!m.HasProperty(n)) continue;
+                Texture tex = m.GetTexture(n);
+                if (tex == null) continue;
+                if (!GlbShading.ReplaceMetalRoughTextureWithScalars(true)) continue;
+
+                m.SetTexture(n, null);
+                m.DisableKeyword("_METALLICGLOSSMAP");
+                foreach (string f in MetalFactorNames)
+                    if (m.HasProperty(f)) m.SetFloat(f, GlbShading.ProbeValidatedMetallic);
+                if (m.HasProperty("roughnessFactor"))
+                    m.SetFloat("roughnessFactor", GlbShading.ProbeValidatedRoughness);
+                // Standard's smoothness is the complement, for any material that is not glTFast's.
+                if (m.HasProperty("_Glossiness"))
+                    m.SetFloat("_Glossiness", 1f - GlbShading.ProbeValidatedRoughness);
+
+                Debug.Log($"[Shading] mat={m.name} asset={assetId} metalRoughTex={tex.graphicsFormat} " +
+                          $"{tex.width}x{tex.height} -> metallic={GlbShading.ProbeValidatedMetallic:F2} " +
+                          $"roughness={GlbShading.ProbeValidatedRoughness:F2} dropped=t");
+                return true;
+            }
+            return false;
         }
 
         /// <summary>

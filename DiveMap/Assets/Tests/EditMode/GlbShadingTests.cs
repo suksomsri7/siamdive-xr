@@ -102,6 +102,28 @@ namespace DiveMap.Tests
         }
 
         [Test]
+        public void TheMetalRoughSwapShipsExactlyWhatTheProbeMeasured()
+        {
+            // 🔴 The point of pinning these two numbers: CI run 30753720407 photographed the
+            // models with the metallic-roughness texture cleared and metallic/roughness set to
+            // these values, and every black patch on all four affected models went to 0.00%.
+            // Anything else is an unvalidated tweak, and unvalidated tweaks have cost this bug
+            // three CI rounds already.
+            Assert.AreEqual(0f, GlbShading.ProbeValidatedMetallic, 1e-6f);
+            Assert.AreEqual(0.6f, GlbShading.ProbeValidatedRoughness, 1e-6f);
+
+            // Legal PBR values, and matte enough that a dielectric scan does not read as plastic.
+            Assert.GreaterOrEqual(GlbShading.ProbeValidatedRoughness, 0f);
+            Assert.LessOrEqual(GlbShading.ProbeValidatedRoughness, 1f);
+
+            // Only materials that actually carry the map are touched — a model with no
+            // metallic-roughness texture (the lionfish) measured 0.00% black as it shipped and
+            // must not be rewritten on the way past.
+            Assert.IsTrue(GlbShading.ReplaceMetalRoughTextureWithScalars(hasMetalRoughTexture: true));
+            Assert.IsFalse(GlbShading.ReplaceMetalRoughTextureWithScalars(hasMetalRoughTexture: false));
+        }
+
+        [Test]
         public void CopyingAMaterialOntoTheSwimShaderDoesNotTurnTheAnimalIntoAMirror()
         {
             // WhaleController.CopyMaps moves a glTF material onto DM_FishWaveDetail, which cannot
