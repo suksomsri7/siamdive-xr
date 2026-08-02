@@ -1,0 +1,334 @@
+using System.Collections;
+using System.Collections.Generic;
+using System.IO;
+using System.Threading.Tasks;
+using DiveMap.Core;
+using GLTFast;
+using UnityEngine;
+
+namespace DiveMap.Runtime
+{
+    /// <summary>
+    /// The QC pass that photographs REAL MODELS, one per frame, close enough to see.
+    ///
+    /// 🔴 Why it had to be written. CI has been taking two wide shots and twenty-five UI shots of a
+    /// scene that pulls exactly four GLBs off the CDN (school_scad, school_barracuda,
+    /// pod_yellowtail, msh_whaleshark); everything else in that map is geometry this codebase
+    /// generates. The black-skin bug lives in the models' own tangents — so for 222 of the 226
+    /// modules we ship, no CI screenshot has ever contained the thing being tested. Green shots,
+    /// zero evidence. The user's phrasing: หลักฐานจากเว็บไม่นับ ต้องเป็นตัว Unity.
+    ///
+    /// So: six representatives are downloaded through the app's OWN loader — manifest → CDN →
+    /// <see cref="AssetCacheStore"/> → glTFast → the same TameMetal/GoldFx post-pass a map item
+    /// gets — placed one at a time, framed to fill the shot, and photographed. Going through the
+    /// cache is deliberate: it means this pass also exercises the generation gate, which is the
+    /// mechanism that decides whether a device ever sees a repaired GLB at all.
+    ///
+    /// 🔎 Two frames per model, not one. Every shot is taken twice from an identical camera pose,
+    /// once with the model and once without it, and the pixels that differ ARE the model. That is
+    /// what stops this from repeating the failure it exists to fix: a beautiful photograph of empty
+    /// water scores 0% subject and is logged FAIL, loudly, instead of being reported as a pass.
+    /// The arithmetic lives in <see cref="QcPixels"/> where it is tested.
+    ///
+    /// 🔎 No lights are added. The models are staged far out to the side of the map, at the same
+    /// depth as its content, and lit by exactly what the app lights the map with — the sun, fill
+    /// and Trilight ambient from <c>AppBoot.SetupLighting</c>, the reflection cube, the fog, and
+    /// the <see cref="UnderwaterShading"/> floor. A QC rig with its own flattering key light would
+    /// hide the very bug it is looking for. The capture is taken at END OF FRAME for the same
+    /// reason: UnderwaterShading raises the ambient in LateUpdate and hands it back at the top of
+    /// the next frame, so a mid-frame capture would photograph the model in light the app never
+    /// actually renders it in — and would report black that is not there.
+    /// </summary>
+    public static class QcModelShot
+    {
+        /// <summary>
+        /// The six the work order names — chosen as one of each way a model goes wrong: two
+        /// scanned CC0 props, a statue that also runs the gold FX path, two wrecks (one of them
+        /// the metallic hull the whole reflection-cube story is about), and two marine models,
+        /// including the barracuda that has just been re-exported at 2048².
+        /// </summary>
+        public static readonly string[] AssetIds =
+        {
+            "cc0:kraken",
+            "stat:verdant_poseidon",
+            "cc0:wreck_hardeep",
+            "sw:htms732",
+            "msh:barracuda",
+            "msh:lionfish",
+        };
+
+        /// <summary>How far to the side of the map the models are staged, world units. Well clear
+        /// of the seabed disc (340 u) and its fish, so the only thing that can move between the
+        /// two frames of a pair is the model itself.</summary>
+        private const float StageOffset = 4000f;
+
+        /// <summary>Per model: download + parse + instantiate. A model that has not landed by now
+        /// is a FAIL worth reporting, not a reason to lose the other five.</summary>
+        private const float PerModelSeconds = 45f;
+
+        /// <summary>
+        /// Whole-pass budget. llvmpipe renders at 135-300 ms a frame and the six GLBs are ~12.6 MB
+        /// together; the pass measures well under this, and the ceiling is here so that a CDN going
+        /// slow costs us the remaining models' log lines rather than the entire step — including
+        /// the two screenshots already written and the artifact upload behind it.
+        /// </summary>
+        private const float BudgetSeconds = 170f;
+
+        /// <summary>Settle time after the model lands, before the pair of frames.</summary>
+        private const float SettleSeconds = 0.4f;
+
+        /// <summary>
+        /// Photograph every model in <see cref="AssetIds"/> into
+        /// <paramref name="dir"/>/qc_model_&lt;name&gt;.png and log one <c>[QCModel]</c> line each.
+        /// </summary>
+        /// <param name="dir">Where the PNGs go — the folder the other QC shots are written to.</param>
+        /// <param name="manifest">The registry the app resolved its own map against.</param>
+        /// <param name="mapCentre">Centre of the built map; the stage sits beside it, at its depth.</param>
+        public static IEnumerator Run(string dir, AssetManifest manifest, Vector3 mapCentre)
+        {
+            float t0 = Time.realtimeSinceStartup;
+            if (string.IsNullOrEmpty(dir)) dir = ".";
+
+            Camera cam = Camera.main;
+            if (cam == null)
+            {
+                Debug.LogWarning("[QCModel] no main camera — nothing was photographed");
+                foreach (string id in AssetIds)
+                    Debug.Log(QcPixels.Line(NameFor(manifest, id), false, 0, new QcPixels.Shot()));
+                yield break;
+            }
+
+            // Nothing else may drive this camera while it is being aimed. The orbit rig is switched
+            // off for the same reason angle 2 does it, and the tour is checked because a drone
+            // flying the map re-drives Camera.main every frame — which is what made the two
+            // existing screenshots identical.
+            var orbit = cam.GetComponent<OrbitCamera>();
+            if (orbit != null) orbit.enabled = false;
+            if (ModeManager.Current != AppMode.View && ModeManager.Instance != null)
+            {
+                ModeManager.Instance.Exit();
+                yield return null;
+            }
+
+            Vector3 stage = mapCentre + Vector3.right * StageOffset;
+            Debug.Log($"[QCModel] pass start stage={stage} models={AssetIds.Length} " +
+                      $"manifest={(manifest != null ? manifest.Count.ToString() : "MISSING")} " +
+                      $"screen={Screen.width}x{Screen.height} ambientSky={RenderSettings.ambientSkyColor}");
+
+            int w = Mathf.Clamp(Screen.width, 320, 1920);
+            int h = Mathf.Clamp(Screen.height, 240, 1080);
+            var rt = new RenderTexture(w, h, 24, RenderTextureFormat.ARGB32)
+            {
+                name = "QcModelRT",
+                antiAliasing = 1,
+            };
+            var readback = new Texture2D(w, h, TextureFormat.RGB24, false, false);
+
+            int ok = 0, fail = 0;
+            foreach (string assetId in AssetIds)
+            {
+                string name = NameFor(manifest, assetId);
+                if (Time.realtimeSinceStartup - t0 > BudgetSeconds)
+                {
+                    // Out of budget is a FAIL, not a silence. A missing line reads as "the harness
+                    // never ran"; this reads as what it is.
+                    Debug.Log(QcPixels.Line(name, false, 0, new QcPixels.Shot()) + " budget-exhausted");
+                    fail++;
+                    continue;
+                }
+
+                bool shotOk = false;
+                yield return One(cam, rt, readback, dir, manifest, assetId, name, stage,
+                                 r => shotOk = r);
+                if (shotOk) ok++; else fail++;
+
+                // Sequential on purpose: six 2048² models resident at once is not what a phone
+                // does, and not what this box has to spare either.
+                Resources.UnloadUnusedAssets();
+                yield return null;
+            }
+
+            RenderTexture.active = null;
+            cam.targetTexture = null;
+            rt.Release();
+            Object.Destroy(rt);
+            Object.Destroy(readback);
+
+            Debug.Log($"[QCModel] pass done ok={ok} fail={fail} " +
+                      $"in {Time.realtimeSinceStartup - t0:F1}s (budget {BudgetSeconds:F0}s)");
+        }
+
+        // ── one model ────────────────────────────────────────────────────────────
+
+        private static IEnumerator One(Camera cam, RenderTexture rt, Texture2D readback, string dir,
+                                       AssetManifest manifest, string assetId, string name,
+                                       Vector3 stage, System.Action<bool> onDone)
+        {
+            string url = manifest != null ? manifest.ResolveUrl(assetId) : null;
+            if (string.IsNullOrEmpty(url))
+            {
+                Debug.Log(QcPixels.Line(name, false, 0, new QcPixels.Shot()) +
+                          " url=(unresolved) asset=" + assetId);
+                onDone(false);
+                yield break;
+            }
+
+            var pivot = new GameObject("QcModel:" + assetId);
+            pivot.transform.position = stage;
+            float scale = 1f;
+            AssetManifest.Module mod = manifest.Get(assetId);
+            if (mod != null && mod.DefaultScale > 0) scale = (float)mod.DefaultScale;
+            pivot.transform.localScale = Vector3.one * scale;
+
+            // The app's own loader — cache, generation gate, glTFast, TameMetal, GoldFx.
+            float loadStart = Time.realtimeSinceStartup;
+            Task<GltfImport> task = SceneBuilder.LoadForQc(url, assetId, pivot.transform);
+            while (!task.IsCompleted && Time.realtimeSinceStartup - loadStart < PerModelSeconds)
+                yield return null;
+
+            // RanToCompletion, not IsCompleted: a faulted task is "completed" too, and reading its
+            // Result rethrows — which would take the remaining five models down with it.
+            GltfImport import = task.Status == TaskStatus.RanToCompletion ? task.Result : null;
+            bool loaded = import != null;
+            float loadSecs = Time.realtimeSinceStartup - loadStart;
+
+            var renderers = new List<Renderer>();
+            pivot.GetComponentsInChildren(true, renderers);
+            int rendererCount = renderers.Count;
+
+            QcPixels.Shot shot = default;
+            if (loaded && rendererCount > 0)
+            {
+                Bounds b = WorldBounds(renderers);
+                float radius = Mathf.Max(b.extents.magnitude, 0.05f);
+                float aspect = (float)rt.width / Mathf.Max(1, rt.height);
+                float dist = (float)QcPixels.FrameDistance(radius, cam.fieldOfView, aspect);
+                // Never inside the near plane, whatever the model's size says.
+                dist = Mathf.Max(dist, radius + cam.nearClipPlane * 3f);
+
+                // Three-quarter view from slightly above: one lit flank, one shadowed flank and the
+                // top all in the same frame, so a surface that is black on one side only cannot
+                // hide behind a head-on shot.
+                Vector3 viewDir = new Vector3(0.55f, 0.32f, 1f).normalized;
+                cam.transform.position = b.center + viewDir * dist;
+                cam.transform.LookAt(b.center);
+
+                yield return new WaitForSeconds(SettleSeconds);
+
+                string png = Path.Combine(dir, "qc_model_" + name + ".png");
+                byte[] withModel = null, withoutModel = null;
+                yield return Capture(cam, rt, readback, png, bytes => withModel = bytes);
+
+                // …and the same frame with nothing in it. Whatever differs is the model.
+                pivot.SetActive(false);
+                yield return null;
+                yield return Capture(cam, rt, readback, null, bytes => withoutModel = bytes);
+                pivot.SetActive(true);
+
+                shot = QcPixels.Measure(withModel, withoutModel);
+
+                Debug.Log($"[QCModel] {name} framed radius={radius:F2} dist={dist:F2} " +
+                          $"scale={scale:F2} camY={cam.transform.position.y:F1} " +
+                          $"load={loadSecs:F1}s url={url}");
+            }
+            else
+            {
+                Debug.LogWarning($"[QCModel] {name} did not arrive: loaded={loaded} " +
+                                 $"renderers={rendererCount} after {loadSecs:F1}s url={url}");
+            }
+
+            Debug.Log(QcPixels.Line(name, loaded, rendererCount, shot));
+            bool pass = QcPixels.Passes(loaded, rendererCount, shot);
+
+            // Destroy the instance BEFORE disposing the import, and let the destroy actually
+            // happen: Destroy is deferred to the end of the frame, and the import owns the meshes
+            // and textures the instance is still drawing from until then.
+            Object.Destroy(pivot);
+            yield return null;
+            import?.Dispose();
+
+            onDone(pass);
+        }
+
+        // ── capture ──────────────────────────────────────────────────────────────
+
+        /// <summary>
+        /// One frame, rendered on demand into <paramref name="rt"/> and read straight back.
+        ///
+        /// Not <c>ScreenCapture.CaptureScreenshot</c>: that hands the bytes to a file and never to
+        /// us, so there would be nothing to count — and the numbers, not the pictures, are what
+        /// make this pass evidence. Waiting for end of frame first is not optional; see the class
+        /// remarks on UnderwaterShading.
+        /// </summary>
+        private static IEnumerator Capture(Camera cam, RenderTexture rt, Texture2D readback,
+                                           string pngPath, System.Action<byte[]> onBytes)
+        {
+            yield return new WaitForEndOfFrame();
+
+            RenderTexture prevTarget = cam.targetTexture;
+            RenderTexture prevActive = RenderTexture.active;
+            try
+            {
+                cam.targetTexture = rt;
+                cam.Render();
+                RenderTexture.active = rt;
+                readback.ReadPixels(new Rect(0f, 0f, rt.width, rt.height), 0, 0, false);
+                readback.Apply(false);
+            }
+            finally
+            {
+                RenderTexture.active = prevActive;
+                cam.targetTexture = prevTarget;
+            }
+
+            if (!string.IsNullOrEmpty(pngPath))
+            {
+                try
+                {
+                    File.WriteAllBytes(pngPath, readback.EncodeToPNG());
+                    Debug.Log("[QCModel] shot -> " + pngPath);
+                }
+                catch (System.Exception e)
+                {
+                    Debug.LogWarning("[QCModel] cannot write " + pngPath + ": " + e.Message);
+                }
+            }
+
+            // A copy, because the next capture reuses this same Texture2D and the caller is
+            // holding both frames at once to compare them.
+            onBytes(readback.GetRawTextureData());
+        }
+
+        // ── helpers ──────────────────────────────────────────────────────────────
+
+        private static Bounds WorldBounds(List<Renderer> renderers)
+        {
+            var b = new Bounds();
+            bool has = false;
+            foreach (Renderer r in renderers)
+            {
+                if (r == null || !r.enabled) continue;
+                if (!has) { b = r.bounds; has = true; }
+                else b.Encapsulate(r.bounds);
+            }
+            return has ? b : new Bounds(Vector3.zero, Vector3.one);
+        }
+
+        /// <summary>
+        /// The GLB's own file name — <c>cc0_kraken_xr0</c> — because that is what the artifact and
+        /// the CDN both call it, and an id with a colon in it cannot be a file name anyway.
+        /// </summary>
+        private static string NameFor(AssetManifest manifest, string assetId)
+        {
+            string url = manifest != null ? manifest.ResolveUrl(assetId) : null;
+            if (!string.IsNullOrEmpty(url))
+            {
+                int q = url.IndexOf('?');
+                if (q >= 0) url = url.Substring(0, q);
+                string file = Path.GetFileNameWithoutExtension(url);
+                if (!string.IsNullOrEmpty(file)) return file;
+            }
+            return assetId.Replace(':', '_');
+        }
+    }
+}

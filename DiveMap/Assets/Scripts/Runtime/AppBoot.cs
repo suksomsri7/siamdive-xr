@@ -357,10 +357,24 @@ namespace DiveMap.Runtime
             TourController.ArrivingByWarp = false;
             TourController.ArenaPlay = false;
 
-            if (autoPlay)
+            // 🔴 …except in -qcshot mode, where the tour is what broke the evidence.
+            //
+            // The QC map belongs to SIAMDIVE and cannot be edited, so ArenaEntry drops the player
+            // into the tour 600 ms after the map loads and the drone re-drives Camera.main every
+            // frame from then on. QcShot below disables the ORBIT rig before aiming the camera, but
+            // nothing stopped the drone: both screenshots were therefore taken from the drone's
+            // pose, into open water, and came out as the same gradient — byte-identical files that
+            // were read for weeks as "two angles of the map". UiShell's -qcui pass had already hit
+            // this and leaves the tour explicitly (UiShell:812); this is the same fix at the source.
+            // -qcui is untouched, so its shots keep their current behaviour.
+            if (autoPlay && string.IsNullOrEmpty(GetArg("-qcshot")))
             {
                 Debug.Log($"[Tour] auto-play (arena={arena} warp={warped}) → tour at a random spawn");
                 StartCoroutine(StartTourAfterDelay());
+            }
+            else if (autoPlay)
+            {
+                Debug.Log("[Tour] auto-play suppressed — -qcshot needs a camera nobody else is flying");
             }
 
             // ── Sun shafts (WO-XR-04.3) ─────────────────────────────────────────────
@@ -446,6 +460,12 @@ namespace DiveMap.Runtime
             {
                 Debug.LogWarning($"[QC] no scad school for angle2 (marine={(marine != null)}) — skipping {path2}");
             }
+
+            // ── ใบที่ 3-8: โมเดลจริงจาก CDN ตัวละใบ + นับพิกเซลดำ ────────────────────
+            // The two angles above photograph a scene built almost entirely from geometry this
+            // code generates: only four GLBs in it come off the CDN. Everything the model bugs
+            // live in — 222 of 226 modules — has never been in a CI frame. This is that frame.
+            yield return QcModelShot.Run(dir, Manifest, boatCenter);
 
             Application.Quit(0);
         }

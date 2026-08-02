@@ -34,11 +34,14 @@
     <Compile Include="../../DiveMap/Assets/Scripts/Core/WebCoord.cs" />
     <Compile Include="../../DiveMap/Assets/Scripts/Core/MarineMath.cs" />
     <Compile Include="../../DiveMap/Assets/Scripts/Core/DroneFlight.cs" />
+    <Compile Include="../../DiveMap/Assets/Scripts/Core/WarpSpawn.cs" />
+    <Compile Include="../../DiveMap/Assets/Scripts/Core/FishAssetPick.cs" />
     <Compile Include="../../DiveMap/Assets/Scripts/Core/SolidBoxes.cs" />
     <Compile Include="../../DiveMap/Assets/Scripts/Core/FleeMath.cs" />
     <Compile Include="../../DiveMap/Assets/Scripts/Core/SpeciesGenome.cs" />
     <Compile Include="../../DiveMap/Assets/Scripts/Core/SwimStyle.cs" />
     <Compile Include="../../DiveMap/Assets/Scripts/Core/FishMind.cs" />
+    <Compile Include="../../DiveMap/Assets/Scripts/Core/QcPixels.cs" />
   </ItemGroup>
 
   <ItemGroup Label="EditMode tests for exactly those files">
@@ -49,8 +52,11 @@
     <Compile Include="../../DiveMap/Assets/Tests/EditMode/SwimStyleTests.cs" />
     <Compile Include="../../DiveMap/Assets/Tests/EditMode/FishMindTests.cs" />
     <Compile Include="../../DiveMap/Assets/Tests/EditMode/DroneFlightTests.cs" />
+    <Compile Include="../../DiveMap/Assets/Tests/EditMode/WarpSpawnTests.cs" />
+    <Compile Include="../../DiveMap/Assets/Tests/EditMode/FishAssetPickTests.cs" />
     <Compile Include="../../DiveMap/Assets/Tests/EditMode/SolidBoxesTests.cs" />
     <Compile Include="../../DiveMap/Assets/Tests/EditMode/TiltedHullTests.cs" />
+    <Compile Include="../../DiveMap/Assets/Tests/EditMode/QcPixelsTests.cs" />
     <Compile Include="Runner.cs" />
   </ItemGroup>
 </Project>

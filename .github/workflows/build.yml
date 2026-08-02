@@ -439,14 +439,26 @@ jobs:
           sudo chown -R "$USER:$USER" . || true
           BIN=$(find . -path '*/build/*' -name 'DiveMap' -type f | head -1)
           echo "BIN=$BIN"; chmod +x "$BIN"
-          timeout 300 xvfb-run -a -s "-screen 0 1280x720x24" \
+          # 300 → 480 s. The same run now also does the MODEL pass (AppBoot.QcShot →
+          # QcModelShot): six real GLBs pulled off the CDN (~12.6 MB), instantiated one at a
+          # time through the app's own loader, and photographed close up — the models that
+          # every previous QC screenshot has been unable to contain, because this scene builds
+          # all but four of its objects out of generated geometry. The pass has its own 170 s
+          # internal budget and quits itself, so this ceiling is the outer fuse, not the plan.
+          timeout 480 xvfb-run -a -s "-screen 0 1280x720x24" \
             "$BIN" -qcshot "$PWD/qc_screenshot.png" -screen-width 1280 -screen-height 720 -force-glcore || true
           ls -la qc_screenshot.png || echo "::warning::no screenshot produced"
+          ls -la qc_model_*.png || echo "::warning::no per-model QC shots — see [QCModel] lines in qc_player.log"
           # Find the log rather than guess its path: Unity puts it under the COMPANY NAME, so
           # renaming the company (which we did) silently produced no log at all — and the log is
           # half of what QC proves. `|| true` hid it perfectly.
           find ~/.config/unity3d -name Player.log -exec cp {} qc_player.log \; 2>/dev/null || true
           test -s qc_player.log || echo "::warning::no Player.log found under ~/.config/unity3d"
+          # The per-model verdicts, in the step log itself, so "the wreck is black" or "the
+          # wreck was never there" is visible without downloading a 20 MB artifact. A shot with
+          # no model in it is logged FAIL by the harness (QcPixels.Passes), not quietly passed.
+          grep -h '\[QCModel\]' qc_player.log 2>/dev/null || \
+            echo "::warning::no [QCModel] lines — the model QC pass did not run"
 
       # Second, SEPARATE run for the UI shots (WO-XR-05). It must not share a process
       # with -qcshot: that mode ends in Application.Quit(0) inside AppBoot.QcShot, so
@@ -470,6 +482,7 @@ jobs:
           path: |
             qc_screenshot.png
             qc_screenshot2.png
+            qc_model_*.png
             qc_player.log
             qc_ui*.png
             qc_ui_player.log

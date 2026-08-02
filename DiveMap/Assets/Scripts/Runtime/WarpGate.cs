@@ -21,9 +21,15 @@ namespace DiveMap.Runtime
     [DisallowMultipleComponent]
     public sealed class WarpGate : MonoBehaviour
     {
-        public const float TriggerRadius = 13f;
-        public const float RearmRadius = 16f;
-        private const float Height = 14f;      // the web lifts the gate off the seabed
+        // The two radii live in Core (DiveMap.Core.WarpSpawn) because the spawn rule has to keep
+        // clear of them — a diver dropped inside the trigger ring opens the destination picker on
+        // the first frame of the dive — and Core is the half that can be unit-tested on a machine
+        // with no Unity. Same numbers, one place to change them.
+        public const float TriggerRadius = Core.WarpSpawn.TriggerRadius;
+        public const float RearmRadius = Core.WarpSpawn.RearmRadius;
+
+        /// <summary>The web lifts the gate off the seabed; the spawn rule lands the diver level with it.</summary>
+        public const float Height = 14f;
 
         private static readonly List<WarpGate> All = new List<WarpGate>();
 

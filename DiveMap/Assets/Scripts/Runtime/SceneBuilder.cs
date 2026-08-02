@@ -777,6 +777,57 @@ namespace DiveMap.Runtime
             _loadState.CompleteLoad();
         }
 
+        /// <summary>
+        /// Load ONE model exactly the way a map item is loaded, for the CI model QC pass
+        /// (<see cref="QcModelShot"/>). Returns the import — which owns the meshes and textures —
+        /// or null if the model never arrived; the caller destroys the instance and then disposes.
+        ///
+        /// 🔴 It goes through <see cref="CachedUri"/>, <see cref="TameMetal"/> and the gold FX for
+        /// one reason: a QC pass with its own private loader proves things about the QC pass. The
+        /// black-skin bug is in the GLBs, the generation gate decides which GLB a device gets, and
+        /// TameMetal is itself a fix for a "black model with a white rim" report — a shortcut past
+        /// any of the three would photograph a model no user has.
+        ///
+        /// Deliberately NOT sharing <see cref="_imports"/>: this is a static pass with no map, and
+        /// each model is disposed the moment its picture is taken so six 2048² models are never
+        /// resident at once.
+        /// </summary>
+        public static async Task<GltfImport> LoadForQc(string url, string assetId, Transform parent)
+        {
+            var gltf = new GltfImport();
+            try
+            {
+                bool ok = await gltf.Load(await CachedUri(url));
+                // A download that outlived its pivot (the harness timed this model out and moved
+                // on) is a failure, not a success with nowhere to go — otherwise the import is
+                // returned to nobody and its textures stay resident for the rest of the run.
+                ok = ok && parent != null && await gltf.InstantiateMainSceneAsync(parent);
+                if (!ok)
+                {
+                    gltf.Dispose();
+                    return null;
+                }
+            }
+            catch (Exception e)
+            {
+                Debug.LogWarning($"[SceneBuilder] QC GLB load failed for {assetId} ({url}): {e.Message}");
+                gltf.Dispose();
+                return null;
+            }
+
+            if (parent != null)
+            {
+                // Centred, not grounded: the QC camera frames the model about its own middle, and
+                // there is no seabed under the staging area to stand it on.
+                CenterToPivot(parent);
+                TameMetal(parent.gameObject, assetId);
+                string fxId = assetId ?? "";
+                if (GoldFx.IsGolden(fxId)) GoldFx.ApplyGold(parent.gameObject);
+                if (GoldFx.HasBeard(fxId)) GoldFx.ApplyBeard(parent.gameObject);
+            }
+            return gltf;
+        }
+
         // ── Big animal (whaleshark) = real GLB + WhaleController (WO-XR-03b) ─────────
 
         /// <summary>

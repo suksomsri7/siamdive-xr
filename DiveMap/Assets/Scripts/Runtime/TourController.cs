@@ -209,12 +209,24 @@ namespace DiveMap.Runtime
             start.y = Mathf.Clamp(_homeCenter.y + 12f, SeabedY(start) + 10f, _waterLevel - 12f);
             float startYaw = 0f;   // +Z, i.e. looking at the content we just backed away from
 
+            // The random-start flag is consumed on ENTRY, whatever the map turns out to contain:
+            // leaving it set because a warp gate answered first would drop the player somewhere
+            // random the next time they opened the drone on a map with no gates.
+            bool wantRandom = _randomSpawn;
+            _randomSpawn = false;
+
+            // 🌀 E8 — EVERY dive starts at a warp gate on a map that has one, at random when it has
+            // several (WarpSpawn: beside the gate, facing the middle of the map). This deliberately
+            // outranks the D9 draw below: a portal is the one landmark in a map that means "you
+            // arrived here", so starting anywhere else on a map that has one is a wasted entrance.
+            // Maps with no gate keep D9 exactly as it was.
+            bool atWarp = TryWarpSpawn(ref start, ref startYaw);
+
             // D9 — a player who arrived by "play", or through a warp gate, is dropped somewhere
             // random instead (the web's enterTour(randomStart), builder.html:3722) so the same map
             // is not the same dive twice. The two draws come from here so the maths stays pure.
-            if (_randomSpawn)
+            if (!atWarp && wantRandom)
             {
-                _randomSpawn = false;
                 float mapR = SeabedGeom.SandRadius * Mathf.Max(_scaleX, _scaleZ);
                 var centre = new DroneFlight.Vec3(_homeCenter.x, _homeCenter.y, _homeCenter.z);
                 DroneFlight.Vec3 pick = DroneFlight.RandomSpawn(
@@ -229,6 +241,13 @@ namespace DiveMap.Runtime
                 start = at;
                 startYaw = DroneFlight.YawToward(new DroneFlight.Vec3(at.x, at.y, at.z), centre);
                 Debug.Log($"[Tour] random spawn at ({at.x:F0},{at.y:F0},{at.z:F0}) mapR={mapR:F0}");
+                Debug.Log($"[Tour] spawn=default mode=random " +
+                          $"pos=({start.x:F1},{start.y:F1},{start.z:F1})");
+            }
+            else if (!atWarp)
+            {
+                Debug.Log($"[Tour] spawn=default mode=fixed " +
+                          $"pos=({start.x:F1},{start.y:F1},{start.z:F1})");
             }
 
             _state = new DroneFlight.State
@@ -270,6 +289,70 @@ namespace DiveMap.Runtime
             // D10 — coach a first dive, once per device. Delayed like the web (700 ms) because the
             // HUD is still fading in and a spotlight needs something laid out to point at.
             StartCoroutine(CoachFirstDive());
+        }
+
+        /// <summary>
+        /// 🌀 Start the dive at one of the map's warp gates, picked at random. False = this map has
+        /// none, and the caller keeps the behaviour it had before (D9, or the fixed opening view).
+        ///
+        /// The gates come from <see cref="WarpGate.Gates"/> — the same live list the trigger reads,
+        /// so a gate that a map tore down cannot be spawned at — and the placement itself is
+        /// <see cref="WarpSpawn.Place"/>, which is pure and unit-tested.
+        ///
+        /// Two passes, because the solids the drone carries are picked around WHERE IT IS: the
+        /// first placement (no solids) says roughly where the diver will stand, that primes
+        /// <see cref="RefreshSolids"/>, and the second placement is the one that can be pushed out
+        /// of a wreck the gate happens to stand in.
+        /// </summary>
+        private bool TryWarpSpawn(ref Vector3 start, ref float startYaw)
+        {
+            var gates = WarpGate.Gates;
+            if (gates == null || gates.Count == 0) return false;
+
+            var world = new List<Vector3>(gates.Count);
+            var pts = new List<DroneFlight.Vec3>(gates.Count);
+            for (int i = 0; i < gates.Count; i++)
+            {
+                WarpGate g = gates[i];
+                // The registry is static and lives across map loads, so a gate belonging to a map
+                // that is being torn down must not be a candidate to be born at.
+                if (g == null || !g.gameObject.activeInHierarchy) continue;
+                Vector3 p = g.transform.position;
+                world.Add(p);
+                pts.Add(new DroneFlight.Vec3(p.x, p.y, p.z));
+            }
+            if (pts.Count == 0) return false;
+
+            DroneFlight.Vec3[] arr = pts.ToArray();
+            int idx = WarpSpawn.PickIndex(arr.Length, UnityEngine.Random.value);
+            var centre = new DroneFlight.Vec3(_homeCenter.x, _homeCenter.y, _homeCenter.z);
+
+            WarpSpawn.Result first = WarpSpawn.Place(arr, idx, centre, SeabedY(world[idx]),
+                                                     _waterLevel, null, _scaleX, _scaleZ);
+            var near = new Vector3(first.Pos.X, first.Pos.Y, first.Pos.Z);
+            RefreshSolids(near, force: true);
+            // Re-read the seabed UNDER the landing spot, not under the gate: the map is sculpted,
+            // and a gate on the lip of a wall is 22 units from a very different sand height.
+            WarpSpawn.Result at = WarpSpawn.Place(arr, idx, centre, SeabedY(near),
+                                                  _waterLevel, _solids, _scaleX, _scaleZ);
+            if (!at.AtWarp) return false;
+
+            start = new Vector3(at.Pos.X, at.Pos.Y, at.Pos.Z);
+            startYaw = at.Yaw;
+
+            // Being born beside a portal must not open the portal. The clearance already puts the
+            // diver outside the re-arm ring on every ordinary map; this covers the one where the
+            // push-out had to slide them back in. CheckWarpGates arms itself again on the first
+            // frame the diver is clear of every ring, which is the guard the web already uses for
+            // a cancelled picker.
+            _warpArmed = false;
+
+            Debug.Log($"[Tour] spawn=warp idx={idx + 1}/{arr.Length} " +
+                      $"pos=({start.x:F1},{start.y:F1},{start.z:F1}) " +
+                      $"yaw={startYaw * Mathf.Rad2Deg:F0}° " +
+                      $"gate=({world[idx].x:F1},{world[idx].y:F1},{world[idx].z:F1}) " +
+                      $"clear={WarpSpawn.NearestGateDistance(arr, at.Pos):F1}u");
+            return true;
         }
 
         /// <summary>
