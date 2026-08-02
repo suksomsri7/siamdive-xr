@@ -161,50 +161,22 @@ namespace DiveMap.Core
         private static float Clamp01(float v) => v < 0f ? 0f : (v > 1f ? 1f : v);
 
         /// <summary>
-        /// Should this material's metallic-roughness TEXTURE be replaced by scalars?
+        /// Metallic and roughness for the QC pass's textureless probe frames.
         ///
-        /// 🔴 This one is not deduced, it is measured — CI run 30753720407, the A/B probe pass.
-        /// The harness photographed each model three times: as shipped, with the base-colour
-        /// texture cleared, and with the metallic-roughness texture cleared. <c>blackOfSubject</c>:
-        ///
-        ///   model      as shipped   white albedo   no metal-rough
-        ///   kraken       10.92%        0.00%          0.00%
-        ///   poseidon     13.45%        0.00%          0.00%
-        ///   hardeep       6.43%        0.00%          0.00%
-        ///   barracuda     5.17%        0.00%          0.00%
-        ///   htms732       0.00%        0.00%          0.00%
-        ///   lionfish      0.00%        0.00%          0.00%
-        ///
-        /// The probe's replacement shading is numerically almost the same material: the map's metal
-        /// channel measures 0.0004-0.028 across ten models (it is a dielectric everywhere) and its
-        /// roughness averages ~0.53 against the probe's flat 0.6. Nothing about the LOOK changed,
-        /// and every black pixel went away. What separates the four that break from the two that do
-        /// not is how much the roughness channel MOVES: standard deviation 0.175-0.269 on the
-        /// broken models against 0.023 on htms732, whose map is effectively a constant — and
-        /// <c>_METALLICGLOSSMAP</c> is a shader_feature that forks the whole vertex output struct
-        /// and the fragment entry point (<c>glTFUnityStandardCore.cginc:168</c> passes an extra
-        /// interpolator that the variant without it does not have).
-        ///
-        /// 🔴 What this is NOT: an explanation. The mechanism inside that variant is still unknown,
-        /// and this deliberately does not pretend otherwise — three rounds have been lost to
-        /// mechanisms that sounded right. What it is: the exact material state CI has already
-        /// photographed producing zero black, applied at import instead of in the probe. The probe
-        /// stays in the pass; the next run must come back <c>verdict=no-black</c> on all six, and
-        /// if it does not, this is wrong and reverting it is one line.
-        ///
-        /// Cost, stated plainly: models lose per-texel roughness variation and render at a uniform
-        /// <see cref="ProbeValidatedRoughness"/>. On a scan whose map is nearly flat anyway that is
-        /// invisible; on the shiniest model measured (barracuda, mean roughness 0.145) it will read
-        /// slightly more matte. Against 5-13% of the model rendering pure black, that is the trade
-        /// worth making until the variant bug itself is found.
+        /// 🔴 These were briefly a FIX. Between runs 30753720407 and 30765284038 the import
+        /// replaced every metallic-roughness map with this pair, because a probe frame measured it
+        /// taking blackOfSubject from 10.92/13.45/6.43/5.17% to 0.00% on all four affected models.
+        /// It was the right call on the evidence available and the wrong diagnosis: the real cause
+        /// was the UV atlas's undilated black gutters being averaged into the deep mips a chart
+        /// seam throws the sampler into (see <c>SceneBuilder.TameMetal</c>). Clearing the map
+        /// helped only because it stopped one more texture being sampled at the exploded LOD.
+        /// Source-side dilation fixed it properly, the maps are back, and these two numbers stay
+        /// because the probe frames still need something to shade with — 0 metal is what the maps
+        /// measure (0.0004-0.028 across ten models) and 0.6 roughness sits beside their ~0.53 mean.
         /// </summary>
-        public static bool ReplaceMetalRoughTextureWithScalars(bool hasMetalRoughTexture)
-            => hasMetalRoughTexture;
-
-        /// <summary>Metallic the probe frame used. The maps measure 0.0004-0.028 — dielectric.</summary>
         public const float ProbeValidatedMetallic = 0f;
 
-        /// <summary>Roughness the probe frame used, against a measured map average of ~0.53.</summary>
+        /// <inheritdoc cref="ProbeValidatedMetallic"/>
         public const float ProbeValidatedRoughness = 0.6f;
 
         /// <summary>At or below this a factor is already harmless.</summary>

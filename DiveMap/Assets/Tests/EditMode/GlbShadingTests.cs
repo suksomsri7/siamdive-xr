@@ -116,11 +116,14 @@ namespace DiveMap.Tests
             Assert.GreaterOrEqual(GlbShading.ProbeValidatedRoughness, 0f);
             Assert.LessOrEqual(GlbShading.ProbeValidatedRoughness, 1f);
 
-            // Only materials that actually carry the map are touched — a model with no
-            // metallic-roughness texture (the lionfish) measured 0.00% black as it shipped and
-            // must not be rewritten on the way past.
-            Assert.IsTrue(GlbShading.ReplaceMetalRoughTextureWithScalars(hasMetalRoughTexture: true));
-            Assert.IsFalse(GlbShading.ReplaceMetalRoughTextureWithScalars(hasMetalRoughTexture: false));
+            // 🔴 And they are no longer applied at import. Run 30765284038 loaded models whose UV
+            // gutters had been dilated at source and darkOfSubject fell 14.75% → 0.25% (kraken),
+            // 17.35% → 0.31% (statue), 8.69% → 0.58% (hardeep) with the metallic-roughness maps
+            // back in place. Stripping them was a workaround for a cause that has since been fixed
+            // properly, so the maps are restored and these constants exist only for the probe.
+            Assert.IsNull(typeof(GlbShading).GetMethod("ReplaceMetalRoughTextureWithScalars"),
+                "the metallic-roughness workaround was retired when source dilation landed — " +
+                "re-adding it would take the per-texel gloss back off every scan for nothing");
         }
 
         [Test]

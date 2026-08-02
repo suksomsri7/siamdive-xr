@@ -1013,11 +1013,38 @@ namespace DiveMap.Runtime
         ///
         /// Not zero, and not a look change for its own sake: 0.06 keeps a wet sheen so the rock
         /// still reads as underwater rather than as chalk.
+        ///
+        /// ── the black-patch case, closed ─────────────────────────────────────────────────────
+        /// 🔴 For whoever finds a model rendering in dark blotches again. It took eight CI rounds
+        /// and the answer was in none of the obvious places, so here is the shape of it:
+        ///
+        ///   1. NOT the files. Geometry, tangents and normals decode clean; the metal channel
+        ///      measures 0.001 (dielectric, so the reflection-cube story above does not apply);
+        ///      every KTX2's DFD tags normal and metallic-roughness LINEAR correctly; and the
+        ///      ETC1S→ETC2 transcode the device performs is bit-identical to a reference decode
+        ///      (maxAbsDiff 0 over 2048²).
+        ///   2. NOT the material. Dropping the normal map moved blackOfSubject from 10.92% to
+        ///      10.92%. Replacing the metallic-roughness map with scalars removed the pure black
+        ///      but left the blotches. Unity's own Standard shader on a white textureless material
+        ///      rendered the same mesh clean, so neither the shader nor the mesh normals.
+        ///   3. THE UV ATLAS. These scans pack hundreds of small charts with pure-black gutters
+        ///      and no padding. Where a GPU quad straddles a chart seam the two pixels' UVs are
+        ///      half an atlas apart, so the derivative explodes and the sampler is thrown to
+        ///      LOD 7-10 — the atlas AVERAGE, which those gutters make dark. Hence hard-edged
+        ///      patches that follow chart boundaries, ignore albedo, ignore N·L, and survive
+        ///      every material change.
+        ///
+        /// Fixed at source by dilating the gutters before the mips are built (models re-encoded);
+        /// darkOfSubject fell 14.75% → 0.25% on the kraken. No app-side mip bias was needed and
+        /// none should be added — <c>biasVerdict</c> in the QC probe says <c>no-mottle</c> now.
+        /// The measuring kit that found it — <see cref="QcModelShot"/>'s probe frames and
+        /// <see cref="QcPixels.MaxDarkPercent"/> — stays; it is the only reason this was ever more
+        /// than opinion.
         /// </summary>
         private static void TameMetal(GameObject root, string assetId)
         {
             if (root == null) return;
-            int fixedCount = 0, droppedNormals = 0, droppedMetalRough = 0, materials = 0;
+            int fixedCount = 0, droppedNormals = 0, materials = 0;
             bool gamma = QualitySettings.activeColorSpace == ColorSpace.Gamma;
             foreach (Renderer r in root.GetComponentsInChildren<Renderer>(true))
             {
@@ -1035,7 +1062,6 @@ namespace DiveMap.Runtime
                         fixedCount++;
                     }
                     if (DropMisdecodedNormalMap(m, assetId, gamma)) droppedNormals++;
-                    if (ReplaceMetalRoughTexture(m, assetId)) droppedMetalRough++;
                 }
             }
             if (fixedCount > 0)
@@ -1045,48 +1071,8 @@ namespace DiveMap.Runtime
             // between "the pass is clean", "the pass skipped everything" and "the pass was never
             // called on this model" — three different bugs that cost a CI round each to tell apart.
             Debug.Log($"[Shading] {assetId}: materials={materials} tamedMetal={fixedCount} " +
-                      $"droppedNormalMap={droppedNormals} droppedMetalRough={droppedMetalRough} " +
-                      $"gamma={(gamma ? "t" : "f")} tilt={GlbShading.NeutralTiltDegrees():F0}°");
-        }
-
-        /// <summary>
-        /// Swap the metallic-roughness TEXTURE for the scalar pair CI has already photographed
-        /// producing zero black patches. The evidence, the cost and the fact that the mechanism is
-        /// still unidentified are all written down in
-        /// <see cref="GlbShading.ReplaceMetalRoughTextureWithScalars"/> — read that before deciding
-        /// this is superstition, and read the <c>[QCProbe]</c> lines in the next CI log before
-        /// deciding it works.
-        ///
-        /// The keyword goes off with the texture. <c>_METALLICGLOSSMAP</c> is what forks the shader
-        /// onto the variant that samples the map at all — leaving it enabled with an empty slot
-        /// would keep the suspect variant and sample the shader's "white" default, which is metal 1
-        /// and smoothness 1: a mirror, and the opposite of the state the probe validated.
-        /// </summary>
-        private static bool ReplaceMetalRoughTexture(Material m, string assetId)
-        {
-            foreach (string n in MetalMapNames)
-            {
-                if (!m.HasProperty(n)) continue;
-                Texture tex = m.GetTexture(n);
-                if (tex == null) continue;
-                if (!GlbShading.ReplaceMetalRoughTextureWithScalars(true)) continue;
-
-                m.SetTexture(n, null);
-                m.DisableKeyword("_METALLICGLOSSMAP");
-                foreach (string f in MetalFactorNames)
-                    if (m.HasProperty(f)) m.SetFloat(f, GlbShading.ProbeValidatedMetallic);
-                if (m.HasProperty("roughnessFactor"))
-                    m.SetFloat("roughnessFactor", GlbShading.ProbeValidatedRoughness);
-                // Standard's smoothness is the complement, for any material that is not glTFast's.
-                if (m.HasProperty("_Glossiness"))
-                    m.SetFloat("_Glossiness", 1f - GlbShading.ProbeValidatedRoughness);
-
-                Debug.Log($"[Shading] mat={m.name} asset={assetId} metalRoughTex={tex.graphicsFormat} " +
-                          $"{tex.width}x{tex.height} -> metallic={GlbShading.ProbeValidatedMetallic:F2} " +
-                          $"roughness={GlbShading.ProbeValidatedRoughness:F2} dropped=t");
-                return true;
-            }
-            return false;
+                      $"droppedNormalMap={droppedNormals} gamma={(gamma ? "t" : "f")} " +
+                      $"tilt={GlbShading.NeutralTiltDegrees():F0}°");
         }
 
         /// <summary>
