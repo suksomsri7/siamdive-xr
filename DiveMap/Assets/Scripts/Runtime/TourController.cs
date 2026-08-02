@@ -479,8 +479,11 @@ namespace DiveMap.Runtime
             // has actually moved (see RefreshSolids for the budget).
             RefreshSolids(new Vector3(_state.Pos.X, _state.Pos.Y, _state.Pos.Z), force: false);
 
+            // The user's own "ความเร็วโดรน" preset. Read per frame rather than cached at Begin():
+            // settings can be opened from the pause sheet mid-dive, and a speed change that only
+            // took effect on the NEXT dive would read as a control that does nothing.
             _state = DroneFlight.Step(_state, sticks, dt, seabedY, _waterLevel,
-                                      _solids, _scaleX, _scaleZ);
+                                      _solids, _scaleX, _scaleZ, SettingsStore.SpeedScale);
 
             var pos = new Vector3(_state.Pos.X, _state.Pos.Y, _state.Pos.Z);
             DroneFlight.Vec3 look = DroneFlight.LookTarget(_state);
@@ -502,9 +505,13 @@ namespace DiveMap.Runtime
             if (_frames == 30 || _frames % 300 == 0 || (flying && _frames % 15 == 0))
             {
                 float sp = Mathf.Sqrt(_state.Vel.X * _state.Vel.X + _state.Vel.Z * _state.Vel.Z);
+                float top = DroneFlight.Speed * SettingsStore.SpeedScale;
                 Debug.Log($"[Tour] frame={_frames} pos=({pos.x:F1},{pos.y:F1},{pos.z:F1}) " +
                           $"yaw={_state.Yaw * Mathf.Rad2Deg:F0}° " +
-                          $"velXZ={sp:F1}/{DroneFlight.Speed:F0} ry={sticks.Ry:F2} " +
+                          // …and in metres per second, because "is 5.4 fast?" is unanswerable in
+                          // world units and immediately answerable against a diver's 0.3-0.5 m/s.
+                          $"velXZ={sp:F1}/{top:F1}u/s ({DroneFlight.MetresPerSecond(sp):F2} m/s) " +
+                          $"ry={sticks.Ry:F2} " +
                           $"dt={dt:F3} fs={fs:F2} realDt={Time.deltaTime:F3} " +
                           $"depth={DroneFlight.DepthMetres(pos.y, _waterLevel):F1}m " +
                           $"seabedY={seabedY:F1}");

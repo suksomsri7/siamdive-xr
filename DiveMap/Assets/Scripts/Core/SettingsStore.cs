@@ -20,6 +20,23 @@ namespace DiveMap.Core
         public const string High = "high";
         public const string Lite = "lite";
 
+        // ── drone speed ──────────────────────────────────────────────────────────
+        //
+        // One preference, one place. There is no speed control on the dive HUD and there must not
+        // be one: the HUD is a thumb's width of screen with a photo button on it, and a value the
+        // user sets once for how the app FEELS is not a per-dive decision.
+
+        public const string SpeedPrefKey = "dronespeed";
+        public const string SpeedCalm = "calm";
+        public const string SpeedNormal = "normal";
+        public const string SpeedFast = "fast";
+
+        /// <summary>0.65 × 9 u/s = 0.98 m/s — a fit diver sprinting, and no faster.</summary>
+        public const float CalmSpeedScale = 0.65f;
+
+        /// <summary>1.45 × 9 u/s = 2.18 m/s — a scooter, for anyone crossing a big site.</summary>
+        public const float FastSpeedScale = 1.45f;
+
         /// <summary>
         /// Render-scale used by the "battery saver" preset. 0.75 = 56% of the pixels,
         /// which is the usual sweet spot before UI text starts to look soft.
@@ -27,6 +44,7 @@ namespace DiveMap.Core
         public const float LiteRenderScale = 0.75f;
 
         private static string _gfx;
+        private static string _speed;
 
         /// <summary>Graphics preset ("high" / "lite"); the setter persists to PlayerPrefs.</summary>
         public static string Gfx
@@ -43,6 +61,48 @@ namespace DiveMap.Core
                 PlayerPrefs.Save();
             }
         }
+
+        /// <summary>
+        /// How fast the drone flies ("calm" / "normal" / "fast"); the setter persists.
+        /// The default is <see cref="SpeedNormal"/> — the speed the flight model is tuned at, so
+        /// someone who never opens settings gets the one that was designed.
+        /// </summary>
+        public static string DroneSpeed
+        {
+            get
+            {
+                if (_speed == null) _speed = NormalizeSpeed(PlayerPrefs.GetString(SpeedPrefKey, ""));
+                return _speed;
+            }
+            set
+            {
+                _speed = NormalizeSpeed(value);
+                PlayerPrefs.SetString(SpeedPrefKey, _speed);
+                PlayerPrefs.Save();
+            }
+        }
+
+        /// <summary>Clamp any input to a supported preset. Unknown / empty ⇒ <see cref="SpeedNormal"/>.</summary>
+        public static string NormalizeSpeed(string value)
+        {
+            if (string.IsNullOrEmpty(value)) return SpeedNormal;
+            string v = value.Trim().ToLowerInvariant();
+            if (v == SpeedCalm) return SpeedCalm;
+            if (v == SpeedFast) return SpeedFast;
+            return SpeedNormal;
+        }
+
+        /// <summary>Multiplier a preset applies to <c>DroneFlight.Speed</c>.</summary>
+        public static float SpeedScaleOf(string preset)
+        {
+            string p = NormalizeSpeed(preset);
+            if (p == SpeedCalm) return CalmSpeedScale;
+            if (p == SpeedFast) return FastSpeedScale;
+            return 1f;
+        }
+
+        /// <summary>The live multiplier for the stored preference.</summary>
+        public static float SpeedScale => SpeedScaleOf(DroneSpeed);
 
         /// <summary>UI language ("th" / "en") — delegates to the i18n table.</summary>
         public static string Lang
@@ -77,6 +137,6 @@ namespace DiveMap.Core
         }
 
         /// <summary>Drop the in-memory cache so the next read hits PlayerPrefs again (tests).</summary>
-        public static void ResetCache() => _gfx = null;
+        public static void ResetCache() { _gfx = null; _speed = null; }
     }
 }

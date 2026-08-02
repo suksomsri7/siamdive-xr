@@ -29,11 +29,13 @@ namespace DiveMap.Runtime.Ui
         private Text _title;
         private Text _langLabel;
         private Text _gfxLabel;
+        private Text _speedLabel;
         private Text _perfLabel;
         private Text _versionLabel;
         private Text _versionValue;
 
         private Button _langTh, _langEn, _gfxHigh, _gfxLite, _perfOn, _perfOff, _link, _close;
+        private Button _speedCalm, _speedNormal, _speedFast;
 
         // ── build ────────────────────────────────────────────────────────────────
 
@@ -45,7 +47,10 @@ namespace DiveMap.Runtime.Ui
 
             // Settings is a bottom sheet like every other list on the web (#sheet), not a floating
             // card: same dismiss gesture, same corner radius, map still visible behind it.
-            RectTransform rt = UiKit.MakeSheet(self, "SettingsSheet", RaiseClose, 0.62f);
+            // 0.62 → 0.72 with the speed row: the sheet is a fixed height, not a scroll view, so a
+            // fourth section added at the old height would have pushed the website link and the
+            // version out through the bottom edge.
+            RectTransform rt = UiKit.MakeSheet(self, "SettingsSheet", RaiseClose, 0.72f);
 
             // Row geometry in CSS px (web: 16 px sheet title, 12 px section labels, 44 px rows,
             // 16 px side padding). Row HEIGHTS still come from UiKit.RowHeight so a Thai line can
@@ -77,6 +82,23 @@ namespace DiveMap.Runtime.Ui
 
             _gfxHigh = Choice(rt, "GfxHigh", y, pad, half, rowH, () => SetGfx(SettingsStore.High));
             _gfxLite = Choice(rt, "GfxLite", y, pad + half + gap, half, rowH, () => SetGfx(SettingsStore.Lite));
+            y += rowH + gap * 1.6f;
+
+            // ── drone speed ──────────────────────────────────────────────────────
+            // Here and nowhere else. It is a "how does this app feel in my hands" preference —
+            // set once, kept — and the dive HUD is not the place to ask it again: putting a copy
+            // on the HUD would leave two controls for one value and no way to tell which won.
+            _speedLabel = UiKit.MakeText(rt, "SpeedLabel", "", UiKit.CssFont(12f), TextAnchor.MiddleLeft, UiKit.TextDim);
+            UiKit.TopRow(_speedLabel.rectTransform, y, UiKit.RowHeight(UiKit.CssFont(12f)), pad, pad);
+            y += UiKit.RowHeight(UiKit.CssFont(12f)) + UiKit.Css(4f);
+
+            float third = (Screen.width / UiKit.CanvasScale - pad * 2f - gap * 2f) / 3f;
+            _speedCalm   = Choice(rt, "SpeedCalm",   y, pad,
+                                  third, rowH, () => SetSpeed(SettingsStore.SpeedCalm));
+            _speedNormal = Choice(rt, "SpeedNormal", y, pad + third + gap,
+                                  third, rowH, () => SetSpeed(SettingsStore.SpeedNormal));
+            _speedFast   = Choice(rt, "SpeedFast",   y, pad + (third + gap) * 2f,
+                                  third, rowH, () => SetSpeed(SettingsStore.SpeedFast));
             y += rowH + gap * 1.6f;
 
             // ── frame-rate readout (A7) ──────────────────────────────────────────
@@ -162,6 +184,16 @@ namespace DiveMap.Runtime.Ui
             Refresh();
         }
 
+        private void SetSpeed(string preset)
+        {
+            if (SettingsStore.DroneSpeed == SettingsStore.NormalizeSpeed(preset)) return;
+            SettingsStore.DroneSpeed = preset;
+            // Nothing to apply: TourController reads the preference every frame, so a change made
+            // from the pause sheet is felt on the next stroke of the stick.
+            Debug.Log($"[UI] drone speed -> {SettingsStore.DroneSpeed} (×{SettingsStore.SpeedScale:F2})");
+            Refresh();
+        }
+
         private void SetPerf(bool on)
         {
             if (PerfHud.Enabled == on) return;
@@ -186,6 +218,7 @@ namespace DiveMap.Runtime.Ui
             _title.text = UiStrings.Tr("ตั้งค่า");
             _langLabel.text = UiStrings.Tr("ภาษา");
             _gfxLabel.text = UiStrings.Tr("คุณภาพกราฟิก");
+            _speedLabel.text = UiStrings.Tr("ความเร็วโดรน");
             _perfLabel.text = UiStrings.Tr("ตัวเลขเฟรมเรต");
             _versionLabel.text = UiStrings.Tr("เวอร์ชันแอป");
             _versionValue.text = Application.version;
@@ -199,6 +232,11 @@ namespace DiveMap.Runtime.Ui
             string gfx = SettingsStore.Gfx;
             SetChoice(_gfxHigh, UiStrings.Tr("คุณภาพสูง"), gfx == SettingsStore.High);
             SetChoice(_gfxLite, UiStrings.Tr("ประหยัดพลังงาน"), gfx == SettingsStore.Lite);
+
+            string speed = SettingsStore.DroneSpeed;
+            SetChoice(_speedCalm,   UiStrings.Tr("ช้า"),   speed == SettingsStore.SpeedCalm);
+            SetChoice(_speedNormal, UiStrings.Tr("ปกติ"),  speed == SettingsStore.SpeedNormal);
+            SetChoice(_speedFast,   UiStrings.Tr("เร็ว"),  speed == SettingsStore.SpeedFast);
 
             bool perf = PerfHud.Enabled;
             SetChoice(_perfOn, UiStrings.Tr("แสดง"), perf);

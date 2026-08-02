@@ -50,7 +50,29 @@ namespace DiveMap.Tests
             var s = Step(Fresh(), new DroneFlight.Sticks { Lx = 1f });
             // Unity yaw grows clockwise seen from above = turning right.
             Assert.Greater(s.Yaw, 0f);
-            Assert.AreEqual(DroneFlight.YawRate * Dt, s.Yaw, 1e-6f);
+            // The turn has mass: one frame of the rate filter, not the full rate straight away.
+            Assert.AreEqual(DroneFlight.YawRate * DroneFlight.YawResponse, s.YawVel, 1e-5f);
+            Assert.AreEqual(s.YawVel * Dt, s.Yaw, 1e-6f);
+
+            // …and it reaches the full rate if you hold it.
+            for (int i = 0; i < 200; i++) s = Step(s, new DroneFlight.Sticks { Lx = 1f });
+            Assert.AreEqual(DroneFlight.YawRate, s.YawVel, 1e-3f);
+        }
+
+        [Test]
+        public void ReleasingTheTurn_CoastsInsteadOfStopping()
+        {
+            var s = Fresh();
+            for (int i = 0; i < 200; i++) s = Step(s, new DroneFlight.Sticks { Lx = 1f });
+            float held = s.Yaw;
+
+            s = Step(s, new DroneFlight.Sticks());
+            Assert.Greater(s.YawVel, 0f, "letting go must not nail the horizon in place");
+            Assert.Less(s.YawVel, DroneFlight.YawRate);
+            Assert.Greater(s.Yaw, held, "and the turn keeps carrying for a moment");
+
+            for (int i = 0; i < 300; i++) s = Step(s, new DroneFlight.Sticks());
+            Assert.AreEqual(0f, s.YawVel, 1e-3f, "…but it does settle");
         }
 
         [Test]
@@ -70,27 +92,186 @@ namespace DiveMap.Tests
         }
 
         [Test]
-        public void PushingTheLeftStickUp_Ascends_AtSeventyTwoPercent()
+        public void PushingTheLeftStickUp_Ascends_SlowerThanItSwimsForward()
         {
             var up = Fresh();
+            var down = Fresh(y: 400f);
             var fwd = Fresh();
             for (int i = 0; i < 400; i++)
             {
                 up = Step(up, new DroneFlight.Sticks { Ly = -1f });
+                down = Step(down, new DroneFlight.Sticks { Ly = 1f }, seabedY: -1000f);
                 fwd = Step(fwd, new DroneFlight.Sticks { Ry = -1f });
             }
             Assert.Greater(up.Vel.Y, 0f);
-            Assert.AreEqual(DroneFlight.Speed * DroneFlight.LiftRatio, up.Vel.Y, 0.5f);
-            Assert.AreEqual(DroneFlight.Speed, fwd.Vel.Z, 0.5f);
+            Assert.AreEqual(DroneFlight.Speed * DroneFlight.AscendRatio, up.Vel.Y, 0.2f);
+            Assert.AreEqual(-DroneFlight.Speed * DroneFlight.DescendRatio, down.Vel.Y, 0.2f);
+            Assert.AreEqual(DroneFlight.Speed, fwd.Vel.Z, 0.2f);
+
+            // 🔴 The rule the whole re-scale exists for: a runaway ascent is the dangerous one.
+            Assert.Less(up.Vel.Y, System.Math.Abs(down.Vel.Y), "up must be slower than down");
+            Assert.Less(up.Vel.Y, fwd.Vel.Z, "…and slower than swimming forward");
+        }
+
+        [Test]
+        public void Strafing_IsSlowerThanSwimmingForward()
+        {
+            var side = Fresh();
+            var fwd = Fresh();
+            for (int i = 0; i < 400; i++)
+            {
+                side = Step(side, new DroneFlight.Sticks { Rx = 1f });
+                fwd = Step(fwd, new DroneFlight.Sticks { Ry = -1f });
+            }
+            // yaw 0 ⇒ right = +X.
+            Assert.AreEqual(DroneFlight.Speed * DroneFlight.StrafeRatio, side.Vel.X, 0.2f);
+            Assert.Less(side.Vel.X, fwd.Vel.Z);
         }
 
         [Test]
         public void Inertia_RampsUpInsteadOfSnapping()
         {
             var s = Step(Fresh(), new DroneFlight.Sticks { Ry = -1f });
-            // One frame of 0.09 lag on a 30 u/s target.
+            // One frame of 0.09 thrust lag on a full-throttle target, at the 60 Hz step the
+            // constant is defined on.
             Assert.AreEqual(DroneFlight.Speed * DroneFlight.Inertia, s.Vel.Z, 1e-3f);
             Assert.Less(s.Vel.Z, DroneFlight.Speed * 0.2f, "the drone must feel heavy, not instant");
+        }
+
+        // ── the 2026-08 re-scale: "โดรนบินเร็วไป" ────────────────────────────────
+
+        /// <summary>
+        /// 🔴 THE POINT OF THE WHOLE CHANGE, in the only unit that can be argued about: metres.
+        /// A real diver cruises at 0.3-0.5 m/s, sprints at ~1 and a DPV scooter tops out at
+        /// ~1.5. The ported web model flew at 5.0 m/s and the report was "โดรนบินเร็วไป".
+        /// If a future edit puts the drone back above scooter speed, it fails here rather than
+        /// in someone's hands.
+        /// </summary>
+        [Test]
+        public void TopSpeed_IsAScooter_NotAnAeroplane()
+        {
+            Assert.AreEqual(6.0, ItemPicker.UnitsPerMetre, 1e-9,
+                            "the whole conversion hangs off this — see builder.html U_PER_M");
+
+            float fwd = DroneFlight.MetresPerSecond(DroneFlight.Speed);
+            Assert.AreEqual(1.5f, fwd, 0.01f, "forward = a DPV at full throttle");
+            Assert.LessOrEqual(fwd, 1.6f, "faster than a scooter is not a dive, it is a flight");
+            Assert.GreaterOrEqual(fwd, 1.0f, "…and slower than a sprinting diver is a chore");
+
+            Assert.AreEqual(1.05f, DroneFlight.MetresPerSecond(DroneFlight.Speed * DroneFlight.StrafeRatio), 0.01f);
+            Assert.AreEqual(0.525f, DroneFlight.MetresPerSecond(DroneFlight.Speed * DroneFlight.AscendRatio), 0.01f);
+            Assert.AreEqual(0.75f, DroneFlight.MetresPerSecond(DroneFlight.Speed * DroneFlight.DescendRatio), 0.01f);
+
+            // 32 m/min of ascent. Generous against a real 9-18, but the same order of magnitude —
+            // the old model climbed at 216 m/min.
+            Assert.Less(DroneFlight.MetresPerSecond(DroneFlight.Speed * DroneFlight.AscendRatio) * 60f, 40f);
+        }
+
+        [Test]
+        public void HalfAStick_IsADiverFinningGently()
+        {
+            var s = Fresh();
+            for (int i = 0; i < 400; i++) s = Step(s, new DroneFlight.Sticks { Ry = -0.5f });
+            float ms = DroneFlight.MetresPerSecond(s.Vel.Z);
+            // Expo: half deflection is a look-at-the-coral pace, not half of a scooter.
+            Assert.Greater(ms, 0.2f);
+            Assert.Less(ms, 0.55f, "half a stick must land in a real diver's cruising band");
+        }
+
+        [Test]
+        public void Shape_IsExpo_SoASmallPushIsASmallMove()
+        {
+            Assert.AreEqual(0f, DroneFlight.Shape(0.11f), 1e-6f, "dead zone still holds");
+            Assert.AreEqual(0f, DroneFlight.Shape(-0.11f), 1e-6f);
+            Assert.AreEqual(1f, DroneFlight.Shape(1f), 1e-6f, "full stick is still full speed");
+            Assert.AreEqual(-1f, DroneFlight.Shape(-1f), 1e-6f);
+            Assert.AreEqual(1f, DroneFlight.Shape(1.4f), 1e-6f, "over-range is clamped, not amplified");
+
+            // Just past the dead zone the output is a whisper, not a step.
+            Assert.Less(DroneFlight.Shape(0.13f), 0.05f);
+            // Monotonic and always below the linear ramp in the middle.
+            float prev = 0f;
+            for (float v = 0.12f; v <= 1f; v += 0.02f)
+            {
+                float o = DroneFlight.Shape(v);
+                Assert.GreaterOrEqual(o, prev - 1e-6f, "the curve must never go backwards");
+                Assert.LessOrEqual(o, v + 1e-6f, "expo is never MORE than linear");
+                prev = o;
+            }
+            Assert.AreEqual(-DroneFlight.Shape(0.6f), DroneFlight.Shape(-0.6f), 1e-6f, "symmetric");
+        }
+
+        [Test]
+        public void ReleasingTheStick_GlidesToAStop_InsteadOfBraking()
+        {
+            Assert.Less(DroneFlight.Drag, DroneFlight.Inertia,
+                        "water drags; it does not brake — coasting must be the softer response");
+
+            var s = Fresh();
+            for (int i = 0; i < 400; i++) s = Step(s, new DroneFlight.Sticks { Ry = -1f });
+            float cruise = s.Vel.Z;
+            float z0 = s.Pos.Z;
+
+            s = Step(s, new DroneFlight.Sticks());
+            Assert.Greater(s.Vel.Z, cruise * 0.9f, "one frame after release it has barely slowed");
+
+            // It does stop, and the glide is about half a metre — enough to feel like water,
+            // little enough to park in front of a nudibranch.
+            for (int i = 0; i < 600; i++) s = Step(s, new DroneFlight.Sticks());
+            Assert.AreEqual(0f, s.Vel.Z, 0.05f);
+            float glideMetres = (s.Pos.Z - z0) / (float)ItemPicker.UnitsPerMetre;
+            Assert.Greater(glideMetres, 0.2f);
+            Assert.Less(glideMetres, 1.2f, "a coast this long would make aiming impossible");
+        }
+
+        /// <summary>
+        /// The response constants are per-60 Hz-frame, but a phone is not a 60 Hz frame. The old
+        /// code applied them once per frame whatever its length, so the same drone was twice as
+        /// laggy at 30 fps — half of "คุมไม่อยู่" was the device, not the number.
+        /// </summary>
+        [Test]
+        public void Response_IsTheSame_AtAnyFrameRate()
+        {
+            // 60 Hz is untouched: the web's rule, bit for bit.
+            Assert.AreEqual(DroneFlight.Inertia, DroneFlight.FrameLerp(DroneFlight.Inertia, 0.016f), 1e-6f);
+
+            // Half the frames, each twice as long ⇒ the same velocity after the same second.
+            var fast = Fresh();
+            var slow = Fresh();
+            for (int i = 0; i < 60; i++)
+                fast = DroneFlight.Step(fast, new DroneFlight.Sticks { Ry = -1f }, 0.016f, 0f, Water, null, 1f, 1f);
+            for (int i = 0; i < 30; i++)
+                slow = DroneFlight.Step(slow, new DroneFlight.Sticks { Ry = -1f }, 0.032f, 0f, Water, null, 1f, 1f);
+
+            Assert.AreEqual(fast.Vel.Z, slow.Vel.Z, 0.05f, "the drone must not depend on the phone");
+            Assert.AreEqual(fast.Pos.Z, slow.Pos.Z, 0.5f);
+        }
+
+        /// <summary>
+        /// The settings preset (SettingsStore.SpeedScale) multiplies the three translation speeds
+        /// and NOTHING else — a slower diver must still be able to turn round at the same rate.
+        /// </summary>
+        [Test]
+        public void SpeedScale_MovesTheCeiling_ButNotTheTurnRate()
+        {
+            var slow = Fresh();
+            var quick = Fresh();
+            var turnSlow = Fresh();
+            var turnQuick = Fresh();
+            for (int i = 0; i < 400; i++)
+            {
+                slow = DroneFlight.Step(slow, new DroneFlight.Sticks { Ry = -1f }, Dt, 0f, Water, null, 1f, 1f, 0.65f);
+                quick = DroneFlight.Step(quick, new DroneFlight.Sticks { Ry = -1f }, Dt, 0f, Water, null, 1f, 1f, 1.45f);
+                turnSlow = DroneFlight.Step(turnSlow, new DroneFlight.Sticks { Lx = 1f }, Dt, 0f, Water, null, 1f, 1f, 0.65f);
+                turnQuick = DroneFlight.Step(turnQuick, new DroneFlight.Sticks { Lx = 1f }, Dt, 0f, Water, null, 1f, 1f, 1.45f);
+            }
+            Assert.AreEqual(DroneFlight.Speed * 0.65f, slow.Vel.Z, 0.2f);
+            Assert.AreEqual(DroneFlight.Speed * 1.45f, quick.Vel.Z, 0.2f);
+            Assert.AreEqual(turnSlow.Yaw, turnQuick.Yaw, 1e-4f, "aiming is not a speed setting");
+
+            // A nonsense scale must never freeze the drone in the water.
+            var safe = DroneFlight.Step(Fresh(), new DroneFlight.Sticks { Ry = -1f }, Dt, 0f, Water, null, 1f, 1f, 0f);
+            Assert.Greater(safe.Vel.Z, 0f);
         }
 
         [Test]
@@ -107,7 +288,9 @@ namespace DiveMap.Tests
         public void Surface_IsNeverBroken()
         {
             var s = Fresh(y: 200f);
-            for (int i = 0; i < 600; i++) s = Step(s, new DroneFlight.Sticks { Ly = -1f });
+            // 1200 frames, not 600: the ascent is now 0.53 m/s, so 37 units of water takes
+            // twelve simulated seconds rather than two.
+            for (int i = 0; i < 1200; i++) s = Step(s, new DroneFlight.Sticks { Ly = -1f });
             Assert.AreEqual(Water - DroneFlight.CeilingClearance, s.Pos.Y, 0.001f);
             Assert.LessOrEqual(s.Vel.Y, 0f);
         }

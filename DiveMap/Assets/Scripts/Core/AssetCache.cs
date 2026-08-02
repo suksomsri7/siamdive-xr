@@ -24,6 +24,89 @@ namespace DiveMap.Core
         /// <summary>220 MB, the shipped app's cap.</summary>
         public const long BudgetBytes = 220L * 1024L * 1024L;
 
+        /// <summary>
+        /// 🔴 Bump this when the bytes behind a CDN URL change without the URL changing.
+        ///
+        /// The cache is keyed by URL and nothing else — no ETag, no size, no expiry. That was fine
+        /// while a model's URL and its contents were the same fact. They are not: 444 GLBs on
+        /// <c>siamdive-cdn.b-cdn.net/models/xr/</c> were re-uploaded over their existing URLs to
+        /// repair NaN tangents (the black triangles), and every device that had already opened
+        /// those maps kept serving itself the broken copy — forever, because a hit is a hit and
+        /// nothing ever asked whether it was still the right file.
+        ///
+        /// Revalidating over the network was the obvious alternative and it is the wrong one here.
+        /// Bunny sends no <c>ETag</c>, and its <c>Last-Modified</c> is the moment the EDGE filled
+        /// its cache (measured: <c>last-modified</c> 03:33:57 against <c>cdn-cachedat</c> 03:33:58
+        /// on a file untouched since), so it changes every time an edge expires a file and a
+        /// conditional GET would re-download hundreds of MB of identical bytes — on a boat, over
+        /// mobile data, once per model per map open. A number compiled into the build costs
+        /// nothing, needs no signal, and cannot be wrong about its own build.
+        ///
+        /// An index row written before this field existed decodes as generation 0, which is
+        /// exactly the set of files that needs replacing.
+        /// </summary>
+        public const int Generation = 1;
+
+        /// <summary>
+        /// Is a cached file's generation still good enough to serve?
+        ///
+        /// <c>&gt;=</c>, not <c>==</c>: a device that ran a newer build and then rolled back (TestFlight
+        /// installs both ways) holds files NEWER than this build expects, and re-downloading them
+        /// would land the identical bytes, re-stamp them older, and hand the newer build the same
+        /// work back. Older is stale; newer is simply fine.
+        /// </summary>
+        public static bool IsFresh(int generation) => generation >= Generation;
+
+        /// <summary>
+        /// Do these bytes look like the WHOLE file we asked for?
+        ///
+        /// 🔴 The generation bump makes this necessary rather than merely tidy. Before it, a device
+        /// downloaded each model once and the odds of catching a bad response were whatever they
+        /// were on the day. Now every device in the field re-fetches its models exactly once — and
+        /// the place people open this app is a boat, on a captive-portal wifi that answers a GET
+        /// for a GLB with an HTML login page and a cheerful <c>200 OK</c>. Those bytes would be
+        /// written to disk, stamped with the CURRENT generation, and served forever: a permanently
+        /// broken model that the generation gate can never rescue, because it is not stale — it is
+        /// exactly as new as this build expects.
+        ///
+        /// The check is the glTF container's own header, which is the only thing here that can
+        /// answer "is this the file or a story about the file":
+        ///   • bytes 0-3  magic <c>glTF</c> — an HTML page, a JSON error, a redirect body all fail
+        ///   • bytes 8-11 total length — a download cut off mid-flight declares more than it has
+        ///
+        /// Deliberately conservative in both directions. A declared length SHORTER than the data is
+        /// accepted (trailing padding is legal and harmless), and anything that is not a
+        /// <c>.glb</c> — the <c>.solids.json</c> hulls ride this same cache — is accepted on being
+        /// non-empty, because this method must never be the reason a good file fails to cache.
+        /// Rejecting costs one re-download; accepting rubbish costs the model until "clear
+        /// downloads".
+        /// </summary>
+        public static bool LooksComplete(string url, byte[] data)
+        {
+            if (data == null || data.Length == 0) return false;
+            if (!IsGlb(url)) return true;
+
+            if (data.Length < 12) return false;
+            // "glTF", little-endian magic 0x46546C67.
+            if (data[0] != 0x67 || data[1] != 0x6C || data[2] != 0x54 || data[3] != 0x46) return false;
+
+            long declared = data[8]
+                          | ((long)data[9] << 8)
+                          | ((long)data[10] << 16)
+                          | ((long)data[11] << 24);
+            return declared >= 12 && declared <= data.Length;
+        }
+
+        /// <summary>Is this URL a GLB, ignoring any query or fragment on the end?</summary>
+        private static bool IsGlb(string url)
+        {
+            if (string.IsNullOrWhiteSpace(url)) return false;
+            string u = url.Trim();
+            int cut = u.IndexOfAny(new[] { '?', '#' });
+            if (cut >= 0) u = u.Substring(0, cut);
+            return u.EndsWith(".glb", StringComparison.OrdinalIgnoreCase);
+        }
+
         /// <summary>One cached file.</summary>
         public struct Entry
         {
@@ -31,6 +114,11 @@ namespace DiveMap.Core
             public long Bytes;
             /// <summary>Unix seconds when it was last read. Ties break by key, so eviction is stable.</summary>
             public long LastUsed;
+            /// <summary>
+            /// <see cref="Generation"/> at the time it was written. 0 for anything stored before
+            /// generations existed — see <see cref="Decode"/>.
+            /// </summary>
+            public int Gen;
         }
 
         /// <summary>
@@ -140,7 +228,7 @@ namespace DiveMap.Core
         public const string IndexKey = "assetCache";
 
         /// <summary>
-        /// <c>key:bytes:lastUsed</c> rows separated by newlines. A plain format on purpose: this
+        /// <c>key:bytes:lastUsed:gen</c> rows separated by newlines. A plain format on purpose: this
         /// has to survive being read by a future version, and a row that cannot be parsed is
         /// skipped rather than taking the index with it (a corrupt cache index that throws would
         /// mean the app cannot start).
@@ -153,11 +241,19 @@ namespace DiveMap.Core
             {
                 if (string.IsNullOrEmpty(e.Key) || e.Key.IndexOf(':') >= 0) continue;
                 if (sb.Length > 0) sb.Append('\n');
-                sb.Append(e.Key).Append(':').Append(Math.Max(0, e.Bytes)).Append(':').Append(e.LastUsed);
+                sb.Append(e.Key).Append(':').Append(Math.Max(0, e.Bytes)).Append(':').Append(e.LastUsed)
+                  .Append(':').Append(Math.Max(0, e.Gen));
             }
             return sb.ToString();
         }
 
+        /// <summary>
+        /// Read the index back. Three-column rows are the format that shipped before generations
+        /// existed and are kept readable rather than discarded — throwing them away would empty
+        /// every existing device's cache in one step, which is the exact outage ("no models, no
+        /// signal") that <see cref="AssetCache"/> exists to prevent. They decode at generation 0:
+        /// still on disk, still usable when there is no network, but no longer trusted as current.
+        /// </summary>
         public static List<Entry> Decode(string s)
         {
             var list = new List<Entry>();
@@ -167,10 +263,20 @@ namespace DiveMap.Core
             {
                 if (string.IsNullOrWhiteSpace(row)) continue;
                 string[] p = row.Split(':');
-                if (p.Length != 3) continue;
+                if (p.Length != 3 && p.Length != 4) continue;
                 if (!long.TryParse(p[1], out long bytes)) continue;
                 if (!long.TryParse(p[2], out long used)) continue;
-                list.Add(new Entry { Key = p[0], Bytes = Math.Max(0, bytes), LastUsed = used });
+
+                int gen = 0;
+                if (p.Length == 4 && !int.TryParse(p[3], out gen)) continue;
+
+                list.Add(new Entry
+                {
+                    Key = p[0],
+                    Bytes = Math.Max(0, bytes),
+                    LastUsed = used,
+                    Gen = Math.Max(0, gen),
+                });
             }
             return list;
         }

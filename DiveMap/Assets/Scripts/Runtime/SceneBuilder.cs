@@ -514,17 +514,31 @@ namespace DiveMap.Runtime
         ///
         /// Every failure path ends at the original URL, so the worst case is exactly the behaviour
         /// before this existed: glTFast tries, fails, and the item becomes a placeholder.
+        ///
+        /// 🔴 The order below is the fix for the black triangles. <see cref="AssetCacheStore.Resolve"/>
+        /// only hands back a copy written by the CURRENT generation, so the 444 GLBs repaired on
+        /// the CDN under their existing URLs are fetched again exactly once per device instead of
+        /// never. The stale copy is not deleted on the way: if that fetch fails we serve it rather
+        /// than a grey placeholder, so a map downloaded before the bump still opens on a boat with
+        /// no signal — out of date, which is what it always was, and not broken.
         /// </summary>
         private static async System.Threading.Tasks.Task<string> CachedUri(string url)
         {
             if (!DiveMap.Core.AssetCache.IsCacheable(url)) return url;
 
             string local = AssetCacheStore.Resolve(url);
-            if (!ReferenceEquals(local, url) && local != url) return local;   // already on the device
+            if (!ReferenceEquals(local, url) && local != url) return local;   // current copy on the device
 
             byte[] data = await AssetCacheStore.Download(url);
-            if (data == null) return url;                                     // offline → let it fail as before
-            return AssetCacheStore.Store(url, data) ? AssetCacheStore.FileUri(url) : url;
+            if (data != null)
+            {
+                // Bytes in hand. A failed WRITE is not a reason to serve the old file — hand
+                // glTFast the URL and let it fetch, exactly as before this cache existed.
+                return AssetCacheStore.Store(url, data) ? AssetCacheStore.FileUri(url) : url;
+            }
+
+            // No signal. An out-of-date copy beats no map at all.
+            return AssetCacheStore.StaleUri(url) ?? url;
         }
 
         // ── Collision hulls ("รูคือรู") ───────────────────────────────────────────
@@ -555,6 +569,11 @@ namespace DiveMap.Runtime
         /// EVERY failure returns null, and null means "this object keeps the single AABB it has
         /// today" — which is the whole safety story. Most models have no hull at all, so a 404 here
         /// is the normal case, not an incident.
+        ///
+        /// 🔴 The hull is cached by URL like the GLB is, so it inherited the same fault: a
+        /// <c>.solids.json</c> regenerated on the CDN under its existing name would never reach a
+        /// device that had already fetched the old one, and "ว่ายทะลุรูไม่ได้" would survive every
+        /// republish. It goes through the same generation gate for that reason.
         /// </summary>
         private static async Task<SolidBoxes.Model> LoadHull(string glbUrl)
         {
@@ -562,11 +581,24 @@ namespace DiveMap.Runtime
             if (url == null) return null;
             try
             {
-                string local = AssetCacheStore.Resolve(url);
-                byte[] data = await AssetCacheStore.Download(local);
-                if (data == null || data.Length == 0) return null;
-                if (local == url) AssetCacheStore.Store(url, data);   // came off the network — keep it
-                return SolidBoxes.Parse(System.Text.Encoding.UTF8.GetString(data));
+                // A current copy is read straight off the disk — no web request for a file we are
+                // already holding.
+                if (AssetCacheStore.Resolve(url) != url)
+                    return SolidBoxes.Parse(Utf8(AssetCacheStore.ReadLocal(url)));
+
+                byte[] fresh = await AssetCacheStore.Download(url);
+                if (fresh != null && fresh.Length > 0)
+                {
+                    AssetCacheStore.Store(url, fresh);
+                    return SolidBoxes.Parse(Utf8(fresh));
+                }
+
+                // 404 and "no signal" arrive here identically, and only one of them has a stale
+                // copy to fall back on. Most models publish no hull at all, so null is the
+                // ordinary answer and the object simply keeps its single AABB.
+                return AssetCacheStore.StaleUri(url) == null
+                    ? null
+                    : SolidBoxes.Parse(Utf8(AssetCacheStore.ReadLocal(url)));
             }
             catch (Exception e)
             {
@@ -574,6 +606,9 @@ namespace DiveMap.Runtime
                 return null;
             }
         }
+
+        private static string Utf8(byte[] data) =>
+            data == null || data.Length == 0 ? null : System.Text.Encoding.UTF8.GetString(data);
 
         /// <summary>
         /// This object's hull in world space, or null to keep its single AABB. Null for every one

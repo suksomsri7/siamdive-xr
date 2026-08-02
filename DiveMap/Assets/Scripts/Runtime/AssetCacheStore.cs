@@ -48,6 +48,12 @@ namespace DiveMap.Runtime
         public static int Misses { get; private set; }
         public static int Stored { get; private set; }
         public static int Evicted { get; private set; }
+        /// <summary>Files we had but would not serve because their generation is behind.</summary>
+        public static int StaleSkipped { get; private set; }
+        /// <summary>Times a stale file was served anyway because the network could not replace it.</summary>
+        public static int StaleServed { get; private set; }
+        /// <summary>Downloads refused because the bytes were not the whole file — see <see cref="Store"/>.</summary>
+        public static int Rejected { get; private set; }
 
         /// <summary>Everything on disk, from the index.</summary>
         public static List<AssetCache.Entry> Entries =>
@@ -64,6 +70,11 @@ namespace DiveMap.Runtime
             return key == null ? null : Path.Combine(Directory, key);
         }
 
+        /// <summary>
+        /// Is there a file on disk for this URL — of ANY generation? "We have something" and "we
+        /// have something worth serving" are different questions since generations existed; this
+        /// answers the first. Ask <see cref="Resolve"/> for the second.
+        /// </summary>
         public static bool Has(string url)
         {
             string p = PathFor(url);
@@ -71,22 +82,77 @@ namespace DiveMap.Runtime
         }
 
         /// <summary>
-        /// What to hand the loader: a local <c>file://</c> when we have it, otherwise the URL
-        /// unchanged. Touches the entry so eviction knows this model is still in use — a model
-        /// used every dive must not be dropped for one downloaded once and never opened again.
+        /// What to hand the loader: a local <c>file://</c> when we have a copy we still trust,
+        /// otherwise the URL unchanged. Touches the entry so eviction knows this model is still in
+        /// use — a model used every dive must not be dropped for one downloaded once and never
+        /// opened again.
+        ///
+        /// 🔴 "Still trust" is the whole point of this method now. Before generations, a file on
+        /// disk was served unconditionally, so the 444 GLBs repaired on the CDN under their
+        /// existing URLs never reached anyone who had opened those maps once. A copy written by an
+        /// older generation is deliberately NOT returned here — the caller goes to the network —
+        /// but it is not deleted either: <see cref="StaleUri"/> can still reach it if the network
+        /// turns out not to be there. Nothing is thrown away before its replacement is in hand.
         /// </summary>
         public static string Resolve(string url)
         {
-            string p = PathFor(url);
+            string key = AssetCache.KeyFor(url);
+            string p = key == null ? null : Path.Combine(Directory, key);
             if (p == null || !File.Exists(p))
             {
                 if (AssetCache.IsCacheable(url)) Misses++;
                 return url;
             }
 
+            List<AssetCache.Entry> all = Entries;
+            int at = IndexOf(all, key);
+
+            // On disk but not in the index — an index lost to a crash, or a build older than the
+            // index format. We cannot know which generation wrote it, so it is the oldest one.
+            // Adopt it at 0 so the budget can see it; the next successful download re-stamps it.
+            if (at < 0)
+            {
+                long size = 0;
+                try { size = new FileInfo(p).Length; } catch { }
+                if (size > 0) Record(key, size, 0);
+            }
+
+            int gen = at >= 0 ? all[at].Gen : 0;
+            if (!AssetCache.IsFresh(gen))
+            {
+                StaleSkipped++;
+                return url;                       // fetch the repaired bytes; keep the old file
+            }
+
             Hits++;
-            Touch(AssetCache.KeyFor(url));
+            Touch(all, at, key);
             return "file://" + p;
+        }
+
+        /// <summary>
+        /// The local copy whatever its generation, or null when there is none.
+        ///
+        /// The offline half of <see cref="Resolve"/>: a model we know is out of date is still a
+        /// model, and on a boat with no signal it is the difference between the dive the user
+        /// downloaded and a field of grey placeholders. Only ever reached after a download has
+        /// actually failed, so a device with a signal never sees the old file.
+        /// </summary>
+        public static string StaleUri(string url)
+        {
+            string p = PathFor(url);
+            if (p == null || !File.Exists(p)) return null;
+            StaleServed++;
+            return "file://" + p;
+        }
+
+        /// <summary>Bytes straight off the disk copy, any generation, or null. No web request for
+        /// a file we are holding.</summary>
+        public static byte[] ReadLocal(string url)
+        {
+            string p = PathFor(url);
+            if (p == null || !File.Exists(p)) return null;
+            try { return File.ReadAllBytes(p); }
+            catch (Exception e) { Debug.LogWarning("[Cache] cannot read " + p + ": " + e.Message); return null; }
         }
 
         /// <summary>The local URI for a file we know is there.</summary>
@@ -97,8 +163,23 @@ namespace DiveMap.Runtime
         }
 
         /// <summary>
+        /// A download that never comes back is worse than one that fails, because the caller's
+        /// fallback — the stale copy on disk — never gets its turn. 60 s clears the largest model
+        /// we ship (4.2 MB) on anything above ~600 kbps and still leaves half of SceneBuilder's
+        /// 120 s scene budget for the fallback to land.
+        /// </summary>
+        public const int TimeoutSeconds = 60;
+
+        /// <summary>
         /// Download the bytes. Returns null on any failure — offline, 404, timeout — because
         /// every one of those means the same thing to the caller: carry on without it.
+        ///
+        /// 🔴 The no-cache headers are not superstition. Bunny serves these models with
+        /// <c>cache-control: public, max-age=2592000</c> (measured), and this request goes out
+        /// through NSURLSession on iOS, which keeps its own shared URL cache on disk. Having just
+        /// decided the copy WE hold is out of date, being handed the platform's copy of the same
+        /// out-of-date bytes would defeat the generation check silently and look exactly like the
+        /// bug not being fixed. We only reach this method when we already want the network.
         /// </summary>
         public static Task<byte[]> Download(string url)
         {
@@ -106,6 +187,9 @@ namespace DiveMap.Runtime
             try
             {
                 UnityWebRequest req = UnityWebRequest.Get(url);
+                req.timeout = TimeoutSeconds;
+                req.SetRequestHeader("Cache-Control", "no-cache");
+                req.SetRequestHeader("Pragma", "no-cache");
                 UnityWebRequestAsyncOperation op = req.SendWebRequest();
                 op.completed += _ =>
                 {
@@ -132,6 +216,21 @@ namespace DiveMap.Runtime
         public static bool Store(string url, byte[] data)
         {
             if (data == null || data.Length == 0) return false;
+
+            // 🔴 Never stamp rubbish with the current generation. A half-arrived download or a
+            // captive portal's HTML login page (served 200, which is how a boat's wifi answers
+            // everything) would otherwise be cached as a model and served for good — the one
+            // failure the generation gate cannot undo, because such a file is not stale.
+            // Refusing costs a re-fetch: the caller falls back to the network URL, as it did
+            // before this cache existed.
+            if (!AssetCache.LooksComplete(url, data))
+            {
+                Rejected++;
+                Debug.LogWarning($"[Cache] refusing {data.Length} B for {url} — not a complete GLB " +
+                                 "(truncated download, or a portal/error page served as 200)");
+                return false;
+            }
+
             string key = AssetCache.KeyFor(url);
             string path = PathFor(url);
             if (key == null || path == null) return false;
@@ -152,7 +251,7 @@ namespace DiveMap.Runtime
             }
 
             Stored++;
-            Record(key, data.Length);
+            Record(key, data.Length, AssetCache.Generation);
             Enforce();
             return true;
         }
@@ -170,37 +269,34 @@ namespace DiveMap.Runtime
 
         private static long Now => DateTimeOffset.UtcNow.ToUnixTimeSeconds();
 
-        private static void Record(string key, long bytes)
+        private static int IndexOf(List<AssetCache.Entry> all, string key)
+        {
+            for (int i = 0; i < all.Count; i++) if (all[i].Key == key) return i;
+            return -1;
+        }
+
+        private static void Record(string key, long bytes, int gen)
         {
             List<AssetCache.Entry> all = Entries;
-            for (int i = 0; i < all.Count; i++)
-            {
-                if (all[i].Key != key) continue;
-                all[i] = new AssetCache.Entry { Key = key, Bytes = bytes, LastUsed = Now };
-                Save(all);
-                return;
-            }
-            all.Add(new AssetCache.Entry { Key = key, Bytes = bytes, LastUsed = Now });
+            var row = new AssetCache.Entry { Key = key, Bytes = bytes, LastUsed = Now, Gen = gen };
+            int at = IndexOf(all, key);
+            if (at >= 0) all[at] = row; else all.Add(row);
             Save(all);
         }
 
-        private static void Touch(string key)
+        /// <summary>Mark an already-decoded entry as used just now. <paramref name="at"/> below zero
+        /// means it is not in the index, which <see cref="Resolve"/> has already dealt with.</summary>
+        private static void Touch(List<AssetCache.Entry> all, int at, string key)
         {
-            List<AssetCache.Entry> all = Entries;
-            for (int i = 0; i < all.Count; i++)
+            if (at < 0 || at >= all.Count) return;
+            all[at] = new AssetCache.Entry
             {
-                if (all[i].Key != key) continue;
-                all[i] = new AssetCache.Entry { Key = key, Bytes = all[i].Bytes, LastUsed = Now };
-                Save(all);
-                return;
-            }
-
-            // On disk but not in the index — an index lost to a crash, or an older build. Adopt it
-            // rather than ignore it, or the file would never be counted and never evicted.
-            string path = Path.Combine(Directory, key);
-            long size = 0;
-            try { if (File.Exists(path)) size = new FileInfo(path).Length; } catch { }
-            if (size > 0) Record(key, size);
+                Key = key,
+                Bytes = all[at].Bytes,
+                LastUsed = Now,
+                Gen = all[at].Gen,     // touching is not re-validating
+            };
+            Save(all);
         }
 
         private static void Save(List<AssetCache.Entry> all)

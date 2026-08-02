@@ -1279,11 +1279,19 @@ namespace DiveMap.Runtime.Ui
                 // `files=` matters: the counters are per-process, so a second launch legitimately
                 // reports stored=0 while every model came off the disk. Without the on-disk count
                 // that line reads like the cache did nothing.
+                // staleSkipped/staleServed are the generation gate reporting itself: after a bump
+                // the first run shows skipped>0 and served=0 (it re-fetched), and only a run with
+                // no signal shows served>0. "0/0" on a device that has never seen an older
+                // generation is the correct quiet answer, not a broken counter.
                 Debug.Log($"[QC] offline assets files={AssetCacheStore.Entries.Count} " +
                           $"stored={AssetCacheStore.Stored} " +
                           $"hits={AssetCacheStore.Hits} misses={AssetCacheStore.Misses} " +
+                          $"staleSkipped={AssetCacheStore.StaleSkipped} " +
+                          $"staleServed={AssetCacheStore.StaleServed} " +
+                          $"rejected={AssetCacheStore.Rejected} " +
                           $"evicted={AssetCacheStore.Evicted} size={AssetCacheStore.TotalLabel} " +
-                          $"(cap {DiveMap.Core.AssetCache.FormatSize(DiveMap.Core.AssetCache.BudgetBytes)})");
+                          $"(gen {DiveMap.Core.AssetCache.Generation}, " +
+                          $"cap {DiveMap.Core.AssetCache.FormatSize(DiveMap.Core.AssetCache.BudgetBytes)})");
                 ScreenCapture.CaptureScreenshot(prefix + "_ar.png");
                 Debug.Log("[UI] qcui shot -> " + prefix + "_ar.png");
                 yield return new WaitForSecondsRealtime(1.2f);
@@ -1343,9 +1351,11 @@ namespace DiveMap.Runtime.Ui
                 Debug.Log("[UI] qcui shot -> " + prefix + "_game.png");
                 yield return new WaitForSecondsRealtime(1.2f);
 
-                // 6.8) C5 — charge the scad shoal. Fear only exists above 11 u/s
-                // (FleeMath.DiverPanicSpeed), so a parked drone proves nothing: this is the only
-                // way the QC eye can tell "the fish scatter" from "the fish are indifferent".
+                // 6.8) C5 — charge the scad shoal. Fear only exists above FleeMath.DiverPanicSpeed
+                // (a third of the drone's top speed — 3.3 u/s now that the drone does 9, not the
+                // literal 11 it was while the drone did 30), so a parked drone proves nothing:
+                // this is the only way the QC eye can tell "the fish scatter" from "the fish are
+                // indifferent".
                 var reef = FindFirstObjectByType<Marine.FishSchoolSystem>();
                 TourController tour = TourController.Active;
                 if (reef != null && tour != null &&
@@ -1357,15 +1367,15 @@ namespace DiveMap.Runtime.Ui
                     // up). Starting just outside it looked fairer but was not a test: at CI speed
                     // the drone closed one unit per second and reached 92 of a 93-unit radius by
                     // the time the shutter went — panic 0.01, and a picture proving nothing. The
-                    // speed rule is still honoured; the log shows the drone passing 11 u/s.
+                    // speed rule is still honoured; the log prints the drone's m/s next to its cap.
                     tour.QcPlaceNear(shoal, (float)DiveMap.Core.FleeMath.DiverPanicRadius(shoalR, 4.2) * 0.3f);
                     yield return new WaitForSecondsRealtime(0.3f);
                     tour.QcChargeToward(shoal);
-                    // Wait in FRAMES, not seconds. The drone accelerates by a fixed 9 % per FRAME
-                    // (DroneFlight.Inertia is deliberately not dt-scaled — it is the web's rule),
-                    // so on a 3 fps runner five seconds of wall clock is fifteen frames and the
-                    // drone never reaches the 11 u/s that frightens anything. Sixty frames gets it
-                    // to ~99 % of cruise on any machine; on a phone that is one second.
+                    // Wait in FRAMES, not seconds. Sixty frames gets the drone to ~99 % of cruise
+                    // at 60 fps, and DroneFlight.FrameLerp now compounds the 9 % thrust response
+                    // over the frame's own length, so a 3 fps runner reaches cruise in FEWER
+                    // frames rather than never — which is what the old fixed-per-frame rule did to
+                    // this very shot.
                     for (int f = 0; f < 60; f++) yield return null;
                     ScreenCapture.CaptureScreenshot(prefix + "_flee.png");
                     Debug.Log("[UI] qcui shot -> " + prefix + "_flee.png");
