@@ -999,7 +999,9 @@
    "animated": false,
    "school": 100,
    "fx": null,
-   "behavior": null
+   "behavior": null,
+   "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/school_batfish_xr0.glb",
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/school_batfish_xr1.glb"
   },
   {
    "id": "school:parrotfish_prismatic",
@@ -1011,7 +1013,9 @@
    "animated": false,
    "school": 20,
    "fx": null,
-   "behavior": null
+   "behavior": null,
+   "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/school_parrotfish_prismatic_xr0.glb",
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/school_parrotfish_prismatic_xr1.glb"
   },
   {
    "id": "pod:orca",
@@ -2339,7 +2343,9 @@
    "animated": false,
    "school": null,
    "fx": null,
-   "behavior": null
+   "behavior": null,
+   "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/mdl_whitetip_shark_xr0.glb",
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/mdl_whitetip_shark_xr1.glb"
   },
   {
    "id": "mdl:dorado",
@@ -2351,7 +2357,9 @@
    "animated": false,
    "school": null,
    "fx": null,
-   "behavior": null
+   "behavior": null,
+   "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/mdl_dorado_xr0.glb",
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/mdl_dorado_xr1.glb"
   },
   {
    "id": "mdl:batfish",
@@ -2377,7 +2385,9 @@
    "animated": false,
    "school": null,
    "fx": null,
-   "behavior": null
+   "behavior": null,
+   "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/mdl_batfish_juvenile_xr0.glb",
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/mdl_batfish_juvenile_xr1.glb"
   },
   {
    "id": "mdl:coralfish",
@@ -2403,7 +2413,9 @@
    "animated": false,
    "school": null,
    "fx": null,
-   "behavior": null
+   "behavior": null,
+   "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/mdl_sardine_xr0.glb",
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/mdl_sardine_xr1.glb"
   },
   {
    "id": "mdl:seal",
@@ -2443,7 +2455,9 @@
    "animated": false,
    "school": null,
    "fx": null,
-   "behavior": null
+   "behavior": null,
+   "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/mdl_penguin_emperor_xr0.glb",
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/mdl_penguin_emperor_xr1.glb"
   },
   {
    "id": "mdl:leafy_seadragon",
@@ -2455,7 +2469,9 @@
    "animated": false,
    "school": null,
    "fx": null,
-   "behavior": null
+   "behavior": null,
+   "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/mdl_leafy_seadragon_xr0.glb",
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/mdl_leafy_seadragon_xr1.glb"
   },
   {
    "id": "mdl:giant_clam",
@@ -2467,7 +2483,9 @@
    "animated": false,
    "school": null,
    "fx": null,
-   "behavior": null
+   "behavior": null,
+   "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/mdl_giant_clam_xr0.glb",
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/mdl_giant_clam_xr1.glb"
   },
   {
    "id": "sw:buoy_red",
@@ -2479,7 +2497,9 @@
    "animated": false,
    "school": null,
    "fx": null,
-   "behavior": null
+   "behavior": null,
+   "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/sw_buoy_red_xr0.glb",
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/sw_buoy_red_xr1.glb"
   },
   {
    "id": "sw:buoy_yellow",
@@ -2505,7 +2525,9 @@
    "animated": false,
    "school": null,
    "fx": null,
-   "behavior": null
+   "behavior": null,
+   "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/sw_boonsung_xr0.glb",
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/sw_boonsung_xr1.glb"
   },
   {
    "id": "sw:htms732",
@@ -2531,7 +2553,9 @@
    "animated": false,
    "school": null,
    "fx": null,
-   "behavior": null
+   "behavior": null,
+   "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/sw_kingcruiser_xr0.glb",
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/sw_kingcruiser_xr1.glb"
   },
   {
    "id": "sw:golden_trident",
