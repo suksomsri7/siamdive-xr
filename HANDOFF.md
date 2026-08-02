@@ -363,3 +363,37 @@ WO-XR-04 (ปลา GLB จริง + caustics/FX) ↔ WO-XR-02m AR (ARCore) �
 2. reviewer รอ CI เสร็จ → โหลด qc-screenshot 2 มุม + player log → เทียบ side-by-side กับภาพเว็บอ้างอิง + ตรวจตัวเลขใน log
 3. reviewer เขียน verdict: ผ่าน / ไม่ผ่าน+สาเหตุ+สมมติฐานเรียงลำดับ → ส่งเป็น work order รอบถัดไป
 4. ประวัติ QC ที่ผ่านมา (บทเรียนสำคัญ): เรือจม=pivot ไม่ ground, มืด=metallic ไร้ reflection, ปลาหาย=llvmpipe instancing, ปลายักษ์=ตีความ scale ผิดชั้น (item.s = ขนาดก้อนฝูง ไม่ใช่ปลารายตัว) — **อย่าเดา ให้อ่านโค้ดเว็บ/ข้อมูล API เป็นเลขจริงก่อนตั้งค่าเสมอ**
+
+---
+
+## §6 — Session 2026-08-02→03 (มาราธอนปิด 4 เป้า + คดีปื้นดำ) — จุดต่องานสำหรับ session ใหม่
+
+### สถานะ ณ จบ session
+- main = `b391101` · **build TestFlight ยิงแล้ว run `30771246633`** (workflow_dispatch ios=true) — เช็คผล: `gh run view 30771246633` ถ้า UPLOAD SUCCEEDED รอ user เทส
+- เทส EditMode ~351 (`bash tools/test.sh` รัน pure-logic บนเครื่องได้ ไม่ต้องรอ CI · `tools/check.sh` = Roslyn syntax)
+- ใน build นี้: สมองสัตว์เต็มระบบ (FishMind+SpeciesBehavior 94 แถว+HuntMath+Solo 88 ตัว) · SwimStyle+body wave · โดรน 9u/s=1.5m/s + spawn ที่ warp gate · OBB frame-space collision + push-out 6 หน้า · แคช Generation=2 + LooksComplete · จอ QC โหลดโมเดลจริง 6 ตัว + probe 7 เฟรม + gate baseline
+
+### คดีปื้นดำ (ปิดแล้ว — อ่านบล็อก "the black-patch case, closed" หัว SceneBuilder.TameMetal)
+ราก 3 ชั้น: ① tangent NaN ในไฟล์ (ซ่อม 444) ② แคชไม่รับไฟล์ซ่อม (Generation gate) ③ **UV gutter ดำ + chart seam → GPU เลือก LOD ลึก = ค่าเฉลี่ย atlas มืด** → แก้ที่ pipeline: jump-flood gutter dilation (`siamdive-xr-models/dilate_gutter.mjs` + `glb_swap_image.py` — สลับ texture โดย geometry ไม่ขยับ 1 ไบต์ → solids ตรงเดิม) ทำแล้ว 5 โมเดล 10 ไฟล์
+- MR texture คืนแล้ว (สี/วาวจริงโชว์ครั้งแรก) · **normal map ยังถอดใน Gamma** (sRGB misdecode 53.4°/texel — คืนอัตโนมัติเมื่อย้าย Linear, เงื่อนไขใน `GlbShading.NormalMapIsMisdecoded`)
+- วิธีที่ชนะ: probe A/B ในเฟรมจริง (whiteAlbedo/noMetalRough/meshNormals/whiteGltf/greyAlbedo/mipBias) + 4 verdict — สมมติฐานผิด 5 ตัวตายด้วยการวัด: etc1s transcode bit-identical · mip bleed ไม่แตะผิว · normal map A/B 10.92→10.92 · env cube ลดแล้วแย่ลง (มันพยุงเงา) · bias ไม่มีค่าที่แยก seam(LOD7-10) จากปกติ(1.01)
+
+### กติกาที่เพิ่มใน session นี้ (ห้ามลืม)
+1. **หลักฐานภาพต้องมาจากตัว Unity เท่านั้น** — เว็บ render/proxy ไม่นับ (user จับได้ว่าลักไก่ 1 ครั้ง)
+2. gate `darker-than-baseline` ต่อโมเดล — **เปลี่ยน lighting/material pipeline เมื่อไหร่ ต้อง re-record baseline หลังมองรูปด้วยตา** (`QcModelShot.DarkBaselines`)
+3. เฟรมเดียวแยก "ลายเข้มจริง" จาก "ปื้นเสีย" ไม่ได้ — วัดพิสูจน์แล้ว 3 metric
+4. อย่าใส่ mipMapBias (biasVerdict=no-mottle แล้ว — มี regression guard ในเทส)
+5. dilation batch กว้าง: เกณฑ์คัดคือ **dLum@mip5 ติดลบ** (`mipdrift.mjs`) ไม่ใช่ lum<0.5
+
+### คิวถัดไป (เรียงความสำคัญ)
+1. รอ user เทส build บนไอโฟน (ลอดรู T-13/ช้าง · ซุ้ม Atlantis · โดรนช้า+spawn warp · ปลามีสมอง · รูปปั้นสี-วาวจริง)
+2. **Linear color space migration** — คืน normal map ทั้งระบบ (เทียบภาพทั้งแอปก่อน)
+3. dilation batch กว้างทั้งแคตตาล็อก (คัดด้วย mipdrift)
+4. hero animal ไม่เคยใช้ LOD1 (`SceneBuilder.LoadBigAnimalAsync` ไม่เรียก ResolveLod1Url — ประหยัด 71%/ตัว)
+5. GoldFx.ApplyGold เป็น no-op (ชื่อ property ไม่ตรง glTF shader) · env spec ฟ้าแบน (cubemap 4×4 ไม่มี mip — **ห้ามลด intensity เดี่ยวๆ** วัดแล้วแย่ลง ต้องแก้เป็นชุด)
+6. pod:yellowtail รอ raw trevally จาก user · cor:crimson1/nat:peak ต้องหา asset ใหม่ · procedural 19 ตัวถ้าจะสวยต้องสร้างใหม่ (Meshy)
+7. WhaleController → SoloAnimalController rename (จุดอ้าง 6 ที่ — ดู §5.4) · roamR วาฬจาก cfg (170 vs 98 กระทบเฟรมช็อต QC)
+8. เว็บ: cache เบราว์เซอร์เก่าเห็นซุ้ม Atlantis เดิมได้ถึง 1 ปี (immutable) — เติม query string ฝั่ง builder.html หลังเทส offline shim
+
+### โมเดล (245/275 ชี้ Bunny 2048²)
+ledger ทั้งหมดใน `/root/projects/siamdive-xr-models/*.jsonl` (commit `0cd3674`) · raw archive `/root/asset-masters/` + `predilation_backup/` (rollback dilation ได้) · maps repo = `4d8a1d7`
