@@ -107,12 +107,29 @@ namespace DiveMap.Runtime
         //     cream sand settles to a natural tone. Barely moves the metallic wreck.
         //   • Sun soft-shadow strength eased so the camera-facing hull isn't a hard black
         //     self-shadow band (ambient + reflection now fill it).
+        //
+        // 🔴 That diagnosis is TRUE OF THE WRECK AND OF NOTHING ELSE. Do not reach for it again.
+        // The marine and statue GLBs were pulled and their KTX2 maps decoded (thresher, tiger,
+        // blacktip, whitetip, leopard, hammerhead, great white, Stone_King, white_cluster): every
+        // one of them declares metallicFactor 1 but ships a metallic-roughness texture whose blue
+        // channel averages 1-5 out of 255. That is 0.004 metal — a dielectric. The reflection
+        // cubemap contributes about 3% to them and the metallic tame-down in SceneBuilder skips
+        // them by design. Their base colour maps average sRGB 108-202; they are BRIGHT models.
+        // When one of these goes black it is the ambient, not the material. See UnderwaterShading.
         private void SetupLighting()
         {
             RenderSettings.ambientMode         = UnityEngine.Rendering.AmbientMode.Trilight;
             RenderSettings.ambientSkyColor     = new Color(0.348f, 0.478f, 0.574f); // r4 −13% (sand still cream vs web); boat lit by reflection cube, ~unaffected
-            RenderSettings.ambientEquatorColor = new Color(0.278f, 0.392f, 0.461f); // r4 −13% down (sand faces up = sky+equator ambient)
-            RenderSettings.ambientGroundColor  = new Color(0.20f, 0.28f, 0.31f); // 0x123040 lifted (no black undersides)
+            // 🔴 The two lower bands lifted (equator 0.278→0.315, ground 0.20→0.235) after the
+            // "sharks are black on Posidon" report. These are the only light a surface gets when it
+            // is not facing the sun, and the sand — which faces straight up into the SKY band and
+            // straight into the sun — was reading ten times brighter than a shark's flank in the
+            // same frame. The deep-water half of that fix is <see cref="UnderwaterShading"/>; this
+            // is the part that also helps the map view, where the depth floor deliberately does
+            // nothing. Kept monotonic (sky > equator > ground) so objects still shade top to bottom
+            // instead of going flat.
+            RenderSettings.ambientEquatorColor = new Color(0.315f, 0.430f, 0.500f);
+            RenderSettings.ambientGroundColor  = new Color(0.235f, 0.325f, 0.375f); // 0x123040 lifted (no black undersides)
             // WO-XR-04.3: the web's underwater fog — THREE.Fog(0x123a55, near, far) with
             // near = max(500, reach·1.1) and far = max(9000, maxD·3.4). At orbit distance this
             // is only a 3-7% wash (Fable's survey), and that is the point: it must colour the
@@ -152,10 +169,25 @@ namespace DiveMap.Runtime
                 sun.type = LightType.Directional;
             }
             sun.color = new Color(1f, 0.957f, 0.839f); // 0xfff3df
-            sun.intensity = 1.0f;                      // r2 1.05 → eased (sand highlight)
+            // r2 1.05 → 1.0 → 0.82. Under 50 m of water the sun is not a key light any more, it is
+            // a direction; the light that reaches you is overwhelmingly scattered and comes from
+            // everywhere. The rig here was an above-water rig — one hard directional plus a thin
+            // ambient — and that is precisely the combination that gives bright up-facing sand, a
+            // hard terminator across a statue, and no light at all on a shark's flank. Trading a
+            // fifth of the sun for the ambient lift above keeps the sand where it was (it was
+            // clipping to white in wide shots anyway) and gives every vertical surface something.
+            sun.intensity = 0.82f;
             sun.transform.rotation = Quaternion.Euler(52f, -35f, 0f); // high, angled — web pos (60,160,70)
             sun.shadows = LightShadows.Soft;
             sun.shadowStrength = 0.5f;                 // was 1.0 — soften the wreck's self-shadow band
+            // 🔴 ProjectSettings ships Android and iPhone on quality level 2 ("Medium"), which is
+            // pixelLightCount = 1. ONE per-pixel light on the phone, whatever the editor or the CI
+            // screenshots (level 5, four lights) suggest. With the drone out there are five lights
+            // in the scene and the auto ranking is by intensity and distance, so a 2.6 headlamp
+            // spot right next to a statue could take the only slot and drop the sun — leaving the
+            // statue lit by a cone with hard black either side of it. Pinning the sun to per-pixel
+            // costs nothing (it already held the slot most of the time) and makes it deterministic.
+            sun.renderMode = LightRenderMode.ForcePixel;
             RenderSettings.sun = sun;
 
             // Fill light: cool bounce from the far side so the wreck's shadowed hull reads
@@ -173,6 +205,12 @@ namespace DiveMap.Runtime
             fill.color = new Color(0.247f, 0.471f, 0.659f); // 0x3f78a8
             fill.intensity = 0.65f;                          // r2 0.55 → a touch more lift on the shadowed hull
             fill.transform.rotation = Quaternion.Euler(-14f, 145f, 0f); // opposite/low — web pos (-90,40,-70)
+            // ⚠️ On the phone this light is NOT per-pixel (see the note on the sun): with one slot
+            // and the sun holding it, the fill is folded into the ambient probe instead. Tuning its
+            // intensity therefore does much less on a device than it appears to do in a CI
+            // screenshot — the job it was hired for, opening up shadowed undersides, is carried by
+            // ambientGroundColor above and by the underwater floor. Left in because in SH it still
+            // costs nothing and it does hold the Windows/desktop build together.
         }
 
         // A tiny uniform-colour cubemap used as the scene's custom reflection. Built-in RP
@@ -296,6 +334,9 @@ namespace DiveMap.Runtime
             ArSession.Configure(result);   // F1 — AR needs the footprint to place the viewer
             EnvMode.Reset();   // new scene, new lights/water to capture
             DepthAtmosphere.Configure(result.WaterLevel);   // shallow bright, deep dark and blue
+            // …and the floor under all of that: however many dimmers stack on the way down, an
+            // object underwater is never lit by less than the water it is standing in.
+            UnderwaterShading.Configure(result.WaterLevel);
             Ui.PerfHud.Apply();   // A7 — rebuild the readout if the player left it on
 
             // D9/E8 — a diver who left through a warp gate lands IN the destination, at a random
@@ -500,6 +541,7 @@ namespace DiveMap.Runtime
             TourController.Configure(result);
             ArSession.Configure(result);   // F1 — AR needs the footprint to place the viewer
             EnvMode.Reset();
+            UnderwaterShading.Configure(result.WaterLevel);
             Ui.PerfHud.Apply();
 
             if (result.Root != null && result.WaterLevel > result.FrameMinY + 5f)

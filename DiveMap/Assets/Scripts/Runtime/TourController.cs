@@ -39,6 +39,15 @@ namespace DiveMap.Runtime
 
         private DroneFlight.State _state;
         private DroneFlight.Box[] _solids = new DroneFlight.Box[0];
+        // Every solid object twice over: the single AABB it has always had, and the hull that
+        // leaves its openings open where the model publishes one. _solids is the slice of these
+        // the drone actually carries this stretch of the dive — see RefreshSolids.
+        private List<SolidBoxes.Group> _solidGroups = new List<SolidBoxes.Group>();
+        private readonly List<SolidBoxes.Box> _solidPick = new List<SolidBoxes.Box>();
+        private Vector3 _solidsAt;
+        private bool _solidsPicked;
+        private bool _anyHull;
+        private int _detailedLast = -1;
         private float _waterLevel = 240f;
         private float _scaleX = 1f, _scaleZ = 1f;
         private Vector3 _homeCenter;
@@ -67,16 +76,39 @@ namespace DiveMap.Runtime
             }
 
             int n = obstacles != null ? obstacles.Count : 0;
-            tc._solids = new DroneFlight.Box[n];
-            for (int i = 0; i < n; i++)
+
+            // The diver's own view of the scenery. A build that carries hulls hands them over
+            // here; anything else (an older build result, a map whose models publish nothing)
+            // falls back to one box per object — bit for bit the array this method used to make.
+            if (r.Solids != null && r.Solids.Count > 0)
             {
-                ObstacleBox o = obstacles[i];
-                tc._solids[i] = new DroneFlight.Box
-                {
-                    MinX = o.Min.x, MinY = o.Min.y, MinZ = o.Min.z,
-                    MaxX = o.Max.x, MaxY = o.Max.y, MaxZ = o.Max.z,
-                };
+                tc._solidGroups = r.Solids;
             }
+            else
+            {
+                var plain = new List<SolidBoxes.Group>(n);
+                for (int i = 0; i < n; i++)
+                {
+                    ObstacleBox o = obstacles[i];
+                    plain.Add(new SolidBoxes.Group
+                    {
+                        Coarse = SolidBoxes.Box.FromMinMax(o.Min.x, o.Min.y, o.Min.z,
+                                                           o.Max.x, o.Max.y, o.Max.z),
+                        Fine = null,
+                    });
+                }
+                tc._solidGroups = plain;
+            }
+            // No model on this map publishes a hull — which is every map until the CDN has the
+            // files — so the pick can never change and is made once, exactly as before.
+            tc._anyHull = false;
+            for (int i = 0; i < tc._solidGroups.Count && !tc._anyHull; i++)
+                tc._anyHull = tc._solidGroups[i].Fine != null && tc._solidGroups[i].Fine.Length > 0;
+
+            tc._solids = new DroneFlight.Box[0];
+            tc._solidsPicked = false;
+            tc._detailedLast = -1;
+
             tc._waterLevel = waterLevel;
             tc._scaleX = scaleX;
             tc._scaleZ = scaleZ;
@@ -84,11 +116,15 @@ namespace DiveMap.Runtime
             tc._animalIds = r.AnimalIds;
 
             // The minimap needs the same world the drone flies in: footprint, solids, schools.
+            // ONE dot per object, from the coarse list — a minimap that drew a module's every
+            // strut would be a grey smear where the wreck used to be.
             var solidCentres = new List<Vector3>();
-            for (int i = 0; i < tc._solids.Length; i++)
-                solidCentres.Add(new Vector3((tc._solids[i].MinX + tc._solids[i].MaxX) * 0.5f,
-                                             0f,
-                                             (tc._solids[i].MinZ + tc._solids[i].MaxZ) * 0.5f));
+            for (int i = 0; i < n; i++)
+            {
+                ObstacleBox o = obstacles[i];
+                solidCentres.Add(new Vector3((o.Min.x + o.Max.x) * 0.5f, 0f,
+                                             (o.Min.z + o.Max.z) * 0.5f));
+            }
             tc._miniSolids = solidCentres;
             tc._miniSchools = r.SchoolAnchors ?? new List<Vector3>();
             tc._homeCenter = r.FrameCenter;
@@ -186,6 +222,8 @@ namespace DiveMap.Runtime
                 Yaw = startYaw,
             };
 
+            RefreshSolids(start, force: true);
+
             _hud = TourHud.Ensure();
             Ui.MinimapWidget.Configure(_homeCenter, SeabedGeom.SandRadius * Mathf.Max(_scaleX, _scaleZ),
                                        _miniSolids, _miniSchools, _animals);
@@ -216,6 +254,61 @@ namespace DiveMap.Runtime
             // D10 — coach a first dive, once per device. Delayed like the web (700 ms) because the
             // HUD is still fading in and a spotlight needs something laid out to point at.
             StartCoroutine(CoachFirstDive());
+        }
+
+        /// <summary>
+        /// Re-pick the boxes the diver collides with, near-first.
+        ///
+        /// 🔴 THE BUDGET, and why it is this one. <see cref="DroneFlight.Step"/> walks the whole
+        /// array every frame of the dive, on a phone:
+        ///
+        ///   today            494 objects × 1 box  =    494   (T-13, the biggest map we ship)
+        ///   hulls for all    494 × 64             = 31,616   — sixty-four times the work, forever
+        ///   here             ≤ 2,048 hull boxes + 1 box per object left over ≈ 2,542 worst case
+        ///
+        /// The number that made this affordable is not the cap, it is the RADIUS: you can only
+        /// swim through a hole you are next to, so the nearest <see cref="SolidBoxes.DetailRadius"/>
+        /// units carry real hulls and the rest of the map carries exactly what it carries today.
+        /// A flat cap with no radius would have given holes to the first 32 of T-13's 394 identical
+        /// frames and left the other 362 as bricks — the same report, a third time.
+        ///
+        /// Re-picked on DISTANCE travelled, not on a frame count and not on a timer: the tour runs
+        /// at 3 fps on CI and 60 on a phone (HANDOFF §4 rule 13), and distance is the only trigger
+        /// that means the same thing on both.
+        /// </summary>
+        private void RefreshSolids(Vector3 at, bool force)
+        {
+            if (!force && _solidsPicked)
+            {
+                if (!_anyHull) return;   // nothing to swap in — the pick is already final
+                float move = (float)SolidBoxes.RefreshMove;
+                if ((at - _solidsAt).sqrMagnitude < move * move) return;
+            }
+
+            int detailed = SolidBoxes.Select(_solidGroups, new Vec3(at.x, at.y, at.z), _solidPick);
+
+            if (_solids.Length != _solidPick.Count) _solids = new DroneFlight.Box[_solidPick.Count];
+            for (int i = 0; i < _solidPick.Count; i++)
+            {
+                SolidBoxes.Box b = _solidPick[i];
+                _solids[i] = new DroneFlight.Box
+                {
+                    MinX = (float)b.Min.X, MinY = (float)b.Min.Y, MinZ = (float)b.Min.Z,
+                    MaxX = (float)b.Max.X, MaxY = (float)b.Max.Y, MaxZ = (float)b.Max.Z,
+                };
+            }
+
+            _solidsAt = at;
+            _solidsPicked = true;
+
+            // Only when it changes — this runs a couple of times a second — but ALWAYS on the
+            // first pick, including the "near=0" case that says no model on this map has a hull.
+            if (detailed != _detailedLast)
+            {
+                Debug.Log($"[Solids] near={detailed}/{_solidGroups.Count} boxes={_solids.Length} " +
+                          $"budget={SolidBoxes.DiverBoxBudget} radius={SolidBoxes.DetailRadius:F0}u");
+                _detailedLast = detailed;
+            }
         }
 
         private System.Collections.IEnumerator CoachFirstDive()
@@ -381,6 +474,10 @@ namespace DiveMap.Runtime
             Vector3 probe = new Vector3(_state.Pos.X + _state.Vel.X * dt, 0f,
                                         _state.Pos.Z + _state.Vel.Z * dt);
             float seabedY = SeabedY(probe);
+
+            // Swap in the hulls of whatever is close enough to swim into — a no-op until the diver
+            // has actually moved (see RefreshSolids for the budget).
+            RefreshSolids(new Vector3(_state.Pos.X, _state.Pos.Y, _state.Pos.Z), force: false);
 
             _state = DroneFlight.Step(_state, sticks, dt, seabedY, _waterLevel,
                                       _solids, _scaleX, _scaleZ);

@@ -43,9 +43,20 @@ namespace DiveMap.Runtime
             /// <summary>env.waterLevel of this map — the surface the sun shafts start from.</summary>
             public float WaterLevel;
 
-            /// <summary>Solid decor as world AABBs — the fish steer around these and, from P1.1,
-            /// so does the drone.</summary>
+            /// <summary>Solid decor as world AABBs — one per object. The fish steer around these,
+            /// the minimap plots them, and the info card picks against them.</summary>
             public List<ObstacleBox> Obstacles;
+
+            /// <summary>
+            /// The same decor for the DIVER: each object's single AABB plus, where the model
+            /// publishes one, the hull that leaves its openings open ("รูคือรู"). One entry per
+            /// entry in <see cref="Obstacles"/>, in the same order.
+            ///
+            /// Kept apart from <see cref="Obstacles"/> on purpose: <c>BoidsJob</c> walks the
+            /// obstacle array once PER FISH per frame (1,100 of them), so a hull that is a
+            /// bargain for one diver is 64× the work for the reef.
+            /// </summary>
+            public List<SolidBoxes.Group> Solids;
 
             /// <summary>Seabed footprint stretch (areaScale × areaScaleX/Z) — the tour needs it
             /// to keep the drone inside the map.</summary>
@@ -208,6 +219,7 @@ namespace DiveMap.Runtime
             // ── Items ─────────────────────────────────────────────────────────────
             IReadOnlyList<SceneItem> items = scene?.Items() ?? new List<SceneItem>();
             var decorGos = new List<GameObject>();   // structure/scenery (for framing box)
+            var decorUrls = new List<string>();       // index-aligned with decorGos — where its hull would live
             var allGos = new List<GameObject>();      // fallback when a map is swimmers-only
 
             // WO-XR-03: SCHOOL/pod items become live instanced boid swarms and msh:* big
@@ -275,7 +287,15 @@ namespace DiveMap.Runtime
                 bool swimmer = IsSwimmer(module?.Kind);
 
                 allGos.Add(itemGo);
-                if (!swimmer) decorGos.Add(itemGo);
+                if (!swimmer)
+                {
+                    decorGos.Add(itemGo);
+                    decorUrls.Add(url);
+                    // Start the hull fetch alongside the model's own download so the two arrive
+                    // together. Deduped by URL like the GLB itself — T-13 is 494 objects built
+                    // from 10 assets, so this is 10 requests, not 494. Nothing waits on it.
+                    HullFor(url);
+                }
 
                 if (aid.StartsWith("warp:", StringComparison.OrdinalIgnoreCase))
                 {
@@ -357,15 +377,38 @@ namespace DiveMap.Runtime
             // GLB loads settle so renderer bounds are real.
             // Built once and shared: the fish steer around these, the drone collides with them
             // (P1.1), and the info card will pick against them later.
+            //
+            // 🔴 "รูคือรู" — a hole is a hole. The single AABB below is what made an open cube
+            // frame a brick, reported twice. Where the model publishes a hull (SolidBoxes), the
+            // DIVER gets that instead; everything else — the fish, the minimap, the info card —
+            // keeps the one box it has always had, because BoidsJob walks the obstacle array once
+            // per fish per frame and 1,100 fish cannot afford the detail.
             var obstacles = new List<ObstacleBox>();
-            foreach (GameObject go in decorGos)
+            var solids = new List<SolidBoxes.Group>();
+            int hulled = 0, hullBoxes = 0;
+            for (int gi = 0; gi < decorGos.Count; gi++)
             {
+                GameObject go = decorGos[gi];
                 if (go == null) continue;
                 if (go.name.Contains("_warp:")) continue; // portals are not solid
                 var one = new List<GameObject> { go };
-                if (TryContentBounds(one, out Bounds ob))
-                    obstacles.Add(new ObstacleBox { Min = ob.min, Max = ob.max, ObsR = 4f });
+                if (!TryContentBounds(one, out Bounds ob)) continue;
+
+                obstacles.Add(new ObstacleBox { Min = ob.min, Max = ob.max, ObsR = 4f });
+
+                SolidBoxes.Box[] fine = TryHull(go.transform, decorUrls[gi]);
+                if (fine != null) { hulled++; hullBoxes += fine.Length; }
+                solids.Add(new SolidBoxes.Group
+                {
+                    Coarse = new SolidBoxes.Box(ToVec(ob.min), ToVec(ob.max)),
+                    Fine = fine,
+                });
             }
+            // Says something even when nothing happened (HANDOFF §4 rule 14): "0 hulls" and
+            // "the fetch is still in flight" look identical from a silent log, and they need
+            // opposite fixes.
+            Debug.Log($"[Solids] objects={solids.Count} withHull={hulled} hullBoxes={hullBoxes} " +
+                      $"models={_hulls.Count} — an object with no .solids.json keeps its single AABB");
 
             if (schoolRegs.Count > 0 || whaleCount > 0)
             {
@@ -419,6 +462,7 @@ namespace DiveMap.Runtime
                 FrameMinY = frameBox.min.y,
                 WaterLevel = _waterLevel,
                 Obstacles = obstacles,
+                Solids = solids,
                 SeabedScaleX = _seabedScaleX,
                 SeabedScaleZ = _seabedScaleZ,
                 Animals = animals,
@@ -483,6 +527,95 @@ namespace DiveMap.Runtime
             return AssetCacheStore.Store(url, data) ? AssetCacheStore.FileUri(url) : url;
         }
 
+        // ── Collision hulls ("รูคือรู") ───────────────────────────────────────────
+
+        /// <summary>
+        /// One hull fetch per MODEL for the lifetime of the scene, keyed by the GLB's URL and
+        /// holding the TASK — the same shape as <see cref="_imports"/>, and for the same reason:
+        /// 494 objects built from 10 assets must ask 10 times, not 494.
+        /// </summary>
+        private readonly Dictionary<string, Task<SolidBoxes.Model>> _hulls =
+            new Dictionary<string, Task<SolidBoxes.Model>>(StringComparer.Ordinal);
+
+        private Task<SolidBoxes.Model> HullFor(string glbUrl)
+        {
+            if (string.IsNullOrEmpty(glbUrl)) return null;
+            if (_hulls.TryGetValue(glbUrl, out Task<SolidBoxes.Model> pending)) return pending;
+            Task<SolidBoxes.Model> task = LoadHull(glbUrl);
+            _hulls[glbUrl] = task;
+            return task;
+        }
+
+        /// <summary>
+        /// Fetch <c>&lt;model&gt;.solids.json</c> down the same road the GLB takes: the on-device
+        /// copy when there is one, otherwise the network, written to the cache on the way past so
+        /// the next dive needs no signal. A few KB, so it rides inside the existing 220 MB budget
+        /// without moving it.
+        ///
+        /// EVERY failure returns null, and null means "this object keeps the single AABB it has
+        /// today" — which is the whole safety story. Most models have no hull at all, so a 404 here
+        /// is the normal case, not an incident.
+        /// </summary>
+        private static async Task<SolidBoxes.Model> LoadHull(string glbUrl)
+        {
+            string url = SolidBoxes.UrlFor(glbUrl);
+            if (url == null) return null;
+            try
+            {
+                string local = AssetCacheStore.Resolve(url);
+                byte[] data = await AssetCacheStore.Download(local);
+                if (data == null || data.Length == 0) return null;
+                if (local == url) AssetCacheStore.Store(url, data);   // came off the network — keep it
+                return SolidBoxes.Parse(System.Text.Encoding.UTF8.GetString(data));
+            }
+            catch (Exception e)
+            {
+                Debug.Log($"[Solids] {url}: {e.Message} — keeping the single AABB");
+                return null;
+            }
+        }
+
+        /// <summary>
+        /// This object's hull in world space, or null to keep its single AABB. Null for every one
+        /// of: no URL, a placeholder standing in for a model that never loaded (the hull describes
+        /// the model, not a grey cube), a fetch still in flight, an unreadable file, and a hull
+        /// whose proportions do not match the thing it would be wrapped around.
+        ///
+        /// 🔴 It NEVER waits. A map build that stalls on a 4 KB side-file to make a hole slightly
+        /// better shaped has traded the product for the detail; the fetch is already cached by
+        /// then, so the next load has it.
+        /// </summary>
+        private SolidBoxes.Box[] TryHull(Transform pivot, string url)
+        {
+            if (pivot == null || string.IsNullOrEmpty(url)) return null;
+            if (pivot.Find("Placeholder") != null) return null;
+            if (!_hulls.TryGetValue(url, out Task<SolidBoxes.Model> t)) return null;
+            if (t == null || t.Status != TaskStatus.RanToCompletion) return null;
+
+            SolidBoxes.Model model = t.Result;
+            if (model == null || model.IsEmpty) return null;
+            if (!TryLocalBounds(pivot, out Bounds local)) return null;
+
+            // Fit the hull to the content's MEASURED local box rather than to the bbox the file
+            // declares, so GroundToBase's recentre-and-drop needs no replay here.
+            var fit = new SolidBoxes.Box(ToVec(local.min), ToVec(local.max));
+            if (!SolidBoxes.FitsBbox(model, fit))
+            {
+                Debug.Log($"[Solids] {url}: hull bbox {model.BboxMax.X - model.BboxMin.X:F2}×" +
+                          $"{model.BboxMax.Y - model.BboxMin.Y:F2}×{model.BboxMax.Z - model.BboxMin.Z:F2} " +
+                          $"does not match the placed model {local.size.x:F2}×{local.size.y:F2}×{local.size.z:F2} " +
+                          $"— keeping the single AABB");
+                return null;
+            }
+
+            return SolidBoxes.ToWorld(model, fit, ToVec(pivot.position), ToQuat(pivot.rotation),
+                                      ToVec(pivot.lossyScale));
+        }
+
+        /// <summary>Across the UnityEngine border into DiveMap.Core's own vector/quaternion.</summary>
+        private static Vec3 ToVec(Vector3 v) => new Vec3(v.x, v.y, v.z);
+        private static Quat ToQuat(Quaternion q) => new Quat(q.x, q.y, q.z, q.w);
+
 
         /// <summary>
         /// One <see cref="GltfImport"/> per URL for the lifetime of the scene, not one per item.
@@ -521,6 +654,9 @@ namespace DiveMap.Runtime
                 if (t != null && t.Status == TaskStatus.RanToCompletion) t.Result?.Dispose();
             }
             _imports.Clear();
+            // Hulls own nothing on the GPU — they are plain numbers — but they are keyed by URL
+            // for THIS map, and a map that no longer has the object must not keep asking about it.
+            _hulls.Clear();
         }
 
         private Task<GltfImport> ImportFor(string url)
