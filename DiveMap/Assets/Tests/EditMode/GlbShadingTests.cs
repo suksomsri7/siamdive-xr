@@ -56,17 +56,29 @@ namespace DiveMap.Tests
         [Test]
         public void TheWorkaroundSwitchesItselfOffWhenTheImportIsFixed()
         {
-            // Both halves are required. This is the case the app is in today.
-            Assert.IsTrue(GlbShading.NormalMapIsMisdecoded(gammaColorSpace: true, textureFormatIsSrgb: true));
+            // The case the app is in today: gamma colour space, so glTFast never marks a glTF
+            // texture as data and every KTX2 transcodes to an sRGB target.
+            Assert.IsTrue(GlbShading.NormalMapIsMisdecoded(gammaColorSpace: true));
 
             // Linear colour space: glTFast tags the map as data and KtxUnity transcodes it
-            // unsigned-normalised. Nothing to fix, and throwing the map away would be pure loss.
-            Assert.IsFalse(GlbShading.NormalMapIsMisdecoded(gammaColorSpace: false, textureFormatIsSrgb: true));
+            // unsigned-normalised. Nothing to fix, and throwing the map away would be pure loss —
+            // this is what stops the workaround becoming permanent.
+            Assert.IsFalse(GlbShading.NormalMapIsMisdecoded(gammaColorSpace: false));
+        }
 
-            // A map that is already on a non-sRGB format samples correctly whatever the colour
-            // space — that is every normal map that did not arrive through KTX2.
-            Assert.IsFalse(GlbShading.NormalMapIsMisdecoded(gammaColorSpace: true, textureFormatIsSrgb: false));
-            Assert.IsFalse(GlbShading.NormalMapIsMisdecoded(gammaColorSpace: false, textureFormatIsSrgb: false));
+        [Test]
+        public void TheDecisionDoesNotDependOnAskingTheTexture()
+        {
+            // 🔴 Regression guard for CI run 30747457729. That build gated the drop on the
+            // texture's own GraphicsFormat being sRGB, dropped nothing, and cost a full round:
+            // KtxUnity textures arrive through Texture2D.CreateExternalTexture, so the managed
+            // GraphicsFormat is re-derived from the project colour space and reports UNorm for a
+            // GL object the hardware decodes as sRGB. The colour space is the only input that is
+            // both knowable from C# and actually causal — if a second parameter ever reappears
+            // here, this test is the argument against it.
+            Assert.AreEqual(1, typeof(GlbShading)
+                .GetMethod(nameof(GlbShading.NormalMapIsMisdecoded))
+                .GetParameters().Length);
         }
 
         [Test]

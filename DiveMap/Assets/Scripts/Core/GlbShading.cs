@@ -92,17 +92,34 @@ namespace DiveMap.Core
         /// <summary>
         /// Is this material's normal map going to hand the shader garbage?
         ///
-        /// Both halves have to be true. In LINEAR colour space glTFast tags the map as data and
-        /// the transcode comes back unsigned-normalised, so there is nothing to fix and this must
-        /// say no — the day somebody switches the project over, the workaround has to switch
-        /// itself off rather than keep throwing surface detail away. And a map whose GPU format is
-        /// already non-sRGB is fine whatever the colour space, which is every normal map that did
-        /// not come in through KTX2.
+        /// 🔴 THIS USED TO ASK THE TEXTURE, AND THE TEXTURE LIES. The first version took a second
+        /// argument — is this texture's GPU format an sRGB one — on the reasoning that only the
+        /// KTX2 imports are affected and the format would say so. CI run 30747457729 shipped that
+        /// version and NOTHING was dropped: blackOfSubject went 10.04 → 10.92 (kraken), 12.46 →
+        /// 13.24 (statue). The reason is structural and cannot be worked around from C#.
+        /// KtxUnity hands Unity a texture that already exists on the GPU —
+        /// <c>Texture2D.CreateExternalTexture(w, h, textureFormat, mipChain, linear, nativePtr)</c>
+        /// in <c>KtxNativeInstance.cs:117-126</c> — so the sRGB-ness that matters is baked into the
+        /// GL object libktx uploaded, while <c>Texture2D.graphicsFormat</c> on the managed side is
+        /// something Unity re-derives from <c>textureFormat</c> + <c>linear</c> + the project's
+        /// colour space. In a gamma project that derivation drops the sRGB variant, so the C# API
+        /// reports a UNorm format for a texture the hardware is decoding as sRGB. There is no
+        /// property to ask; do not re-add the check.
+        ///
+        /// What is left is the one fact that IS knowable, and it is the fact that causes the bug:
+        /// the colour space. In gamma, glTFast never marks any glTF texture as data
+        /// (<c>GltfImport.cs:1674</c>) so every KTX2 in the app transcodes to an sRGB target — and
+        /// every texture in this app's GLBs is a KTX2, because <c>tools/optimize_xr.mjs</c> puts
+        /// them all through toktx. Switch the project to linear and this turns itself off rather
+        /// than becoming a permanent loss of surface detail.
+        ///
+        /// The trade-off, stated plainly: a glTF whose normal map is NOT a KTX2 would be sampled
+        /// correctly and is now having a good map thrown away. None exist in the XR pipeline today,
+        /// and half a right angle of error on every texel of every model that does is the thing
+        /// worth avoiding.
         /// </summary>
         /// <param name="gammaColorSpace">QualitySettings.activeColorSpace == Gamma.</param>
-        /// <param name="textureFormatIsSrgb">GraphicsFormatUtility.IsSRGBFormat(tex.graphicsFormat).</param>
-        public static bool NormalMapIsMisdecoded(bool gammaColorSpace, bool textureFormatIsSrgb)
-            => gammaColorSpace && textureFormatIsSrgb;
+        public static bool NormalMapIsMisdecoded(bool gammaColorSpace) => gammaColorSpace;
 
         /// <summary>
         /// What <c>metallicFactor</c> should become. Unchanged rule, moved here so it is covered:

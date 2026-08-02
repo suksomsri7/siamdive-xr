@@ -1017,13 +1017,14 @@ namespace DiveMap.Runtime
         private static void TameMetal(GameObject root, string assetId)
         {
             if (root == null) return;
-            int fixedCount = 0, droppedNormals = 0;
+            int fixedCount = 0, droppedNormals = 0, materials = 0;
             bool gamma = QualitySettings.activeColorSpace == ColorSpace.Gamma;
             foreach (Renderer r in root.GetComponentsInChildren<Renderer>(true))
             {
                 foreach (Material m in r.materials)
                 {
                     if (m == null) continue;
+                    materials++;
                     // glTFast's own PBR shader, and the Standard fallback, name these differently.
                     foreach (string factor in MetalFactorNames)
                     {
@@ -1033,14 +1034,18 @@ namespace DiveMap.Runtime
                         m.SetFloat(factor, tamed);
                         fixedCount++;
                     }
-                    if (DropMisdecodedNormalMap(m, gamma)) droppedNormals++;
+                    if (DropMisdecodedNormalMap(m, assetId, gamma)) droppedNormals++;
                 }
             }
             if (fixedCount > 0)
                 Debug.Log($"[SceneBuilder] {assetId}: หรี่ metallic ที่ไม่มี texture กำกับ {fixedCount} วัสดุ");
-            if (droppedNormals > 0)
-                Debug.Log($"[SceneBuilder] {assetId}: ถอด normal map ที่ถอดรหัสผิด (sRGB) {droppedNormals} วัสดุ " +
-                          $"— เอียง {GlbShading.NeutralTiltDegrees():F0}° ทุกเท็กเซล");
+
+            // 🔴 Unconditional, and it counts the materials it SAW. Silence used to be ambiguous
+            // between "the pass is clean", "the pass skipped everything" and "the pass was never
+            // called on this model" — three different bugs that cost a CI round each to tell apart.
+            Debug.Log($"[Shading] {assetId}: materials={materials} tamedMetal={fixedCount} " +
+                      $"droppedNormalMap={droppedNormals} gamma={(gamma ? "t" : "f")} " +
+                      $"tilt={GlbShading.NeutralTiltDegrees():F0}°");
         }
 
         /// <summary>
@@ -1060,25 +1065,35 @@ namespace DiveMap.Runtime
         /// permanent loss of surface detail. Nothing is lost meanwhile: these are photogrammetry
         /// bakes with 35-42k triangles and the detail is in the mesh and the base colour.
         /// </summary>
-        private static bool DropMisdecodedNormalMap(Material m, bool gammaColorSpace)
+        private static bool DropMisdecodedNormalMap(Material m, string assetId, bool gammaColorSpace)
         {
             foreach (string n in NormalMapNames)
             {
                 if (!m.HasProperty(n)) continue;
                 Texture tex = m.GetTexture(n);
                 if (tex == null) continue;
-                // Read off the format's own name rather than GraphicsFormatUtility.IsSRGBFormat:
-                // that helper sits in a namespace Unity has moved between versions, and a wrong
-                // `using` is a red CI at 35 minutes a round. Every sRGB member of the enum ends
-                // "_SRGB" (R8G8B8A8_SRGB, RGBA_DXT1_SRGB, RGB_ETC2_SRGB, RGBA_ASTC4X4_SRGB…), and
-                // this runs once per material at load, not per frame.
-                bool srgb = tex.graphicsFormat.ToString().EndsWith("SRGB", StringComparison.Ordinal);
-                if (!GlbShading.NormalMapIsMisdecoded(gammaColorSpace, srgb)) continue;
-                m.SetTexture(n, null);
-                // The keyword is what actually switches the sampling on; clearing the slot alone
-                // leaves the shader sampling its "bump" default, which is another flat lie.
-                m.DisableKeyword("_NORMALMAP");
-                return true;
+
+                bool drop = GlbShading.NormalMapIsMisdecoded(gammaColorSpace);
+                if (drop)
+                {
+                    m.SetTexture(n, null);
+                    // The keyword is what actually switches the sampling on; clearing the slot
+                    // alone leaves the shader sampling its "bump" default, another flat lie.
+                    m.DisableKeyword("_NORMALMAP");
+                }
+
+                // 🔴 One line per material, always — including when nothing is dropped. The
+                // previous attempt at this fix shipped, changed nothing, and the log could not say
+                // whether it had run, been skipped, or never reached a material at all; a whole CI
+                // round (35 min) bought no information. `srgbApi` is recorded precisely because it
+                // is the check that did NOT work: for a KtxUnity external texture the managed
+                // GraphicsFormat is re-derived from the colour space, so this reads false while the
+                // GL object underneath is sRGB. It is here as evidence, not as a condition.
+                Debug.Log($"[Shading] mat={m.name} asset={assetId} shader={(m.shader != null ? m.shader.name : "(none)")} " +
+                          $"normalTex={tex.graphicsFormat} {tex.width}x{tex.height} " +
+                          $"srgbApi={(tex.graphicsFormat.ToString().EndsWith("SRGB", StringComparison.Ordinal) ? "t" : "f")} " +
+                          $"gamma={(gammaColorSpace ? "t" : "f")} dropped={(drop ? "t" : "f")}");
+                return drop;
             }
             return false;
         }
