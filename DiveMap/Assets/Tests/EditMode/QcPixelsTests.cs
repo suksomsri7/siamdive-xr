@@ -156,8 +156,8 @@ namespace DiveMap.Tests
             Assert.GreaterOrEqual(s.SubjectPercent, QcPixels.MinSubjectPercent);
             // …and the mottling gate refuses it anyway, which is the whole point of adding it:
             // an all-black wreck used to score "OK" on everything the pass knew how to ask.
-            Assert.IsFalse(QcPixels.Passes(true, 4, s));
-            Assert.AreEqual("mottled", QcPixels.Reason(true, 4, s));
+            Assert.IsFalse(QcPixels.Passes(true, 4, s, QcPixels.MinSubjectPercent, LowGate));
+            Assert.AreEqual("darker-than-baseline", QcPixels.Reason(true, 4, s, QcPixels.MinSubjectPercent, LowGate));
         }
 
         [Test]
@@ -204,20 +204,20 @@ namespace DiveMap.Tests
 
             // A frame that is 40% pure black is a FAIL now, and the headline fields still read the
             // way the work order fixed them.
-            string line = QcPixels.Line("cc0_kraken_xr0", loaded: true, renderers: 7, shot: s);
+            string line = QcPixels.Line("cc0_kraken_xr0", true, 7, s, QcPixels.MinSubjectPercent, LowGate);
             StringAssert.StartsWith("[QCModel] cc0_kraken_xr0 pureBlack=40.00% loaded=FAIL", line);
             StringAssert.Contains("subject=40.00%", line);
             StringAssert.Contains("blackOfSubject=100.00%", line);
             StringAssert.Contains("darkOfSubject=100.00%", line);
-            StringAssert.Contains("reason=mottled", line);
+            StringAssert.Contains("reason=darker-than-baseline", line);
             StringAssert.Contains("renderers=7", line);
 
             // The same model, lit: OK, and the dark number is what changed the verdict.
             byte[] lit = Water(1000);
             Paint(lit, 0, 400, 120, 150, 170);
             QcPixels.Shot ok = QcPixels.Measure(lit, off);
-            StringAssert.Contains("loaded=OK", QcPixels.Line("cc0_kraken_xr0", true, 7, ok));
-            StringAssert.Contains("darkOfSubject=0.00%", QcPixels.Line("cc0_kraken_xr0", true, 7, ok));
+            StringAssert.Contains("loaded=OK", QcPixels.Line("cc0_kraken_xr0", true, 7, ok, QcPixels.MinSubjectPercent, LowGate));
+            StringAssert.Contains("darkOfSubject=0.00%", QcPixels.Line("cc0_kraken_xr0", true, 7, ok, QcPixels.MinSubjectPercent, LowGate));
         }
 
         [Test]
@@ -322,22 +322,21 @@ namespace DiveMap.Tests
             Assert.AreEqual(0.0, s.BlackOfSubjectPercent, 1e-9);
             // …and the new number is the one that speaks.
             Assert.AreEqual(40.0, s.DarkOfSubjectPercent, 1e-9);
-            Assert.IsFalse(QcPixels.Passes(true, 1, s));
-            Assert.AreEqual("mottled", QcPixels.Reason(true, 1, s));
+            Assert.IsFalse(QcPixels.Passes(true, 1, s, QcPixels.MinSubjectPercent, LowGate));
+            Assert.AreEqual("darker-than-baseline", QcPixels.Reason(true, 1, s, QcPixels.MinSubjectPercent, LowGate));
         }
 
         [Test]
         public void TheDarkCeilingSitsBetweenTheFloorAndRealShading()
         {
             // Nothing in the offending shots sits below 40 — that is the ambient + reflection-cube
-            // floor, and an offline render of the same models at the same camera reproduces it
-            // exactly — so a ceiling at or below 40 would count nothing at all.
+            // floor, reproduced exactly by an offline render — so a ceiling at or below 40 would
+            // count nothing at all. Above ~70 it would start counting honest crevice shading.
             Assert.Greater(QcPixels.DarkMax, 40);
-            // And above ~70 it would start counting honest crevice shading as a defect.
             Assert.LessOrEqual(QcPixels.DarkMax, 70);
 
-            // Strictly below the ceiling, on every channel: a pixel that is dark in red but bright
-            // in blue is water-coloured shading, not a blotch.
+            // Strictly below the ceiling on EVERY channel: a pixel dark in red but bright in blue
+            // is water-coloured shading, not a blotch.
             byte[] off = Water(100);
             byte[] on = Water(100);
             Paint(on, 0, 20, (byte)(QcPixels.DarkMax - 1), (byte)(QcPixels.DarkMax - 1), (byte)(QcPixels.DarkMax - 1));
@@ -348,31 +347,58 @@ namespace DiveMap.Tests
         }
 
         [Test]
-        public void TheMottlingGateLeavesRoomForAGenuinelyShadowedModel()
+        public void ADarkModelIsNotABrokenModel()
         {
-            // An offline render of the kraken — same camera, same lights, same gamma BRDF, with
-            // its own sun shadow map — measures 1.32-1.44% dark. Real crevice shading has to pass.
-            var honest = new QcPixels.Shot
-            { SubjectPercent = 12.5, DarkOfSubjectPercent = 1.44, Pixels = 921600 };
-            Assert.IsTrue(QcPixels.Passes(true, 1, honest));
-            Assert.AreEqual("", QcPixels.Reason(true, 1, honest));
-
-            // The kraken as CI last photographed it: 14.75%. That has to fail.
-            var mottled = new QcPixels.Shot
-            { SubjectPercent = 12.56, DarkOfSubjectPercent = 14.75, Pixels = 921600 };
-            Assert.IsFalse(QcPixels.Passes(true, 1, mottled));
-            Assert.AreEqual("mottled", QcPixels.Reason(true, 1, mottled));
-
-            // The threshold sits between the two, not on top of either.
-            Assert.Greater(QcPixels.MaxDarkPercent, 1.44);
-            Assert.Less(QcPixels.MaxDarkPercent, 14.75);
+            // 🔴 The false positives this replaced an absolute ceiling to stop. Run 30768353482 was
+            // passed by eye and shipped, and four of its six models tripped a flat 2.5% gate:
+            // Poseidon's dark green stone at 31.47%, HTMS 732's camouflage at 62.34%, hardeep at
+            // 36.86%, barracuda at 14.57%. Judged against their own baselines, all four hold.
+            foreach (double baseline in new[] { 2.33, 31.47, 36.86, 62.34, 14.57, 0.86 })
+            {
+                var same = new QcPixels.Shot
+                { SubjectPercent = 10.0, DarkOfSubjectPercent = baseline, Pixels = 921600 };
+                Assert.IsTrue(QcPixels.Passes(true, 1, same, QcPixels.MinSubjectPercent,
+                                              QcPixels.DarkGate(baseline)),
+                              $"baseline {baseline}% must pass against its own gate");
+            }
         }
 
         [Test]
-        public void AMissingModelIsStillReportedAsMissingNotAsMottled()
+        public void AModelThatGetsDarkerThanItsBaselineIsCaught()
         {
-            // Order matters in Reason(): an empty frame has 0% dark, so if "mottled" were checked
-            // first a model that never arrived would be reported as a lighting problem.
+            // The kraken's mottled era against its post-dilation baseline of 0.25%.
+            var mottled = new QcPixels.Shot
+            { SubjectPercent = 12.56, DarkOfSubjectPercent = 14.75, Pixels = 921600 };
+            Assert.IsFalse(QcPixels.Passes(true, 1, mottled, QcPixels.MinSubjectPercent,
+                                           QcPixels.DarkGate(0.25)));
+            Assert.AreEqual("darker-than-baseline",
+                QcPixels.Reason(true, 1, mottled, QcPixels.MinSubjectPercent, QcPixels.DarkGate(0.25)));
+
+            // Poseidon regressing to its own mottled-era 51.38% against a 31.47% baseline.
+            var regressed = new QcPixels.Shot
+            { SubjectPercent = 9.0, DarkOfSubjectPercent = 51.38, Pixels = 921600 };
+            Assert.IsFalse(QcPixels.Passes(true, 1, regressed, QcPixels.MinSubjectPercent,
+                                           QcPixels.DarkGate(31.47)));
+        }
+
+        [Test]
+        public void TheGateNeedsBothARelativeAndAnAbsoluteJump()
+        {
+            // A near-zero baseline must not be tripped by frame-to-frame wobble: 0.25 × 1.4 is
+            // 0.35%, which llvmpipe could cross by itself, so the absolute slack governs there.
+            Assert.AreEqual(0.25 + QcPixels.DarkRegressionSlack, QcPixels.DarkGate(0.25), 1e-9);
+            // A large baseline needs a proportional change, not three points.
+            Assert.AreEqual(62.34 * QcPixels.DarkRegressionFactor, QcPixels.DarkGate(62.34), 1e-9);
+            // A model with no baseline gets the loose catastrophe ceiling, not a quality bar.
+            Assert.AreEqual(QcPixels.MaxDarkPercent, QcPixels.DarkGate(-1.0), 1e-9);
+            Assert.Greater(QcPixels.MaxDarkPercent, 62.34);
+        }
+
+        [Test]
+        public void AMissingModelIsStillReportedAsMissingNotAsDark()
+        {
+            // Order matters in Reason(): an empty frame has 0% dark, so if the dark check came
+            // first, a model that never arrived would be reported as a lighting problem.
             byte[] empty = Water(1000);
             QcPixels.Shot none = QcPixels.Measure(empty, Water(1000));
             Assert.AreEqual("not-in-frame", QcPixels.Reason(true, 1, none));
@@ -383,6 +409,11 @@ namespace DiveMap.Tests
 
         private static QcPixels.Shot Probed(double black, double subject = 10.0, int px = 1000)
             => new QcPixels.Shot { BlackOfSubjectPercent = black, SubjectPercent = subject, Pixels = px };
+
+        /// <summary>The gate a model whose recorded baseline is 0.25% gets: the kraken's, after
+        /// dilation landed. Everything below is judged against that, which is what the harness
+        /// does per model.</summary>
+        private static readonly double LowGate = QcPixels.DarkGate(0.25);
 
         private static QcPixels.Shot Dark(double dark, double subject = 12.56, int px = 921600)
             => new QcPixels.Shot { DarkOfSubjectPercent = dark, SubjectPercent = subject, Pixels = px };
@@ -457,7 +488,7 @@ namespace DiveMap.Tests
             // difference is the shader and nothing else — the two frames share the white,
             // textureless material.
             Assert.AreEqual("gltfast-shader",
-                QcPixels.NormalSourceVerdict(Dark(14.75), meshNormals: Dark(1.44), whiteGltf: Dark(13.9)));
+                QcPixels.NormalSourceVerdict(Dark(14.75), Dark(1.44), Dark(13.9), LowGate));
         }
 
         [Test]
@@ -466,14 +497,14 @@ namespace DiveMap.Tests
             // No textures, no maps, both shaders — and the patches are still there. Then what is
             // wrong arrived with the geometry, and com.unity.cloud.draco is next.
             Assert.AreEqual("mesh-normals",
-                QcPixels.NormalSourceVerdict(Dark(14.75), meshNormals: Dark(13.2), whiteGltf: Dark(14.1)));
+                QcPixels.NormalSourceVerdict(Dark(14.75), Dark(13.2), Dark(14.1), LowGate));
         }
 
         [Test]
         public void BothCleanMeansATextureWasCarryingItAfterAll()
         {
             Assert.AreEqual("textures",
-                QcPixels.NormalSourceVerdict(Dark(14.75), meshNormals: Dark(1.2), whiteGltf: Dark(1.3)));
+                QcPixels.NormalSourceVerdict(Dark(14.75), Dark(1.2), Dark(1.3), LowGate));
         }
 
         [Test]
@@ -481,9 +512,9 @@ namespace DiveMap.Tests
         {
             // htms732 measures 0.00% dark. Running a verdict on it would invent a culprit.
             Assert.AreEqual("no-mottle",
-                QcPixels.NormalSourceVerdict(Dark(0.0), Dark(0.0), Dark(0.0)));
+                QcPixels.NormalSourceVerdict(Dark(0.0), Dark(0.0), Dark(0.0), LowGate));
             Assert.AreEqual("no-mottle",
-                QcPixels.NormalSourceVerdict(Dark(QcPixels.MaxDarkPercent), Dark(9.9), Dark(9.9)));
+                QcPixels.NormalSourceVerdict(Dark(LowGate), Dark(9.9), Dark(9.9), LowGate));
         }
 
         [Test]
@@ -494,13 +525,13 @@ namespace DiveMap.Tests
             // 0.00% and "prove" the shader theory. Pixels==0 (the harness refused to run it) and a
             // silhouette that moved both land on probe-failed instead.
             Assert.AreEqual("probe-failed",
-                QcPixels.NormalSourceVerdict(Dark(14.75), meshNormals: default, whiteGltf: Dark(13.9)));
+                QcPixels.NormalSourceVerdict(Dark(14.75), default, Dark(13.9), LowGate));
             Assert.AreEqual("probe-failed",
-                QcPixels.NormalSourceVerdict(Dark(14.75), meshNormals: Dark(1.44), whiteGltf: default));
+                QcPixels.NormalSourceVerdict(Dark(14.75), Dark(1.44), default, LowGate));
             // Silhouette drifted by more than half a percent of the frame: the probe changed what
             // is on screen, so it changed more than the one thing it was meant to.
             Assert.AreEqual("probe-failed",
-                QcPixels.NormalSourceVerdict(Dark(14.75), meshNormals: Dark(1.44, 9.0), whiteGltf: Dark(13.9)));
+                QcPixels.NormalSourceVerdict(Dark(14.75), Dark(1.44, 9.0), Dark(13.9), LowGate));
 
             Assert.IsTrue(QcPixels.SubjectHeld(Dark(14.75), Dark(1.44, 12.56 + 0.4)));
             Assert.IsFalse(QcPixels.SubjectHeld(Dark(14.75), Dark(1.44, 12.56 + 0.9)));
@@ -511,7 +542,7 @@ namespace DiveMap.Tests
         {
             string line = QcPixels.ProbeLine("cc0_kraken_xr0",
                 Dark(14.75), Dark(9.9), Dark(9.8), Dark(1.44), Dark(13.9), Dark(12.1),
-                Dark(13.8), Dark(1.10));
+                Dark(13.8), Dark(1.10), LowGate);
             StringAssert.Contains("darkOfSubject base=14.75%", line);
             StringAssert.Contains("meshNormals=1.44%", line);
             StringAssert.Contains("whiteGltf=13.90%", line);
@@ -538,13 +569,13 @@ namespace DiveMap.Tests
             Assert.AreEqual(0.65f, QcPixels.MeanAlbedo, 1e-6f);
 
             // Patches survive a flat albedo of the same brightness ⇒ the texture is innocent.
-            Assert.AreEqual("lighting", QcPixels.MottleVerdict(Dark(14.75), Dark(12.1)));
+            Assert.AreEqual("lighting", QcPixels.MottleVerdict(Dark(14.75), Dark(12.1), LowGate));
             // Patches follow the texture's own dark regions ⇒ edge dilation at the source.
-            Assert.AreEqual("albedo-variation", QcPixels.MottleVerdict(Dark(14.75), Dark(0.9)));
+            Assert.AreEqual("albedo-variation", QcPixels.MottleVerdict(Dark(14.75), Dark(0.9), LowGate));
             // Clean model, no interrogation; broken probe, no verdict.
-            Assert.AreEqual("no-mottle", QcPixels.MottleVerdict(Dark(0.0), Dark(0.0)));
-            Assert.AreEqual("probe-failed", QcPixels.MottleVerdict(Dark(14.75), default));
-            Assert.AreEqual("probe-failed", QcPixels.MottleVerdict(Dark(14.75), Dark(0.9, 9.0)));
+            Assert.AreEqual("no-mottle", QcPixels.MottleVerdict(Dark(0.0), Dark(0.0), LowGate));
+            Assert.AreEqual("probe-failed", QcPixels.MottleVerdict(Dark(14.75), default, LowGate));
+            Assert.AreEqual("probe-failed", QcPixels.MottleVerdict(Dark(14.75), Dark(0.9, 9.0), LowGate));
         }
 
         [Test]
@@ -553,24 +584,24 @@ namespace DiveMap.Tests
             // The prediction the arithmetic makes: −4 leaves a seam at LOD 5-6 and changes little,
             // −10 defeats even the worst seam. If −10 comes back clean, a bias IS the fix.
             Assert.AreEqual("bias-fixes-it",
-                QcPixels.BiasVerdict(Dark(14.75), bias4: Dark(13.8), bias10: Dark(1.10)));
+                QcPixels.BiasVerdict(Dark(14.75), Dark(13.8), Dark(1.10), LowGate));
 
             // Moved a long way without getting there: mips are involved, a uniform bias is not
             // enough — which is what the seam-LOD arithmetic predicts.
             Assert.AreEqual("bias-helps",
-                QcPixels.BiasVerdict(Dark(14.75), bias4: Dark(13.0), bias10: Dark(7.5)));
+                QcPixels.BiasVerdict(Dark(14.75), Dark(13.0), Dark(7.5), LowGate));
 
             // 🔴 Did not move at ALL: either mipMapBias never reached a texture Unity is only
             // wrapping — the same trap graphicsFormat set two rounds ago — or mip selection is
             // innocent. Either way the answer is not "try a bigger number".
             Assert.AreEqual("bias-no-effect",
-                QcPixels.BiasVerdict(Dark(14.75), bias4: Dark(14.7), bias10: Dark(14.6)));
+                QcPixels.BiasVerdict(Dark(14.75), Dark(14.7), Dark(14.6), LowGate));
             Assert.Greater(QcPixels.BiasMovedPercent, 0.0);
 
-            Assert.AreEqual("no-mottle", QcPixels.BiasVerdict(Dark(0.0), Dark(0.0), Dark(0.0)));
-            Assert.AreEqual("probe-failed", QcPixels.BiasVerdict(Dark(14.75), default, Dark(1.1)));
+            Assert.AreEqual("no-mottle", QcPixels.BiasVerdict(Dark(0.0), Dark(0.0), Dark(0.0), LowGate));
+            Assert.AreEqual("probe-failed", QcPixels.BiasVerdict(Dark(14.75), default, Dark(1.1), LowGate));
             Assert.AreEqual("probe-failed",
-                QcPixels.BiasVerdict(Dark(14.75), Dark(1.1, 9.0), Dark(1.1)));
+                QcPixels.BiasVerdict(Dark(14.75), Dark(1.1, 9.0), Dark(1.1), LowGate));
         }
 
         // ── framing a box instead of a sphere ────────────────────────────────────

@@ -74,13 +74,46 @@ namespace DiveMap.Core
         public const byte DarkMax = 60;
 
         /// <summary>
-        /// How much of the model may read as a dark blotch. A correct offline render of these
-        /// models — same camera, same lights, same gamma BRDF, its own sun shadow map — measures
-        /// 1.3-1.4% on the kraken, so real crevice shading lives well under 2%. 2.5% leaves room
-        /// for a genuinely shadowed model without leaving room for the 14.75% the kraken currently
-        /// scores.
+        /// Fallback dark ceiling for a model with no recorded baseline. Deliberately loose: it is
+        /// the "something is catastrophically wrong" line for a model nobody has looked at yet,
+        /// not a quality bar. Models we HAVE looked at are judged against their own baseline
+        /// through <see cref="DarkGate"/>.
         /// </summary>
-        public const double MaxDarkPercent = 2.5;
+        public const double MaxDarkPercent = 70.0;
+
+        /// <summary>
+        /// 🔴 Why this is not one absolute number any more. The 2.5% ceiling was calibrated in run
+        /// 30756993584, while the import was still stripping metallic-roughness maps — which lifted
+        /// every model into a pale, washed-out grey. With the maps restored (run 30768353482, the
+        /// one a human passed by eye and shipped to TestFlight) the models render their real
+        /// materials: Poseidon's dark green stone measures 31% below the dark ceiling, HTMS 732's
+        /// camouflage 62%. Both are correct and both failed the gate. A dark model is not a broken
+        /// model.
+        ///
+        /// And a single-image spatial metric cannot tell the two apart — that was measured, not
+        /// assumed. Local contrast (how much darker a pixel is than its own neighbourhood, the most
+        /// promising of the candidates) scores the CLEAN barracuda at 16.73% and the MOTTLED
+        /// hardeep at 1.07%: the classes overlap, because a barracuda's dark bands and a blotch
+        /// look the same to any operator that only sees one frame. Hard-edge fraction and
+        /// histogram bimodality were measured on the same nine frames and overlap too.
+        ///
+        /// So the gate asks the only question that has a right answer: HAS THIS MODEL GOT DARKER
+        /// THAN THE LAST TIME SOMEBODY LOOKED AT IT. Both conditions have to trip — a relative jump
+        /// so a large baseline needs a real change, and an absolute one so a near-zero baseline is
+        /// not set off by llvmpipe noise.
+        /// </summary>
+        public static double DarkGate(double baselinePercent)
+        {
+            if (baselinePercent < 0.0) return MaxDarkPercent;   // no baseline recorded
+            return System.Math.Max(baselinePercent * DarkRegressionFactor,
+                                   baselinePercent + DarkRegressionSlack);
+        }
+
+        /// <summary>A baseline may grow by this factor before it counts as a regression.</summary>
+        public const double DarkRegressionFactor = 1.4;
+
+        /// <summary>…and by at least this many points, so a 0.25% baseline needs a real jump.</summary>
+        public const double DarkRegressionSlack = 3.0;
 
         /// <summary>What one QC shot measured. Percentages are 0..100.</summary>
         public struct Shot
@@ -193,7 +226,7 @@ namespace DiveMap.Core
             if (shot.Pixels <= 0) return "readback-empty";
             if (shot.SubjectPercent < minSubjectPercent) return "not-in-frame";
             // Last, because it is the only one that says the model ARRIVED and still looks wrong.
-            if (shot.DarkOfSubjectPercent > maxDarkPercent) return "mottled";
+            if (shot.DarkOfSubjectPercent > maxDarkPercent) return "darker-than-baseline";
             return "";
         }
 
@@ -204,10 +237,11 @@ namespace DiveMap.Core
         /// there so a FAIL can be diagnosed without opening the picture.
         /// </summary>
         public static string Line(string name, bool loaded, int renderers, Shot shot,
-                                  double minSubjectPercent = MinSubjectPercent)
+                                  double minSubjectPercent = MinSubjectPercent,
+                                  double maxDarkPercent = MaxDarkPercent)
         {
-            bool ok = Passes(loaded, renderers, shot, minSubjectPercent);
-            string reason = Reason(loaded, renderers, shot, minSubjectPercent);
+            bool ok = Passes(loaded, renderers, shot, minSubjectPercent, maxDarkPercent);
+            string reason = Reason(loaded, renderers, shot, minSubjectPercent, maxDarkPercent);
             return "[QCModel] " + (string.IsNullOrEmpty(name) ? "(unnamed)" : name) +
                    " pureBlack=" + Pct(shot.PureBlackPercent) +
                    "% loaded=" + (ok ? "OK" : "FAIL") +
@@ -252,7 +286,7 @@ namespace DiveMap.Core
         /// </summary>
         public static string ProbeLine(string name, Shot baseShot, Shot whiteAlbedo, Shot noMetalRough,
                                        Shot meshNormals, Shot whiteGltf, Shot greyAlbedo,
-                                       Shot bias4, Shot bias10)
+                                       Shot bias4, Shot bias10, double maxDarkPercent = MaxDarkPercent)
             => "[QCProbe] " + (string.IsNullOrEmpty(name) ? "(unnamed)" : name) +
                " blackOfSubject base=" + Pct(baseShot.BlackOfSubjectPercent) +
                "% whiteAlbedo=" + Pct(whiteAlbedo.BlackOfSubjectPercent) +
@@ -275,9 +309,9 @@ namespace DiveMap.Core
                "% whiteGltf=" + Pct(whiteGltf.SubjectPercent) +
                "% greyAlbedo=" + Pct(greyAlbedo.SubjectPercent) +
                "% verdict=" + ProbeVerdict(baseShot, whiteAlbedo, noMetalRough) +
-               " normalVerdict=" + NormalSourceVerdict(baseShot, meshNormals, whiteGltf) +
-               " mottleVerdict=" + MottleVerdict(baseShot, greyAlbedo) +
-               " biasVerdict=" + BiasVerdict(baseShot, bias4, bias10);
+               " normalVerdict=" + NormalSourceVerdict(baseShot, meshNormals, whiteGltf, maxDarkPercent) +
+               " mottleVerdict=" + MottleVerdict(baseShot, greyAlbedo, maxDarkPercent) +
+               " biasVerdict=" + BiasVerdict(baseShot, bias4, bias10, maxDarkPercent);
 
         /// <summary>
         /// Does pulling the sampler into sharper mips remove the blotches?

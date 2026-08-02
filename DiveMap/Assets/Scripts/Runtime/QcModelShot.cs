@@ -57,6 +57,37 @@ namespace DiveMap.Runtime
             "msh:lionfish",
         };
 
+        /// <summary>
+        /// <c>darkOfSubject</c> as measured in run 30768353482 — the run a human looked at, passed
+        /// by eye ("the best these have ever looked": Poseidon showing its dark green stone and a
+        /// real specular for the first time, HTMS 732's camouflage crisp) and shipped to
+        /// TestFlight. Index-matched to <see cref="AssetIds"/>.
+        ///
+        /// 🔴 These are not targets and they are not quality scores — a model is allowed to be
+        /// dark. They are the answer to "what did this model look like when it was last known
+        /// good", and the gate fires when a model gets meaningfully DARKER than its own entry. Re-
+        /// record them (all of them, from one run, after looking at the pictures) whenever the
+        /// lighting or the material pipeline changes on purpose; a stale baseline is worth more
+        /// than no baseline, but a baseline nobody has looked at is worth less than none.
+        /// </summary>
+        private static readonly double[] DarkBaselines =
+        {
+            2.33,    // cc0:kraken
+            31.47,   // stat:verdant_poseidon — dark green stone
+            36.86,   // cc0:wreck_hardeep
+            62.34,   // sw:htms732 — camouflage, legitimately the darkest of the six
+            14.57,   // msh:barracuda
+            0.86,    // msh:lionfish
+        };
+
+        /// <summary>Baseline for <paramref name="assetId"/>, or −1 when none is recorded.</summary>
+        private static double BaselineFor(string assetId)
+        {
+            for (int i = 0; i < AssetIds.Length && i < DarkBaselines.Length; i++)
+                if (AssetIds[i] == assetId) return DarkBaselines[i];
+            return -1.0;
+        }
+
         /// <summary>How far to the side of the map the models are staged, world units. Well clear
         /// of the seabed disc (340 u) and its fish, so the only thing that can move between the
         /// two frames of a pair is the model itself.</summary>
@@ -196,6 +227,9 @@ namespace DiveMap.Runtime
             pivot.GetComponentsInChildren(true, renderers);
             int rendererCount = renderers.Count;
 
+            double baseline = BaselineFor(assetId);
+            double darkGate = QcPixels.DarkGate(baseline);
+
             QcPixels.Shot shot = default;
             if (loaded && rendererCount > 0)
             {
@@ -267,7 +301,7 @@ namespace DiveMap.Runtime
                 yield return ProbeMipBias(cam, rt, readback, renderers, withoutModel, -4f, s => bias4 = s);
                 yield return ProbeMipBias(cam, rt, readback, renderers, withoutModel, -10f, s => bias10 = s);
                 Debug.Log(QcPixels.ProbeLine(name, shot, whiteAlbedo, noMetalRough, meshNormals,
-                                             whiteGltf, greyAlbedo, bias4, bias10));
+                                             whiteGltf, greyAlbedo, bias4, bias10, darkGate));
             }
             else
             {
@@ -275,8 +309,12 @@ namespace DiveMap.Runtime
                                  $"renderers={rendererCount} after {loadSecs:F1}s url={url}");
             }
 
-            Debug.Log(QcPixels.Line(name, loaded, rendererCount, shot));
-            bool pass = QcPixels.Passes(loaded, rendererCount, shot);
+            Debug.Log(QcPixels.Line(name, loaded, rendererCount, shot,
+                                    QcPixels.MinSubjectPercent, darkGate) +
+                      (baseline < 0 ? " darkBaseline=none" : $" darkBaseline={baseline:0.00}%") +
+                      $" darkGate={darkGate:0.00}%");
+            bool pass = QcPixels.Passes(loaded, rendererCount, shot,
+                                        QcPixels.MinSubjectPercent, darkGate);
 
             // Destroy the instance BEFORE disposing the import, and let the destroy actually
             // happen: Destroy is deferred to the end of the frame, and the import owns the meshes
