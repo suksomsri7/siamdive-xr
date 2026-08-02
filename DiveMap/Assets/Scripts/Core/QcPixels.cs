@@ -183,6 +183,68 @@ namespace DiveMap.Core
                    (reason.Length == 0 ? "" : " reason=" + reason);
         }
 
+        /// <summary>
+        /// The A/B probe line: the same model photographed with one shading input removed at a
+        /// time, so the next CI round says which input the black patches come from instead of the
+        /// round after that.
+        ///
+        /// 🔴 Why this exists. Three rounds have now been spent on the black patches and every
+        /// hypothesis that could be tested from the FILES has been eliminated by measurement:
+        /// tangents and normals decode clean, the metal channel reads 0.001, the base-colour
+        /// atlas's black gutters never reach the surface at the real framing, back faces are 0.04%
+        /// of the picture, and dropping the normal map — run 30750409697, confirmed
+        /// <c>droppedNormalMap=1</c> on every model — moved <c>blackOfSubject</c> from 10.92% to
+        /// 10.92% on the kraken. Offline analysis is out of road: what is left lives inside the
+        /// shader, and the only instrument that can see in there is the frame itself.
+        ///
+        /// So the harness removes one input per frame and reports what the black does:
+        ///   • <paramref name="whiteAlbedo"/> — base-colour texture cleared, factor forced white.
+        ///     In gamma colour space an albedo of exactly zero multiplies the whole forward pass
+        ///     to exactly zero whatever the lighting does, so this is the one hypothesis a picture
+        ///     can settle outright. Black survives ⇒ it is not the texture.
+        ///   • <paramref name="noMetalRough"/> — metallic-roughness texture cleared, metal 0,
+        ///     roughness 0.6. That map is the last input still suspected of arriving sRGB-decoded
+        ///     (roughness 0.447 → 0.166 makes the model glossy, and a glossy dielectric against a
+        ///     uniform reflection cube is where the flat, blue, albedo-independent wash in the
+        ///     current shots comes from).
+        ///
+        /// The reading is the DIFFERENCE, not the absolute: whichever probe collapses the black is
+        /// the input carrying it, and if neither does then both are innocent and the cause is in
+        /// the lighting terms — which is itself a result, and one that costs one round instead of
+        /// three.
+        /// </summary>
+        public static string ProbeLine(string name, Shot baseShot, Shot whiteAlbedo, Shot noMetalRough)
+            => "[QCProbe] " + (string.IsNullOrEmpty(name) ? "(unnamed)" : name) +
+               " blackOfSubject base=" + Pct(baseShot.BlackOfSubjectPercent) +
+               "% whiteAlbedo=" + Pct(whiteAlbedo.BlackOfSubjectPercent) +
+               "% noMetalRough=" + Pct(noMetalRough.BlackOfSubjectPercent) +
+               "% | subject base=" + Pct(baseShot.SubjectPercent) +
+               "% whiteAlbedo=" + Pct(whiteAlbedo.SubjectPercent) +
+               "% noMetalRough=" + Pct(noMetalRough.SubjectPercent) +
+               "% verdict=" + ProbeVerdict(baseShot, whiteAlbedo, noMetalRough);
+
+        /// <summary>
+        /// Which input the black followed, in one token. A probe only ACQUITS an input when the
+        /// black stays put; the collapse threshold is deliberately generous (a third of the
+        /// original) because the question is "did removing this make the patches go away", not
+        /// "by exactly how much".
+        /// </summary>
+        public static string ProbeVerdict(Shot baseShot, Shot whiteAlbedo, Shot noMetalRough)
+        {
+            double b = baseShot.BlackOfSubjectPercent;
+            // Nothing to explain. Say so rather than nominating a culprit for a clean model.
+            if (b < 0.5) return "no-black";
+            // A probe whose frame never landed cannot acquit anything.
+            if (whiteAlbedo.Pixels == 0 || noMetalRough.Pixels == 0) return "probe-failed";
+
+            bool albedoCleared = whiteAlbedo.BlackOfSubjectPercent < b / 3.0;
+            bool mrCleared = noMetalRough.BlackOfSubjectPercent < b / 3.0;
+            if (albedoCleared && mrCleared) return "both";
+            if (albedoCleared) return "base-colour-texture";
+            if (mrCleared) return "metallic-roughness-texture";
+            return "neither-lighting";
+        }
+
         private static string Pct(double v) => v.ToString("0.00", CultureInfo.InvariantCulture);
 
         // ── framing ──────────────────────────────────────────────────────────────

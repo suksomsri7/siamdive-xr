@@ -281,6 +281,68 @@ namespace DiveMap.Tests
             Assert.Greater(QcPixels.FrameDistance(10, 400, 1.0), 0.0);    // FOV out of range
         }
 
+        // ── the A/B probe ────────────────────────────────────────────────────────
+
+        private static QcPixels.Shot Probed(double black, double subject = 10.0, int px = 1000)
+            => new QcPixels.Shot { BlackOfSubjectPercent = black, SubjectPercent = subject, Pixels = px };
+
+        [Test]
+        public void AProbeOnlyAccusesTheInputTheBlackFollowed()
+        {
+            // The kraken as it stands: 10.92% black. Clearing the base colour makes it vanish ⇒
+            // the texture was carrying it.
+            Assert.AreEqual("base-colour-texture",
+                QcPixels.ProbeVerdict(Probed(10.92), Probed(0.10), Probed(10.80)));
+
+            // …and the mirror case.
+            Assert.AreEqual("metallic-roughness-texture",
+                QcPixels.ProbeVerdict(Probed(10.92), Probed(10.70), Probed(0.20)));
+
+            // 🔴 The answer this pass exists to be able to give. Three rounds have been spent
+            // nominating a culprit that turned out to be innocent; "neither" has to be a result
+            // the harness can report, not a gap it falls through.
+            Assert.AreEqual("neither-lighting",
+                QcPixels.ProbeVerdict(Probed(10.92), Probed(10.80), Probed(11.10)));
+
+            Assert.AreEqual("both",
+                QcPixels.ProbeVerdict(Probed(10.92), Probed(0.05), Probed(0.05)));
+        }
+
+        [Test]
+        public void ACleanModelIsNotHandedACulprit()
+        {
+            // htms732 and the lionfish measure 0.00%. A verdict of "base-colour-texture" on a model
+            // with nothing wrong would be noise that reads like evidence.
+            Assert.AreEqual("no-black",
+                QcPixels.ProbeVerdict(Probed(0.0), Probed(0.0), Probed(0.0)));
+        }
+
+        [Test]
+        public void AProbeFrameThatNeverLandedAcquitsNothing()
+        {
+            // Pixels == 0 means the readback failed. Treating that as "the black went away" would
+            // convict whichever probe crashed.
+            Assert.AreEqual("probe-failed",
+                QcPixels.ProbeVerdict(Probed(10.92), Probed(0.0, 0.0, 0), Probed(10.8)));
+            Assert.AreEqual("probe-failed",
+                QcPixels.ProbeVerdict(Probed(10.92), Probed(10.8), Probed(0.0, 0.0, 0)));
+        }
+
+        [Test]
+        public void TheProbeLineCarriesEveryNumberItsVerdictRestsOn()
+        {
+            string line = QcPixels.ProbeLine("cc0_kraken_xr0", Probed(10.92, 12.56),
+                                             Probed(0.10, 12.56), Probed(10.80, 12.55));
+            StringAssert.StartsWith("[QCProbe] cc0_kraken_xr0", line);
+            StringAssert.Contains("base=10.92%", line);
+            StringAssert.Contains("whiteAlbedo=0.10%", line);
+            StringAssert.Contains("noMetalRough=10.80%", line);
+            // The subject percentages ride along because a probe that changed the SILHOUETTE
+            // changed more than the one input it was supposed to, and its verdict is worthless.
+            StringAssert.Contains("subject base=12.56%", line);
+            StringAssert.Contains("verdict=base-colour-texture", line);
+        }
+
         // ── framing a box instead of a sphere ────────────────────────────────────
 
         /// <summary>The QC camera's own basis: three-quarter view from slightly above.</summary>

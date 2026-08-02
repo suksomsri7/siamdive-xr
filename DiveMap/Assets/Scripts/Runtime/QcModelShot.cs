@@ -246,6 +246,15 @@ namespace DiveMap.Runtime
                 Debug.Log($"[QCModel] {name} framed radius={radius:F2} dist={dist:F2} " +
                           $"scale={scale:F2} camY={cam.transform.position.y:F1} " +
                           $"load={loadSecs:F1}s url={url}");
+
+                // A/B probes: same camera, same model, one shading input removed at a time.
+                // See QcPixels.ProbeLine for why the pass earns two extra frames per model.
+                QcPixels.Shot whiteAlbedo = default, noMetalRough = default;
+                yield return Probe(cam, rt, readback, renderers, withoutModel, ProbeKind.WhiteAlbedo,
+                                   s => whiteAlbedo = s);
+                yield return Probe(cam, rt, readback, renderers, withoutModel, ProbeKind.NoMetalRough,
+                                   s => noMetalRough = s);
+                Debug.Log(QcPixels.ProbeLine(name, shot, whiteAlbedo, noMetalRough));
             }
             else
             {
@@ -264,6 +273,93 @@ namespace DiveMap.Runtime
             import?.Dispose();
 
             onDone(pass);
+        }
+
+        // ── A/B probes ───────────────────────────────────────────────────────────
+
+        /// <summary>Which shading input the probe frame removes.</summary>
+        private enum ProbeKind { WhiteAlbedo, NoMetalRough }
+
+        /// <summary>
+        /// Take one probe frame with <paramref name="kind"/>'s input removed, measure it against
+        /// the model-off frame that is already in hand, and put every material back exactly as it
+        /// was — the main shot has already been written, but the map view is photographed after
+        /// this pass and must not inherit a debug material.
+        ///
+        /// Property names are glTFast's (<c>baseColorTexture</c>, <c>metallicRoughnessTexture</c>),
+        /// with Unity's Standard names as a fallback so the probe still says something if a model
+        /// ever arrives on a different shader. A material that has neither is left alone and
+        /// simply contributes nothing to the probe.
+        /// </summary>
+        private static IEnumerator Probe(Camera cam, RenderTexture rt, Texture2D readback,
+                                         List<Renderer> renderers, byte[] withoutModel,
+                                         ProbeKind kind, System.Action<QcPixels.Shot> onShot)
+        {
+            var mats = new List<Material>();
+            foreach (Renderer r in renderers)
+            {
+                if (r == null) continue;
+                foreach (Material m in r.materials) if (m != null) mats.Add(m);
+            }
+
+            var savedTex = new List<Texture>();
+            var savedA = new List<float>();
+            var savedColor = new List<Color>();
+            var savedB = new List<float>();
+
+            string texProp = kind == ProbeKind.WhiteAlbedo ? "baseColorTexture" : "metallicRoughnessTexture";
+            string texAlt = kind == ProbeKind.WhiteAlbedo ? "_MainTex" : "_MetallicGlossMap";
+
+            foreach (Material m in mats)
+            {
+                string p = m.HasProperty(texProp) ? texProp : (m.HasProperty(texAlt) ? texAlt : null);
+                savedTex.Add(p != null ? m.GetTexture(p) : null);
+                if (p != null) m.SetTexture(p, null);
+
+                if (kind == ProbeKind.WhiteAlbedo)
+                {
+                    // Factor to white as well: clearing the slot alone leaves baseColorFactor
+                    // tinting a "white" default, which is not the same experiment.
+                    string c = m.HasProperty("baseColorFactor") ? "baseColorFactor"
+                             : (m.HasProperty("_Color") ? "_Color" : null);
+                    savedColor.Add(c != null ? m.GetColor(c) : Color.white);
+                    if (c != null) m.SetColor(c, Color.white);
+                    savedA.Add(0f);
+                    savedB.Add(0f);
+                }
+                else
+                {
+                    savedColor.Add(Color.white);
+                    savedA.Add(m.HasProperty("metallicFactor") ? m.GetFloat("metallicFactor") : 0f);
+                    savedB.Add(m.HasProperty("roughnessFactor") ? m.GetFloat("roughnessFactor") : 0f);
+                    if (m.HasProperty("metallicFactor")) m.SetFloat("metallicFactor", 0f);
+                    if (m.HasProperty("roughnessFactor")) m.SetFloat("roughnessFactor", 0.6f);
+                    m.DisableKeyword("_METALLICGLOSSMAP");
+                }
+            }
+
+            byte[] probed = null;
+            yield return Capture(cam, rt, readback, null, bytes => probed = bytes);
+            onShot(QcPixels.Measure(probed, withoutModel));
+
+            for (int i = 0; i < mats.Count; i++)
+            {
+                Material m = mats[i];
+                string p = m.HasProperty(texProp) ? texProp : (m.HasProperty(texAlt) ? texAlt : null);
+                if (p != null) m.SetTexture(p, savedTex[i]);
+                if (kind == ProbeKind.WhiteAlbedo)
+                {
+                    string c = m.HasProperty("baseColorFactor") ? "baseColorFactor"
+                             : (m.HasProperty("_Color") ? "_Color" : null);
+                    if (c != null) m.SetColor(c, savedColor[i]);
+                }
+                else
+                {
+                    if (m.HasProperty("metallicFactor")) m.SetFloat("metallicFactor", savedA[i]);
+                    if (m.HasProperty("roughnessFactor")) m.SetFloat("roughnessFactor", savedB[i]);
+                    if (savedTex[i] != null) m.EnableKeyword("_METALLICGLOSSMAP");
+                }
+            }
         }
 
         // ── capture ──────────────────────────────────────────────────────────────
