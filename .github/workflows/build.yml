@@ -394,7 +394,10 @@ jobs:
     name: QC screenshot
     needs: test
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    # 90 ไม่ใช่ 60: shader ใหม่ (เช่น DM_FishWaveDetail) ทำ Library cache แตก → คอมไพล์ variant
+    # ~5k ตัวกิน ~60 นาทีพอดีเพดานเดิม โดนตัดตอน 3956/5120 มาแล้ว 4 run ติด และการโดนตัด
+    # ก่อน cache ถูกเซฟ = รอบถัดไปก็แตกอีก วนไม่รู้จบ
+    timeout-minutes: 90
     steps:
       - name: Free disk space
         uses: jlumbroso/free-disk-space@main

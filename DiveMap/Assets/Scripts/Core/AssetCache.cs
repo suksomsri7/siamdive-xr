@@ -45,7 +45,7 @@ namespace DiveMap.Core
         /// An index row written before this field existed decodes as generation 0, which is
         /// exactly the set of files that needs replacing.
         /// </summary>
-        public const int Generation = 1;
+        public const int Generation = 2;
 
         /// <summary>
         /// Is a cached file's generation still good enough to serve?
