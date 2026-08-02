@@ -93,6 +93,15 @@ namespace DiveMap.Core
         private static readonly Regex RxStill =
             new Regex("crab|lobster|shrim|mantis_shrimp|clam|urchin|starfish|anemone|coral|barnacle|nudibranch|seahorse|pygmy|stonefish|scorpionfish|flounder|sea_star", Opt);
 
+        /// <summary>
+        /// Names the still-list swallows by accident. <c>coral</c> is in it for the coral heads,
+        /// and it also matches <c>mdl:coralfish</c> — a perfectly ordinary reef fish that the web
+        /// gives <c>speedMul: 0.8</c> (builder.html:1853). Left alone it comes out with a 1.2 %
+        /// tail amplitude and hangs in the water like a decal.
+        /// </summary>
+        private static readonly Regex RxNotStill =
+            new Regex("coral_?fish|coralfish|anemone_?fish|clownfish", Opt);
+
         /// <summary>Anguilliform — the WHOLE body waves, several wavelengths of it.</summary>
         private static readonly Regex RxEel =
             new Regex("moray|eel|sea_serpent|serpent|snake|oarfish|ribbon", Opt);
@@ -138,9 +147,26 @@ namespace DiveMap.Core
             return SwimGait.Body;
         }
 
-        /// <summary>True when this asset has no swimming motion to give it at all.</summary>
+        /// <summary>
+        /// True when this asset has no swimming motion to give it at all.
+        ///
+        /// 🔴 Two sources, and the second one is not optional. The name list above catches the
+        /// obvious ones (crab, clam, urchin). The web ALSO marks species stationary by hand
+        /// (<c>BEHAVIOR_CFG</c>'s <c>stationary:true</c>), and three animals in this app's own
+        /// manifest are only reachable that way: <c>mdl:leafy_seadragon</c> (no "seahorse" in the
+        /// name — it is a seaDRAGON), <c>mdl:giant_clam</c>… which the name list does catch, and
+        /// <c>losin:garden_eel</c>, which the name list actively catches the WRONG way: it matches
+        /// "eel", and the eel clause below un-stills it. A garden eel is anchored in its burrow
+        /// and sways; giving it a two-wavelength anguilliform swim sends a colony of them
+        /// undulating across the sand like a field of snakes. The hand-tuned row wins.
+        /// </summary>
         public static bool IsStill(string assetId)
-            => RxStill.IsMatch(assetId ?? "") && !RxEel.IsMatch(assetId ?? "");
+        {
+            string id = assetId ?? "";
+            if (SpeciesBehavior.For(id).Stationary) return true;
+            if (RxNotStill.IsMatch(id)) return false;
+            return RxStill.IsMatch(id) && !RxEel.IsMatch(id);
+        }
 
         /// <summary>
         /// The wave numbers for <paramref name="assetId"/> at the size it is drawn

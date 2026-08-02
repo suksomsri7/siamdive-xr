@@ -39,9 +39,14 @@
     <Compile Include="../../DiveMap/Assets/Scripts/Core/SolidBoxes.cs" />
     <Compile Include="../../DiveMap/Assets/Scripts/Core/FleeMath.cs" />
     <Compile Include="../../DiveMap/Assets/Scripts/Core/SpeciesGenome.cs" />
+    <Compile Include="../../DiveMap/Assets/Scripts/Core/SpeciesBehavior.cs" />
+    <Compile Include="../../DiveMap/Assets/Scripts/Core/MarineRouting.cs" />
+    <Compile Include="../../DiveMap/Assets/Scripts/Core/AppModes.cs" />
     <Compile Include="../../DiveMap/Assets/Scripts/Core/SwimStyle.cs" />
+    <Compile Include="../../DiveMap/Assets/Scripts/Core/HuntMath.cs" />
     <Compile Include="../../DiveMap/Assets/Scripts/Core/FishMind.cs" />
     <Compile Include="../../DiveMap/Assets/Scripts/Core/QcPixels.cs" />
+    <Compile Include="../../DiveMap/Assets/Scripts/Core/GlbShading.cs" />
   </ItemGroup>
 
   <ItemGroup Label="EditMode tests for exactly those files">
@@ -49,7 +54,12 @@
     <Compile Include="../../DiveMap/Assets/Tests/EditMode/MarineMathTests.cs" />
     <Compile Include="../../DiveMap/Assets/Tests/EditMode/FleeMathTests.cs" />
     <Compile Include="../../DiveMap/Assets/Tests/EditMode/SpeciesGenomeTests.cs" />
+    <Compile Include="../../DiveMap/Assets/Tests/EditMode/SpeciesBehaviorTests.cs" />
     <Compile Include="../../DiveMap/Assets/Tests/EditMode/SwimStyleTests.cs" />
+    <Compile Include="../../DiveMap/Assets/Tests/EditMode/HuntMathTests.cs" />
+    <Compile Include="../../DiveMap/Assets/Tests/EditMode/SpeciesCoverageTests.cs" />
+    <Compile Include="../../DiveMap/Assets/Tests/EditMode/MarineRoutingTests.cs" />
+    <Compile Include="../../DiveMap/Assets/Tests/EditMode/ModeRulesTests.cs" />
     <Compile Include="../../DiveMap/Assets/Tests/EditMode/FishMindTests.cs" />
     <Compile Include="../../DiveMap/Assets/Tests/EditMode/DroneFlightTests.cs" />
     <Compile Include="../../DiveMap/Assets/Tests/EditMode/WarpSpawnTests.cs" />
@@ -57,6 +67,7 @@
     <Compile Include="../../DiveMap/Assets/Tests/EditMode/SolidBoxesTests.cs" />
     <Compile Include="../../DiveMap/Assets/Tests/EditMode/TiltedHullTests.cs" />
     <Compile Include="../../DiveMap/Assets/Tests/EditMode/QcPixelsTests.cs" />
+    <Compile Include="../../DiveMap/Assets/Tests/EditMode/GlbShadingTests.cs" />
     <Compile Include="Runner.cs" />
   </ItemGroup>
 </Project>

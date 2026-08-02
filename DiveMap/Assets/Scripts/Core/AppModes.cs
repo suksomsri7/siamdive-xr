@@ -42,6 +42,19 @@ namespace DiveMap.Core
         /// <summary>First-person modes: the camera is the diver/drone, not an orbit rig.</summary>
         public static bool IsFirstPerson(AppMode mode) => mode == AppMode.Tour || mode == AppMode.Game;
 
+        /// <summary>
+        /// May the solo animals swim?
+        ///
+        /// 🔴 Not in Edit. The builder moves an item by writing its transform, and so does the
+        /// animal — so an author trying to place a shark would be dragging something that swims
+        /// out from under the gizmo, and one that let go would watch it wander off the spot they
+        /// chose. This mattered little while only the <c>msh:*</c> heroes moved (a map has one or
+        /// two); C6 phase 2 gave all 58 other species a brain, so a reef of twenty fish would
+        /// have become unplaceable. In Edit an animal is furniture — which is exactly what an
+        /// author is trying to arrange.
+        /// </summary>
+        public static bool AnimalsSwim(AppMode mode) => mode != AppMode.Edit;
+
         /// <summary>Where "exit" lands from <paramref name="mode"/>. Always somewhere usable.</summary>
         public static AppMode ExitTarget(AppMode mode) => AppMode.View;
 

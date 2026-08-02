@@ -39,11 +39,51 @@ namespace DiveMap.Core
             public readonly double Social;
             public readonly bool   Schooler;
 
-            public Genome(string diet, string zone, int rank, double social, bool schooler)
+            // ── personality RANGES (web :1898-1903). An individual is drawn from these, which is
+            // why they are ranges and not numbers: two clownfish on the same reef are not the
+            // same clownfish. SpeciesBehavior.DrawPersonality does the draw, deterministically.
+            /// <summary>How close it lets a threat come before it bolts (web :1898).</summary>
+            public readonly double BoldMin, BoldMax;
+            /// <summary>How far and how fast it goes; a big animal is conserving it (web :1899).</summary>
+            public readonly double EnergyMin, EnergyMax;
+            /// <summary>Whether it comes to inspect the diver or keeps a flight bubble (web :1902).</summary>
+            public readonly double CuriosityMin, CuriosityMax;
+            /// <summary>How fast it gets hungry again (web :1903). Read by the hunting code.</summary>
+            public readonly double MetabolismMin, MetabolismMax;
+            /// <summary>
+            /// Social structure (web :1904): <c>mother-calf</c>, <c>matriarchal-pod</c>,
+            /// <c>paternal-guard</c> or <c>none</c>. Not yet steering anything — carried so the
+            /// port is complete and so a pod of orcas can be told from a pair of humpbacks.
+            /// </summary>
+            public readonly string Family;
+
+            public Genome(string diet, string zone, int rank, double social, bool schooler,
+                          double boldMin, double boldMax,
+                          double energyMin, double energyMax,
+                          double curiosityMin, double curiosityMax,
+                          double metabolismMin, double metabolismMax,
+                          string family)
             {
                 Diet = diet; Zone = zone; Rank = rank; Social = social; Schooler = schooler;
+                BoldMin = boldMin; BoldMax = boldMax;
+                EnergyMin = energyMin; EnergyMax = energyMax;
+                CuriosityMin = curiosityMin; CuriosityMax = curiosityMax;
+                MetabolismMin = metabolismMin; MetabolismMax = metabolismMax;
+                Family = family;
             }
+
+            /// <summary>Midpoint of a range — "the average member of this species".</summary>
+            public double Boldness   => (BoldMin + BoldMax) * 0.5;
+            public double Energy     => (EnergyMin + EnergyMax) * 0.5;
+            public double Curiosity  => (CuriosityMin + CuriosityMax) * 0.5;
+            public double Metabolism => (MetabolismMin + MetabolismMax) * 0.5;
         }
+
+        // ── family structures (web :1904) ────────────────────────────────────────
+        public const string FamilyMotherCalf    = "mother-calf";
+        public const string FamilyMatriarchal   = "matriarchal-pod";
+        public const string FamilyPaternalGuard = "paternal-guard";
+        public const string FamilyNone          = "none";
 
         private const RegexOptions Opt = RegexOptions.IgnoreCase | RegexOptions.CultureInvariant;
 
@@ -66,10 +106,25 @@ namespace DiveMap.Core
         private static readonly Regex RxSolitary  = new Regex("shark|whale|sperm|beluga|mola|grouper|turtle|orca|moray|scorpion|stonefish|octopus|lobster|mantis|crab|barracuda", Opt);
         private static readonly Regex RxSocial07  = new Regex("fusilier|snapper|blush|bannerfish|tang|surgeon|butterfly|anthias|parrot|idol|moorish|azure|banded|prismatic|spotted|indigo|leopard_fish|damsel", Opt);
 
+        /// <summary>Bold inspectors — they come and look at the diver (web :1901).</summary>
+        private static readonly Regex RxBoldLook  = new Regex("trigger|batfish|remora|whitetip|silvertip|barracuda|grouper|napoleon|trevally|seal|penguin", Opt);
+        /// <summary>Shy fish — they keep a flight bubble (web :1902).</summary>
+        private static readonly Regex RxShy       = new Regex("butterfly|anthias|damsel|goby|blenny|seahorse|pygmy|shrimp|clownfish", Opt);
+
+        private static readonly Regex RxMotherCalf  = new Regex("humpback|sperm|beluga|whale", Opt);
+        private static readonly Regex RxMatriarchal = new Regex("dolphin|orca", Opt);
+        private static readonly Regex RxPaternal    = new Regex("seahorse|clownfish|cardinal|jawfish", Opt);
+
         /// <summary>Classify an asset id (<c>school:scad</c>, <c>fish:whaleshark</c>, …).</summary>
         public static Genome For(string assetId)
         {
             string id = assetId ?? "";
+
+            // 🔴 The hand-tuned row comes FIRST, because the web's zone test reads it (:1888-1890).
+            // Without this the mola-mola, both batfish, the coralfish, the leafy seadragon, the
+            // giant clam and the kaleidoscope beetle all land in the wrong water — see the note on
+            // SpeciesBehavior. `cfg` is a struct off a dictionary lookup: no allocation.
+            SpeciesBehavior.Cfg cfg = SpeciesBehavior.For(id);
 
             string diet = DietPlanktivore;
             if (RxFilter.IsMatch(id)) diet = DietFilter;
@@ -80,9 +135,9 @@ namespace DiveMap.Core
             else if (RxBaleen.IsMatch(id)) diet = DietFilter;
 
             string zone = ZoneMid;
-            if (RxBottom.IsMatch(id)) zone = ZoneBottom;
-            else if (RxReef.IsMatch(id)) zone = ZoneReef;
-            else if (RxPelagic.IsMatch(id)) zone = ZonePelagic;
+            if (cfg.Stationary || cfg.Benthic || RxBottom.IsMatch(id)) zone = ZoneBottom;   // :1888
+            else if (cfg.Flat || RxReef.IsMatch(id)) zone = ZoneReef;                       // :1889
+            else if (RxPelagic.IsMatch(id)) zone = ZonePelagic;                             // :1890
 
             int rank = RxApex.IsMatch(id) ? 3
                      : diet == DietPredator ? 2
@@ -96,7 +151,32 @@ namespace DiveMap.Core
                           : RxSocial07.IsMatch(id) ? 0.7
                           : 0.45;
 
-            return new Genome(diet, zone, rank, social, schooler);
+            // boldness (:1898) — a predator lets things get close; prey does not.
+            double boldMin = diet == DietPredator ? 0.5 : 0.12;
+            double boldMax = diet == DietPredator ? 0.92 : 0.5;
+
+            // energy (:1899) — a big animal is conserving it. Note this reads cfg.big, NOT a name:
+            // "big" is a hand-tuned decision, which is why the table has to be consulted.
+            double energyMin = cfg.Big ? 0.3 : 0.45;
+            double energyMax = cfg.Big ? 0.6 : 0.85;
+
+            // curiosity (:1901-1902) — bold inspectors approach the diver, shy fish keep a bubble.
+            double curioMin, curioMax;
+            if (RxBoldLook.IsMatch(id))   { curioMin = 0.55; curioMax = 0.95; }
+            else if (RxShy.IsMatch(id))   { curioMin = 0.05; curioMax = 0.30; }
+            else                          { curioMin = 0.20; curioMax = 0.70; }
+
+            string family = RxMotherCalf.IsMatch(id)  ? FamilyMotherCalf     // :1904
+                          : RxMatriarchal.IsMatch(id) ? FamilyMatriarchal
+                          : RxPaternal.IsMatch(id)    ? FamilyPaternalGuard
+                          : FamilyNone;
+
+            return new Genome(diet, zone, rank, social, schooler,
+                              boldMin, boldMax,
+                              energyMin, energyMax,
+                              curioMin, curioMax,
+                              0.6, 1.25,          // metabolism (:1903) — the same range for everything
+                              family);
         }
 
         /// <summary>Would <paramref name="other"/> frighten <paramref name="self"/>?</summary>

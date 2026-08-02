@@ -78,5 +78,18 @@ namespace DiveMap.Tests
             foreach (AppMode m in new[] { AppMode.View, AppMode.Tour, AppMode.Game, AppMode.Ar, AppMode.Edit })
                 Assert.IsFalse(ModeRules.CanEnter(m, m));
         }
+
+        [Test]
+        public void AnimalsFreezeInTheBuilder()
+        {
+            // 🔴 C6 phase 2. The gizmo moves an item by writing its transform and so does
+            // WhaleController, so an author placing a shark would be dragging something that
+            // swims out from under them. Harmless while only one or two msh:* heroes moved;
+            // unusable once all 58 other species got a brain.
+            Assert.IsFalse(ModeRules.AnimalsSwim(AppMode.Edit));
+
+            foreach (AppMode m in new[] { AppMode.View, AppMode.Tour, AppMode.Game, AppMode.Ar })
+                Assert.IsTrue(ModeRules.AnimalsSwim(m), m.ToString());
+        }
     }
 }

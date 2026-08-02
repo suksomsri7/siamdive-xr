@@ -126,6 +126,72 @@ namespace DiveMap.Tests
             Assert.AreEqual(SpeciesGenome.ZoneBottom, SpeciesGenome.For("fish:moray_eel").Zone);
         }
 
+        [Test]
+        public void TheHandTunedRowDecidesTheZoneBeforeTheNameDoes()
+        {
+            // 🔴 builder.html:1888-1890 tests cfg.stationary/benthic → bottom and cfg.flat → reef
+            // BEFORE the name lists. These seven species in the app's own manifest are only
+            // reachable that way, and every one of them was in the wrong water until the table
+            // arrived — the mola drifting the open ocean instead of basking by the reef, the
+            // seadragon and the clam swimming in mid-water.
+            Assert.AreEqual(SpeciesGenome.ZoneReef, SpeciesGenome.For("msh:mola_mola").Zone,
+                            "flat:true (:1804) — a basker hangs by the reef, it does not migrate");
+            Assert.AreEqual(SpeciesGenome.ZoneReef, SpeciesGenome.For("mdl:batfish").Zone);
+            Assert.AreEqual(SpeciesGenome.ZoneReef, SpeciesGenome.For("mdl:batfish_juvenile").Zone);
+            Assert.AreEqual(SpeciesGenome.ZoneReef, SpeciesGenome.For("mdl:coralfish").Zone);
+            Assert.AreEqual(SpeciesGenome.ZoneBottom, SpeciesGenome.For("mdl:leafy_seadragon").Zone,
+                            "stationary:true (:1858) — nothing in the NAME says seadragon");
+            Assert.AreEqual(SpeciesGenome.ZoneBottom, SpeciesGenome.For("mdl:giant_clam").Zone);
+            Assert.AreEqual(SpeciesGenome.ZoneBottom, SpeciesGenome.For("losin:kaleidoscope_beetle").Zone,
+                            "benthic:true (:1824)");
+        }
+
+        // ── personality (web :1898-1904) ─────────────────────────────────────────
+
+        [Test]
+        public void PredatorsAreBolderThanPrey()
+        {
+            // :1898 — [0.5,0.92] against [0.12,0.5]. Boldness is what sets the size of the
+            // flight bubble a diver has to stay outside of.
+            Assert.Greater(SpeciesGenome.For("fish:tiger_shark").Boldness,
+                           SpeciesGenome.For("fish:anthias").Boldness);
+        }
+
+        [Test]
+        public void BigAnimalsConserveEnergy()
+        {
+            // :1899 — cfg.big ? [0.3,0.6] : [0.45,0.85]. Read off the TABLE, not the name, which
+            // is why an id with no row cannot be big however large the animal sounds.
+            Assert.Less(SpeciesGenome.For("msh:humpback_whale").Energy,
+                        SpeciesGenome.For("losin:blue_tang").Energy);
+        }
+
+        [Test]
+        public void BoldInspectorsApproachAndShyFishDoNot()
+        {
+            // :1901-1902 — a triggerfish comes to look at you, a damselfish keeps its distance.
+            Assert.Greater(SpeciesGenome.For("mdl:batfish").Curiosity, 0.6,
+                           "a batfish follows divers around — web :1901 lists it as an inspector");
+            // ⚠️ Known and deliberate: losin:parrotfish_yellowface and losin:parrotfish_honeycomb
+            // are DISPLAYED as triggerfish but their ids say parrotfish, so every table in the
+            // app classifies them as grazers. The web has exactly the same mismatch and the ids
+            // are what maps are saved with — renaming them is a data migration, not a fix here.
+            Assert.AreEqual(SpeciesGenome.DietGrazer,
+                            SpeciesGenome.For("losin:parrotfish_yellowface").Diet);
+            Assert.Less(SpeciesGenome.For("losin:clownfish_two_band").Curiosity, 0.25);
+            Assert.Less(SpeciesGenome.For("losin:pygmy_seahorse").Curiosity, 0.25);
+        }
+
+        [Test]
+        public void FamiliesAreClassified()
+        {
+            // :1904 — carried for completeness; a pod of orcas is not a pair of humpbacks.
+            Assert.AreEqual(SpeciesGenome.FamilyMotherCalf, SpeciesGenome.For("msh:humpback_whale").Family);
+            Assert.AreEqual(SpeciesGenome.FamilyMatriarchal, SpeciesGenome.For("pod:orca").Family);
+            Assert.AreEqual(SpeciesGenome.FamilyPaternalGuard, SpeciesGenome.For("losin:pygmy_seahorse").Family);
+            Assert.AreEqual(SpeciesGenome.FamilyNone, SpeciesGenome.For("school:scad").Family);
+        }
+
         // ── sociability ──────────────────────────────────────────────────────────
 
         [Test]

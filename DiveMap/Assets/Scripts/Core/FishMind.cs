@@ -15,6 +15,14 @@ namespace DiveMap.Core
         Startle = 3,
         /// <summary>The threat has gone; coming back together, still jumpy. NOT calm yet.</summary>
         Regroup = 4,
+        /// <summary>Closing on something it means to eat. Driven by <see cref="HuntMath"/>.</summary>
+        Hunt = 5,
+        /// <summary>
+        /// Running from something that hunts it, with a direction of its own rather than merely
+        /// scattering. Distinct from <see cref="Startle"/>: a startle is a reflex that fades,
+        /// an evade is a sustained retreat from an animal that is still coming.
+        /// </summary>
+        Evade = 6,
     }
 
     /// <summary>
@@ -223,8 +231,34 @@ namespace DiveMap.Core
             // map to go and look at something it was already closer to. Standing off by a fraction
             // of the shoal's own radius, just outside the structure, is what "went to look at it"
             // actually means.
-            if (Has(id, "barracuda"))
+            // ── 1. the demo map's own four, FROZEN, matched by exact id ──────────────
+            // These numbers were tuned against the demo map and its QC shots; nothing below may
+            // change them. Matched exactly rather than by substring so that the fifteen OTHER
+            // species whose names contain "barracuda", "batfish" or "sardine" are free to have
+            // rows of their own — msh:barracuda roams 26 u and school:barracuda roams 6, and
+            // before this they were the same animal.
+            if (Same(id, "school:barracuda"))
                 //          curio roam depth  dwellMin/Max  orbit  orbitR stand  poiH  wary
+                return new MindTraits(0.55, 0.50, 0.22, 26.0, 48.0, 0.055, 1.30, 0.30, 0.20, 14.0);
+            if (Same(id, "school:scad"))
+                return new MindTraits(0.30, 1.60, 0.50, 9.0, 18.0, 0.000, 1.20, 0.45, 0.25, 10.0);
+            if (Same(id, "school:batfish"))
+                return new MindTraits(0.80, 0.70, 0.28, 18.0, 34.0, 0.030, 1.10, 0.20, 0.30, 12.0);
+            if (Same(id, "pod:yellowtail"))
+                return new MindTraits(0.25, 1.20, 0.35, 20.0, 38.0, 0.000, 1.25, 0.55, 0.30, 16.0);
+
+            // ── 2. every species the WEB hand-tuned gets its own row, from that row ──
+            // Before this, ninety species shared four zone fallbacks: every reef fish in the game
+            // had the same curiosity, the same dwell and the same roaming range, so a lionfish
+            // (which hovers over seven units of sand) and a parrotfish (seventy) were the same
+            // animal wearing a different mesh.
+            SpeciesBehavior.Cfg cfg = SpeciesBehavior.For(id);
+            if (cfg.Has) return FromWebRow(cfg, SpeciesGenome.For(id));
+
+            // ── 3. no row anywhere, but the name is recognisable ─────────────────────
+            // Keeps a hand-authored map that says "fish:sardine" or "msh:scad_school" behaving
+            // like the shoal it is naming rather than like a generic mid-water fish.
+            if (Has(id, "barracuda"))
                 return new MindTraits(0.55, 0.50, 0.22, 26.0, 48.0, 0.055, 1.30, 0.30, 0.20, 14.0);
             if (Has(id, "scad") || Has(id, "sardine") || Has(id, "anchov"))
                 return new MindTraits(0.30, 1.60, 0.50, 9.0, 18.0, 0.000, 1.20, 0.45, 0.25, 10.0);
@@ -233,7 +267,7 @@ namespace DiveMap.Core
             if (Has(id, "yellowtail") || Has(id, "trevally") || Has(id, "jack"))
                 return new MindTraits(0.25, 1.20, 0.35, 20.0, 38.0, 0.000, 1.25, 0.55, 0.30, 16.0);
 
-            // Nobody wrote a row — fall back to where this animal lives.
+            // ── 4. nothing at all — fall back to where this animal lives ─────────────
             SpeciesGenome.Genome g = SpeciesGenome.For(id);
             if (g.Zone == SpeciesGenome.ZoneBottom)
                 return new MindTraits(0.70, 0.25, 0.10, 16.0, 30.0, 0.015, 1.05, 0.12, 0.05, 10.0);
@@ -247,6 +281,92 @@ namespace DiveMap.Core
 
         private static bool Has(string id, string needle)
             => id.IndexOf(needle, StringComparison.OrdinalIgnoreCase) >= 0;
+
+        private static bool Same(string id, string other)
+            => string.Equals(id, other, StringComparison.OrdinalIgnoreCase);
+
+        /// <summary>
+        /// Units of the web's <c>roamR</c> that one unit of this app's <see cref="MindTraits.RoamMul"/>
+        /// is worth.
+        ///
+        /// 🔴 The two systems do not measure the same thing and pretending they do is how a port
+        /// goes wrong quietly. The web's <c>roamR</c> is an ABSOLUTE radius in map units around
+        /// where the animal was placed (1 for a giant clam, 400 for a humpback). This app's
+        /// <c>RoamMul</c> is RELATIVE to the school's own home radius, because the thing that
+        /// wanders here is a shoal, not a fish. What can be carried across is the ORDERING and the
+        /// spread, and 100 u per unit does exactly that: the frozen rows above sit at 0.5-1.6, the
+        /// web's rows span 1-400, and dividing by 100 lands the web's spread on the app's band.
+        /// The clamp keeps a 400 u humpback from dragging a shoal twice across the map and a 1 u
+        /// clam from pinning one to a point.
+        /// </summary>
+        public const double WebRoamPerMul = 100.0;
+        /// <summary>Narrowest and widest a derived row may roam. See <see cref="WebRoamPerMul"/>.</summary>
+        public const double DerivedRoamMin = 0.08, DerivedRoamMax = 1.80;
+
+        /// <summary>
+        /// Build a temperament from the species' own hand-tuned web row plus its genome. Pure, so
+        /// every species in the manifest can be asserted against it without a scene.
+        ///
+        /// Which trait comes from where, and why:
+        ///   • <b>roam</b> — the web's <c>roamR</c>, rescaled (<see cref="WebRoamPerMul"/>).
+        ///   • <b>curiosity</b> — the genome's own curiosity range (web :1901-1902: a triggerfish
+        ///     comes to look at you, a damselfish does not), tilted by where it lives. A reef fish
+        ///     lives ON structure so it visits it constantly; a pelagic has no reason to.
+        ///   • <b>dwell</b> — inversely from the species' cruise speed. A sailfish changes its
+        ///     mind every six seconds and a lionfish hangs in one spot for a minute, and that
+        ///     difference is most of what tells them apart at a distance.
+        ///   • <b>wariness</b> — from boldness (web :1898). A predator settles faster than prey.
+        /// </summary>
+        private static MindTraits FromWebRow(in SpeciesBehavior.Cfg cfg, in SpeciesGenome.Genome g)
+        {
+            bool bottom  = g.Zone == SpeciesGenome.ZoneBottom;
+            bool reef    = g.Zone == SpeciesGenome.ZoneReef;
+            bool pelagic = g.Zone == SpeciesGenome.ZonePelagic;
+
+            // Roam. A stationary animal is pinned at the floor of the band, not at zero: even a
+            // clam's "home" has to have a radius or the clamp maths divides by it.
+            double webRoam = cfg.HasRoamR
+                           ? cfg.RoamR
+                           : SpeciesBehavior.Derive(cfg, g, 0.5).BaseRoam;
+            double roamMul = Clamp(webRoam / WebRoamPerMul, DerivedRoamMin, DerivedRoamMax);
+            if (cfg.Stationary) roamMul = DerivedRoamMin;
+
+            // Depth budget: how much of the roaming is spent going up and down.
+            double depthMul = cfg.Stationary ? 0.04
+                            : bottom  ? 0.10
+                            : reef    ? 0.20
+                            : pelagic ? 0.45
+                            :           0.32;
+
+            // Curiosity. The genome midpoint is the species' disposition; the zone says how much
+            // structure there is to be curious ABOUT.
+            double curiosity = g.Curiosity * (reef ? 1.25 : bottom ? 1.15 : pelagic ? 0.55 : 1.0);
+            if (cfg.Big) curiosity *= 0.7;          // a big animal slides past, it does not sightsee
+            curiosity = Clamp(curiosity, 0.05, 0.95);
+
+            // Dwell from speed: fast animals are restless. CruiseMul already folds the web's
+            // hand-tuned speedMul into the derived swimMul, so a 0.15× lionfish and a 1.9×
+            // sailfish come out an order of magnitude apart, which is the point.
+            double speed = SpeciesBehavior.Derive(cfg, g, 0.5).SwimMul;
+            if (cfg.HasSpeed) speed *= cfg.SpeedMul;
+            double dwellMin = Clamp(14.0 / (speed > 0.12 ? speed : 0.12), 6.0, 40.0);
+            double dwellMax = dwellMin * 1.9;
+
+            // Orbiting a structure. Pelagic animals pass by; reef and bottom dwellers walk round.
+            double orbitRate = cfg.Stationary || pelagic ? 0.0 : (cfg.Big ? 0.012 : 0.022);
+            double orbitRMul = bottom ? 1.05 : reef ? 1.10 : pelagic ? 1.35 : 1.25;
+            double standoff  = (bottom ? 0.12 : reef ? 0.15 : pelagic ? 0.60 : 0.35) * (cfg.Big ? 1.3 : 1.0);
+            double poiHeight = bottom ? 0.05 : reef ? 0.20 : pelagic ? 0.35 : 0.30;
+
+            // Nerves. Bold animals stop being nervous sooner (web :1898).
+            double wary = Clamp(8.0 + 10.0 * (1.0 - g.Boldness), 8.0, 18.0);
+
+            return new MindTraits(curiosity, roamMul, depthMul, dwellMin, dwellMax,
+                                  orbitRate, orbitRMul, standoff, poiHeight, wary);
+        }
+
+        private static double Clamp(double v, double lo, double hi)
+            => v < lo ? lo : (v > hi ? hi : v);
 
         // ── the school brain ─────────────────────────────────────────────────────
 
@@ -344,6 +464,131 @@ namespace DiveMap.Core
                 m.OrbitPhase += tr.OrbitRate * dt;
                 if (m.OrbitPhase >= TwoPi) m.OrbitPhase %= TwoPi;
                 AimAtPoi(ref m, tr, dom, pois[m.Poi], homeR);
+            }
+
+            return changed;
+        }
+
+        /// <summary>
+        /// What a predator or a prey animal knows about the other animals around it this frame.
+        /// A plain struct so <see cref="StepHunter"/> keeps a sane signature and the runtime can
+        /// fill it in place with no allocation.
+        /// </summary>
+        public readonly struct Quarry
+        {
+            /// <summary>Something this animal eats is within its sense radius.</summary>
+            public readonly bool   HasPrey;
+            public readonly double PreyX, PreyY, PreyZ;
+            /// <summary>Something that eats THIS animal is within its sense radius.</summary>
+            public readonly bool   HasHunter;
+            public readonly double HunterX, HunterZ;
+            /// <summary>Obstacle radius of this animal — every sense radius is built from it.</summary>
+            public readonly double ObsR;
+
+            public Quarry(bool hasPrey, double preyX, double preyY, double preyZ,
+                          bool hasHunter, double hunterX, double hunterZ, double obsR)
+            {
+                HasPrey = hasPrey; PreyX = preyX; PreyY = preyY; PreyZ = preyZ;
+                HasHunter = hasHunter; HunterX = hunterX; HunterZ = hunterZ;
+                ObsR = obsR > 0.0 ? obsR : 1.0;
+            }
+        }
+
+        /// <summary>
+        /// C6 — <see cref="Step"/> with the predator/prey layer on top: the same brain, plus
+        /// <see cref="MindState.Hunt"/> and <see cref="MindState.Evade"/>.
+        ///
+        /// The precedence is the web's and it is not negotiable (builder.html:2182-2199): fear
+        /// first, hunger second, ordinary life last. A shark that has something bigger on it stops
+        /// hunting — the web literally clears <c>mem.prey</c> in that case (:1957) — and a hungry
+        /// animal still runs. Getting this backwards produces the one thing that instantly reads
+        /// as a bug: a predator calmly eating while something eats it.
+        ///
+        /// 🔴 Everything else is delegated to <see cref="Step"/> unchanged, deliberately. This
+        /// method adds states; it does not get to re-decide dwell, curiosity, wariness or the
+        /// domain clamp, all of which are already tested. When neither hunting nor evading applies
+        /// the two methods are the same function.
+        ///
+        /// <paramref name="selfX"/>/<paramref name="selfZ"/> is where the animal (or the shoal's
+        /// centre) actually is — NOT the anchor. The anchor is where it was placed and a hunt is
+        /// about where things are now.
+        /// </summary>
+        public static bool StepHunter(
+            ref Mind m, ref HuntDrive drive,
+            in MindTraits tr, in MindDomain dom,
+            MindPoi[] pois, int poiCount,
+            double anchorX, double anchorY, double anchorZ,
+            double selfX, double selfZ, double heading,
+            double homeR, double panic,
+            in Quarry q, in SpeciesGenome.Genome gen, bool ambush, bool big,
+            double time, double dt,
+            out MindState previous, out HuntStep hunt)
+        {
+            bool predator = gen.Diet == SpeciesGenome.DietPredator;
+
+            // ── fear first (web :2182, and :1957 — a frightened predator has no prey) ─────
+            double fleeR = FleeMath.FleeRadius(q.ObsR);
+            bool hunted = false;
+            double hunterD = 0.0;
+            if (q.HasHunter)
+            {
+                double hx = selfX - q.HunterX, hz = selfZ - q.HunterZ;
+                hunterD = Math.Sqrt(hx * hx + hz * hz);
+                hunted = hunterD < fleeR;
+            }
+
+            bool mayHunt = predator && !hunted && panic <= StartlePanic;
+
+            hunt = HuntMath.Step(ref drive,
+                                 mayHunt && q.HasPrey, q.PreyX - selfX, q.PreyZ - selfZ,
+                                 heading, q.ObsR, ambush, big,
+                                 gen.Metabolism, time, dt);
+
+            // ── the ordinary brain always runs, so wariness and dwell keep their clocks ───
+            bool changed = Step(ref m, tr, dom, pois, poiCount,
+                                anchorX, anchorY, anchorZ, homeR, panic, time, dt, out previous);
+
+            // Startle (a burst of fear) outranks both of the states below — Step has already set
+            // it and its target, and nothing here may overwrite that.
+            if (m.State == MindState.Startle) return changed;
+
+            // ── evade: seen, not yet panicking. Put distance between them. ───────────────
+            if (hunted && hunterD > 1e-6)
+            {
+                if (m.State != MindState.Evade) { m.Since = time; changed = true; }
+                m.State = MindState.Evade;
+                m.Poi = -1;
+                m.Until = time + StartleMinSeconds;
+                double ax = (selfX - q.HunterX) / hunterD, az = (selfZ - q.HunterZ) / hunterD;
+                double run = homeR * (1.0 + tr.RoamMul);
+                m.TX = selfX + ax * run;
+                m.TZ = selfZ + az * run;
+                m.TY = anchorY;
+                ClampToDomain(dom, homeR, ref m.TX, ref m.TY, ref m.TZ);
+                return changed;
+            }
+
+            // ── hunt: it is closing on something ─────────────────────────────────────────
+            if (hunt.Phase == HuntPhase.Stalk || hunt.Phase == HuntPhase.Sprint || hunt.Phase == HuntPhase.Strike)
+            {
+                if (m.State != MindState.Hunt) { m.Since = time; changed = true; }
+                m.State = MindState.Hunt;
+                m.Poi = -1;
+                // A hunt is re-decided every frame from where the prey IS, so the dwell is only a
+                // floor that stops the state flickering when the prey crosses the engage radius.
+                m.Until = time + HuntMath.SprintSeconds;
+                m.TX = q.PreyX; m.TY = q.PreyY; m.TZ = q.PreyZ;
+                ClampToDomain(dom, homeR, ref m.TX, ref m.TY, ref m.TZ);
+                return changed;
+            }
+
+            // Hunt/Evade have lapsed but Step left the state alone because its dwell has not
+            // expired — force a fresh decision so the animal does not sit in a stale Hunt.
+            if (m.State == MindState.Hunt || m.State == MindState.Evade)
+            {
+                m.Since = time;
+                Choose(ref m, tr, dom, pois, poiCount, anchorX, anchorY, anchorZ, homeR, time);
+                changed = true;
             }
 
             return changed;
@@ -542,6 +787,8 @@ namespace DiveMap.Core
                 case MindState.Investigate: return "Investigate";
                 case MindState.Startle:     return "Startle";
                 case MindState.Regroup:     return "Regroup";
+                case MindState.Hunt:        return "Hunt";
+                case MindState.Evade:       return "Evade";
                 default:                    return "?";
             }
         }

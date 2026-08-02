@@ -46,11 +46,22 @@ namespace DiveMap.Core
 
         /// <summary>
         /// How much of the frame the model must occupy before the shot is allowed to mean
-        /// anything. The framing aims for 45-70% coverage; 5% is "something is genuinely there",
-        /// far enough below the target to survive a thin model (the lionfish is mostly fins) and
-        /// far enough above zero that a missing model can never sneak through.
+        /// anything. Far enough above zero that a missing model can never sneak through — an
+        /// empty frame scores exactly 0 — and no higher, because this gate is about the LOADER,
+        /// not about the model's shape.
+        ///
+        /// 🔴 Was 5.0, lowered after the first model-QC run. With
+        /// <see cref="FrameDistanceForBox"/> putting the bounding box across 90% of the frame,
+        /// <c>msh:barracuda</c> still measures ~4.8%: a spindle-shaped fish photographed
+        /// three-quarters on has a silhouette worth about 7% of its own bounding box, so there is
+        /// no distance at which it reaches 5% without being clipped — and a clipped model has no
+        /// backdrop border for <see cref="Measure"/> to key its edge against. Failing it said
+        /// "this did not load", which was false. At 3% a 1280×720 shot still hands
+        /// <see cref="Shot.BlackOfSubjectPercent"/> ~28,000 pixels to count, which resolves the
+        /// black fraction to about a tenth of a percent — far finer than the effect being watched
+        /// for (10.04% on the kraken, 12.46% on the statue).
         /// </summary>
-        public const double MinSubjectPercent = 5.0;
+        public const double MinSubjectPercent = 3.0;
 
         /// <summary>What one QC shot measured. Percentages are 0..100.</summary>
         public struct Shot
@@ -204,6 +215,90 @@ namespace DiveMap.Core
             double half = System.Math.Min(halfV, halfH);
             return radius / (fill * System.Math.Sin(half));
         }
+
+        /// <summary>
+        /// Distance that makes a model's BOX — not its bounding sphere — fill <paramref name="fill"/>
+        /// of the frame.
+        ///
+        /// 🔴 Four of the six models in the first model-QC run failed <c>not-in-frame</c> with
+        /// subject 1.8-3.9% against a 5% floor, and every one of them is long and thin: a wreck
+        /// 60 m end to end and 6 m tall, a lionfish that is mostly fins.
+        /// <see cref="FrameDistance"/> frames the bounding SPHERE, whose radius is set by the long
+        /// axis, so a 10:1 model is pushed back until its LENGTH spans 80% of the frame and its
+        /// silhouette — which is what <see cref="Measure"/> counts — covers a few percent of the
+        /// disc. The shot is then technically of the model and useless as evidence.
+        ///
+        /// This solves the box's eight corners directly: the smallest distance at which every
+        /// corner still projects inside <paramref name="fill"/> of the frame. That is exact rather
+        /// than conservative — a sphere has to contain the corners with room to spare, this does
+        /// not — and because it is a per-corner constraint the model can never be clipped, which
+        /// matters more here than the extra pixels: <see cref="Measure"/> needs a clean border of
+        /// backdrop around the subject to find its edge at all.
+        ///
+        /// All vectors are in world space and need not be normalised beyond right/up/forward being
+        /// unit and mutually perpendicular — the camera basis, in other words. The camera is
+        /// assumed to sit at <c>centre − forward × distance</c> and look at the centre.
+        /// </summary>
+        /// <param name="halfX">Model half-extent along world X.</param>
+        /// <param name="halfY">Model half-extent along world Y.</param>
+        /// <param name="halfZ">Model half-extent along world Z.</param>
+        /// <param name="rightX">Camera right vector, world space.</param>
+        /// <param name="upX">Camera up vector, world space.</param>
+        /// <param name="fwdX">Camera forward vector, world space.</param>
+        /// <param name="verticalFovDegrees">The camera's field of view.</param>
+        /// <param name="aspect">Width / height.</param>
+        /// <param name="fill">Fraction of the frame the model should span (0..1).</param>
+        public static double FrameDistanceForBox(
+            double halfX, double halfY, double halfZ,
+            double rightX, double rightY, double rightZ,
+            double upX, double upY, double upZ,
+            double fwdX, double fwdY, double fwdZ,
+            double verticalFovDegrees, double aspect, double fill = BoxFill)
+        {
+            halfX = System.Math.Abs(halfX);
+            halfY = System.Math.Abs(halfY);
+            halfZ = System.Math.Abs(halfZ);
+            if (fill <= 0.01) fill = 0.01;
+            if (fill > 1.0) fill = 1.0;
+            if (aspect <= 0.0) aspect = 1.0;
+
+            // A model with no size still has to be photographed from somewhere.
+            if (halfX + halfY + halfZ <= 0.0) halfX = halfY = halfZ = 1.0;
+
+            double vFov = Clamp(verticalFovDegrees, 1.0, 179.0) * System.Math.PI / 180.0;
+            double tanV = System.Math.Tan(vFov * 0.5);
+            double tanH = tanV * aspect;
+
+            double need = 0.0;
+            for (int c = 0; c < 8; c++)
+            {
+                double px = ((c & 1) == 0 ? -halfX : halfX);
+                double py = ((c & 2) == 0 ? -halfY : halfY);
+                double pz = ((c & 4) == 0 ? -halfZ : halfZ);
+
+                // Corner in camera axes. Depth is measured from the camera, which sits `distance`
+                // back along −forward, so a corner leaning toward the lens costs extra distance.
+                double x = px * rightX + py * rightY + pz * rightZ;
+                double y = px * upX + py * upY + pz * upZ;
+                double toward = -(px * fwdX + py * fwdY + pz * fwdZ);
+
+                // |x| ≤ fill·tanH·(d − toward)  ⇒  d ≥ toward + |x|/(fill·tanH). Same for y.
+                double dx = toward + System.Math.Abs(x) / (fill * tanH);
+                double dy = toward + System.Math.Abs(y) / (fill * tanV);
+                if (dx > need) need = dx;
+                if (dy > need) need = dy;
+            }
+            return need;
+        }
+
+        /// <summary>
+        /// How much of the frame the bounding BOX may span. Higher than <see cref="FrameDistance"/>'s
+        /// 0.8 on purpose: the box is a tight bound and its extreme corner is exactly where this
+        /// puts it, so 0.9 still leaves a 5% border of backdrop on every side for
+        /// <see cref="Measure"/> to key against, where the sphere rule wastes that margin on empty
+        /// space the model never reaches.
+        /// </summary>
+        public const double BoxFill = 0.9;
 
         private static double Clamp(double v, double lo, double hi) => v < lo ? lo : (v > hi ? hi : v);
     }

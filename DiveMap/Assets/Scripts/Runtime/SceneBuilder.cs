@@ -231,6 +231,16 @@ namespace DiveMap.Runtime
             var animalIds = new List<string>();
             int whaleCount = 0;
 
+            // C6 phase 2 — every OTHER animal. losin:*, mdl:*, the loggerhead, the procedural
+            // fish and turtles: 58 species that were loaded down the scenery path and then never
+            // moved again. They are collected here and given a controller AFTER their GLB has
+            // landed, so the attach can measure the animal's real size — and so the scenery
+            // loader (hull fetch, LOD, URL dedupe) is not touched at all.
+            var soloGos = new List<GameObject>();
+            var soloIds = new List<string>();
+            int soloPlacements = 0;
+            SoloAnimalRegistry.Clear();   // a new map is a new reef; stale entries must not survive
+
             // P0: the "โหมดกราฟิกประหยัด" setting only scaled the render resolution — the reef
             // kept all 1,100 fish, which is the expensive half on a weak phone. Halve the swarm
             // instead (never below 8 per school, or a "school" stops reading as one). Applied
@@ -287,6 +297,17 @@ namespace DiveMap.Runtime
                 bool swimmer = IsSwimmer(module?.Kind);
 
                 allGos.Add(itemGo);
+
+                // C6 — an animal that is neither a shoal nor an already-handled msh: hero. The
+                // GLB still loads down the ordinary path below; all this does is remember which
+                // of those objects is alive so it can be given a brain once it has arrived.
+                if (MarineRouting.IsSolo(aid, module?.Kind) && !IsBigAnimalItem(aid))
+                {
+                    soloGos.Add(itemGo);
+                    soloIds.Add(aid);
+                    soloPlacements++;
+                }
+
                 if (!swimmer)
                 {
                     decorGos.Add(itemGo);
@@ -430,7 +451,11 @@ namespace DiveMap.Runtime
                 {
                     if (animals[ai] == null) continue;
                     var wc = animals[ai].GetComponent<WhaleController>();
-                    if (wc != null) wc.SetWorld(seabedRadius, _waterLevel, obstacles);
+                    if (wc == null) continue;
+                    wc.SetWorld(seabedRadius, _waterLevel, obstacles);
+                    // The heroes sense the reef too — a whale shark is prey to nothing, but a
+                    // tiger shark placed as msh:* must be able to find something to hunt.
+                    wc.JoinReef();
                 }
 
                 // Swap in the real fish (WO-XR-04.1): whatever is already loaded now, plus
@@ -446,6 +471,47 @@ namespace DiveMap.Runtime
                         marineRef.ApplyGlbTemplate(tpl.Species, tpl.Mesh, tpl.Mat, tpl.Bake, tpl.BakedLen);
                 };
             }
+
+            // ── C6 phase 2: give the other 58 species a brain ─────────────────────
+            //
+            // 🔴 Deliberately OUTSIDE the `schoolRegs.Count > 0 || whaleCount > 0` block above. A
+            // map whose only living things are losin:/mdl: animals has neither a shoal nor a
+            // hero, and putting this inside that guard is how such a map would keep exactly the
+            // motionless reef this whole phase exists to fix.
+            //
+            // Attached HERE, after the load wait, for two reasons that are not interchangeable:
+            // the GLB has landed so the animal's real world size can be measured (the size sets
+            // its turn radius, its beat rate and its sense radii), and the obstacles exist so
+            // SetWorld can hand it the sand's edge and the structures on it in the same breath.
+            int soloAttached = 0;
+            var oneGo = new List<GameObject>(1);
+            for (int i = 0; i < soloGos.Count; i++)
+            {
+                GameObject go = soloGos[i];
+                if (go == null) continue;
+                if (go.GetComponent<WhaleController>() != null) continue; // never twice
+
+                oneGo.Clear();
+                oneGo.Add(go);
+                float worldLen = 0f;
+                if (TryContentBounds(oneGo, out Bounds ab))
+                    worldLen = Mathf.Max(ab.size.x, Mathf.Max(ab.size.y, ab.size.z));
+
+                var sc = go.AddComponent<WhaleController>();
+                sc.Init(go.transform.position, worldLen, soloIds[i]);
+                sc.SetWorld(seabedRadius, _waterLevel, obstacles);
+                sc.JoinReef();
+                soloAttached++;
+            }
+
+            // The oracle. "N of M" rather than just N, because the two numbers fail differently:
+            // a low M means the routing did not recognise the animals at all, and a low N against
+            // a right M means their GLBs never landed. A silent log cannot tell those apart, and
+            // that ambiguity is exactly how 58 species stayed furniture for this long.
+            Debug.Log($"[Solo] attached={soloAttached} of {soloPlacements} animal placements " +
+                      $"(registry={SoloAnimalRegistry.Count} hunting={SoloAnimalRegistry.HuntingCount}" +
+                      $"/{MarineRouting.SoloHuntBudget} predators={SoloAnimalRegistry.PredatorsExist}) " +
+                      $"— heroes msh:*={whaleCount} schools={schoolRegs.Count}");
 
             Vector3 center = bounds.center;
             float radius = Mathf.Max(bounds.extents.magnitude, seabedRadius, 1f);
@@ -864,6 +930,18 @@ namespace DiveMap.Runtime
                     float itemScale = Mathf.Max(0.01f, parent.localScale.x);
                     worldLen = (float)MarineMath.WhaleWorldLen(localMax, itemScale);
                 }
+
+                // 🔴 The same material pass the static items and the QC shots get. It was missing
+                // here, which meant the six models CI photographs were fixed and the whale swimming
+                // over the map was not — a QC pass that is prettier than the app is a new way of
+                // lying to ourselves, not a result.
+                //
+                // Order matters and is the whole reason this sits HERE rather than after
+                // AttachWhale: WhaleController.ApplyBodyWave clones DM_FishWaveDetail and pulls the
+                // maps off these materials (CopyMaps), so anything cleared afterwards would already
+                // have been copied into the swim material and would still be on screen.
+                TameMetal(parent.gameObject, assetId);
+
                 _loaded++;
             }
             else
@@ -939,7 +1017,8 @@ namespace DiveMap.Runtime
         private static void TameMetal(GameObject root, string assetId)
         {
             if (root == null) return;
-            int fixedCount = 0;
+            int fixedCount = 0, droppedNormals = 0;
+            bool gamma = QualitySettings.activeColorSpace == ColorSpace.Gamma;
             foreach (Renderer r in root.GetComponentsInChildren<Renderer>(true))
             {
                 foreach (Material m in r.materials)
@@ -949,20 +1028,65 @@ namespace DiveMap.Runtime
                     foreach (string factor in MetalFactorNames)
                     {
                         if (!m.HasProperty(factor)) continue;
-                        if (m.GetFloat(factor) <= 0.05f) continue;
-                        if (HasMetalMap(m)) continue;      // authored — leave it alone
-                        m.SetFloat(factor, 0.06f);
+                        float tamed = GlbShading.TamedMetalFactor(m.GetFloat(factor), HasMetalMap(m));
+                        if (tamed < 0f) continue;          // authored, or already harmless
+                        m.SetFloat(factor, tamed);
                         fixedCount++;
                     }
+                    if (DropMisdecodedNormalMap(m, gamma)) droppedNormals++;
                 }
             }
             if (fixedCount > 0)
                 Debug.Log($"[SceneBuilder] {assetId}: หรี่ metallic ที่ไม่มี texture กำกับ {fixedCount} วัสดุ");
+            if (droppedNormals > 0)
+                Debug.Log($"[SceneBuilder] {assetId}: ถอด normal map ที่ถอดรหัสผิด (sRGB) {droppedNormals} วัสดุ " +
+                          $"— เอียง {GlbShading.NeutralTiltDegrees():F0}° ทุกเท็กเซล");
+        }
+
+        /// <summary>
+        /// Take the normal map away from a material whose map the sampler is going to sRGB-decode.
+        ///
+        /// 🔴 This is not a look change and not a QC dodge — see <see cref="GlbShading"/> for the
+        /// measurement. In gamma colour space glTFast never tags a glTF texture as DATA
+        /// (<c>GltfImport.cs:1674</c> guards the whole decision on the project being LINEAR), so
+        /// KtxUnity transcodes the normal map to an sRGB GPU format and libktx uploads it as one.
+        /// The shader then reads the neutral texel 128 as 0.216 instead of 0.502 and tilts every
+        /// normal ~53° toward −tangent/−bitangent. A map that says "no perturbation" everywhere is
+        /// doing more damage than no map at all, which is what the QC pass photographed:
+        /// blackOfSubject 10.04% on the kraken, 12.46% on the statue.
+        ///
+        /// Deliberately conditional on both the colour space AND the texture's own format, so it
+        /// stops doing anything the moment either is fixed properly rather than becoming a
+        /// permanent loss of surface detail. Nothing is lost meanwhile: these are photogrammetry
+        /// bakes with 35-42k triangles and the detail is in the mesh and the base colour.
+        /// </summary>
+        private static bool DropMisdecodedNormalMap(Material m, bool gammaColorSpace)
+        {
+            foreach (string n in NormalMapNames)
+            {
+                if (!m.HasProperty(n)) continue;
+                Texture tex = m.GetTexture(n);
+                if (tex == null) continue;
+                // Read off the format's own name rather than GraphicsFormatUtility.IsSRGBFormat:
+                // that helper sits in a namespace Unity has moved between versions, and a wrong
+                // `using` is a red CI at 35 minutes a round. Every sRGB member of the enum ends
+                // "_SRGB" (R8G8B8A8_SRGB, RGBA_DXT1_SRGB, RGB_ETC2_SRGB, RGBA_ASTC4X4_SRGB…), and
+                // this runs once per material at load, not per frame.
+                bool srgb = tex.graphicsFormat.ToString().EndsWith("SRGB", StringComparison.Ordinal);
+                if (!GlbShading.NormalMapIsMisdecoded(gammaColorSpace, srgb)) continue;
+                m.SetTexture(n, null);
+                // The keyword is what actually switches the sampling on; clearing the slot alone
+                // leaves the shader sampling its "bump" default, which is another flat lie.
+                m.DisableKeyword("_NORMALMAP");
+                return true;
+            }
+            return false;
         }
 
         private static readonly string[] MetalFactorNames = { "metallicFactor", "_Metallic" };
         private static readonly string[] MetalMapNames =
             { "metallicRoughnessTexture", "_MetallicGlossMap", "occlusionRoughnessMetallicTexture" };
+        private static readonly string[] NormalMapNames = { "normalTexture", "_BumpMap" };
 
         private static bool HasMetalMap(Material m)
         {

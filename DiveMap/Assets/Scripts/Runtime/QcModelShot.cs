@@ -202,14 +202,30 @@ namespace DiveMap.Runtime
                 Bounds b = WorldBounds(renderers);
                 float radius = Mathf.Max(b.extents.magnitude, 0.05f);
                 float aspect = (float)rt.width / Mathf.Max(1, rt.height);
-                float dist = (float)QcPixels.FrameDistance(radius, cam.fieldOfView, aspect);
-                // Never inside the near plane, whatever the model's size says.
-                dist = Mathf.Max(dist, radius + cam.nearClipPlane * 3f);
 
                 // Three-quarter view from slightly above: one lit flank, one shadowed flank and the
                 // top all in the same frame, so a surface that is black on one side only cannot
                 // hide behind a head-on shot.
                 Vector3 viewDir = new Vector3(0.55f, 0.32f, 1f).normalized;
+
+                // Frame the BOX, not the bounding sphere. The first run failed four of six models
+                // on `not-in-frame` (subject 1.8-3.9% against a 5% floor) and every one of them was
+                // long and thin — a sphere sized by a wreck's length parks the camera far enough
+                // back that the hull is a splinter. See QcPixels.FrameDistanceForBox.
+                Vector3 fwd = -viewDir;
+                Vector3 right = Vector3.Cross(Vector3.up, viewDir).normalized;
+                if (right.sqrMagnitude < 0.5f) right = Vector3.right;   // straight up/down view
+                Vector3 up = Vector3.Cross(viewDir, right).normalized;
+                Vector3 half = b.extents;
+                float dist = (float)QcPixels.FrameDistanceForBox(
+                    half.x, half.y, half.z,
+                    right.x, right.y, right.z,
+                    up.x, up.y, up.z,
+                    fwd.x, fwd.y, fwd.z,
+                    cam.fieldOfView, aspect);
+                // Never inside the near plane, whatever the model's size says.
+                dist = Mathf.Max(dist, radius + cam.nearClipPlane * 3f);
+
                 cam.transform.position = b.center + viewDir * dist;
                 cam.transform.LookAt(b.center);
 

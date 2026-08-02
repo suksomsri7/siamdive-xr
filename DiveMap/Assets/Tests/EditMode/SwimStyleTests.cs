@@ -103,6 +103,35 @@ namespace DiveMap.Tests
         }
 
         [Test]
+        public void TheHandTunedRowCanStillAnAnimalTheNameMisses()
+        {
+            // 🔴 builder.html's stationary:true rows. Two of these are unreachable from the name:
+            //   • mdl:leafy_seadragon (:1858) — a seaDRAGON. "seahorse" does not match it, so
+            //     without the table it swims about like an ordinary fish, which is the exact
+            //     opposite of an animal whose entire survival strategy is looking like a weed.
+            //   • losin:garden_eel (:1832) — the name list catches it the WRONG way: "eel"
+            //     un-stills it and it gets a two-wavelength anguilliform swim. A colony of garden
+            //     eels then undulates across the sand like a field of snakes.
+            Assert.IsTrue(SwimStyle.IsStill("mdl:leafy_seadragon"));
+            Assert.IsTrue(SwimStyle.IsStill("losin:garden_eel"));
+            Assert.IsTrue(SwimStyle.IsStill("mdl:giant_clam"));
+            Assert.IsTrue(SwimStyle.IsStill("losin:stonefish"));
+            Assert.Less(SwimStyle.For("mdl:leafy_seadragon", 4.0).Amp, 0.02);
+        }
+
+        [Test]
+        public void CoralfishIsAFish()
+        {
+            // 🔴 "coral" is in the still-list for the coral heads, and it also matches
+            // mdl:coralfish — an ordinary reef fish the web gives speedMul 0.8 (:1853). Left
+            // alone it came out with a 1.2 % tail amplitude and hung in the water like a decal.
+            Assert.IsFalse(SwimStyle.IsStill("mdl:coralfish"));
+            Assert.Greater(SwimStyle.For("mdl:coralfish", 4.0).Amp, 0.05);
+            // …and anything that really is a coral head must still be still.
+            Assert.IsTrue(SwimStyle.IsStill("msh:coral_head"));
+        }
+
+        [Test]
         public void TheDemoMapsSpecies_AllClassify()
         {
             Assert.AreEqual(SwimGait.Body, SwimStyle.GaitFor("school:scad"));

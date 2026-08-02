@@ -176,6 +176,33 @@ namespace DiveMap.Core
         public static double SenseRadius(double obsR) => obsR * 4.5 + 28.0;
 
         /// <summary>
+        /// Radius at which an individual animal turns and swims away from a hunter
+        /// (web :2183 — <c>obsR*5 + 30</c>).
+        ///
+        /// 🔴 Wider than <see cref="PredatorPanicRadius"/> on purpose, and the gap between them is
+        /// a behaviour rather than sloppy tuning: outside the panic radius the animal has SEEN the
+        /// predator and is quietly putting distance between them; inside it, it bursts. A reef
+        /// where prey does nothing at all until the shark is on top of it reads as scenery.
+        /// </summary>
+        public static double FleeRadius(double obsR) => obsR * 5.0 + 30.0;
+
+        /// <summary>
+        /// Sprint multiplier of a fleeing animal (web :2184 — <c>1.7 + 0.6·(1 − d/fleeR)</c>):
+        /// 1.7× at the rim of the flight bubble, 2.3× with the predator on its tail.
+        /// </summary>
+        public static double FleeSprint(double distance, double fleeRadius)
+        {
+            if (fleeRadius <= 0.0) return 1.7;
+            double k = 1.0 - distance / fleeRadius;
+            if (k < 0.0) k = 0.0;
+            if (k > 1.0) k = 1.0;
+            return 1.7 + 0.6 * k;
+        }
+
+        /// <summary>Fear added per sense tick while a hunter is inside the bubble (web :2183).</summary>
+        public const double FearPerFleeTick = 0.25;
+
+        /// <summary>
         /// Is <paramref name="otherRank"/> a threat to something of <paramref name="myRank"/>?
         ///
         /// The web's rule (:1939) has one detail that is easy to drop and very visible if you do:

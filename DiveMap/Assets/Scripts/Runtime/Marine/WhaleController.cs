@@ -24,6 +24,26 @@ namespace DiveMap.Runtime.Marine
     /// Nothing in the new path can teleport: the heading turns at a capped rate, the speed is eased
     /// under an acceleration cap, and the position is integrated from the two — asserted in
     /// FishMindTests at the very numbers this class computes below.
+    ///
+    /// ── C6 phase 2: this is no longer only the whale ─────────────────────────────────────────
+    ///
+    /// It now drives EVERY solo animal on the map — all 58 species that used to be loaded as
+    /// scenery (<c>losin:*</c>, <c>mdl:*</c>, the loggerhead, the procedural fish and turtles) as
+    /// well as the <c>msh:*</c> heroes it always drove. Three things came with that:
+    ///
+    ///   • **stationary animals** (crab, seahorse, clam, seadragon, garden eel — the web's
+    ///     <c>stationary:true</c> rows) hold their spot and sway. They used to patrol.
+    ///   • **hunger and evasion**, via <see cref="SoloAnimalRegistry"/> and
+    ///     <see cref="HuntMath"/> — the reef's sharks and morays actually hunt now.
+    ///   • **species locomotion**: the roaming range and cruise come from the animal's own web
+    ///     row where it has one, so a lionfish hovers and a sailfish crosses the map.
+    ///
+    /// 🔴 The class is still called WhaleController, and that is deliberate. Its name is wrong and
+    /// its GUID is not: the type is referenced from EnvMode, SceneBuilder, FishSchoolSystem, two
+    /// design docs and a standing HANDOFF rule ("ห้ามแก้ WhaleController"), and this machine has no
+    /// UnityEngine.dll — <c>tools/check.sh</c> parses syntax and cannot type-check a rename, so one
+    /// missed reference is a 35-minute red CI for a purely cosmetic gain. Rename it in a round that
+    /// is already spending CI. Read it as "SoloAnimalController"; the logs already say <c>[Solo]</c>.
     /// </summary>
     [DisallowMultipleComponent]
     public sealed class WhaleController : MonoBehaviour
@@ -62,6 +82,31 @@ namespace DiveMap.Runtime.Marine
         /// (0,0,0) if it ever does not is not a class anyone should have to remember that about.
         /// </summary>
         private bool _configured;
+
+        // ── C6: the animals on the msh:* list that do not swim ────────────────────
+        /// <summary>The web's <c>stationary:true</c> — crab, seahorse (builder.html:1777-1778).</summary>
+        private bool  _stationary;
+        /// <summary>Sway phase, seeded from the placement so two crabs are not in lockstep.</summary>
+        private float _swayPhase;
+        /// <summary>The facing it was placed with; the yaw sway is measured off this.</summary>
+        private float _baseYaw;
+
+        // ── C6: hunger, pursuit, evasion (Core/HuntMath.cs) ───────────────────────
+        private HuntDrive              _drive;
+        private SpeciesGenome.Genome   _gen;
+        private SpeciesBehavior.Cfg    _cfg;
+        private string                 _assetId = "";
+        /// <summary>Place in <see cref="SoloAnimalRegistry"/>, or −1 when not registered.</summary>
+        private int       _slot = -1;
+        private HuntPhase _phase;
+        /// <summary>Cruise multiplier from the hunt, EASED — a sprint that snaps on is a teleport.</summary>
+        private float     _huntMul = 1f;
+        private uint      _seed;
+        private float     _soloLogAt;
+        /// <summary>This individual's 0..1 energy — it sets its roaming range and its speed.</summary>
+        private float     _energy = 0.5f;
+        /// <summary>…and how fast it gets hungry again (web :1903).</summary>
+        private float     _metabolism = 1f;
 
         // ── Body wave (WO-XR: "ปลาว่ายไม่สมจริง ตัวแข็งมาก", 3rd report) ──────────────
         // 🔴 This is the animal in the screenshot. A big animal is a REAL GLB with `skins 0,
@@ -103,6 +148,32 @@ namespace DiveMap.Runtime.Marine
         {
             anchor = anchorPos;
 
+            // ── C6: which animal is this, actually? ───────────────────────────────
+            // 🔴 SceneBuilder routes EVERY msh:* item here, and "msh:" is not a synonym for "big
+            // animal": msh:crab and msh:seahorse are on that list, and the web marks both
+            // stationary:true (builder.html:1777-1778). Until this lookup existed they were given
+            // a roaming patrol like everything else, so the reef's crabs cruised laps of the map.
+            // A crab that swims is worse than a crab that does nothing.
+            string aid = assetId ?? AssetIdFromName(gameObject.name);
+            SpeciesBehavior.Cfg cfg = SpeciesBehavior.For(aid);
+            _assetId = aid;
+            _cfg = cfg;
+            _gen = SpeciesGenome.For(aid);
+            _stationary = cfg.Stationary;
+
+            // 🔴 Seeded from the PLACEMENT, never from a counter or the clock. Five sharks dropped
+            // on one map must behave like five sharks; the same map reopened tomorrow must give
+            // back the same five, or a QC screenshot proves nothing.
+            _seed = MarineRouting.PlacementSeed(aid, anchorPos.x, anchorPos.y, anchorPos.z);
+            _swayPhase = (float)(FishMind.Rand01(_seed, 0, 50) * 6.2832);
+
+            // Personality, and the hunger it opens on. Two morays on one reef are not hungry at
+            // the same moment, so the reef has no feeding "tick".
+            SpeciesBehavior.Personality pers = SpeciesBehavior.DrawPersonality(aid, _seed);
+            _drive = new HuntDrive { Hunger = 0.2 + 0.6 * FishMind.Rand01(_seed, 0, 51) };
+            _energy = (float)pers.Energy;
+            _metabolism = (float)pers.Metabolism;
+
             // ── Viewer/QC framing bias ────────────────────────────────────────────
             // The whaleshark is placed high in the water column (Htms Chang: web y≈154,
             // just under the mast top) and well off to one side. The opening shot frames
@@ -113,9 +184,16 @@ namespace DiveMap.Runtime.Marine
             // Dip that loop down toward the wreck and reel it in horizontally so the big
             // animal actually reads in the shot — proportional, so a low/near whale barely
             // moves while a sky-high far one is brought home.
-            anchor.y -= Mathf.Clamp(anchor.y * 0.35f, 0f, 60f); // ~154 → ~100 (into the framed band)
-            anchor.x *= 0.65f;                                  // pull toward the wreck (content sits near origin)
-            anchor.z *= 0.65f;
+            //
+            // 🔴 …and it applies to the HERO animal only. A stationary animal has been placed by
+            // hand on a specific piece of sand; dragging it 35 % of the way to the origin puts the
+            // crab somewhere the author did not put it, and no framing argument covers that.
+            if (!_stationary)
+            {
+                anchor.y -= Mathf.Clamp(anchor.y * 0.35f, 0f, 60f); // ~154 → ~100 (into the framed band)
+                anchor.x *= 0.65f;                                  // pull toward the wreck (content sits near origin)
+                anchor.z *= 0.65f;
+            }
 
             // Loop scaled to the animal's size so a big whaleshark sweeps a real arc, but
             // tighter than before so the sweep can't carry it back out of frame. WO-XR-03b
@@ -135,10 +213,32 @@ namespace DiveMap.Runtime.Marine
             //     waypoint it can never reach and the patrol degenerates into… an ellipse.
             //   • the roaming range must be a few arrival radii across, or every leg is over
             //     before it started.
+            // ── C6: the species' own range and speed, for everything that is not a hero ──
+            //
+            // 🔴 Applied to non-Big animals ONLY, and the reason is the framing bias forty lines
+            // up. The hero's roaming range is derived from the on-screen sweep the opening QC shot
+            // was tuned against (RoamPerLap, "keeps the same on-screen sweep"); the whale shark's
+            // own web row asks for 170 u against the ~98 u that geometry gives, which would carry
+            // it out of frame in a shot nobody can re-check on this machine. Every OTHER animal
+            // has no such constraint and desperately needs its row: without it a lionfish (7 u)
+            // and a hammerhead (300 u) patrol the same circle, which is the whole complaint.
+            // Revisit the hero the next time someone can render the shot.
+            if (!cfg.Big && cfg.Has)
+            {
+                float speciesCruise = (float)SpeciesBehavior.CruiseMul(aid, _energy);
+                if (speciesCruise > 0.01f) _cruise = Mathf.Max(0.2f, _cruise * speciesCruise);
+            }
+
             float turnRadius = Mathf.Max(1f, _size * TurnRadiusPerLen);
             _turnRate = Mathf.Clamp(_cruise / turnRadius, 0.03f, 0.8f);
             _arriveR  = Mathf.Max(_size * ArrivePerLen, turnRadius * 1.3f);
             _roamR    = Mathf.Max(Mathf.Max(radiusX, radiusZ) * RoamPerLap, _arriveR * 3f);
+            if (!cfg.Big && cfg.Has)
+            {
+                // The arrival radius still floors it: a range smaller than a few arrival radii
+                // means every leg is over before it started and the animal jitters on the spot.
+                _roamR = Mathf.Max((float)SpeciesBehavior.Derive(aid, _energy).RoamR, _arriveR * 3f);
+            }
 
             // Until SetWorld arrives with the real seabed, roam a disc around the placement and
             // stay in a depth band around it — self-contained, so a map that never calls SetWorld
@@ -151,15 +251,31 @@ namespace DiveMap.Runtime.Marine
                                 anchor.x, anchor.y, anchor.z, _roamR,
                                 _pois, _poiCount, _arriveR, _cruise);
 
-            transform.position = new Vector3((float)_patrol.X, (float)_patrol.Y, (float)_patrol.Z);
+            if (_stationary)
+            {
+                // It stays exactly where it was put. Update() gives it the web's bob and yaw sway
+                // (SpeciesBehavior.Sway*) and nothing else.
+                transform.position = anchor;
+                _baseYaw = transform.eulerAngles.y;
+            }
+            else
+            {
+                transform.position = new Vector3((float)_patrol.X, (float)_patrol.Y, (float)_patrol.Z);
+            }
             _lastPos = transform.position;
             _configured = true;
 
-            ApplyBodyWave(assetId ?? AssetIdFromName(gameObject.name), size);
+            ApplyBodyWave(aid, size);
 
-            Debug.Log($"[Patrol] init anchor={anchor} size={_size:F1} cruise={_cruise:F2} " +
+            SpeciesGenome.Genome sg = SpeciesGenome.For(aid);
+            Debug.Log($"[Patrol] init id={aid} anchor={anchor} size={_size:F1} cruise={_cruise:F2} " +
                       $"turnRate={_turnRate:F3} arriveR={_arriveR:F1} roamR={_roamR:F1} " +
-                      $"domainR={_domain.Radius:F0} pois={_poiCount}");
+                      $"domainR={_domain.Radius:F0} pois={_poiCount} stationary={_stationary}");
+            Debug.Log($"[Genome] hero id={aid} diet={sg.Diet} zone={sg.Zone} rank={sg.Rank} " +
+                      $"row={(cfg.Has ? "web" : "fallback")} " +
+                      $"webRoamR={(cfg.HasRoamR ? cfg.RoamR : -1.0):F0} " +
+                      $"gait={SwimStyle.GaitFor(aid)} still={SwimStyle.IsStill(aid)} " +
+                      $"big={cfg.Big} benthic={cfg.Benthic} ambush={cfg.Ambush}");
         }
 
         /// <summary>
@@ -368,12 +484,32 @@ namespace DiveMap.Runtime.Marine
             // approximation rather than a wrong sample.
             if (to.HasProperty("_Glossiness") && from.HasProperty("roughnessFactor"))
                 to.SetFloat("_Glossiness", Mathf.Clamp01(1f - from.GetFloat("roughnessFactor")));
+
+            // 🔴 …but the metal factor is only honest when it stands alone. Where the source ships
+            // a metallic-roughness TEXTURE the factor is one half of a multiplication and the map
+            // is the other: every XR model measured declares metallicFactor = 1 against a map
+            // whose metal channel reads 0.001. Copying the 1 by itself turns the animal into a
+            // mirror, and a mirror with one small reflection cube to reflect is black.
+            // GlbShading.CopiedMetalFactor is where that rule is written down and tested.
             if (to.HasProperty("_Metallic") && from.HasProperty("metallicFactor"))
-                to.SetFloat("_Metallic", Mathf.Clamp01(from.GetFloat("metallicFactor")));
+                to.SetFloat("_Metallic", GlbShading.CopiedMetalFactor(
+                    from.GetFloat("metallicFactor"), HasMetalMap(from)));
         }
 
         private static Texture Get(Material m, string prop)
             => m != null && m.HasProperty(prop) ? m.GetTexture(prop) : null;
+
+        /// <summary>
+        /// Does this source material carry the metal/roughness data in a TEXTURE? Named the three
+        /// ways glTFast, Unity's Standard and an ORM-packed export spell it, same list SceneBuilder
+        /// checks — see <see cref="CopyMaps"/> for why the answer changes what gets copied.
+        /// </summary>
+        private static bool HasMetalMap(Material m)
+        {
+            return Get(m, "metallicRoughnessTexture") != null
+                || Get(m, "_MetallicGlossMap") != null
+                || Get(m, "occlusionRoughnessMetallicTexture") != null;
+        }
 
         private static Mesh MeshOf(Renderer r)
         {
@@ -389,14 +525,136 @@ namespace DiveMap.Runtime.Marine
         {
             if (!_configured) return;
 
+            // 🔴 In the builder an animal is furniture. The gizmo moves an item by writing its
+            // transform and so does this class, so an author placing a shark would be dragging
+            // something that swims out from under them. Freeze — and keep the patrol's own
+            // position in step with wherever the author leaves it, so that leaving Edit resumes
+            // from the new spot instead of snapping back to the last waypoint it remembered.
+            if (!ModeRules.AnimalsSwim(ModeManager.Current))
+            {
+                Vector3 held = transform.position;
+                _patrol.X = held.x; _patrol.Y = held.y; _patrol.Z = held.z;
+
+                // 🔴 Only re-anchor when the AUTHOR moved it, not merely because we are looking.
+                // _lastPos is the position this class last wrote, so a difference is somebody
+                // else's doing — the gizmo. Assigning the anchor unconditionally instead looks
+                // identical for a swimmer and is wrong for a stationary one: its transform sits at
+                // anchor + sway, so every entry into Edit would bake that frame's ±0.4 u bob into
+                // the anchor and the crab would walk up the sand one edit at a time.
+                if ((held - _lastPos).sqrMagnitude > 1e-6f)
+                {
+                    anchor = held;
+                    _lastPos = held;
+                }
+                return;
+            }
+
             float fs = (float)MarineMath.RealDeltaScale(Time.deltaTime);
             float dt = (float)MarineMath.BaseStep * fs; // real-delta step
             _t += dt;
 
+            // A stationary animal's ENTIRE behaviour: bob on the spot, turn its head, and let the
+            // rig keep ticking at half speed. builder.html:2166-2172 — the web returns from
+            // applyBehavior right here, and so does this.
+            if (_stationary)
+            {
+                transform.position = new Vector3(
+                    anchor.x,
+                    anchor.y + (float)SpeciesBehavior.SwayY(_t, bobFreq * 6.2832f, _swayPhase),
+                    anchor.z);
+                // Recorded so the Edit-mode branch above can tell OUR movement from the gizmo's.
+                _lastPos = transform.position;
+                transform.rotation = Quaternion.Euler(
+                    0f,
+                    _baseYaw + (float)SpeciesBehavior.SwayYaw(_t, _swayPhase) * Mathf.Rad2Deg,
+                    0f); // roll forced 0 — the no-roll rule holds here too
+
+                // The rig keeps ticking, at half speed (web :2167 mixer.timeScale = 0.5). The
+                // amplitude SwimStyle hands a still animal is ~1 %, so this is a seahorse's tail
+                // curling rather than a swim — but a body that is bit-for-bit identical every
+                // frame is what "แช่แข็ง" looks like, and that is the complaint this all began as.
+                AdvanceWave((float)SpeciesBehavior.SwayClipScale, dt);
+                return;
+            }
+
+            // ── C6: hunger, pursuit, evasion ─────────────────────────────────────────
+            // The registry does the O(n²) work once every 0.7 s for the whole reef (and not at
+            // all on a map with nothing that hunts); this animal only reads its own row.
+            //
+            // 🔴 Time.time, NOT _t. Every animal calls this and whichever one runs first each tick
+            // does the scan for all of them, so the clock has to be the same clock. _t is a
+            // PER-ANIMAL accumulator that starts at zero when that animal is attached — and the
+            // msh:* heroes are attached during the load while the other 58 are attached after it,
+            // so their _t values are minutes apart. Feeding those in would let the animal with the
+            // largest _t push _nextScan into the future and starve every other animal's senses.
+            SoloAnimalRegistry.Tick(Time.time);
+            float huntWant = 1f;
+            if (_slot >= 0 && SoloAnimalRegistry.TryGet(_slot, out SoloAnimalRegistry.Entry me))
+            {
+                Vector3 here = transform.position;
+                bool hunted = false;
+                float fleeR = (float)FleeMath.FleeRadius(me.ObsR);
+                float hunterD = 0f;
+                if (me.HasHunter)
+                {
+                    float hx = here.x - me.Hunter.x, hz = here.z - me.Hunter.z;
+                    hunterD = Mathf.Sqrt(hx * hx + hz * hz);
+                    hunted = hunterD < fleeR;
+                }
+
+                bool predator = _gen.Diet == SpeciesGenome.DietPredator;
+                HuntStep hs = HuntMath.Step(
+                    ref _drive,
+                    predator && !hunted && me.HasPrey,
+                    me.Prey.x - here.x, me.Prey.z - here.z,
+                    _patrol.Heading, me.ObsR, _cfg.Ambush, _cfg.Big,
+                    _metabolism, _t, dt);
+
+                if (hunted && hunterD > 1e-4f)
+                {
+                    // Evade — put the waypoint on the far side of itself from the hunter. Steering,
+                    // never a position write: PatrolStep still turns at the capped rate, so the
+                    // animal swings away rather than snapping around.
+                    float ax = (here.x - me.Hunter.x) / hunterD, az = (here.z - me.Hunter.z) / hunterD;
+                    _patrol.TX = here.x + ax * _roamR;
+                    _patrol.TZ = here.z + az * _roamR;
+                    _patrol.LegT = 0f;
+                    FishMind.ClampToDomain(_domain, _arriveR * 2f,
+                                           ref _patrol.TX, ref _patrol.TY, ref _patrol.TZ);
+                    huntWant = (float)FleeMath.FleeSprint(hunterD, fleeR);
+                    SetPhase(HuntPhase.Sprint, true);
+                }
+                else if (hs.Phase == HuntPhase.Stalk || hs.Phase == HuntPhase.Sprint ||
+                         hs.Phase == HuntPhase.Strike)
+                {
+                    _patrol.TX = me.Prey.x;
+                    _patrol.TZ = me.Prey.z;
+                    _patrol.TY = me.Prey.y;
+                    _patrol.LegT = 0f;
+                    FishMind.ClampToDomain(_domain, _arriveR * 2f,
+                                           ref _patrol.TX, ref _patrol.TY, ref _patrol.TZ);
+                    // 🔴 Capped hard. HuntMath's multiplier reaches 20× on a starving predator,
+                    // which is the right number for the web's per-frame position nudge and an
+                    // absurd one here: PatrolStep integrates position from speed, so a 20× cruise
+                    // is an animal crossing the reef in a second. 2.5× is a visible, believable
+                    // burst — and the acceleration cap below still eases into it.
+                    huntWant = Mathf.Min(2.5f, (float)hs.SpeedMul * 0.25f);
+                    SetPhase(hs.Phase, false);
+                }
+                else
+                {
+                    SetPhase(hs.Phase, false);
+                }
+            }
+
+            // Ease the burst in and out. A sprint that snaps on reads as a stutter, and the whole
+            // no-teleport rule this class is built on is about exactly this kind of discontinuity.
+            _huntMul = Mathf.MoveTowards(_huntMul, huntWant, 2.0f * dt);
+
             // Roam. Everything about the shape of the path lives in Core/FishMind.cs, where it can
             // be replayed and asserted; this class only owns the Unity-side transform.
             bool newLeg = FishMind.PatrolStep(
-                ref _patrol, dt, _cruise, _turnRate, _domain,
+                ref _patrol, dt, _cruise * _huntMul, _turnRate, _domain,
                 anchor.x, anchor.y, anchor.z, _roamR,
                 _pois, _poiCount, _arriveR);
 
@@ -425,22 +683,10 @@ namespace DiveMap.Runtime.Marine
 
             // Advance the body wave. Integrated on the CPU, never sin(_Time.y · rate): with
             // _Time.y the tail jumps by hundreds of radians the moment the rate changes.
-            if (_waveMats.Count > 0)
-            {
-                // Read off the PATROL's own speed, not the frame's displacement: the breath and the
-                // ease-off beside the wreck are what the tail is supposed to be reporting, and a
-                // displacement reading picks up the turn as well and muddies both.
-                float effort = (float)SwimStyle.Effort(_patrol.Speed, _cruise);
-                _wavePhase += SwimStyle.BeatPhaseStep(_beatHz * effort, dt);
-                if (_wavePhase >= TwoPi) _wavePhase %= TwoPi;
-                for (int i = 0; i < _waveMats.Count; i++)
-                {
-                    Material m = _waveMats[i];
-                    if (m == null) continue;
-                    m.SetFloat(IdWavePhase, (float)_wavePhase);
-                    m.SetFloat(IdWaveEffort, effort);
-                }
-            }
+            // Read off the PATROL's own speed, not the frame's displacement: the breath and the
+            // ease-off beside the wreck are what the tail is supposed to be reporting, and a
+            // displacement reading picks up the turn as well and muddies both.
+            AdvanceWave((float)SwimStyle.Effort(_patrol.Speed, _cruise), dt);
 
             // QC oracle (r8): a still screenshot cannot prove the GLB's own forward axis is +Z.
             // Log the alignment once, a few frames in — dot ≈ +1 means the model swims nose-first,
@@ -450,6 +696,70 @@ namespace DiveMap.Runtime.Marine
                 _headingLogged = true;
                 Debug.Log($"[Marine] whale heading dot(forward,vel)={Vector3.Dot(transform.forward, vel.normalized):F3} " +
                           "(expect ≈ +1.0)");
+            }
+        }
+
+        // ── C6: registry lifecycle + the [Solo] oracle ───────────────────────────
+
+        /// <summary>
+        /// Join the reef's sensing population. Called by SceneBuilder once the animal's GLB has
+        /// landed and its real size is known — <paramref name="obsR"/> is half its world length,
+        /// which is what every sense radius in <see cref="FleeMath"/> and <see cref="HuntMath"/>
+        /// is built from.
+        /// </summary>
+        public void JoinReef()
+        {
+            if (_slot >= 0 || !_configured) return;
+            _slot = SoloAnimalRegistry.Register(this, _assetId, _size * 0.5f);
+        }
+
+        private void OnDestroy()
+        {
+            SoloAnimalRegistry.Unregister(this);
+            _slot = -1;
+        }
+
+        /// <summary>
+        /// The registry moved this animal's row. Called by
+        /// <see cref="SoloAnimalRegistry.Unregister"/>, which fills the hole it makes by swapping
+        /// the last entry into it — so exactly one animal per removal learns a new index.
+        /// </summary>
+        internal void SetRegistrySlot(int slot) => _slot = slot;
+
+        /// <summary>
+        /// Record a phase change and log it. One line per CHANGE, never per frame, and throttled
+        /// so a pair of animals oscillating across an engage radius cannot flood the log.
+        /// </summary>
+        private void SetPhase(HuntPhase p, bool evading)
+        {
+            if (p == _phase) return;
+            _phase = p;
+            if (_t < _soloLogAt) return;
+            _soloLogAt = _t + 0.5f;
+            Debug.Log($"[Solo] id={_assetId} state={(evading ? "Evade" : HuntMath.Label(p))} " +
+                      $"pos=({transform.position.x:F0},{transform.position.y:F0},{transform.position.z:F0}) " +
+                      $"hunger={_drive.Hunger:F2} fatigue={_drive.Fatigue:F2} " +
+                      $"speed={_huntMul:F2}× cruise={_cruise:F2} roamR={_roamR:F0}");
+        }
+
+        /// <summary>
+        /// Push the body wave on by <paramref name="dt"/> at the given effort.
+        ///
+        /// The phase is INTEGRATED on the CPU, never <c>sin(_Time.y · rate)</c>: with _Time.y the
+        /// tail jumps by hundreds of radians the moment the rate changes. See
+        /// <see cref="SwimStyle.BeatPhaseStep"/>.
+        /// </summary>
+        private void AdvanceWave(float effort, float dt)
+        {
+            if (_waveMats.Count == 0) return;
+            _wavePhase += SwimStyle.BeatPhaseStep(_beatHz * effort, dt);
+            if (_wavePhase >= TwoPi) _wavePhase %= TwoPi;
+            for (int i = 0; i < _waveMats.Count; i++)
+            {
+                Material m = _waveMats[i];
+                if (m == null) continue;
+                m.SetFloat(IdWavePhase, (float)_wavePhase);
+                m.SetFloat(IdWaveEffort, effort);
             }
         }
 

@@ -96,15 +96,34 @@ namespace DiveMap.Tests
         {
             byte[] off = Water(1000);
             byte[] on = Water(1000);
-            Paint(on, 0, 49, 200, 200, 200);   // 4.9% — just under the floor
+            Paint(on, 0, 29, 200, 200, 200);   // 2.9% — just under the floor
             QcPixels.Shot s = QcPixels.Measure(on, off);
             Assert.Less(s.SubjectPercent, QcPixels.MinSubjectPercent);
             Assert.IsFalse(QcPixels.Passes(true, 1, s));
 
-            Paint(on, 49, 2, 200, 200, 200);   // 5.1% — over it
+            Paint(on, 29, 2, 200, 200, 200);   // 3.1% — over it
             s = QcPixels.Measure(on, off);
             Assert.GreaterOrEqual(s.SubjectPercent, QcPixels.MinSubjectPercent);
             Assert.IsTrue(QcPixels.Passes(true, 1, s));
+        }
+
+        [Test]
+        public void TheFloorIsAboutTheLoaderNotTheModelsShape()
+        {
+            // Why the floor is 3 and not 5. A spindle — barracuda, lionfish — projects a
+            // silhouette worth about 7% of its own bounding box, so even framed with the box
+            // across 90% of the frame it lands near 4.8%. At 5 that was reported as
+            // "not-in-frame", i.e. as a failed load, which is a lie about a model that arrived
+            // and rendered. At 3 it passes and its blackOfSubject is still worth reading.
+            Assert.Less(QcPixels.MinSubjectPercent, 4.8);
+
+            // …and the floor must never be so low that an empty frame or single-pixel noise
+            // could clear it. Nothing at all still scores zero and still FAILS.
+            byte[] empty = Water(1000);
+            QcPixels.Shot none = QcPixels.Measure(empty, Water(1000));
+            Assert.AreEqual(0.0, none.SubjectPercent, 1e-9);
+            Assert.IsFalse(QcPixels.Passes(true, 1, none));
+            Assert.Greater(QcPixels.MinSubjectPercent, 1.0);
         }
 
         [Test]
@@ -260,6 +279,151 @@ namespace DiveMap.Tests
             Assert.Greater(QcPixels.FrameDistance(0, 60, 1.0), 0.0);      // zero-size model
             Assert.Greater(QcPixels.FrameDistance(10, 0, 0), 0.0);        // no FOV, no aspect
             Assert.Greater(QcPixels.FrameDistance(10, 400, 1.0), 0.0);    // FOV out of range
+        }
+
+        // ── framing a box instead of a sphere ────────────────────────────────────
+
+        /// <summary>The QC camera's own basis: three-quarter view from slightly above.</summary>
+        private static void QcBasis(out double[] right, out double[] up, out double[] fwd)
+        {
+            double[] v = { 0.55, 0.32, 1.0 };
+            double n = Math.Sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2]);
+            for (int i = 0; i < 3; i++) v[i] /= n;
+            fwd = new[] { -v[0], -v[1], -v[2] };
+            // right = up × viewDir, normalised
+            double[] r = { 1.0 * v[2] - 0.0 * v[1], 0.0 * v[0] - 0.0 * v[2], 0.0 * v[1] - 1.0 * v[0] };
+            double rn = Math.Sqrt(r[0] * r[0] + r[1] * r[1] + r[2] * r[2]);
+            for (int i = 0; i < 3; i++) r[i] /= rn;
+            right = r;
+            up = new[]
+            {
+                v[1] * r[2] - v[2] * r[1],
+                v[2] * r[0] - v[0] * r[2],
+                v[0] * r[1] - v[1] * r[0],
+            };
+        }
+
+        private static double BoxDist(double hx, double hy, double hz)
+        {
+            QcBasis(out double[] r, out double[] u, out double[] f);
+            return QcPixels.FrameDistanceForBox(hx, hy, hz,
+                                                r[0], r[1], r[2], u[0], u[1], u[2], f[0], f[1], f[2],
+                                                60.0, 1280.0 / 720.0);
+        }
+
+        [Test]
+        public void ALongThinWreckIsFramedMuchCloserThanItsBoundingSphere()
+        {
+            // sw:htms732 — subject 3.02% and reason=not-in-frame in the first model-QC run. Half
+            // extents roughly 30 × 3 × 4: a hull thirty times longer than it is tall. Its bounding
+            // sphere radius is ~30, so sphere framing stands off far enough to fit the LENGTH and
+            // the silhouette collapses to a splinter.
+            double sphereRadius = Math.Sqrt(30 * 30 + 3 * 3 + 4 * 4);
+            double sphere = QcPixels.FrameDistance(sphereRadius, 60.0, 1280.0 / 720.0);
+            double box = BoxDist(30, 3, 4);
+
+            Assert.Less(box, sphere, "box framing must come closer than sphere framing");
+            // Not a rounding difference — the whole point is that the model gets several times
+            // more of the frame.
+            Assert.Less(box, sphere * 0.75);
+        }
+
+        [Test]
+        public void NoCornerOfTheBoxIsEverClipped()
+        {
+            // The one thing that must not happen: Measure() keys the subject off the backdrop, so a
+            // model touching the frame edge has no edge to find. Project all eight corners at the
+            // returned distance and check every one lands inside the frame with the border intact.
+            QcBasis(out double[] r, out double[] u, out double[] f);
+            double tanV = Math.Tan(30.0 * Math.PI / 180.0);
+            double aspect = 1280.0 / 720.0;
+            double tanH = tanV * aspect;
+
+            foreach (double[] h in new[]
+                     {
+                         new[] { 30.0, 3.0, 4.0 },   // wreck
+                         new[] { 1.0, 1.0, 1.0 },    // cube
+                         new[] { 0.4, 3.0, 0.3 },    // statue: tall and thin
+                         new[] { 6.0, 0.6, 0.5 },    // fish
+                     })
+            {
+                double d = QcPixels.FrameDistanceForBox(h[0], h[1], h[2],
+                    r[0], r[1], r[2], u[0], u[1], u[2], f[0], f[1], f[2], 60.0, aspect);
+                for (int c = 0; c < 8; c++)
+                {
+                    double px = ((c & 1) == 0 ? -h[0] : h[0]);
+                    double py = ((c & 2) == 0 ? -h[1] : h[1]);
+                    double pz = ((c & 4) == 0 ? -h[2] : h[2]);
+                    double x = px * r[0] + py * r[1] + pz * r[2];
+                    double y = px * u[0] + py * u[1] + pz * u[2];
+                    double z = d - (px * -f[0] + py * -f[1] + pz * -f[2]);
+                    Assert.Greater(z, 0.0, "corner behind the camera");
+                    Assert.LessOrEqual(Math.Abs(x) / z, QcPixels.BoxFill * tanH + 1e-9);
+                    Assert.LessOrEqual(Math.Abs(y) / z, QcPixels.BoxFill * tanV + 1e-9);
+                }
+            }
+        }
+
+        [Test]
+        public void TheFramingIsTightNotMerelySafe()
+        {
+            // Exactness, the other half of the previous test: at least one corner must sit ON the
+            // fill boundary, or the rule is just "stand back a bit" with extra steps.
+            QcBasis(out double[] r, out double[] u, out double[] f);
+            double tanV = Math.Tan(30.0 * Math.PI / 180.0);
+            double aspect = 1280.0 / 720.0;
+            double tanH = tanV * aspect;
+            double[] h = { 30.0, 3.0, 4.0 };
+            double d = QcPixels.FrameDistanceForBox(h[0], h[1], h[2],
+                r[0], r[1], r[2], u[0], u[1], u[2], f[0], f[1], f[2], 60.0, aspect);
+
+            double worst = 0.0;
+            for (int c = 0; c < 8; c++)
+            {
+                double px = ((c & 1) == 0 ? -h[0] : h[0]);
+                double py = ((c & 2) == 0 ? -h[1] : h[1]);
+                double pz = ((c & 4) == 0 ? -h[2] : h[2]);
+                double x = px * r[0] + py * r[1] + pz * r[2];
+                double y = px * u[0] + py * u[1] + pz * u[2];
+                double z = d - (px * -f[0] + py * -f[1] + pz * -f[2]);
+                worst = Math.Max(worst, Math.Max(Math.Abs(x) / (z * tanH), Math.Abs(y) / (z * tanV)));
+            }
+            Assert.AreEqual(QcPixels.BoxFill, worst, 1e-9);
+        }
+
+        [Test]
+        public void BiggerModelsAreFramedFurtherAway()
+        {
+            // Scale invariance: doubling the model doubles the distance, so "fill" means the same
+            // fraction of the frame at every size.
+            double one = BoxDist(2, 1, 5);
+            double two = BoxDist(4, 2, 10);
+            Assert.AreEqual(2.0, two / one, 1e-9);
+        }
+
+        [Test]
+        public void TheModelIsNeverBehindTheCamera()
+        {
+            // The returned distance has to clear the model's own depth half-extent, or a deep
+            // model is framed with its front half behind the lens.
+            QcBasis(out double[] r, out double[] u, out double[] f);
+            double deep = QcPixels.FrameDistanceForBox(0.01, 0.01, 50,
+                                                       r[0], r[1], r[2], u[0], u[1], u[2], f[0], f[1], f[2],
+                                                       60.0, 1280.0 / 720.0);
+            double halfDepth = 0.01 * Math.Abs(f[0]) + 0.01 * Math.Abs(f[1]) + 50 * Math.Abs(f[2]);
+            Assert.Greater(deep, halfDepth);
+        }
+
+        [Test]
+        public void BoxFramingSurvivesNonsenseToo()
+        {
+            QcBasis(out double[] r, out double[] u, out double[] f);
+            Assert.Greater(QcPixels.FrameDistanceForBox(0, 0, 0,
+                               r[0], r[1], r[2], u[0], u[1], u[2], f[0], f[1], f[2], 60.0, 1.0), 0.0);
+            Assert.Greater(QcPixels.FrameDistanceForBox(-3, 2, -1,
+                               r[0], r[1], r[2], u[0], u[1], u[2], f[0], f[1], f[2], 0.0, 0.0), 0.0);
+            Assert.Greater(QcPixels.FrameDistanceForBox(3, 2, 1,
+                               r[0], r[1], r[2], u[0], u[1], u[2], f[0], f[1], f[2], 400.0, 1.0, 5.0), 0.0);
         }
     }
 }

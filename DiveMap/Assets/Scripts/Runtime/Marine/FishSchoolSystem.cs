@@ -128,6 +128,20 @@ namespace DiveMap.Runtime.Marine
         // somewhere, did it notice the wreck, is it still nervous), and that is what these hold.
         private Mind[]       _mind   = System.Array.Empty<Mind>();
         private MindTraits[] _traits = System.Array.Empty<MindTraits>();
+
+        // ── C6: hunger and the hunt (Core/HuntMath.cs) ──────────────────────────────
+        // One drive per school, and the species facts the hunt reads. Kept in parallel arrays
+        // rather than fetched per frame because SpeciesGenome.For and SpeciesBehavior.For both
+        // run regexes / a dictionary lookup, and a hundred of those a frame is a hundred too many.
+        private HuntDrive[]            _hunt   = System.Array.Empty<HuntDrive>();
+        private SpeciesGenome.Genome[] _gen    = System.Array.Empty<SpeciesGenome.Genome>();
+        private SpeciesBehavior.Cfg[]  _cfg    = System.Array.Empty<SpeciesBehavior.Cfg>();
+        private HuntPhase[]            _phase0 = System.Array.Empty<HuntPhase>();
+        /// <summary>
+        /// The web's <c>predatorsExist</c> gate (builder.html:2177). A map with nothing that hunts
+        /// skips the whole prey scan, so the ordinary reef costs exactly what it did before.
+        /// </summary>
+        private bool _predatorsExist;
         /// <summary>The things on this map worth swimming over to look at (the wreck, big rocks).</summary>
         private MindPoi[]    _pois   = System.Array.Empty<MindPoi>();
         private int          _poiCount;
@@ -322,6 +336,11 @@ namespace DiveMap.Runtime.Marine
             _fear = new SchoolFear[schools.Count];
             _mind = new Mind[schools.Count];
             _traits = new MindTraits[schools.Count];
+            _hunt = new HuntDrive[schools.Count];
+            _gen = new SpeciesGenome.Genome[schools.Count];
+            _cfg = new SpeciesBehavior.Cfg[schools.Count];
+            _phase0 = new HuntPhase[schools.Count];
+            _predatorsExist = false;
 
             // Points of interest = the biggest structures on the map. Capped at eight: T-13 is 494
             // placed objects built from 10 assets, and a school choosing between 494 pebbles is
@@ -410,6 +429,34 @@ namespace DiveMap.Runtime.Marine
                 // FishMindTests possible at all.
                 _traits[si] = FishMind.TraitsFor(s.Species);
                 _mind[si] = new Mind { Seed = MindSeed(s.Species, si), Poi = -1 };
+
+                // C6 — who this species is, resolved once. The hunger it opens on is drawn from
+                // its own seed rather than set to a constant, so two shark pods on one map are not
+                // hungry at the same moment and the reef does not have a feeding "tick".
+                SpeciesBehavior.Cfg cfg = SpeciesBehavior.For(s.Species);
+                _gen[si] = gen;
+                _cfg[si] = cfg;
+                _phase0[si] = HuntPhase.Idle;
+                _hunt[si] = new HuntDrive
+                {
+                    Hunger = 0.25 + 0.5 * FishMind.Rand01(MindSeed(s.Species, si), 0, 40),
+                };
+                if (gen.Diet == SpeciesGenome.DietPredator) _predatorsExist = true;
+
+                // The audit line. Every species in the map, with all four tables side by side —
+                // a reviewer must be able to answer "does this animal have a brain, and is it the
+                // right brain" from the log alone, because a screenshot cannot show intent.
+                SpeciesBehavior.Locomotion loc = SpeciesBehavior.Derive(cfg, gen, gen.Energy);
+                Debug.Log($"[Genome] school={si} species={s.Species} diet={gen.Diet} zone={gen.Zone} " +
+                          $"rank={gen.Rank} social={gen.Social:F2} family={gen.Family} " +
+                          $"row={(cfg.Has ? "web" : "fallback")} " +
+                          $"flags={(cfg.Stationary ? "S" : "")}{(cfg.Benthic ? "B" : "")}" +
+                          $"{(cfg.Flat ? "F" : "")}{(cfg.Big ? "G" : "")}{(cfg.Ambush ? "A" : "")} " +
+                          $"roamR={loc.RoamR:F0} swimMul={loc.SwimMul:F2} " +
+                          $"gait={SwimStyle.GaitFor(s.Species)} still={SwimStyle.IsStill(s.Species)} " +
+                          $"curio={_traits[si].Curiosity:F2} roamMul={_traits[si].RoamMul:F2} " +
+                          $"dwell={_traits[si].DwellMin:F0}-{_traits[si].DwellMax:F0}s " +
+                          $"wary={_traits[si].WarySeconds:F0}s hunger0={_hunt[si].Hunger:F2}");
 
                 // Material (clone the proven DM_Standard so instancing renders in the QC shot).
                 Material mat = baseMat != null ? new Material(baseMat) : new Material(Shader.Find("Standard"));
@@ -911,12 +958,80 @@ namespace DiveMap.Runtime.Marine
             MindDomain dom = FishMind.SchoolDomain(_domainR, minY, maxY,
                                                    fx.Anchor0.x, fx.Anchor0.z, fx.HomeR0);
 
+            // C6 — who this school could eat, and who could eat it. Only on maps that actually
+            // contain a predator (the web's `predatorsExist` gate), so an ordinary reef pays
+            // nothing for a feature it is not using.
+            //
+            // 🔴 The sense radius is built from the FISH's length, not the shoal's home radius.
+            // A shoal is 80 u across; feeding that to PreyRadius (obsR·6 + 45) gives a 500 u
+            // engagement bubble and every predator on the map is permanently hunting something on
+            // the far side of it, which is a behaviour that is always on — i.e. not a behaviour.
+            var quarry = default(FishMind.Quarry);
+            SpeciesGenome.Genome gen = _gen[si];
+            SpeciesBehavior.Cfg cfg = _cfg[si];
+            if (_predatorsExist)
+            {
+                bool hasPrey = false;
+                Vector3 preyPos = Vector3.zero;
+                if (gen.Diet == SpeciesGenome.DietPredator)
+                {
+                    float bestPrey = float.MaxValue;
+                    for (int oj = 0; oj < _fear.Length; oj++)
+                    {
+                        if (oj == si) continue;
+                        // "I frighten them" is the same relation as the fear scan, read the other
+                        // way round — so nothing can be both my prey and my predator.
+                        if (!FleeMath.IsThreat(_fear[oj].Rank, fx.Rank, gen.Diet)) continue;
+                        Vector3 op = _fear[oj].HomeInit ? _fear[oj].HomeNow : _fear[oj].Anchor0;
+                        float d = Mathf.Sqrt((op.x - centre.x) * (op.x - centre.x) +
+                                             (op.z - centre.z) * (op.z - centre.z));
+                        if (d >= bestPrey) continue;
+                        bestPrey = d; preyPos = op; hasPrey = true;
+                    }
+                }
+                quarry = new FishMind.Quarry(hasPrey, preyPos.x, preyPos.y, preyPos.z,
+                                             hasPred, predPos.x, predPos.z, sp.FishLen);
+            }
+            else
+            {
+                quarry = new FishMind.Quarry(false, 0, 0, 0, false, 0, 0, sp.FishLen);
+            }
+
             Mind mind = _mind[si];
-            bool minded = FishMind.Step(
-                ref mind, _traits[si], dom, _pois, _poiCount,
+            HuntDrive drive = _hunt[si];
+
+            // Which way the shoal is currently going — the direction from where it IS to where it
+            // last decided to be. HuntMath reads this only for the aim gate ("am I lined up on the
+            // prey yet"), so what matters is that it is the shoal's own heading and not, say, the
+            // bearing of the threat, which would make it permanently "aimed" at whatever scared it.
+            float hdx = (float)mind.TX - centre.x, hdz = (float)mind.TZ - centre.z;
+            float heading = (hdx * hdx + hdz * hdz) > 1e-4f ? Mathf.Atan2(hdz, hdx) : 0f;
+            bool minded = FishMind.StepHunter(
+                ref mind, ref drive, _traits[si], dom, _pois, _poiCount,
                 fx.Anchor0.x, fx.Anchor0.y, fx.Anchor0.z,
-                fx.HomeR0, panic, t, Time.deltaTime, out MindState was);
+                centre.x, centre.z, heading,
+                fx.HomeR0, panic, quarry, gen, cfg.Ambush, cfg.Big,
+                t, Time.deltaTime, out MindState was, out HuntStep hs);
             _mind[si] = mind;
+            _hunt[si] = drive;
+
+            // A hunting school swims harder. Folded into the same DartMul the flee code uses, and
+            // capped: the web's sprint multiplier reaches 20× on a starving predator, which is a
+            // sensible number for ONE fish steering itself and an absurd one for a shoal's home
+            // being eased across the map — the ease is what makes "no teleport" structural, and a
+            // 20× ease is a teleport with a longer name.
+            if (hs.Phase == HuntPhase.Sprint || hs.Phase == HuntPhase.Strike)
+                sp.DartMul = Mathf.Max(sp.DartMul, Mathf.Min(2.5f, (float)hs.SpeedMul * 0.25f));
+
+            // One line per hunting-phase CHANGE, never per frame.
+            if (hs.Phase != _phase0[si])
+            {
+                Debug.Log($"[Hunt] school={si} species={(si < _render.Count ? _render[si].Species : "?")} " +
+                          $"phase={HuntMath.Label(_phase0[si])}→{HuntMath.Label(hs.Phase)} " +
+                          $"hunger={drive.Hunger:F2} fatigue={drive.Fatigue:F2} " +
+                          $"sprint={hs.SpeedMul:F1}× prey={quarry.HasPrey} hunter={quarry.HasHunter}");
+                _phase0[si] = hs.Phase;
+            }
 
             // One line PER DECISION — not per frame, and not only when something dramatic happens.
             // A reviewer has to be able to read the whole state machine off the player log, because

@@ -53,7 +53,14 @@ DiveMap/Assets/Scripts/
                 MarineMath สูตร boids/pitch/no-roll, SceneLoadState)
   Runtime/     (AppBoot จุดเริ่ม+UI+แสง SetupLighting, MapApiClient, AssetManifest resolver xrGlbUrl,
                 SceneBuilder สร้างฉาก+GroundToBase+น้ำ+obstacles, OrbitCamera FrameBox,
-                Marine/ = FishSchoolSystem, BoidsJob(Burst), WhaleController, FishMeshFactory)
+                Marine/ = FishSchoolSystem, BoidsJob(Burst), WhaleController, SoloAnimalRegistry,
+                FishMeshFactory)
+
+🐟 **สมองสัตว์ (C6)** — 4 ตารางใน Core ทั้งหมด pure + มีเทส:
+  `SpeciesGenome` (กินอะไร/กลัวใคร/บุคลิก) → `SpeciesBehavior` (BEHAVIOR_CFG 94 แถวจาก builder.html
+  + roamR/swimMul) → `SwimStyle` (ท่าว่าย) → `FishMind.TraitsFor` (นิสัยฝูง) · `HuntMath` = หิว/ล่า/หนี
+  `MarineRouting.For(id, kind)` ตัดสินว่าอะไรได้สมอง — **kind ไม่ใช่ prefix** (เดิมดูแต่ prefix เลยทำ
+  ให้ losin:/mdl: 58 ชนิดกลายเป็นเฟอร์นิเจอร์)
 DiveMap/Assets/StreamingAssets/asset_manifest.json  (275 โมดูล, 16 ตัวมี xrGlbUrl)
 DiveMap/Assets/Resources/   (materials DM_* กัน shader stripping + NotoSansThai)
 DiveMap/Assets/Tests/EditMode/  (45+ เทส — ห้ามแตก)
@@ -323,6 +330,11 @@ oracle จาก `qc_player.log` ผ่านครบ:
 ### 5.4 เก็บเล็ก
 - ปลายังเป็นเมช procedural ไม่มี texture (เว็บเป็นปลาเขียว-เงิน) → งานจริงคือ **WO-XR-04** ปลา GLB รายตัว · **อย่ายัดรวมรอบอื่น** (เสี่ยง magenta/KTX2 บน llvmpipe)
 - ตรวจ log `[Marine] whale heading dot(forward,vel)` ควร ≈ +1.0 ถ้าติดลบ = GLB หันกลับ ให้หมุน child yaw 180° (ห้ามแก้ WhaleController)
+- ⚠️ **`WhaleController` ชื่อผิดแล้ว** — ตั้งแต่ C6 phase 2 มันขับ**สัตว์เดี่ยวทุกตัว** (88 placement) ไม่ใช่แค่วาฬ
+  อ่านว่า "SoloAnimalController" (log ใช้ `[Solo]` แล้ว) · ยังไม่ rename เพราะ type ถูกอ้าง 6 จุด + doc 3 ที่
+  และเครื่อง dev ไม่มี UnityEngine.dll → `check.sh` เช็ค syntax อย่างเดียว rename พลาดจุดเดียว = CI แดง 35 นาที
+  **ให้ rename ในรอบที่มีงบ CI อยู่แล้ว** (แก้ EnvMode, SceneBuilder ×3, FishSchoolSystem, ArPlacement, ArKitSession + doc)
+- ตรวจ log `[Solo] attached=N of M` — N<M = GLB ไม่ลง · M ต่ำผิด = routing ไม่รู้จักสัตว์
 - ทรายเป็นวงรีครีมแบน เว็บมี sculpt + ไล่สีน้ำเงิน · hull เรือมีแผ่นดำ (backface ของ wreck GLB)
 
 ### 5.5 คิวใหญ่ถัดไป (user อาจสลับลำดับ — ถามก่อน)
