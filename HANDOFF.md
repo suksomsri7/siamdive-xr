@@ -397,3 +397,23 @@ WO-XR-04 (ปลา GLB จริง + caustics/FX) ↔ WO-XR-02m AR (ARCore) �
 
 ### โมเดล (245/275 ชี้ Bunny 2048²)
 ledger ทั้งหมดใน `/root/projects/siamdive-xr-models/*.jsonl` (commit `0cd3674`) · raw archive `/root/asset-masters/` + `predilation_backup/` (rollback dilation ได้) · maps repo = `4d8a1d7`
+
+## §7 — WO-E3: Linear + ACES + ค่าแสงตามเว็บ (branch `wo-e3-linear`, ยังไม่ push / ยังไม่ยิง CI)
+
+### ทำอะไร (ชุดเดียวกัน — แยกทำทีละอย่างจะแย่ลง เคยวัดมาแล้ว)
+1. `ProjectSettings m_ActiveColorSpace: 0 → 1` — **normal map กลับมาทั้งระบบเอง** (`GlbShading.NormalMapIsMisdecoded` รับ input เดียวคือ color space → `false` → `SceneBuilder.DropMisdecodedNormalMap` ไม่ทิ้งอีก) มีเทส `ColorSpaceTests` อ่านไฟล์ ProjectSettings จริงเพื่อกันการ revert เงียบ
+2. **ACES tone mapping** = `Shaders/DM_AcesToneMap.shader` + `Runtime/AcesToneMapping.cs` (OnRenderImage บนกล้องฉาก) · port ตรงจาก three.js r160 รวม `/0.6` · exposure 1.05 · uGUI = ScreenSpaceOverlay จึง **ไม่โดน** tone map · toggle `AcesToneMapping.Enabled` ให้ QC ถ่าย A/B ในรันเดียว
+3. **น้ำ/หมอก/ฉากหลัง/ambient คูณ attenuation ตัวเดียวกัน** (`WaterFog.Scale` → `ToneMap.ScaleLight`) → อัตราส่วน subject:background **คงที่ทุกความลึกโดยโครงสร้าง** · gradient กลับไปใช้ 4 stop ของเว็บ (`#e3f2f8→#06243a`) · fog กลับไปใช้ `0x123a55` ซึ่งเป็น "จุดบน ramp" ที่ v≈0.90
+4. แสงตามเว็บ: sun 0.82→1.2 · fill 0.65→0.5 · ambient = hemi 0xbfe6ff/0x123040 ×1.05 · reflectionIntensity 1→0.3 · `DepthLight.Floor` 0.35→0.25 · shadowStrength 0.5→0.35 · Medium `shadows: 1→2` + `shadowResolution: 0→1`
+5. QC ใหม่: `QcModelShot.RunDepth` ถ่ายบาราคูด้าที่ 15/30/52 m × (ACES on/off) → `[QCDepth]` + `qc_depth_*.png`
+
+### 🔴 สิ่งที่ session ถัดไปต้องทำก่อนอย่างอื่น
+1. **`QcModelShot.DarkBaselines` ถูกรีเซ็ตเป็น −1 ทั้ง 9 ตัว** ตามกติกา §6 ข้อ 2 (pipeline แสง/material เปลี่ยนยกชุด ค่าเดิมมาจากแอปคนละตัว) — ดูรูปจากรันแรกด้วยตาก่อน แล้วบันทึกใหม่จาก **รันเดียว**
+2. อ่าน `[QCDepth]` 6 บรรทัด: ต้องได้ `verdict=OK` ทุกความลึก (contrast ≥ 0.25 · range ≥ 0.15) และ `depthCue=depth-cue-held` · A/B `aces=on` vs `aces=off` คือหลักฐานว่า tone mapping ช่วยจริงหรือไม่
+3. ตรวจว่า `[Tone] ACES on` โผล่ใน log — ถ้าไม่โผล่แปลว่า shader ถูก strip/ไม่รองรับ แล้วเฟรมจะไม่มี tone curve (ไม่ใช่จอม่วง แต่ก็ไม่ใช่ของที่ตั้งใจ)
+
+### ค่าที่ยัง "จูนไว้ใน Gamma" และ **ยังไม่แก้** (อยู่นอกขอบเขต WO-E3 — ตัดสินใจทีหลัง)
+- `EnvMode` โหมดกลางวัน: ambient ×0.72 และ sun 1.15 แทนค่าเว็บ 1.2/1.6 — คอมเมนต์ในไฟล์บอกตรงๆ ว่าลดเพราะ "ทรายขาวโพลน" ใน gamma ซึ่งตอนนี้ ACES มี shoulder รับให้แล้ว
+- `DM_StandardTransparent.mat` `_Color (0.1,0.4,0.7,0.45)` + ผิวน้ำใน `SceneBuilder` (0.290,0.659,0.855,α0.5 / 0.78,0.92,1,α0.13)
+- `DiveLightMath.Headlight*` (fog + atmosphere multiplier ของไฟหน้าโดรน)
+- texture ที่เป็น "ค่าความเข้ม" ไม่ใช่สี (`GodRays`, `DroneLights` glow) ถูกสร้างเป็น sRGB → เส้นโค้ง falloff เปลี่ยนรูปใน linear

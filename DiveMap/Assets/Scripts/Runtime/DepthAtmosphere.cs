@@ -67,40 +67,51 @@ namespace DiveMap.Runtime
             }
 
             // In air none of this applies — the web's daylight mode is a view from a boat.
-            if (EnvMode.Daylight) return;
+            if (EnvMode.Daylight)
+            {
+                Backdrop.ClearDepth();
+                return;
+            }
 
             float depth = _waterLevel - _cam.transform.position.y;
             DepthLight.Attenuation(depth, out float r, out float g, out float b);
             var tint = new Color(r, g, b, 1f);
 
-            // Only HALF the attenuation goes on the ambient. The headlamp system already dims the
-            // whole scene by its own multiplier, so applying the depth curve on top at full
-            // strength stacked two dimmers and the water came out near-black — reported as "still
-            // too dark" on a build that had already been brightened once. The depth cue lives
-            // mostly in the fog and the colour shift, which is where the eye reads it anyway.
-            Color soft = Color.Lerp(Color.white, tint, 0.5f);
-            RenderSettings.ambientSkyColor = _baseSky * soft;
-            RenderSettings.ambientEquatorColor = _baseEquator * soft;
-            RenderSettings.ambientGroundColor = _baseGround * soft;
+            // 🔴 WO-E3: the FULL attenuation, not half of it.
+            //
+            // The half was compensation. Applying the depth curve to the ambient while the fog and
+            // the backdrop were painted from a depth-independent ramp meant the scene got darker
+            // and the water did not, so the water "came out near-black" only in the sense that
+            // everything IN it did — and halving the curve was the lever that was reachable at the
+            // time. Now the fog (below) and the backdrop (Backdrop.SetDepth) are multiplied by this
+            // same vector, so the subject-to-background ratio does not move with depth at all and
+            // the ambient no longer has to be protected from its own curve. Halving it here would
+            // now do the opposite of what it was hired for: it would make the subject drift
+            // BRIGHTER than the water as the camera descends.
+            RenderSettings.ambientSkyColor = Dim(_baseSky, tint);
+            RenderSettings.ambientEquatorColor = Dim(_baseEquator, tint);
+            RenderSettings.ambientGroundColor = Dim(_baseGround, tint);
 
-            // 🔴 The fog colour comes off the BACKDROP'S OWN RAMP, not from multiplying the base
-            // colour down.
+            // The background, dimmed by the very same vector. This is the half of the fix that is
+            // visible: the gradient fills most of the frame and was baked once, at the surface.
+            Backdrop.SetDepth(depth);
+
+            // The fog: the web's own #123a55, dimmed by the same vector as everything else.
             //
-            // The old line did the physically-tempting thing — take the authored fog colour and
-            // attenuate it like light — and it is what turned the wreck and the fish into black
-            // silhouettes. Two independent things were painting the same pixels: the backdrop
-            // gradient runs #eaf7fb→#1b5a85, and this was multiplying #123a55 down from there. So a
-            // fish 200 units out faded toward a colour roughly a third as bright as the background
-            // directly behind it. Nothing was unlit; the fog was simply the wrong colour, and no
-            // amount of brightening the lights could have fixed it.
-            //
-            // Reading the ramp instead makes the two agree BY CONSTRUCTION: whatever the gradient
-            // says the water looks like at this depth is what things fade into. Editing a stop in
-            // SeabedGeom now moves both. See WaterFog for why the sample sits at the horizon rather
-            // than at the top or bottom of the ramp.
-            SeabedGeom.Rgb ramp = WaterFog.ColorAt(depth);
+            // 🔴 The history is worth keeping because BOTH previous versions of this line were
+            // wrong in ways that look right. Version 1 attenuated the authored fog colour while the
+            // backdrop behind it stayed on a bright, depth-independent ramp — so distant geometry
+            // faded toward a colour a third as bright as the background directly behind it and read
+            // as a black silhouette. Version 2 fixed that by reading the fog OFF the backdrop ramp,
+            // which made fog and background agree with each other but left both of them out of the
+            // lighting's multiplication, so the subject kept sinking away from the water with
+            // depth. Version 3 — this one — puts all three in the same product: authored colour ⊙
+            // attenuation, for the fog, for the backdrop, and for the ambient. The web's fog colour
+            // is a point on the web's own gradient (WaterFog.FogRampV), so agreeing with the
+            // background costs nothing and needs nobody to keep two numbers in step.
+            SeabedGeom.Rgb water = WaterFog.ColorAt(depth);
             var mood = new SeabedGeom.Rgb(_baseFog.r, _baseFog.g, _baseFog.b);
-            SeabedGeom.Rgb fog = WaterFog.Blend(ramp, mood, WaterFog.MoodWeight);
+            SeabedGeom.Rgb fog = WaterFog.Blend(water, mood, WaterFog.MoodWeight);
             RenderSettings.fogColor = new Color(fog.R, fog.G, fog.B, 1f);
 
             float vis = DepthLight.VisibilityScale(depth);
@@ -114,6 +125,23 @@ namespace DiveMap.Runtime
             _wroteFogStart = RenderSettings.fogStartDistance;
             _wroteFogEnd = RenderSettings.fogEndDistance;
         }
+
+        /// <summary>
+        /// Dim an authored ambient colour by the attenuation, in light rather than in the numbers.
+        ///
+        /// The old line was <c>_baseSky * tint</c>, a plain Color multiply, and it is wrong in the
+        /// same way it would be wrong to darken a photograph by scaling its JPEG bytes: these
+        /// colours are sRGB-authored (the web's hex) and the attenuation is a transmittance. At the
+        /// bottom of the curve the two differ by about a factor of three, always in the direction
+        /// of too dark. It also has to agree EXACTLY with what the fog and the backdrop do, or the
+        /// ratio this whole change is built on drifts with depth — hence the shared
+        /// <see cref="ToneMap.ScaleLight"/> rather than a second copy of the arithmetic.
+        /// </summary>
+        private static Color Dim(Color c, Color k) => new Color(
+            ToneMap.ScaleLight(c.r, k.r),
+            ToneMap.ScaleLight(c.g, k.g),
+            ToneMap.ScaleLight(c.b, k.b),
+            c.a);
 
         private void OnDestroy()
         {

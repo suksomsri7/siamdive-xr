@@ -446,10 +446,13 @@ jobs:
           # all but four of its objects out of generated geometry. The pass has its own 240 s
           # internal budget and quits itself, so this ceiling is the outer fuse, not the plan;
           # it moved with the budget (170 → 240) to keep the same headroom behind it.
-          timeout 560 xvfb-run -a -s "-screen 0 1280x720x24" \
+          # WO-E3 added the DEPTH pass behind the model pass: the same animal at 15/30/52 m with
+          # the ACES curve on and off — 12 frames, one model, no extra download. 560 → 640 s.
+          timeout 640 xvfb-run -a -s "-screen 0 1280x720x24" \
             "$BIN" -qcshot "$PWD/qc_screenshot.png" -screen-width 1280 -screen-height 720 -force-glcore || true
           ls -la qc_screenshot.png || echo "::warning::no screenshot produced"
           ls -la qc_model_*.png || echo "::warning::no per-model QC shots — see [QCModel] lines in qc_player.log"
+          ls -la qc_depth_*.png || echo "::warning::no depth QC shots — see [QCDepth] lines in qc_player.log"
           # Find the log rather than guess its path: Unity puts it under the COMPANY NAME, so
           # renaming the company (which we did) silently produced no log at all — and the log is
           # half of what QC proves. `|| true` hid it perfectly.
@@ -466,6 +469,14 @@ jobs:
           # calibration targets they are read against are in SwimStyleTests.
           grep -h '\[Swim\]' qc_player.log 2>/dev/null || \
             echo "::warning::no [Swim] lines — no animal resolved a swim style"
+          # WO-E3's acceptance evidence: subject-against-water contrast, the shading range INSIDE
+          # the subject, and whether the frame still gets bluer with depth (the cue the user asked
+          # to keep). Three depths × ACES on/off, in the step log so the A/B is readable without
+          # downloading the pictures.
+          grep -h '\[QCDepth\]' qc_player.log 2>/dev/null || \
+            echo "::warning::no [QCDepth] lines — the depth QC pass did not run"
+          grep -h '\[Tone\]' qc_player.log 2>/dev/null || \
+            echo "::warning::no [Tone] line — ACES never reported whether it attached"
 
       # Second, SEPARATE run for the UI shots (WO-XR-05). It must not share a process
       # with -qcshot: that mode ends in Application.Quit(0) inside AppBoot.QcShot, so
@@ -490,6 +501,7 @@ jobs:
             qc_screenshot.png
             qc_screenshot2.png
             qc_model_*.png
+            qc_depth_*.png
             qc_player.log
             qc_ui*.png
             qc_ui_player.log

@@ -34,7 +34,19 @@ namespace DiveMap.Core
         /// 0.18 was too dark on the phone — the whole scene read as deep navy. The curve still
         /// separates shallow from deep (that is the point), it just does it from a brighter start:
         /// tropical water is bright, and a dive site nobody can see is not realism.
-        public const float Floor = 0.35f;
+        ///
+        /// 🔴 WO-E3: 0.35 → 0.25. Both of the earlier numbers were chosen against a pipeline with
+        /// no tone mapping, where the only protection a midtone had was to start high — anything
+        /// that got dark STAYED dark all the way to the byte. ACES has a toe: it lifts and holds
+        /// the bottom of the range instead of letting it slide to black (a linear 0.02 comes out at
+        /// byte 40, not 12). The floor's job is unchanged — the deep must stay readable — but with
+        /// the curve doing that job the floor can go back to attenuating rather than propping, and
+        /// a quarter of surface light at 55 m is much nearer what the water actually does.
+        ///
+        /// Now also multiplies the FOG and the BACKDROP, not just the subject (see
+        /// <see cref="WaterFog"/>), so lowering it dims the whole picture together rather than
+        /// pushing the subject further behind the background.
+        public const float Floor = 0.25f;
 
         /// <summary>
         /// Multiplier for (r, g, b) at <paramref name="depthUnits"/> below the surface.

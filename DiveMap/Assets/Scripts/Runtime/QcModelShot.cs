@@ -83,25 +83,34 @@ namespace DiveMap.Runtime
         /// lighting or the material pipeline changes on purpose; a stale baseline is worth more
         /// than no baseline, but a baseline nobody has looked at is worth less than none.
         /// </summary>
+        /// <remarks>
+        /// 🔴 ALL NINE WERE RESET TO −1 BY WO-E3, ON PURPOSE, AND MUST BE RE-RECORDED.
+        ///
+        /// HANDOFF §6 rule 2: re-record these whenever the lighting or material pipeline changes on
+        /// purpose, from ONE run, AFTER a human has looked at the pictures. WO-E3 changed both, as
+        /// hard as they can be changed — gamma → linear (so every normal map in the app is back),
+        /// ACES tone mapping, the web's light rig, and the reflection cube down to 0.3. Every
+        /// number that was here was measured through a pipeline that no longer exists, so keeping
+        /// them would not be a stale baseline, it would be a baseline from a different app, and the
+        /// gate would fire on models that got BETTER.
+        ///
+        /// Writing new numbers here from this session was not on the table either: the author of
+        /// this change cannot run CI and has not seen a single frame from it, and rule 1 says
+        /// evidence comes from the Unity build. −1 is the honest state: the gate falls back to the
+        /// absolute MaxDarkPercent ceiling, the log prints "darkBaseline=none", and the next push
+        /// reads the real numbers off a run somebody looked at.
+        /// </remarks>
         private static readonly double[] DarkBaselines =
         {
-            2.33,    // cc0:kraken
-            31.47,   // stat:verdant_poseidon — dark green stone
-            36.86,   // cc0:wreck_hardeep
-            62.34,   // sw:htms732 — camouflage, legitimately the darkest of the six
-            14.57,   // msh:barracuda
-            0.86,    // msh:lionfish
-
-            // 🔴 −1 = NO BASELINE RECORDED, and it must stay −1 until a human has looked at this
-            // run's pictures. These three have never been photographed, so there is nothing to
-            // compare them against and any number written here would be a guess presented as
-            // evidence — the exact failure mode HANDOFF §6 rule 2 exists to stop. With −1 the gate
-            // falls back to the absolute MaxDarkPercent ceiling (QcPixels.DarkGate) and the log
-            // line prints "darkBaseline=none", which is what the next round reads the real numbers
-            // off. Fill these in in the NEXT push, from one run, after looking.
-            -1.0,    // cc0:statue_singha — baseline pending, look at the shot first
-            -1.0,    // cc0:wreck_chang   — baseline pending, look at the shot first
-            -1.0,    // cc0:rock_cluster  — baseline pending, look at the shot first
+            -1.0,    // cc0:kraken            (was 2.33 — pre-linear, pre-ACES)
+            -1.0,    // stat:verdant_poseidon (was 31.47)
+            -1.0,    // cc0:wreck_hardeep     (was 36.86)
+            -1.0,    // sw:htms732            (was 62.34)
+            -1.0,    // msh:barracuda         (was 14.57)
+            -1.0,    // msh:lionfish          (was 0.86)
+            -1.0,    // cc0:statue_singha     — never had one
+            -1.0,    // cc0:wreck_chang       — never had one
+            -1.0,    // cc0:rock_cluster      — never had one
         };
 
         /// <summary>Baseline for <paramref name="assetId"/>, or −1 when none is recorded.</summary>
@@ -218,6 +227,176 @@ namespace DiveMap.Runtime
 
             Debug.Log($"[QCModel] pass done ok={ok} fail={fail} " +
                       $"in {Time.realtimeSinceStartup - t0:F1}s (budget {BudgetSeconds:F0}s)");
+        }
+
+        // ── WO-E3: the depth pass ────────────────────────────────────────────────
+
+        /// <summary>
+        /// The reference animal for the depth shots. A marine model rather than a wreck or a
+        /// statue because the complaint was about ANIMALS ("ฉลามกลายเป็นเงาแบน"), and the
+        /// barracuda specifically because it is long, thin and pale — the shape and the albedo that
+        /// showed the problem worst, and one already carrying a recorded dark baseline.
+        /// </summary>
+        private const string DepthAssetId = "msh:barracuda";
+
+        /// <summary>
+        /// The three depths, in metres.
+        ///
+        /// 15 is a shallow recreational dive, 30 the far end of one, and 52.4 is the depth the user
+        /// was standing at on Poseidon when they reported the bug — the number is not a round one
+        /// on purpose. Three, not one, because the requirement is not "it looks right at 52 m", it
+        /// is "the subject-to-water ratio does not depend on depth", and one sample cannot say
+        /// anything about a slope.
+        /// </summary>
+        private static readonly float[] DepthMetres = { 15f, 30f, 52f };
+
+        /// <summary>
+        /// Photograph the reference animal at three depths, with the tone curve on and off, and log
+        /// the numbers that answer the user's report.
+        ///
+        /// 🔎 A/B IN ONE RUN. The ACES toggle is flipped between the two halves of each pair rather
+        /// than between two CI runs. Two runs differ in the CDN's mood, the boids' phase and the
+        /// llvmpipe frame time; one run differs in exactly the thing under test. HANDOFF §6 rule 1
+        /// — evidence comes from the Unity build itself — is what makes that worth the extra four
+        /// frames a depth.
+        /// </summary>
+        public static IEnumerator RunDepth(string dir, AssetManifest manifest, Vector3 mapCentre,
+                                           float waterLevel)
+        {
+            if (string.IsNullOrEmpty(dir)) dir = ".";
+            Camera cam = Camera.main;
+            if (cam == null)
+            {
+                Debug.LogWarning("[QCDepth] no main camera — nothing was photographed");
+                yield break;
+            }
+
+            string url = manifest != null ? manifest.ResolveUrl(DepthAssetId) : null;
+            string name = NameFor(manifest, DepthAssetId);
+            if (string.IsNullOrEmpty(url))
+            {
+                Debug.LogWarning("[QCDepth] url unresolved for " + DepthAssetId + " — pass skipped");
+                yield break;
+            }
+
+            var orbit = cam.GetComponent<OrbitCamera>();
+            if (orbit != null) orbit.enabled = false;
+
+            int w = Mathf.Clamp(Screen.width, 320, 1920);
+            int h = Mathf.Clamp(Screen.height, 240, 1080);
+            var rt = new RenderTexture(w, h, 24, RenderTextureFormat.ARGB32)
+            {
+                name = "QcDepthRT",
+                antiAliasing = 1,
+            };
+            var readback = new Texture2D(w, h, TextureFormat.RGB24, false, false);
+
+            var pivot = new GameObject("QcDepth:" + DepthAssetId);
+            float scale = 1f;
+            AssetManifest.Module mod = manifest.Get(DepthAssetId);
+            if (mod != null && mod.DefaultScale > 0) scale = (float)mod.DefaultScale;
+            pivot.transform.localScale = Vector3.one * scale;
+            pivot.transform.position = new Vector3(mapCentre.x + StageOffset, waterLevel - 90f, mapCentre.z);
+
+            float loadStart = Time.realtimeSinceStartup;
+            Task<GltfImport> task = SceneBuilder.LoadForQc(url, DepthAssetId, pivot.transform);
+            while (!task.IsCompleted && Time.realtimeSinceStartup - loadStart < PerModelSeconds)
+                yield return null;
+            GltfImport import = task.Status == TaskStatus.RanToCompletion ? task.Result : null;
+
+            var renderers = new List<Renderer>();
+            pivot.GetComponentsInChildren(true, renderers);
+            if (import == null || renderers.Count == 0)
+            {
+                Debug.LogWarning($"[QCDepth] {name} did not arrive (loaded={import != null} " +
+                                 $"renderers={renderers.Count}) — pass skipped, url={url}");
+            }
+            else
+            {
+                var acesOn = new QcPixels.DepthShot[DepthMetres.Length];
+                bool acesAvailable = cam.GetComponent<AcesToneMapping>() != null;
+                Debug.Log($"[QCDepth] pass start model={name} depths={DepthMetres.Length} " +
+                          $"aces={(acesAvailable ? "available" : "NOT-ATTACHED")} " +
+                          $"colorSpace={QualitySettings.activeColorSpace} waterLevel={waterLevel:F1}");
+
+                for (int i = 0; i < DepthMetres.Length; i++)
+                {
+                    float metres = DepthMetres[i];
+                    float y = waterLevel - metres * DepthLight.UnitsPerMetre;
+                    pivot.transform.position = new Vector3(mapCentre.x + StageOffset, y, mapCentre.z);
+
+                    // Frame it the same way the model pass does, so the two sets of numbers are
+                    // about the same picture.
+                    Bounds b = WorldBounds(renderers);
+                    float aspect = (float)rt.width / Mathf.Max(1, rt.height);
+                    Vector3 viewDir = new Vector3(0.55f, 0.32f, 1f).normalized;
+                    Vector3 fwd = -viewDir;
+                    Vector3 right = Vector3.Cross(Vector3.up, viewDir).normalized;
+                    if (right.sqrMagnitude < 0.5f) right = Vector3.right;
+                    Vector3 up = Vector3.Cross(viewDir, right).normalized;
+                    Vector3 half = b.extents;
+                    float dist = (float)QcPixels.FrameDistanceForBox(
+                        half.x, half.y, half.z,
+                        right.x, right.y, right.z,
+                        up.x, up.y, up.z,
+                        fwd.x, fwd.y, fwd.z,
+                        cam.fieldOfView, aspect);
+                    dist = Mathf.Max(dist, b.extents.magnitude + cam.nearClipPlane * 3f);
+                    cam.transform.position = b.center + viewDir * dist;
+                    cam.transform.LookAt(b.center);
+
+                    // The camera has to BE at the depth as well as pointing at it: every system
+                    // that dims with depth (DepthAtmosphere, UnderwaterShading, Backdrop) reads the
+                    // CAMERA's y, not the subject's. Framing from a three-quarter view lifts the
+                    // camera above the model, so this is a real difference of several metres.
+                    Debug.Log($"[QCDepth] {name} target={metres:F1}m camY={cam.transform.position.y:F1} " +
+                              $"camDepth={(waterLevel - cam.transform.position.y) / DepthLight.UnitsPerMetre:F1}m " +
+                              $"dist={dist:F1}");
+
+                    // Long enough for LateUpdate to have run several times: the atmosphere, the
+                    // ambient floor and the backdrop re-bake all settle over frames, not instantly.
+                    yield return new WaitForSeconds(SettleSeconds * 2f);
+
+                    for (int pass = 0; pass < 2; pass++)
+                    {
+                        bool aces = pass == 0;
+                        AcesToneMapping.Enabled = aces;
+                        yield return null;
+
+                        string png = aces
+                            ? Path.Combine(dir, $"qc_depth_{Mathf.RoundToInt(metres)}m.png")
+                            : Path.Combine(dir, $"qc_depth_{Mathf.RoundToInt(metres)}m_noaces.png");
+
+                        byte[] withSubject = null, withoutSubject = null;
+                        yield return Capture(cam, rt, readback, png, bytes => withSubject = bytes);
+                        pivot.SetActive(false);
+                        yield return null;
+                        yield return Capture(cam, rt, readback, null, bytes => withoutSubject = bytes);
+                        pivot.SetActive(true);
+                        yield return null;
+
+                        QcPixels.DepthShot d = QcPixels.MeasureDepth(withSubject, withoutSubject);
+                        if (aces) acesOn[i] = d;
+                        Debug.Log(QcPixels.DepthLine(name, metres, aces, d));
+                    }
+                    AcesToneMapping.Enabled = true;
+                }
+
+                Debug.Log($"[QCDepth] pass done depthCue={QcPixels.DepthCueVerdict(acesOn)} " +
+                          $"minContrast={QcPixels.MinContrast:0.00} " +
+                          $"minRange={QcPixels.MinDynamicRange:0.00}");
+            }
+
+            AcesToneMapping.Enabled = true;
+            RenderTexture.active = null;
+            cam.targetTexture = null;
+            rt.Release();
+            Object.Destroy(rt);
+            Object.Destroy(readback);
+            Object.Destroy(pivot);
+            yield return null;
+            import?.Dispose();
+            Resources.UnloadUnusedAssets();
         }
 
         // ── one model ────────────────────────────────────────────────────────────

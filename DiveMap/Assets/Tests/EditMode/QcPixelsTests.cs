@@ -748,5 +748,194 @@ namespace DiveMap.Tests
             Assert.Greater(QcPixels.FrameDistanceForBox(3, 2, 1,
                                r[0], r[1], r[2], u[0], u[1], u[2], f[0], f[1], f[2], 400.0, 1.0, 5.0), 0.0);
         }
+
+        // ── WO-E3: the depth metrics ─────────────────────────────────────────────
+
+        /// <summary>A frame of <paramref name="n"/> water pixels with <paramref name="subj"/> of
+        /// them replaced by a subject running from <paramref name="lo"/> to <paramref name="hi"/> —
+        /// i.e. a subject that HAS shading, unless lo == hi.</summary>
+        private static void Scene(int n, int subj, byte lo, byte hi,
+                                  byte wr, byte wg, byte wb,
+                                  out byte[] with, out byte[] without)
+        {
+            without = Flat(n, wr, wg, wb);
+            with = Flat(n, wr, wg, wb);
+            for (int i = 0; i < subj; i++)
+            {
+                byte v = subj <= 1 ? lo : (byte)(lo + (hi - lo) * i / (subj - 1));
+                with[i * 3] = v; with[i * 3 + 1] = v; with[i * 3 + 2] = v;
+            }
+        }
+
+        [Test]
+        public void AnEmptyStageCannotScoreWell()
+        {
+            // The rule this whole harness is built on: a frame with nothing in it must read as
+            // nothing photographed, not as a clean picture.
+            byte[] water = Flat(1000, 20, 60, 110);
+            QcPixels.DepthShot d = QcPixels.MeasureDepth(water, water);
+            Assert.AreEqual(0.0, d.SubjectPercent, 1e-9);
+            Assert.AreEqual("not-in-frame", QcPixels.DepthReason(d));
+            Assert.IsFalse(QcPixels.DepthPasses(d));
+        }
+
+        [Test]
+        public void MismatchedOrMissingBuffers_AreRefused()
+        {
+            byte[] water = Flat(500, 20, 60, 110);
+            Assert.AreEqual("not-in-frame", QcPixels.DepthReason(QcPixels.MeasureDepth(water, null)));
+            Assert.AreEqual("not-in-frame",
+                            QcPixels.DepthReason(QcPixels.MeasureDepth(water, Flat(400, 20, 60, 110))));
+            Assert.AreEqual("readback-empty", QcPixels.DepthReason(QcPixels.MeasureDepth(null, water)));
+        }
+
+        [Test]
+        public void ASubjectTheSameBrightnessAsTheWater_IsCalledFlat()
+        {
+            // 🔴 THE REPORTED BUG, as a number. The subject is present, it is not black, and it is
+            // indistinguishable from the water it stands in — which on a screen is a silhouette.
+            // darkOfSubject cannot see this at all: none of these pixels are dark.
+            Scene(1000, 200, 96, 100, 92, 96, 100, out byte[] with, out byte[] without);
+            QcPixels.DepthShot d = QcPixels.MeasureDepth(with, without);
+
+            Assert.Greater(d.SubjectPercent, QcPixels.MinSubjectPercent);
+            Assert.Less(d.Contrast, QcPixels.MinContrast);
+            Assert.AreEqual("flat-against-water", QcPixels.DepthReason(d));
+        }
+
+        [Test]
+        public void ASubjectDarkerThanTheWater_PassesContrast_ItIsAnAbsoluteValue()
+        {
+            // Direction is deliberately not part of the gate. Underwater a mid-grey object is often
+            // darker than the water behind it and still reads perfectly — the web does exactly that
+            // — so what is being measured is separation, not which way round it is.
+            Scene(1000, 200, 20, 60, 90, 140, 200, out byte[] with, out byte[] without);
+            QcPixels.DepthShot d = QcPixels.MeasureDepth(with, without);
+            Assert.Less(d.SubjectLuminance, d.BackgroundLuminance);
+            Assert.Greater(d.Contrast, QcPixels.MinContrast);
+        }
+
+        [Test]
+        public void AFlatFillIsCaughtEvenWhenItStandsOutFromTheWater()
+        {
+            // The other half of "ไร้รายละเอียด": a subject can clear the contrast gate by being one
+            // uniform bright colour and still be a cut-out with no shading in it.
+            Scene(1000, 200, 220, 220, 20, 40, 70, out byte[] with, out byte[] without);
+            QcPixels.DepthShot d = QcPixels.MeasureDepth(with, without);
+
+            Assert.Greater(d.Contrast, QcPixels.MinContrast);
+            Assert.AreEqual(0.0, d.DynamicRange, 1e-6);
+            Assert.AreEqual("no-shading", QcPixels.DepthReason(d));
+        }
+
+        [Test]
+        public void AShadedSubjectAgainstWater_Passes()
+        {
+            Scene(1000, 200, 40, 210, 20, 45, 80, out byte[] with, out byte[] without);
+            QcPixels.DepthShot d = QcPixels.MeasureDepth(with, without);
+
+            Assert.AreEqual("", QcPixels.DepthReason(d));
+            Assert.IsTrue(QcPixels.DepthPasses(d));
+            Assert.Greater(d.DynamicRange, QcPixels.MinDynamicRange);
+            Assert.Greater(d.SubjectP95, d.SubjectP5);
+        }
+
+        [Test]
+        public void PercentilesIgnoreAHandfulOfOutliers()
+        {
+            // p95−p5 rather than max−min on purpose: one specular pixel and one pixel of shadow
+            // would otherwise report a full range on a subject that is flat everywhere else.
+            byte[] without = Flat(1000, 20, 45, 80);
+            byte[] with = Flat(1000, 20, 45, 80);
+            for (int i = 0; i < 200; i++)
+            {
+                byte v = i == 0 ? (byte)0 : (i == 1 ? (byte)255 : (byte)120);
+                with[i * 3] = v; with[i * 3 + 1] = v; with[i * 3 + 2] = v;
+            }
+            QcPixels.DepthShot d = QcPixels.MeasureDepth(with, without);
+            Assert.Less(d.DynamicRange, 0.05, "two outlier pixels are being read as shading");
+        }
+
+        [Test]
+        public void TheDepthCueVerdict_NeedsTheFrameToKeepGettingBluer()
+        {
+            // 🔑 The user chose realism when it was put to them: "หรี่แสงตามความลึก = เก็บไว้". A
+            // change that fixed the contrast by flattening the depth response would improve every
+            // other number in the log and still be a regression, so it gets its own verdict.
+            Assert.AreEqual("depth-cue-held", Verdict(0.30, 0.55, 0.78));
+            Assert.AreEqual("depth-cue-flat", Verdict(0.55, 0.55, 0.55));
+            Assert.AreEqual("depth-cue-lost", Verdict(0.80, 0.55, 0.90));
+            Assert.AreEqual("not-enough-depths", QcPixels.DepthCueVerdict(null));
+            Assert.AreEqual("probe-failed",
+                            QcPixels.DepthCueVerdict(new[]
+                            {
+                                new QcPixels.DepthShot { Pixels = 10, BlueShift = 0.3 },
+                                new QcPixels.DepthShot(),
+                            }));
+        }
+
+        [Test]
+        public void TheBlueShiftPlateauAtTheDeepEnd_IsNotReadAsALostCue()
+        {
+            // The measured shape of a real run: the water's red byte hits 0 somewhere near 50 m, so
+            // the last two frames are both "as blue as a frame gets". A strict > would call that a
+            // regression on a scene where the cue is working exactly as designed.
+            Assert.AreEqual("depth-cue-held", Verdict(0.94, 0.99, 1.00));
+        }
+
+        private static string Verdict(params double[] blueShifts)
+        {
+            var shots = new QcPixels.DepthShot[blueShifts.Length];
+            for (int i = 0; i < blueShifts.Length; i++)
+                shots[i] = new QcPixels.DepthShot { Pixels = 1000, BlueShift = blueShifts[i] };
+            return QcPixels.DepthCueVerdict(shots);
+        }
+
+        [Test]
+        public void BlueShiftIsUsedInsteadOfBOverR_BecauseRedGoesToZero()
+        {
+            // At 52 m the water's red channel lands at 0-1/255 after ACES, so B/R swings over five
+            // orders of magnitude on a single byte and cannot be compared between frames. The
+            // bounded form is a strictly increasing function of it and says the same thing.
+            byte[] a = Flat(100, 1, 40, 120);
+            byte[] b = Flat(100, 0, 40, 120);
+            QcPixels.DepthShot sa = QcPixels.MeasureDepth(a, a);
+            QcPixels.DepthShot sb = QcPixels.MeasureDepth(b, b);
+
+            Assert.AreEqual(0.0, sb.BlueOverRed, 1e-9, "a zero red channel must not divide");
+            Assert.Greater(sb.BlueShift, sa.BlueShift);
+            Assert.LessOrEqual(sb.BlueShift, 1.0);
+        }
+
+        [Test]
+        public void TheDepthLineSaysWhichHalfOfTheAbPairItIs()
+        {
+            Scene(1000, 200, 40, 210, 20, 45, 80, out byte[] with, out byte[] without);
+            QcPixels.DepthShot d = QcPixels.MeasureDepth(with, without);
+
+            string on = QcPixels.DepthLine("barracuda_xr0", 52f, true, d);
+            string off = QcPixels.DepthLine("barracuda_xr0", 52f, false, d);
+            StringAssert.StartsWith("[QCDepth] barracuda_xr0 depth=52.0m aces=on verdict=OK", on);
+            StringAssert.Contains("aces=off", off);
+            StringAssert.Contains("contrast=", on);
+            StringAssert.Contains("range=", on);
+            StringAssert.Contains("blueShift=", on);
+        }
+
+        [Test]
+        public void NoMipMapBiasSneaksIntoTheDepthPass()
+        {
+            // HANDOFF §6 rule 4. The bias probe measured no-mottle and the guard is kept where the
+            // new code is, not only where the old code was.
+            string shot = RepoFiles.Read("Assets/Scripts/Runtime/QcModelShot.cs");
+            Assert.NotNull(shot, "cannot find QcModelShot.cs");
+            int depthPass = shot.IndexOf("RunDepth", StringComparison.Ordinal);
+            int modelPass = shot.IndexOf("private static IEnumerator One(", StringComparison.Ordinal);
+            Assert.Greater(depthPass, 0);
+            Assert.Greater(modelPass, depthPass, "the depth pass moved; this test is reading the wrong span");
+            string depthBody = shot.Substring(depthPass, modelPass - depthPass);
+            Assert.IsFalse(depthBody.Contains("mipMapBias"),
+                           "the depth pass sets a mip bias — see HANDOFF §6 rule 4");
+        }
     }
 }

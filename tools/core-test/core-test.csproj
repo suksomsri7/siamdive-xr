@@ -51,6 +51,13 @@
     <Compile Include="../../DiveMap/Assets/Scripts/Core/FishMind.cs" />
     <Compile Include="../../DiveMap/Assets/Scripts/Core/QcPixels.cs" />
     <Compile Include="../../DiveMap/Assets/Scripts/Core/GlbShading.cs" />
+    <!-- WO-E3. The whole lighting/water/tone chain is UnityEngine-free by design, and until now
+         only SeabedGeom of it was checked on this machine — so the one part of the app the user
+         complains about could only be tested by a 35-minute CI round. All five are pure. -->
+    <Compile Include="../../DiveMap/Assets/Scripts/Core/ToneMap.cs" />
+    <Compile Include="../../DiveMap/Assets/Scripts/Core/WaterFog.cs" />
+    <Compile Include="../../DiveMap/Assets/Scripts/Core/UnderwaterLight.cs" />
+    <Compile Include="../../DiveMap/Assets/Scripts/Core/DiveLightMath.cs" />
   </ItemGroup>
 
   <ItemGroup Label="EditMode tests for exactly those files">
@@ -72,6 +79,12 @@
     <Compile Include="../../DiveMap/Assets/Tests/EditMode/TiltedHullTests.cs" />
     <Compile Include="../../DiveMap/Assets/Tests/EditMode/QcPixelsTests.cs" />
     <Compile Include="../../DiveMap/Assets/Tests/EditMode/GlbShadingTests.cs" />
+    <Compile Include="../../DiveMap/Assets/Tests/EditMode/RepoFiles.cs" />
+    <Compile Include="../../DiveMap/Assets/Tests/EditMode/ToneMapTests.cs" />
+    <Compile Include="../../DiveMap/Assets/Tests/EditMode/ColorSpaceTests.cs" />
+    <Compile Include="../../DiveMap/Assets/Tests/EditMode/WaterFogTests.cs" />
+    <Compile Include="../../DiveMap/Assets/Tests/EditMode/UnderwaterLightTests.cs" />
+    <Compile Include="../../DiveMap/Assets/Tests/EditMode/SeabedGeomTests.cs" />
     <Compile Include="Runner.cs" />
   </ItemGroup>
 </Project>

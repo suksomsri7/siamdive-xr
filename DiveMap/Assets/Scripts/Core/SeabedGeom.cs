@@ -112,22 +112,31 @@ namespace DiveMap.Core
 
         // ── Background gradient ───────────────────────────────────────────────────
 
-        // builder.html:663-667 — the vertical backdrop, top (v=0) to bottom (v=1).
+        // builder.html:665 — the vertical backdrop, top (v=0) to bottom (v=1), the web's own four
+        // stops with the web's own positions.
         //
-        // 🔎 The bottom two stops are LIGHTER than the web's. Reported twice as "the background is
-        // still dark": on a phone screen in daylight the web's #06243a reads as near-black, and
-        // because this gradient — not the fog — is what fills most of the frame, brightening the
-        // fog and the ambient did nothing for it. Chasing the wrong lever twice is what makes this
-        // worth a comment: whatever is BEHIND everything is what "the scene is dark" usually means.
-        private static readonly float[] StopPos = { 0f, 0.22f, 0.42f, 0.62f, 0.80f, 1f };
+        // 🔴 WO-E3 PUT THE WEB'S NUMBERS BACK. These stops had been lifted (six stops, bottom
+        // #1b5a85 instead of #06243a) after "the background is still dark" was reported twice, and
+        // that was the right read of the wrong picture: in a GAMMA project with NO tone mapping the
+        // web's own #06243a is written to the screen as byte 6/36/58 and reads as a black band.
+        // Through the pipeline the web actually uses — linear light, then ACES at exposure 1.05 —
+        // the SAME hex lands at 0/18/42, which is what the user is looking at when they say the web
+        // renders better. The lift was compensation for a missing tone mapper, and carrying
+        // compensation into a pipeline that no longer needs it is how a project ends up with two
+        // wrongs and no way back.
+        //
+        // 🔎 Restoring them also buys the structural property WO-E3 is really about: the web's fog
+        // colour #123a55 sits ON this ramp (v ≈ 0.90, max channel error 0.008 — see
+        // WaterFog.FogRampV), so "the fog is a colour the background uses" stops being a pair of
+        // numbers somebody keeps in step and becomes arithmetic. Against the lifted ramp it was
+        // 0.19 away, which is the whole reason distant geometry read as a silhouette.
+        private static readonly float[] StopPos = { 0f, 0.38f, 0.52f, 1f };
         private static readonly Rgb[] StopCol =
         {
-            new Rgb(0.918f, 0.969f, 0.984f), // #eaf7fb  ผิวน้ำ — แสงแดดส่องถึงเต็มที่
-            new Rgb(0.749f, 0.902f, 0.949f), // #bfe6f2  น้ำตื้น
-            new Rgb(0.498f, 0.776f, 0.890f), // #7fc6e3  ฟ้าใส
-            new Rgb(0.290f, 0.624f, 0.804f), // #4a9fcd  เริ่มลึก
-            new Rgb(0.169f, 0.463f, 0.659f), // #2b76a8  ลึก
-            new Rgb(0.106f, 0.353f, 0.522f), // #1b5a85  ลึกสุด — ยังมองเห็น ไม่ใช่ดำ
+            new Rgb(0.8902f, 0.9490f, 0.9725f), // #e3f2f8  ผิวน้ำ — แสงแดดส่องถึงเต็มที่
+            new Rgb(0.6627f, 0.8314f, 0.9098f), // #a9d4e8  น้ำตื้น
+            new Rgb(0.2471f, 0.5765f, 0.7765f), // #3f93c6  ฟ้าใส/เริ่มลึก
+            new Rgb(0.0235f, 0.1412f, 0.2275f), // #06243a  ลึกสุด
         };
 
         /// <summary>

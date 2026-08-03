@@ -586,5 +586,240 @@ namespace DiveMap.Core
         public const double BoxFill = 0.9;
 
         private static double Clamp(double v, double lo, double hi) => v < lo ? lo : (v > hi ? hi : v);
+
+        // ── WO-E3: the depth pass ────────────────────────────────────────────────
+
+        /// <summary>
+        /// What a reference animal photographed at a known depth says about the three things the
+        /// user actually complained about.
+        ///
+        /// 🔴 The complaint was specific and none of the existing metrics could see it: at 52 m on
+        /// Poseidon "ฉลามกลายเป็นเงาแบนสีน้ำเงินไร้รายละเอียด ขณะที่ฉากหลัง/หมอกยังสว่าง".
+        /// <see cref="Shot.DarkOfSubjectPercent"/> counts how much of a model is dark, which does
+        /// not distinguish "dark animal" from "animal that has fallen behind its own background",
+        /// and nothing at all measured whether the depth cue survived a fix. Three numbers do:
+        ///
+        ///   • <see cref="Contrast"/> — does the subject stand apart from the water at all;
+        ///   • <see cref="DynamicRange"/> — is there any shading left INSIDE it, or is it a
+        ///     silhouette-shaped flat fill;
+        ///   • <see cref="BlueShift"/> — is the frame still getting bluer with depth, i.e. did the
+        ///     fix quietly throw away the dimming the user explicitly asked to keep.
+        ///
+        /// All three are read off the SCREEN bytes, not off scene-linear light, because the screen
+        /// is what was complained about and because the tone curve is part of what is under test.
+        /// </summary>
+        public struct DepthShot
+        {
+            /// <summary>Mean Rec.709 luminance of the subject's own pixels, 0..1 display.</summary>
+            public double SubjectLuminance;
+            /// <summary>Mean luminance of everything that is not the subject — the water.</summary>
+            public double BackgroundLuminance;
+            /// <summary>|subject − background| / background. The silhouette number.</summary>
+            public double Contrast;
+            /// <summary>5th and 95th percentile of the subject's luminance.</summary>
+            public double SubjectP5, SubjectP95;
+            /// <summary>P95 − P5. Zero means the subject is one flat colour.</summary>
+            public double DynamicRange;
+            /// <summary>(B − R)/(B + R) over the whole frame — see <see cref="BlueShift"/>.</summary>
+            public double BlueShift;
+            /// <summary>mean B / mean R, the raw form, guarded against a red channel at zero.</summary>
+            public double BlueOverRed;
+            /// <summary>Subject share of the frame, so an empty shot cannot score well.</summary>
+            public double SubjectPercent;
+            /// <summary>Frame size, 0 when the buffers were unusable.</summary>
+            public int Pixels;
+        }
+
+        /// <summary>
+        /// Contrast floor. Below this the subject and the water it is in are the same brightness,
+        /// which on a screen is what "flat silhouette" looks like whichever way round it is.
+        /// </summary>
+        public const double MinContrast = 0.25;
+
+        /// <summary>
+        /// Dynamic-range floor inside the subject. This is the one that actually answers "ไร้
+        /// รายละเอียด": an object can pass the contrast gate by being uniformly bright and still be
+        /// a cut-out. 0.15 of the display range is roughly the point at which shading reads as
+        /// form rather than as noise.
+        /// </summary>
+        public const double MinDynamicRange = 0.15;
+
+        /// <summary>
+        /// Rec.709 luminance of a display-encoded triple. Deliberately NOT linearised: the question
+        /// is what the eye gets from the finished frame.
+        /// </summary>
+        public static double Luminance(byte r, byte g, byte b)
+            => (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255.0;
+
+        /// <summary>
+        /// Measure one depth pair. Same trick as <see cref="Measure"/>: the subject is whatever
+        /// differs between the frame with the animal and the identical frame without it, so an
+        /// empty stage measures a 0% subject and cannot be reported as a good picture.
+        /// </summary>
+        public static DepthShot MeasureDepth(byte[] withSubject, byte[] withoutSubject,
+                                             byte tolerance = SubjectTolerance)
+        {
+            var d = new DepthShot();
+            int n = PixelCount(withSubject);
+            if (n == 0) return d;
+            d.Pixels = n;
+            if (withoutSubject == null || withoutSubject.Length != withSubject.Length) return d;
+
+            var subjectLum = new System.Collections.Generic.List<double>();
+            double bgSum = 0.0;
+            long bgCount = 0;
+            double sumR = 0.0, sumB = 0.0;
+
+            for (int i = 0; i < n; i++)
+            {
+                int p = i * Channels;
+                byte r = withSubject[p], g = withSubject[p + 1], b = withSubject[p + 2];
+                sumR += r; sumB += b;
+
+                int dr = r - withoutSubject[p];
+                int dg = g - withoutSubject[p + 1];
+                int db = b - withoutSubject[p + 2];
+                if (dr < 0) dr = -dr;
+                if (dg < 0) dg = -dg;
+                if (db < 0) db = -db;
+
+                double lum = Luminance(r, g, b);
+                if (dr <= tolerance && dg <= tolerance && db <= tolerance)
+                {
+                    bgSum += lum; bgCount++;
+                }
+                else subjectLum.Add(lum);
+            }
+
+            d.SubjectPercent = 100.0 * subjectLum.Count / n;
+            d.BackgroundLuminance = bgCount == 0 ? 0.0 : bgSum / bgCount;
+
+            if (subjectLum.Count > 0)
+            {
+                double s = 0.0;
+                for (int i = 0; i < subjectLum.Count; i++) s += subjectLum[i];
+                d.SubjectLuminance = s / subjectLum.Count;
+
+                subjectLum.Sort();
+                d.SubjectP5 = Percentile(subjectLum, 0.05);
+                d.SubjectP95 = Percentile(subjectLum, 0.95);
+                d.DynamicRange = d.SubjectP95 - d.SubjectP5;
+            }
+
+            // A background of zero would make the ratio meaningless rather than infinite, so it is
+            // reported as 0 — "no contrast measurable" — and the verdict below refuses it.
+            d.Contrast = d.BackgroundLuminance <= 1e-9
+                ? 0.0
+                : System.Math.Abs(d.SubjectLuminance - d.BackgroundLuminance) / d.BackgroundLuminance;
+
+            double meanR = sumR / n, meanB = sumB / n;
+            // 🔎 B/R is the natural way to say "the frame got bluer", and it is numerically useless
+            // here: at 52 m the red channel of the water lands at 0-1/255 after ACES, so the ratio
+            // swings between 100 and 400,000 on a single byte. It is still LOGGED, because it is
+            // the number a human reads, but the monotonicity check runs on the bounded form
+            // (B−R)/(B+R) ∈ [−1,1], which is a strictly increasing function of B/R and therefore
+            // says exactly the same thing without dividing by nearly nothing.
+            d.BlueOverRed = meanR <= 1e-9 ? 0.0 : meanB / meanR;
+            double sum = meanB + meanR;
+            d.BlueShift = sum <= 1e-9 ? 0.0 : (meanB - meanR) / sum;
+            return d;
+        }
+
+        private static double Percentile(System.Collections.Generic.List<double> sorted, double q)
+        {
+            if (sorted.Count == 0) return 0.0;
+            if (sorted.Count == 1) return sorted[0];
+            double pos = q * (sorted.Count - 1);
+            int lo = (int)pos;
+            int hi = lo + 1 >= sorted.Count ? sorted.Count - 1 : lo + 1;
+            double f = pos - lo;
+            return sorted[lo] + (sorted[hi] - sorted[lo]) * f;
+        }
+
+        /// <summary>
+        /// One token for what this depth shot proves, in the order the failures matter.
+        /// "" when it is fine.
+        /// </summary>
+        public static string DepthReason(DepthShot d,
+                                         double minContrast = MinContrast,
+                                         double minDynamicRange = MinDynamicRange,
+                                         double minSubjectPercent = MinSubjectPercent)
+        {
+            if (d.Pixels <= 0) return "readback-empty";
+            if (d.SubjectPercent < minSubjectPercent) return "not-in-frame";
+            if (d.BackgroundLuminance <= 1e-9) return "no-background";
+            if (d.Contrast < minContrast) return "flat-against-water";
+            if (d.DynamicRange < minDynamicRange) return "no-shading";
+            return "";
+        }
+
+        /// <summary>Did this depth shot pass all of its own gates?</summary>
+        public static bool DepthPasses(DepthShot d,
+                                       double minContrast = MinContrast,
+                                       double minDynamicRange = MinDynamicRange,
+                                       double minSubjectPercent = MinSubjectPercent)
+            => DepthReason(d, minContrast, minDynamicRange, minSubjectPercent).Length == 0;
+
+        /// <summary>The <c>[QCDepth]</c> log line, shaped here so a test can pin it.</summary>
+        public static string DepthLine(string name, double metres, bool aces, DepthShot d,
+                                       double minContrast = MinContrast,
+                                       double minDynamicRange = MinDynamicRange)
+        {
+            string reason = DepthReason(d, minContrast, minDynamicRange);
+            return "[QCDepth] " + (string.IsNullOrEmpty(name) ? "(unnamed)" : name) +
+                   " depth=" + metres.ToString("0.0", CultureInfo.InvariantCulture) + "m" +
+                   " aces=" + (aces ? "on" : "off") +
+                   " verdict=" + (reason.Length == 0 ? "OK" : reason) +
+                   " subject=" + Pct(d.SubjectPercent) + "%" +
+                   " Lsubj=" + Pct(d.SubjectLuminance) +
+                   " Lbg=" + Pct(d.BackgroundLuminance) +
+                   " contrast=" + Pct(d.Contrast) +
+                   " p5=" + Pct(d.SubjectP5) +
+                   " p95=" + Pct(d.SubjectP95) +
+                   " range=" + Pct(d.DynamicRange) +
+                   " blueShift=" + Pct(d.BlueShift) +
+                   " blueOverRed=" + Pct(d.BlueOverRed);
+        }
+
+        /// <summary>
+        /// Is the depth cue still there?
+        ///
+        /// 🔑 The user chose realism over readability when the two were put to them — "หรี่แสงตาม
+        /// ความลึก = เก็บไว้" — so a change that fixes the contrast by flattening the depth
+        /// response would be a regression even though every other number improved. This is the
+        /// guard for that decision, and it is why the shots are taken at three depths rather than
+        /// at the worst one.
+        /// </summary>
+        /// <summary>
+        /// How far the blue shift may go BACKWARDS between two depths before the cue counts as
+        /// lost.
+        ///
+        /// 🔎 Not zero, and the reason is measurable rather than defensive. The water's red channel
+        /// is crushed to byte 0 by the deep end of the curve, so <see cref="DepthShot.BlueShift"/>
+        /// saturates at 1.0 somewhere around 50 m: two frames that are both "as blue as a frame
+        /// gets" would compare equal, and a strict &gt; would report the cue lost on a scene where
+        /// it is working perfectly. This tolerates the plateau while still refusing a real
+        /// reversal.
+        /// </summary>
+        public const double BlueShiftSlack = 0.01;
+
+        /// <param name="shallowToDeep">One shot per depth, in increasing depth order.</param>
+        public static string DepthCueVerdict(DepthShot[] shallowToDeep)
+        {
+            if (shallowToDeep == null || shallowToDeep.Length < 2) return "not-enough-depths";
+            for (int i = 0; i < shallowToDeep.Length; i++)
+                if (shallowToDeep[i].Pixels <= 0) return "probe-failed";
+
+            for (int i = 1; i < shallowToDeep.Length; i++)
+                if (shallowToDeep[i].BlueShift < shallowToDeep[i - 1].BlueShift - BlueShiftSlack)
+                    return "depth-cue-lost";
+
+            // …and the plateau must not be the WHOLE range: the deepest frame still has to be
+            // meaningfully bluer than the shallowest, or nothing changed with depth at all.
+            double first = shallowToDeep[0].BlueShift;
+            double last = shallowToDeep[shallowToDeep.Length - 1].BlueShift;
+            if (last <= first + BlueShiftSlack) return "depth-cue-flat";
+            return "depth-cue-held";
+        }
     }
 }
