@@ -204,53 +204,64 @@ namespace DiveMap.Tests
                     "the web is more damaged on this metric than we are, and looks better");
         }
 
-        // ── WO-E5l ───────────────────────────────────────────────────────────────
+        // ── WO-E5m ───────────────────────────────────────────────────────────────
 
         [Test]
-        public void ATextureThatIsNotBeingSampledIsTheSameAsNoTextureAtAll()
+        public void ADefaultMetalFactorSittingOnTopOfAMapIsNotADecision()
         {
-            // 🔴 The gap TameMetal was never able to see. Its rule is "a factor with NO texture was
-            // never authored", and these materials DO ship one — so it leaves them alone. But
-            // glTFast's shader only reads that texture inside #ifdef _METALLICGLOSSMAP, and with
-            // the keyword off the factor IS the metal: 1.0, which in built-in RP means no diffuse
-            // at all.
-            Assert.That(GlbShading.UnsampledMapMetalFactor(1f, hasMetalTexture: true, metalKeywordOn: false),
-                        Is.EqualTo(GlbShading.TamedMetal),
-                        "a bound-but-unsampled map with metallicFactor 1 is a black object");
+            // 🔴 The rule, and the measurement behind it: setting metallicFactor to 0 and changing
+            // nothing else took darkOfSubject 65%→8% (kraken), 75%→31% (singha), 85%→55%
+            // (domed_temple), while the roughness twin of the same probe moved 65%→63%.
+            //
+            // 1.0 is glTF's DEFAULT — a file that never writes the field gets it — and every one of
+            // these files pairs it with a metallic-roughness map whose blue channel measures 0-1
+            // out of 255. "The metal comes from the map, and the map says none" is the authored
+            // intent; 0 is that intent, and it survives the map not surviving the transcode.
+            Assert.That(GlbShading.MappedMetalFactor(1f, hasMetalTexture: true), Is.EqualTo(0f));
+            Assert.That(GlbShading.MappedMetalFactor(0.99f, true), Is.EqualTo(0f),
+                        "an exporter writing 0.99, or a quantised float, is the same case");
+        }
 
-            // …and every case that must NOT be touched.
-            Assert.That(GlbShading.UnsampledMapMetalFactor(1f, true, true), Is.LessThan(0f),
-                        "keyword on: the texture is being read and the factor is honest");
-            Assert.That(GlbShading.UnsampledMapMetalFactor(1f, false, false), Is.LessThan(0f),
-                        "no texture at all is TamedMetalFactor's case, not this one");
-            Assert.That(GlbShading.UnsampledMapMetalFactor(0.02f, true, false), Is.LessThan(0f),
-                        "a factor already at the floor is harmless either way");
+        [Test]
+        public void AChosenMetalIsLeftAlone()
+        {
+            // A mid-metal is somebody's decision, not a default, and 0.9 is far enough above the
+            // 0.4 a scanner leaves behind that nothing real is caught.
+            Assert.That(GlbShading.MappedMetalFactor(0.4f, true), Is.LessThan(0f));
+            Assert.That(GlbShading.MappedMetalFactor(0.89f, true), Is.LessThan(0f));
+            Assert.That(GlbShading.MappedMetalFactor(0f, true), Is.LessThan(0f));
         }
 
         [Test]
         public void TheGoldenTridentKeepsItsShine()
         {
             // GoldFx sets metallicFactor = 1 with NO metallic-roughness texture — a deliberate
-            // metal. The rule above fires only where a texture is present but unread, so gold is
-            // outside it by construction rather than by a special case.
-            Assert.That(GlbShading.UnsampledMapMetalFactor(1f, hasMetalTexture: false, metalKeywordOn: false),
-                        Is.LessThan(0f), "a deliberate metal with no map must stay a mirror");
+            // metal. Both metal rules are keyed on the map's presence, so gold is outside them by
+            // the same property that has always protected it, not by a special case.
+            Assert.That(GlbShading.MappedMetalFactor(1f, hasMetalTexture: false), Is.LessThan(0f),
+                        "a deliberate metal with no map must stay a mirror");
         }
 
         [Test]
-        public void TheTwoMetalRulesDoNotOverlap()
+        public void TheTwoMetalRulesAreComplementsAndNeverOverlap()
         {
-            // One material must never be claimed by both rules, or the order they run in becomes
+            // One material must never be claimed by both, or the order they run in becomes
             // load-bearing — which is how this project got ghost maps and black tail fins.
-            foreach (float factor in new[] { 0f, 0.04f, 0.4f, 1f })
+            foreach (float factor in new[] { 0f, 0.04f, 0.4f, 0.89f, 0.9f, 0.99f, 1f })
                 foreach (bool hasTex in new[] { true, false })
-                    foreach (bool keyword in new[] { true, false })
-                    {
-                        bool tamed = GlbShading.TamedMetalFactor(factor, hasTex) >= 0f;
-                        bool unsampled = GlbShading.UnsampledMapMetalFactor(factor, hasTex, keyword) >= 0f;
-                        Assert.That(tamed && unsampled, Is.False,
-                            $"factor={factor} hasTex={hasTex} keyword={keyword} matched both rules");
-                    }
+                {
+                    bool tamed = GlbShading.TamedMetalFactor(factor, hasTex) >= 0f;
+                    bool mapped = GlbShading.MappedMetalFactor(factor, hasTex) >= 0f;
+                    Assert.That(tamed && mapped, Is.False,
+                        $"factor={factor} hasTex={hasTex} matched both rules");
+                }
+
+            // …and between them they cover every high factor, which is the point: a surface with no
+            // diffuse is the bug, and it does not care which rule was supposed to catch it.
+            Assert.That(GlbShading.TamedMetalFactor(1f, false) >= 0f
+                        || GlbShading.MappedMetalFactor(1f, false) >= 0f, Is.True);
+            Assert.That(GlbShading.TamedMetalFactor(1f, true) >= 0f
+                        || GlbShading.MappedMetalFactor(1f, true) >= 0f, Is.True);
         }
     }
 }

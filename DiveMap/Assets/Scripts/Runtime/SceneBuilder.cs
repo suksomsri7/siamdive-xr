@@ -1063,26 +1063,35 @@ namespace DiveMap.Runtime
                     }
                     if (DropMisdecodedNormalMap(m, assetId, gamma)) droppedNormals++;
 
-                    // 🔴 WO-E5l — the half TameMetal was never able to see. See GlbShading:
-                    // glTFast's shader reads the metallic-roughness texture only inside
-                    // #ifdef _METALLICGLOSSMAP; with the keyword off, metallicFactor IS the metal,
-                    // and every file in this catalogue declares 1. Metal 1 in built-in RP means no
-                    // diffuse at all — a black object with a faint cube reflection, which is the
-                    // report. Logged per material either way, because a keyword that is ON is
-                    // exactly as much evidence as one that is off.
+                    // 🔴 WO-E5m — the half TameMetal was never able to see, and the measurement
+                    // that found it. Setting metallicFactor to 0 and changing NOTHING else took
+                    // darkOfSubject from 65% to 8% on the kraken, 75% to 31% on the Singha and 85%
+                    // to 55% on the domed temple, while the roughness twin of the same probe moved
+                    // almost nothing. See GlbShading.MappedMetalFactor.
+                    //
+                    // The rule above cannot reach these: its case is "a high factor and NO map",
+                    // and these all ship a map. Theirs is "a high factor ON TOP of a map" — 1.0 is
+                    // glTF's DEFAULT metallicFactor, so a file that never wrote the field gets it,
+                    // and the map beside it measures 0-1 out of 255. The authored intent is "the
+                    // metal comes from the map, and the map says none"; writing 0 delivers exactly
+                    // that, and delivers it even if the map's blue channel does not survive the
+                    // transcode to the device.
+                    //
+                    // Logged per material either way — a material left alone is as much evidence as
+                    // one that is changed.
                     bool hasMap = HasMetalMap(m);
                     bool keyword = m.IsKeywordEnabled("_METALLICGLOSSMAP");
                     foreach (string factor in MetalFactorNames)
                     {
                         if (!m.HasProperty(factor)) continue;
                         float before = m.GetFloat(factor);
-                        float fix = GlbShading.UnsampledMapMetalFactor(before, hasMap, keyword);
+                        float fix = GlbShading.MappedMetalFactor(before, hasMap);
                         if (fix >= 0f) { m.SetFloat(factor, fix); unsampledMetal++; }
                         Debug.Log($"[Metal] {assetId} mat={m.name} {factor}={before:F3} " +
                                   $"mrTexture={(hasMap ? "bound" : "NULL")} " +
                                   $"_METALLICGLOSSMAP={(keyword ? "on" : "OFF")} " +
                                   $"roughnessFactor={(m.HasProperty("roughnessFactor") ? m.GetFloat("roughnessFactor").ToString("F3") : "n/a")} " +
-                                  $"-> {(fix >= 0f ? fix.ToString("F3") + " TAMED" : "left alone")}");
+                                  $"-> {(fix >= 0f ? $"TAMED (metal {before:F3} → {fix:F3})" : "left alone")}");
                         break;
                     }
                 }

@@ -220,64 +220,69 @@ namespace DiveMap.Core
         // threshold — and it was removed rather than re-tuned, because the quantity it screened on
         // does not separate the pictures that look right from the ones that do not.
 
-        // ── WO-E5l: metallicFactor = 1 with the map's keyword OFF is a black object ──
+        // ── WO-E5m: the half TameMetal was missing, found by measuring instead of reasoning ──
         //
-        // 🔴 THE SHADER SAYS IT IN FIVE LINES. glTFast's built-in-RP PBR
-        // (glTFUnityStandardInput.cginc:190-198):
+        // 🔴 THE MEASUREMENT, not the theory. Run 30821xxxxx set `metallicFactor = 0` on the loaded
+        // materials and changed NOTHING else — same shader, same albedo, same textures, same
+        // keywords — and photographed the same models from the same camera:
         //
-        //     #ifdef _METALLICGLOSSMAP
-        //         mg.rg = tex2D(metallicRoughnessTexture, uv).bg;
-        //         mg.r *= metallicFactor;          // metal = texture.B x factor  ~= 0
-        //     #else
-        //         mg.r = metallicFactor;           // metal = factor = 1.0  -> FULL METAL
-        //     #endif
+        //                       darkOfSubject          blackOfSubject
+        //     kraken            65.39% → 8.42%          0.64% → 0.01%
+        //     singha            74.71% → 31.26%         3.47% → 0.00%
+        //     domed_temple      84.76% → 54.61%        33.40% → 8.94%
+        //     ancient_byzantine 87.17% → 49.41%        26.31% → 11.41%
+        //     hardeep           69.88% → 37.00%         1.81% → 0.45%
+        //     poseidon          95.22% → 62.04%         1.37% → 0.00%
         //
-        // Every GLB in this catalogue declares metallicFactor = 1 and carries a metallic-roughness
-        // texture whose blue channel measures 0-1 out of 255. With the keyword ON that multiplies
-        // out to a dielectric, which is what every previous investigation assumed. With the keyword
-        // OFF the texture is never sampled and the factor IS the material: metal 1.0, which in the
-        // built-in pipeline means NO DIFFUSE AT ALL — the surface returns only its specular
-        // reflection of the environment, and this scene's environment is a 4x4 uniform cube at
-        // reflectionIntensity 0.3. A black object with a faint sheen.
+        // Seven models, one float, and the roughness twin of the same probe moved almost nothing
+        // (65→63, 85→77). This is the metal factor and it is not close.
         //
-        // 🔎 And the keyword can be off. It is declared `#pragma shader_feature_local`, and
-        // shader_feature variants are stripped from a player build unless something in Resources or
-        // Always-Included keeps them alive. This project has shipped a stripped variant twice.
+        // 🔎 An earlier version of this block blamed the shader's `#else` branch — the case where
+        // `_METALLICGLOSSMAP` is stripped and `metallicFactor` becomes the whole metal. That was
+        // wrong: the app's own [Metal] line reports the keyword ON for every material carrying a
+        // map. The texture IS being sampled. The factor still ruins the surface, because
+        // `metal = tex.b × metallicFactor` is only as good as `tex.b`, and tex.b arrives through an
+        // ETC1S transcode that compresses R, G and B together — with roughness sitting at ~0.66 in
+        // G, there is a channel right next to the metal one carrying two thirds of full scale.
+        // Whether that is the exact route was NOT established, and the fix does not depend on it:
+        // the frames say the factor is the problem, and the frames are the evidence.
         //
-        // 🔎 It also explains, without adding anything, every result that has resisted explanation:
-        //   whiteAlbedo still 32% dark   — metal 1 has no diffuse, so albedo cannot help;
-        //   noMetalRough 85% -> 49%      — the only probe that touches the factor;
-        //   costOfNormalMap 0.00pp       — normal maps are irrelevant to a surface with no diffuse;
-        //   dark on EVERY model          — every file declares metallicFactor = 1;
-        //   the torch cannot fix it      — a lamp adds diffuse, and there is none to add to;
-        //   daylight does not fix it     — likewise for ambient;
-        //   the web is fine              — three.js always multiplies by the texture.
-        //
-        // 🔴 TameMetal cannot catch this. Its rule is "a factor with NO texture was never authored",
-        // and these materials DO ship a texture — so it deliberately leaves them alone. The rule
-        // below is the missing half: a texture that is present but NOT BEING SAMPLED is the same
-        // situation as no texture at all, and only the keyword can say which it is.
+        // 🔎 WHY 1.0 IS THERE AT ALL, and why zeroing it is not a loss. 1.0 is glTF's DEFAULT
+        // metallicFactor — a file that never writes the field gets it. Every one of these files
+        // pairs it with a metallic-roughness texture whose blue channel measures 0-1 out of 255.
+        // The authored intent is therefore "the metal comes from the map, and the map says none".
+        // Setting the factor to 0 delivers exactly that intent, and it delivers it even when the
+        // map's blue channel does not survive the trip to the device.
 
         /// <summary>
-        /// What <c>metallicFactor</c> should become when the material ships a metallic-roughness
-        /// texture that the shader is NOT sampling.
+        /// What <c>metallicFactor</c> should become on a material that ships a metallic-roughness
+        /// TEXTURE — the case <see cref="TamedMetalFactor"/> deliberately leaves alone.
         ///
-        /// Narrow on purpose, and narrower than <see cref="TamedMetalFactor"/>: it fires only when
-        /// a texture is present AND the keyword that would read it is off. A material with no
-        /// texture at all is <see cref="TamedMetalFactor"/>'s case and is left to it; a material
-        /// whose keyword is on is genuinely authored and is not touched, so a deliberate metal —
-        /// the golden trident sets <c>metallicFactor = 1</c> with no map — keeps its shine.
+        /// 🔴 The two rules are complements, and the split is the same one either way: a factor is
+        /// only meaningful if something authored it. <see cref="TamedMetalFactor"/> handles "a high
+        /// factor and NO map" — a scanner's leftover. This handles "a high factor and a map", where
+        /// the map is the authored value and the factor is glTF's default sitting on top of it.
+        /// Neither rule touches a material the other one does; a test pins that.
+        ///
+        /// The golden trident is outside both by the same property that has always protected it: it
+        /// sets <c>metallicFactor = 1</c> with NO metallic-roughness texture, so it is a deliberate
+        /// metal and stays a mirror.
         /// </summary>
         /// <returns>The factor to write, or a negative number for "leave it alone".</returns>
-        public static float UnsampledMapMetalFactor(float metallicFactor,
-                                                    bool hasMetalTexture,
-                                                    bool metalKeywordOn)
+        public static float MappedMetalFactor(float metallicFactor, bool hasMetalTexture)
         {
-            if (!hasMetalTexture) return -1f;   // TamedMetalFactor's job, not this one
-            if (metalKeywordOn) return -1f;     // the texture is being read; the factor is honest
-            if (metallicFactor <= MetalFactorFloor) return -1f;
-            return TamedMetal;
+            if (!hasMetalTexture) return -1f;              // TamedMetalFactor's case, not this one
+            if (metallicFactor < DefaultMetalFactorFloor) return -1f;   // somebody chose this number
+            return 0f;
         }
+
+        /// <summary>
+        /// At or above this, a <c>metallicFactor</c> sitting on top of a metallic-roughness map is
+        /// glTF's default rather than a decision. 0.9 rather than exactly 1.0 so that an exporter
+        /// writing 0.99, or a float that has been through a quantise, is still recognised — and far
+        /// enough above the 0.4 a scanner leaves behind that a genuine mid-metal is never caught.
+        /// </summary>
+        public const float DefaultMetalFactorFloor = 0.9f;
 
         /// <summary>At or below this a factor is already harmless.</summary>
         public const float MetalFactorFloor = 0.05f;
