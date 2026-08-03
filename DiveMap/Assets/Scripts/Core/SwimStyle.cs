@@ -205,6 +205,13 @@ namespace DiveMap.Core
         /// </summary>
         private static readonly Regex RxBareId = new Regex(@"(?:^|_)([a-z0-9]+:[a-z0-9_]+)$", Opt);
 
+        /// <summary>
+        /// See <see cref="RxBareId"/>. Public so <see cref="ClipPlay"/> can reach the SAME rule
+        /// instead of writing a second one — both files do exact-match table reads against
+        /// <see cref="SpeciesBehavior"/>, so both fail identically if the prefix is not stripped.
+        /// </summary>
+        public static string BareId(string assetId) => Bare(assetId);
+
         /// <summary>See <see cref="RxBareId"/>. Never null.</summary>
         private static string Bare(string assetId)
         {

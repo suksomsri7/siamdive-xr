@@ -469,6 +469,15 @@ jobs:
           # calibration targets they are read against are in SwimStyleTests.
           grep -h '\[Swim\]' qc_player.log 2>/dev/null || \
             echo "::warning::no [Swim] lines — no animal resolved a swim style"
+          # WO-F3's oracle. One [Anim] line per animal and per QC model, carrying clips=N, the
+          # clip actually picked, its length, the playback rate and — when the wave shader stood
+          # in instead — the one-token REASON. "the turtle does not animate" has four causes
+          # (the GLB ships no clip / com.unity.modules.animation is missing so glTFast compiled
+          # its whole animation path out / the wrong clip was picked / it is playing at 0.06×)
+          # and no screenshot separates any of them. clips=0 on every line means the asset
+          # pipeline baked the clips out; clips=6 with mode=wave means this app dropped them.
+          grep -h '\[Anim\]' qc_player.log 2>/dev/null || \
+            echo "::warning::no [Anim] lines — nothing decided between clip and wave"
           # WO-E3's acceptance evidence: subject-against-water contrast, the shading range INSIDE
           # the subject, and whether the frame still gets bluer with depth (the cue the user asked
           # to keep). Three depths × ACES on/off, in the step log so the A/B is readable without

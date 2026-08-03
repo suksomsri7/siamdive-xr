@@ -109,11 +109,26 @@ namespace DiveMap.Runtime.Marine
         private float     _metabolism = 1f;
 
         // ── Body wave (WO-XR: "ปลาว่ายไม่สมจริง ตัวแข็งมาก", 3rd report) ──────────────
-        // 🔴 This is the animal in the screenshot. A big animal is a REAL GLB with `skins 0,
-        // anims 0` — the manifest's "animated" flag is parsed and then never used, and nothing
-        // ever played a clip — so up to now the hero shark orbited the kraken as one solid
+        // 🔴 This is the animal in the screenshot. A big animal used to be a REAL GLB whose clips
+        // were thrown away on import — the manifest's "animated" flag was parsed and then never
+        // used, and nothing ever played a clip — so the hero shark orbited the kraken as one solid
         // extruded block. The schools got DM_FishWave and the one animal a diver actually stops
         // to look at got nothing.
+        //
+        // ── WO-F3: it plays its own clip now, WHEN it has one ────────────────────────────────
+        // The wave is no longer the only answer, it is the FALLBACK. A rigged model plays the
+        // animation it was authored with (BodyClips / Core/ClipPlay) and the wave is never applied
+        // to it, because bending vertices on top of a moving skeleton doubles the bend. A model
+        // with no clips — most of the library, until the asset pipeline stops baking them out —
+        // gets exactly what it got yesterday. Which of the two ran, and why, is one [Anim] line.
+        private readonly BodyClips _clips = new BodyClips();
+        /// <summary><see cref="SpeciesFlag.SlowAnim"/> — the whale shark's slow, wide tail.</summary>
+        private bool   _slowAnim;
+        /// <summary>Hand-tuned clip multiplier (humpback 0.72), or 1.</summary>
+        private double _animMul = 1.0;
+        /// <summary>Big / neverRest / manta — the animals the web lets coast between strokes.</summary>
+        private bool   _glider;
+
         private readonly List<Material> _waveMats = new List<Material>();
         private double _wavePhase;
         private float  _beatHz;
@@ -265,7 +280,7 @@ namespace DiveMap.Runtime.Marine
             _lastPos = transform.position;
             _configured = true;
 
-            ApplyBodyWave(aid, size);
+            ApplyBodyMotion(aid, size);
 
             SpeciesGenome.Genome sg = SpeciesGenome.For(aid);
             Debug.Log($"[Patrol] init id={aid} anchor={anchor} size={_size:F1} cruise={_cruise:F2} " +
@@ -347,10 +362,60 @@ namespace DiveMap.Runtime.Marine
         }
 
         /// <summary>
+        /// Decide, ONCE, how this animal's body will move: its own baked clip, or the wave shader.
+        ///
+        /// 🔴 The two are mutually exclusive and <see cref="ClipPlay.Motion"/> is the only place
+        /// that says so. Applying the wave to a rigged model bends the mesh along an axis whose
+        /// vertices the skeleton is already moving — the tail folds back on itself — so this
+        /// returns BEFORE <see cref="ApplyBodyWave"/> whenever a clip is playing, and the model
+        /// keeps its own glTFast materials.
+        ///
+        /// The fallback is silent and total: no clips, no <see cref="Animation"/> component, a
+        /// module that was never installed, a GLB that failed to load — every one of those paths
+        /// ends in the wave, which is precisely what this app did before WO-F3. The only visible
+        /// difference in the failure case is the <c>[Anim]</c> line saying which one it was.
+        /// </summary>
+        private void ApplyBodyMotion(string assetId, float worldLen)
+        {
+            _slowAnim = ClipPlay.SlowAnimFor(assetId);
+            _animMul  = ClipPlay.AnimMulFor(assetId);
+            _glider   = ClipPlay.IsGlider(assetId);
+
+            string reason = _clips.Bind(gameObject);
+            // A solo animal is never instanced — the shoals are, and they never reach this class.
+            BodyMotion mode = ClipPlay.Motion(_clips.Count, false);
+            if (mode == BodyMotion.Clip)
+            {
+                _clips.Play(ClipRole.Cruise);
+                _clips.SeedPhase(_seed);
+                _clips.SetSpeed((float)ClipPlay.TimeScale(1.0, _slowAnim, _animMul, false));
+            }
+            else
+            {
+                if (reason == "-") reason = ClipPlay.MotionReason(_clips.Count, false);
+                ApplyBodyWave(assetId, worldLen);
+            }
+
+            // One line per animal, and every field on it answers a different "why is it not
+            // moving": the model shipped no clips / the module is missing / it picked the wrong
+            // clip / it picked the right clip and is playing it at 0.06×. A screenshot separates
+            // none of those, which is how "nothing ever played a clip" survived this long.
+            Debug.Log($"[Anim] asset={assetId} clips={_clips.Count} names={_clips.NamesCsv} " +
+                      $"pick={_clips.CurrentName} role={_clips.CurrentRole} " +
+                      $"length={_clips.CurrentLength:F2}s " +
+                      $"timeScale={ClipPlay.TimeScale(1.0, _slowAnim, _animMul, false):F2} " +
+                      $"slowAnim={_slowAnim} animMul={_animMul:F2} glider={_glider} " +
+                      $"mode={(mode == BodyMotion.Clip ? "clip" : "wave")} reason={reason}");
+        }
+
+        /// <summary>
         /// Swap every renderer under this pivot onto a wave material and aim the wave down the
         /// animal's own body. Entirely separate from the orientation above: the no-roll rule
         /// stands, and it has to — a whale shark rolling into its turn is the regression this
         /// project has already paid for. The BEND is what makes it read as alive, not the roll.
+        ///
+        /// 🔴 Reached only when the model has NO clip of its own — see
+        /// <see cref="ApplyBodyMotion"/>.
         /// </summary>
         private void ApplyBodyWave(string assetId, float worldLen)
         {
@@ -546,6 +611,12 @@ namespace DiveMap.Runtime.Marine
                     anchor = held;
                     _lastPos = held;
                 }
+
+                // …and freeze the rig with it. The web does the same thing at builder.html:3957
+                // ("edit: freeze"), and for the same reason: an author lining a turtle up against a
+                // rock cannot aim at a target whose flippers are mid-stroke. Speed 0 rather than
+                // disabling the component, so the pose it holds is the pose it was in.
+                _clips.SetSpeed(0f);
                 return;
             }
 
@@ -569,11 +640,18 @@ namespace DiveMap.Runtime.Marine
                     _baseYaw + (float)SpeciesBehavior.SwayYaw(_t, _swayPhase) * Mathf.Rad2Deg,
                     0f); // roll forced 0 — the no-roll rule holds here too
 
-                // The rig keeps ticking, at half speed (web :2167 mixer.timeScale = 0.5). The
+                // The rig keeps ticking, at half speed (web :2163 mixer.timeScale = 0.5). The
                 // amplitude SwimStyle hands a still animal is ~1 %, so this is a seahorse's tail
                 // curling rather than a swim — but a body that is bit-for-bit identical every
                 // frame is what "แช่แข็ง" looks like, and that is the complaint this all began as.
-                AdvanceWave((float)SpeciesBehavior.SwayClipScale, dt);
+                //
+                // 🔴 The 0.5 goes STRAIGHT to the clip, it does not go through
+                // ClipPlay.TimeScale. That is the web's own shape: :2163 assigns
+                // mixer.timeScale = 0.5 and returns before animRate is ever computed, because a
+                // crab on the sand is not swimming at an effort. Running it through the formula
+                // would floor it at 0.9 and the crab would scuttle in place.
+                if (_clips.Active) _clips.SetSpeed((float)SpeciesBehavior.SwayClipScale);
+                else AdvanceWave((float)SpeciesBehavior.SwayClipScale, dt);
                 return;
             }
 
@@ -686,7 +764,7 @@ namespace DiveMap.Runtime.Marine
             // Read off the PATROL's own speed, not the frame's displacement: the breath and the
             // ease-off beside the wreck are what the tail is supposed to be reporting, and a
             // displacement reading picks up the turn as well and muddies both.
-            AdvanceWave((float)SwimStyle.Effort(_patrol.Speed, _cruise), dt);
+            AdvanceBody((float)SwimStyle.Effort(_patrol.Speed, _cruise), dt);
 
             // QC oracle (r8): a still screenshot cannot prove the GLB's own forward axis is +Z.
             // Log the alignment once, a few frames in — dot ≈ +1 means the model swims nose-first,
@@ -740,6 +818,50 @@ namespace DiveMap.Runtime.Marine
                       $"pos=({transform.position.x:F0},{transform.position.y:F0},{transform.position.z:F0}) " +
                       $"hunger={_drive.Hunger:F2} fatigue={_drive.Fatigue:F2} " +
                       $"speed={_huntMul:F2}× cruise={_cruise:F2} roamR={_roamR:F0}");
+        }
+
+        /// <summary>
+        /// Move the body by <paramref name="effort"/> — down whichever of the two paths this
+        /// animal was assigned in <see cref="ApplyBodyMotion"/>.
+        ///
+        /// 🔴 <paramref name="effort"/> is <see cref="SwimStyle.Effort"/> and there is no second
+        /// source of it. The clip rate and the wave's beat rate are the same number read twice, so
+        /// a rigged turtle and an un-rigged one slow down at the same moment for the same reason,
+        /// and the calibration in SwimStyleTests still describes both.
+        /// </summary>
+        private void AdvanceBody(float effort, float dt)
+        {
+            if (_clips.Active) { DriveClips(effort); return; }
+            AdvanceWave(effort, dt);
+        }
+
+        /// <summary>
+        /// The web's clip driver: pick the role the behaviour asks for, then set the playback rate
+        /// from <see cref="ClipPlay.TimeScale"/> (builder.html:2445-2448).
+        ///
+        /// The role mapping is the web's <c>STATE_ROLE</c> (:2152) reduced to the states this app
+        /// actually has. It has no <c>state</c> string — a solo animal's behaviour IS its
+        /// <see cref="HuntPhase"/> and its speed — so:
+        ///
+        ///   • coasting glider (see <see cref="ClipPlay.Gliding"/>) → <c>glide</c>
+        ///   • sprinting / striking / mid-burst                    → <c>burst</c>
+        ///   • everything else                                     → <c>cruise</c>
+        ///
+        /// <c>turn</c> is deliberately unused: this class caps its yaw rate rather than tracking a
+        /// turn as a state, so there is nothing honest to trigger it on. The clip is still in the
+        /// file and <see cref="ClipRole.Turn"/> still resolves it, for whoever adds banking.
+        /// </summary>
+        private void DriveClips(float effort)
+        {
+            bool gliding = ClipPlay.Gliding(_patrol.Speed, _cruise, _glider);
+            ClipRole role =
+                gliding ? ClipRole.Glide
+                : (_phase == HuntPhase.Sprint || _phase == HuntPhase.Strike || _huntMul > 1.3f)
+                    ? ClipRole.Fast
+                    : ClipRole.Cruise;
+
+            _clips.Play(role);
+            _clips.SetSpeed((float)ClipPlay.TimeScale(effort, _slowAnim, _animMul, gliding));
         }
 
         /// <summary>
