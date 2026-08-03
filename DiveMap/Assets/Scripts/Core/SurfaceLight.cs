@@ -46,6 +46,68 @@ namespace DiveMap.Core
         /// <summary>No lamp on this surface. Reads better than a magic −1 at every call site.</summary>
         public const float NoLamp = float.PositiveInfinity;
 
+        // ── WO-E5c: which base-colour maps need lifting, decided by measurement ───
+        //
+        // 🔴 THE OLD SCREEN WAS `p95 < 160` AND IT HAS A RECALL OF ZERO. Twelve models were
+        // photographed in one CI run (30800189252) through one pipeline, and their base colour
+        // maps were measured surface-weighted off the very same files the run downloaded. Ranking
+        // every candidate statistic against the thing being predicted — blackOfSubject, the
+        // fraction of the model's own pixels that come out as exactly (0,0,0):
+        //
+        //     Spearman vs blackOfSubject     p1 −0.907 · p5 −0.864 · pctBelow53 +0.891
+        //                                    pctBelow64 +0.891 · pctBelow45 +0.845
+        //                                    p95 +0.351 · p50 −0.009 · darkOfSubject +0.191
+        //
+        // p95 is a statistic about the BRIGHT end and is blind to the dark tail that actually
+        // produces black. Treated as a classifier against the four models that visibly went black
+        // (barracuda 16.79%, singha 5.64%, ancient_byzantine 25.82%, domed_temple 33.32%) it
+        // caught NONE of them, and the one file it did flag was htms732 — the second cleanest map
+        // in the set at 0.16%. It was not weak, it was pointing the wrong way.
+        //
+        // 🔎 And darkOfSubject is not a second opinion on the same thing, it is a different axis:
+        // its correlation with blackOfSubject is +0.19. The three Atlantis ruins score 85.0, 85.4
+        // and 86.9% dark — nearly identical — while their black runs 1.07 → 33.32%. Dark is the
+        // LIGHT (they are enormous, low texel density, dim); black is the TEXTURE's dark tail.
+        // Both are real, they have different owners, and a fix for one will not move the other.
+
+        /// <summary>
+        /// The 1st percentile of a base-colour map's surface-weighted sRGB luminance, below which
+        /// the model is expected to render with visible pure-black patches. The single best
+        /// predictor measured (Spearman −0.907): pure black comes from texels near ZERO, so it is
+        /// the extreme tail that matters, not the mean and not the bright end.
+        /// </summary>
+        public const int ScreenMinP1Srgb = 50;
+
+        /// <summary>
+        /// …and the fraction of SURFACE the map is allowed to leave below
+        /// <see cref="CrushAlbedoSrgb"/>, in per cent.
+        ///
+        /// 🔎 Why this can be a depth-independent number even though the crush point is not. Across
+        /// the whole range the app renders — 0 to 100 m — <see cref="CrushAlbedoSrgb"/> only moves
+        /// between sRGB 45 and 64, and NOT monotonically: it is worst around 20-30 m (45), because
+        /// the seabed bounce ramps in by 22 m and the depth attenuation only slowly wins it back
+        /// (62 at the surface, 45 at 23 m, 53 at 52 m, 64 at 100 m). A 19-byte band is narrow
+        /// enough that a single screen holds everywhere, which is why no per-module depth lookup is
+        /// needed. Screen at sRGB 45 — the most permissive end — and a map that passes is safe at
+        /// every depth; tighten to <c>pctBelow64</c> for content placed past 60 m if a map ever
+        /// wants the stricter reading.
+        /// </summary>
+        public const double ScreenMaxPctBelowCrush = 2.0;
+
+        /// <summary>
+        /// Does this base-colour map need its albedo lifted? Both conditions, because they catch
+        /// different shapes of the same failure: <paramref name="p1Srgb"/> catches a map with a
+        /// thin but genuinely black tail, <paramref name="pctBelowCrush"/> catches one whose dark
+        /// region is broad rather than extreme.
+        ///
+        /// Measured against the eleven models of run 30800189252: 4 of 4 blacks caught, one false
+        /// positive (msh:lionfish, p1 25 / 6.85% below crush but only 2.80% black — a small fish
+        /// whose dark texels are thin stripes that never cover a whole pixel). A false positive
+        /// costs a slightly flatter fish; a false negative costs the bug this whole work order is.
+        /// </summary>
+        public static bool NeedsAlbedoLift(int p1Srgb, double pctBelowCrush)
+            => p1Srgb < ScreenMinP1Srgb || pctBelowCrush > ScreenMaxPctBelowCrush;
+
         /// <summary>The ambient band a surface facing this way receives, authored (sRGB).</summary>
         public static SeabedGeom.Rgb Ambient(float depthUnits, Facing facing)
         {

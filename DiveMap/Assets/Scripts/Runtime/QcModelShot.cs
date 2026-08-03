@@ -528,6 +528,30 @@ namespace DiveMap.Runtime
                 // Never inside the near plane, whatever the model's size says.
                 dist = Mathf.Max(dist, radius + cam.nearClipPlane * 3f);
 
+                // 🔴 WO-E5c — EVERY MODEL HAS TO BE PHOTOGRAPHED AT THE SAME DEPTH, and until now
+                // none of them were.
+                //
+                // The camera is placed back along viewDir to frame the model, and viewDir climbs
+                // (0.27 of the distance). dist scales with the model, so a 2 m lionfish put the
+                // camera ~5 u above the stage and a 128 m ruin put it ~240 u above — forty metres
+                // shallower. Everything that dims with depth reads the CAMERA's y (DepthAtmosphere,
+                // UnderwaterShading, Backdrop), so the big models were being lit by a different,
+                // brighter scene than the small ones, and the run's twelve blackOfSubject numbers
+                // were not comparable with each other. That is a flaw in the instrument, not in
+                // the models: it flattered exactly the assets under suspicion.
+                //
+                // Fixed by sinking the model instead of raising the camera. The stage's own y is
+                // the target — the depth the map's content actually sits at — so the camera ends
+                // up in the same water for a fish and for a temple, and the only thing that
+                // differs between two shots is the thing being photographed.
+                float climb = viewDir.y * dist;
+                float drop = (stage.y - climb) - b.center.y;
+                if (!float.IsNaN(drop) && !float.IsInfinity(drop))
+                {
+                    pivot.transform.position += new Vector3(0f, drop, 0f);
+                    b.center += new Vector3(0f, drop, 0f);
+                }
+
                 cam.transform.position = b.center + viewDir * dist;
                 cam.transform.LookAt(b.center);
 
@@ -545,8 +569,12 @@ namespace DiveMap.Runtime
 
                 shot = QcPixels.Measure(withModel, withoutModel);
 
+                // camDepth is printed because it is the number that makes two models' figures
+                // comparable — or, when it drifts, the reason they are not.
                 Debug.Log($"[QCModel] {name} framed radius={radius:F2} dist={dist:F2} " +
                           $"scale={scale:F2} camY={cam.transform.position.y:F1} " +
+                          $"camDepth={ShotDepthUnits() / DepthLight.UnitsPerMetre:F1}m sank={drop:F1} " +
+                          $"crushAlb=sRGB{SurfaceLight.CrushAlbedoSrgb(ShotDepthUnits(), SurfaceLight.Facing.Down)} " +
                           $"load={loadSecs:F1}s url={url}");
 
                 // A/B probes: same camera, same model, one shading input removed at a time, then
@@ -1038,6 +1066,16 @@ namespace DiveMap.Runtime
         }
 
         // ── helpers ──────────────────────────────────────────────────────────────
+
+        /// <summary>
+        /// How deep the camera is right now, in world units — read off the same component the
+        /// scene's own dimming reads, so the QC log and the renderer cannot disagree about it.
+        /// </summary>
+        private static float ShotDepthUnits()
+        {
+            var shading = UnityEngine.Object.FindFirstObjectByType<UnderwaterShading>();
+            return shading != null ? shading.CameraDepthUnits : 0f;
+        }
 
         private static Bounds WorldBounds(List<Renderer> renderers)
         {
