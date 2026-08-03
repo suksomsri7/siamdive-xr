@@ -276,8 +276,7 @@ namespace DiveMap.Tests
             foreach (var r in rows)
             {
                 SwimWave w = SwimStyle.For(r.Item1, r.Item2);
-                double effortMax = SwimStyle.SchoolBeatHz(r.Item1) > 0.0
-                                 ? SwimStyle.SchoolEffort : SwimStyle.EffortMax;
+                double effortMax = PeakEffort(r.Item1);
                 string off = r.Item3 > 0.0
                            ? $"{(w.BeatHz / r.Item3 - 1.0) * 100.0,6:0.0}%"
                            : "     —";
@@ -361,29 +360,37 @@ namespace DiveMap.Tests
         {
             const double Ceiling = 2.5;
 
+            // 🔎 These are not invented sizes. Every row was read off the six real maps behind
+            // maps.siamdive.com/api/dive-sites (Chang, Hanuman, Atlantis, Posidon, …) — item.s ×
+            // the XR GLB's own 1.91 u — so this asserts the ceiling over what users have actually
+            // built, not over a convenient sample. Notably the SMALLEST solo animal anyone has
+            // placed is an 11 u lionfish: the map editor's scale gizmo lands people around
+            // s = 6-45, which is why the per-gait ceilings (2.0-2.2 Hz) never bind in practice.
             var placed = new[]
             {
-                Tuple.Create("school:scad",       ScadLen),
-                Tuple.Create("school:barracuda",  BarracudaLen),
-                Tuple.Create("school:batfish",    5.7),
-                Tuple.Create("mdl:bull_shark",    BullSharkLen),
-                Tuple.Create("msh:oceanic_manta", MantaLen),
-                Tuple.Create("msh:whaleshark",    WhaleSharkLen),
-                Tuple.Create("msh:turtle",        TurtleLen),
-                Tuple.Create("msh:lionfish",      LionfishLen),
-                Tuple.Create("msh:barracuda",     16.0),
-                Tuple.Create("msh:humpback_whale", 68.0),
+                Tuple.Create("school:scad",         ScadLen),        // 1.74-4.22 u across the maps
+                Tuple.Create("school:barracuda",    BarracudaLen),   // 7.09-17.57 u
+                Tuple.Create("school:batfish",      2.22),
+                Tuple.Create("mdl:bull_shark",      BullSharkLen),
+                Tuple.Create("mdl:great_white_shark", 108.9),        // the largest thing placed
+                Tuple.Create("msh:oceanic_manta",   MantaLen),
+                Tuple.Create("msh:whaleshark",      WhaleSharkLen),
+                Tuple.Create("msh:turtle",          TurtleLen),
+                Tuple.Create("msh:lionfish",        LionfishLen),    // the SMALLEST solo animal
+                Tuple.Create("losin:moorish_idol",  11.50),
+                Tuple.Create("losin:pufferfish_golden", 13.05),
+                Tuple.Create("losin:blue_spotted_stingray", 19.21),
+                Tuple.Create("msh:tiger_shark",     41.28),
+                Tuple.Create("msh:barracuda",       23.57),
+                Tuple.Create("msh:humpback_whale",  68.0),
                 Tuple.Create("losin:moray_leopard", 12.0),
-                Tuple.Create("pod:yellowtail",    20.8),
-                Tuple.Create("pod:humpback",      24.0),
+                Tuple.Create("pod:yellowtail",      5.80),           // s=0.28, the smallest pod
+                Tuple.Create("pod:humpback",        24.0),
             };
 
             foreach (var row in placed)
             {
-                double effortMax = SwimStyle.SchoolBeatHz(row.Item1) > 0.0
-                                 ? SwimStyle.SchoolEffort
-                                 : SwimStyle.EffortMax;
-                double peak = SwimStyle.For(row.Item1, row.Item2).BeatHz * effortMax;
+                double peak = SwimStyle.For(row.Item1, row.Item2).BeatHz * PeakEffort(row.Item1);
                 Assert.LessOrEqual(peak, Ceiling,
                                    $"{row.Item1} @{row.Item2:0.#}u peaks at {peak:0.00} Hz");
             }
@@ -392,13 +399,24 @@ namespace DiveMap.Tests
             // probes them with, so a new animal cannot arrive with a tempo nobody looked at.
             foreach (string id in SpeciesCoverageTests.Animals)
             {
-                double effortMax = SwimStyle.SchoolBeatHz(id) > 0.0
-                                 ? SwimStyle.SchoolEffort
-                                 : SwimStyle.EffortMax;
-                double peak = SwimStyle.For(id, 10.0).BeatHz * effortMax;
+                double peak = SwimStyle.For(id, 10.0).BeatHz * PeakEffort(id);
                 Assert.LessOrEqual(peak, Ceiling, $"{id} @10u peaks at {peak:0.00} Hz");
             }
         }
+
+        /// <summary>
+        /// The hardest this animal's fins can ever be driven.
+        ///
+        /// 🔴 Keyed on the ROUTE, not on whether the fixed shoal rate applies — the distinction
+        /// cost this test a red run. FishSchoolSystem drives every id MarineRouting calls a school,
+        /// which INCLUDES the pods, and it now beats all of them at the constant
+        /// <see cref="SwimStyle.SchoolEffort"/>. Only a solo animal on WhaleController goes through
+        /// <see cref="SwimStyle.Effort"/> and can reach <see cref="SwimStyle.EffortMax"/> — and it
+        /// really does reach it: a hunting predator is capped at 2.5× cruise
+        /// (WhaleController's huntWant), which saturates the effort curve.
+        /// </summary>
+        private static double PeakEffort(string assetId)
+            => MarineRouting.IsSchoolId(assetId) ? SwimStyle.SchoolEffort : SwimStyle.EffortMax;
 
         [Test]
         public void BeatRate_IsAlwaysAPositiveFiniteNumber()
