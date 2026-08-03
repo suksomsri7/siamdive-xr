@@ -404,6 +404,7 @@ namespace DiveMap.Runtime
             // object is on that line of sight" rather than "this exact triangle" — which is exactly
             // the question being asked: WHAT is in front of the camera where the picture is black.
             int[] sample = QcPixels.DarkPixelSample(withMap, RayProbeCount);
+            var inTorchRange = new List<int>();
             if (sample.Length == 0)
             {
                 Debug.Log($"[QCBlack] {label} no dark pixels to probe");
@@ -414,6 +415,7 @@ namespace DiveMap.Runtime
                 if (result.Root != null) result.Root.GetComponentsInChildren(true, renderers);
 
                 var tally = new Dictionary<string, int>();
+                var hitDistance = new List<float>();
                 int missed = 0;
                 foreach (int idx in sample)
                 {
@@ -423,20 +425,32 @@ namespace DiveMap.Runtime
                     Ray ray = cam.ViewportPointToRay(
                         new Vector3((px + 0.5f) / rt.width, (py + 0.5f) / rt.height, 0f));
 
-                    Renderer best = null;
-                    float bestT = float.MaxValue;
+                    // 🔴 NEAREST AND RUNNER-UP, because two of this map's objects share a mesh.
+                    // Caustics is the seabed's own top surface offset 0.4 u upward, so its bounds
+                    // are the WHOLE 340 u disc sitting a third of a metre above another 340 u disc.
+                    // A ray aimed anywhere at the floor enters the higher one first, every time —
+                    // so "Caustics 17/20" and "Seabed 16/20" are the same answer wearing different
+                    // names, and reporting only the nearest turns a tie into a false accusation.
+                    Renderer best = null, second = null;
+                    float bestT = float.MaxValue, secondT = float.MaxValue;
                     foreach (Renderer r in renderers)
                     {
                         if (r == null || !r.enabled || !r.gameObject.activeInHierarchy) continue;
                         if (!r.bounds.IntersectRay(ray, out float t)) continue;
-                        if (t < bestT) { bestT = t; best = r; }
+                        if (t < bestT) { secondT = bestT; second = best; bestT = t; best = r; }
+                        else if (t < secondT) { secondT = t; second = r; }
                     }
                     if (best == null) { missed++; continue; }
 
+                    hitDistance.Add(bestT);
+                    if (bestT <= TorchRangeUnits * TorchUsableFraction) inTorchRange.Add(idx);
                     string key = $"{PathOf(best.transform)} | shader=" +
                                  (best.sharedMaterial != null && best.sharedMaterial.shader != null
                                      ? best.sharedMaterial.shader.name : "(none)") +
-                                 " | mat=" + (best.sharedMaterial != null ? best.sharedMaterial.name : "(none)");
+                                 " | mat=" + (best.sharedMaterial != null ? best.sharedMaterial.name : "(none)") +
+                                 (second != null && secondT - bestT < CoLocatedUnits
+                                     ? $" | TIED-WITH {PathOf(second.transform)} (+{secondT - bestT:F2}u)"
+                                     : "");
                     tally.TryGetValue(key, out int c);
                     tally[key] = c + 1;
                 }
@@ -445,6 +459,21 @@ namespace DiveMap.Runtime
                 if (missed > 0)
                     Debug.Log($"[QCBlack] {label} rayHit x{missed}/{sample.Length}  " +
                               "(nothing — open water / backdrop on that line of sight)");
+
+                // 🔴 HOW FAR AWAY THE BLACK IS, which decides whether the torch test below means
+                // anything at all. A lamp with a 150 u range says nothing about a surface 900 u
+                // away, and a TORCH-CANNOT-REACH verdict on pixels it never reached is not a
+                // finding — it is the instrument reporting its own range back to us.
+                if (hitDistance.Count > 0)
+                {
+                    hitDistance.Sort();
+                    Debug.Log($"[QCBlack] {label} darkDistance " +
+                              $"min={hitDistance[0]:F0}u " +
+                              $"p50={hitDistance[hitDistance.Count / 2]:F0}u " +
+                              $"max={hitDistance[hitDistance.Count - 1]:F0}u " +
+                              $"withinTorchRange={inTorchRange.Count}/{sample.Length} " +
+                              $"(torch reaches {TorchRangeUnits * TorchUsableFraction:F0}u)");
+                }
             }
 
             // ── 3. the torch ────────────────────────────────────────────────────
@@ -462,9 +491,23 @@ namespace DiveMap.Runtime
             // That is a genuine bisection of the remaining space, it costs one light and two
             // frames, and no amount of reasoning about ramps and attenuation curves substitutes
             // for it. Written down here because it is the best test anybody produced all day.
-            if (sample.Length > 0)
+            // 🔴 …AND IT MUST BE AIMED AT PIXELS IT CAN ACTUALLY REACH. The first version measured
+            // every dark pixel in the frame, including the far rim of a 340 u map seen from inside
+            // it — hundreds of units past the lamp's range. Those pixels cannot brighten, so they
+            // score gain 1.00x and the verdict reads TORCH-CANNOT-REACH, which is true of the lamp
+            // and says nothing about the surface. Only the dark pixels the ray probe measured as
+            // inside the lamp's usable range are scored, and the count is logged so a verdict from
+            // three pixels is visibly a verdict from three pixels.
+            if (inTorchRange.Count < MinTorchPixels)
             {
-                double before = QcPixels.MeanLuminanceAt(withMap, sample);
+                Debug.Log($"[QCBlack] {label} torch SKIPPED — only {inTorchRange.Count} dark pixels " +
+                          $"within {TorchRangeUnits * TorchUsableFraction:F0}u of the camera " +
+                          $"(need {MinTorchPixels}); a lamp cannot testify about what it does not reach");
+            }
+            else
+            {
+                int[] sampleForTorch = inTorchRange.ToArray();
+                double before = QcPixels.MeanLuminanceAt(withMap, sampleForTorch);
 
                 var torchGo = new GameObject("QcBlackTorch");
                 torchGo.transform.SetParent(cam.transform, false);
@@ -482,9 +525,10 @@ namespace DiveMap.Runtime
                 Object.Destroy(torchGo);
                 yield return null;
 
-                double after = QcPixels.MeanLuminanceAt(lit, sample);
+                double after = QcPixels.MeanLuminanceAt(lit, sampleForTorch);
                 double gain = before <= 1e-9 ? (after > 1e-9 ? 999.0 : 1.0) : after / before;
-                Debug.Log($"[QCBlack] {label} torch range={TorchRangeUnits:F0}u intensity={TorchIntensity:F1} " +
+                Debug.Log($"[QCBlack] {label} torch px={sampleForTorch.Length}/{sample.Length} " +
+                          $"range={TorchRangeUnits:F0}u intensity={TorchIntensity:F1} " +
                           $"darkLumBefore={before:0.0000} darkLumAfter={after:0.0000} gain={gain:0.00}x " +
                           $"verdict={TorchVerdict(gain)}");
             }
@@ -500,6 +544,18 @@ namespace DiveMap.Runtime
         /// </summary>
         private const float TorchRangeUnits = 150f;
         private const float TorchIntensity = 4f;
+
+        /// <summary>How much of the lamp's nominal range counts as "reached". A point light's
+        /// falloff is most of the way gone by its stated range, so scoring a pixel at 149 u as
+        /// lit-or-not would be scoring the falloff curve rather than the surface.</summary>
+        private const float TorchUsableFraction = 0.5f;
+
+        /// <summary>Fewer than this and the verdict is one pixel's opinion, so it is not given.</summary>
+        private const int MinTorchPixels = 5;
+
+        /// <summary>Two renderers whose bounds a ray enters within this distance of each other are
+        /// reported as a tie. Caustics sits 0.4 u above the seabed on the same mesh.</summary>
+        private const float CoLocatedUnits = 2f;
 
         /// <summary>
         /// What the torch proves. The threshold is deliberately generous: a lamp that is genuinely

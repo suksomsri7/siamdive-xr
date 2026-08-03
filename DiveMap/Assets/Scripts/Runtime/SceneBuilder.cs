@@ -1922,6 +1922,30 @@ namespace DiveMap.Runtime
         /// read as being in front of the floor glow, and a low alpha: this is meant to be
         /// noticed as light on sand, not as a second texture.
         /// </summary>
+        /// <remarks>
+        /// 🔴 WO-E5k — READ BEFORE ACCUSING THIS OF PAINTING THE SEABED BLACK.
+        ///
+        /// Run 30818116631's ray probe put 17 of 20 rays through Atlantis's black region into
+        /// <c>Map/Caustics</c>, and the natural next thought is "it must be alpha-blending instead
+        /// of adding". It is not. The values below are the material's, verbatim:
+        ///
+        ///     _SrcBlend = SrcAlpha      _DstBlend = One      ⟹  dst + src.rgb × src.a
+        ///     _ZWrite   = 0             queue     = 3050     ⟹  writes no depth, occludes nothing
+        ///     colour    = (0.78, 0.92, 1.00) at alpha 0.13   ⟹  a pale, nearly white tint
+        ///     texture   = RGBA(200, 235, 255, 120-255)       ⟹  bright everywhere
+        ///
+        /// <c>One</c> as the destination factor is additive by definition: the framebuffer term is
+        /// multiplied by 1 and the source is added to it. Every channel of what is added is
+        /// positive. This surface CANNOT subtract light from what is behind it, at any alpha, at
+        /// any depth, and no tuning of its colour can make it do so.
+        ///
+        /// 🔎 Why the probe named it anyway: it is the seabed's OWN top-surface mesh, parented at
+        /// +0.4 u. Its bounds are therefore the whole 340 u disc, sitting a third of a metre above
+        /// another 340 u disc — so a ray aimed anywhere at the floor enters this one first, every
+        /// time. "Caustics 17/20" and Posidon's "Seabed 16/20" are the same answer with different
+        /// names on it. QcMapShot now reports the runner-up and flags the tie for exactly this
+        /// reason.
+        /// </remarks>
         private static Material CausticsMaterial()
         {
             var mat = BaseMat(true);
