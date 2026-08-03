@@ -159,10 +159,12 @@ namespace DiveMap.Runtime
             // times brighter in blue. Fading distant objects toward the deep stop while they stand
             // against the mid ramp is the "distant geometry reads as a black silhouette" failure
             // this comment's own version 1 describes — it was fixed for the orbit camera and
-            // re-created for the diver. WaterFog.HorizonRampV is the projection, and it returns
-            // 0.90 for exactly the pitch the web's camera has, so this is not a departure from the
-            // web: it is the web's number stated as the thing it was a measurement OF.
-            float rampV = FarRimRampV();
+            // re-created for the diver — and then made worse by WO-E5, which first sampled the
+            // ramp at the MAP'S FAR RIM. The far rim of a seabed is below the diver, so it projects
+            // low on screen where the ramp is its deep stop, and the deep stop at 95 m is byte
+            // (1, 15, 34). See HorizonRampV for the measurement and for why the horizon is the row
+            // that matters: it is the water the eye is looking THROUGH.
+            float rampV = HorizonRampV();
             SeabedGeom.Rgb water = WaterFog.ColorAt(depth, rampV);
             var mood = new SeabedGeom.Rgb(_baseFog.r, _baseFog.g, _baseFog.b);
             SeabedGeom.Rgb fog = WaterFog.Blend(water, mood, WaterFog.MoodWeight);
@@ -196,33 +198,53 @@ namespace DiveMap.Runtime
         }
 
         /// <summary>
-        /// Which row of the backdrop the map's FAR RIM lands on, as a ramp position.
+        /// Which row of the backdrop the HORIZON lands on, as a ramp position — the row whose
+        /// colour distant geometry has to fade into.
         ///
-        /// Not modelled and not tuned: the point on the far side of the content, at the content's
-        /// own height, is put through the real camera matrix and the row it comes out on is the
-        /// answer. That is the row where distant geometry meets the background, which is the only
-        /// row the fog colour has any business matching. For a camera framed the way the web frames
-        /// its map it lands near the web's own 0.90; for a diver looking level it lands near
-        /// mid-frame, where the ramp carries several times the light.
+        /// 🔴 WO-E5i. This used to project the map's FAR RIM, and that was rigorous about the wrong
+        /// point. The far rim of a SEABED is below the diver, so it projects LOW on the screen,
+        /// where the backdrop ramp is its deep stop — and the deep stop times the attenuation at
+        /// 95 m is byte (1, 15, 34). Fog that colour does not haze anything; it paints it black.
+        /// Measured off the shipped build's own map shots, the fog colour by depth was:
         ///
-        /// Behind the camera — which happens the instant the diver turns around — the projection
-        /// is meaningless, and <see cref="WaterFog.RampVOfViewportY"/> answers with the web's
-        /// constant rather than with a mirrored number.
+        ///     depth      fog colour        dark? (all channels &lt; 60)
+        ///      7.5 m     (5, 42, 69)       no      map scored dark 5.00%
+        ///     18.0 m     (3, 37, 65)       no                    6.13%
+        ///     28.8 m     (3, 32, 60)       borderline           28.60%
+        ///     38.0 m     (3, 29, 57)       YES                  15.80%
+        ///     68.3 m     (3, 23, 49)       YES                  62.23%
+        ///     95.3 m     (3, 22, 44)       YES                  63.00%
+        ///
+        /// The whole dark-percentage ladder across seven maps is the blue channel of the fog colour
+        /// crossing 60. That is not a coincidence and it is not the models: it is the seabed being
+        /// blended most of the way into a colour that is itself nearly black.
+        ///
+        /// 🔎 THE HORIZON IS THE RIGHT POINT, and for one reason: the fog colour has to be the
+        /// water the eye is looking THROUGH, and a diver looking at something far away is looking
+        /// along a roughly horizontal path. The backdrop at the horizon row IS that water, painted
+        /// by the same ramp and dimmed by the same attenuation — so fading distant geometry into it
+        /// makes the object and the water behind it the same colour by construction, which is what
+        /// haze is. At 95 m that is byte (76, 109, 146) instead of (3, 22, 44).
+        ///
+        /// 🔎 And it is PROJECTED, not derived from pitch and field of view: a point on the horizon
+        /// is the camera's own height, straight ahead, far away. Putting that through the real
+        /// camera matrix cannot disagree with the picture, whereas a trig formula can disagree with
+        /// it about handedness, about which way pitch counts, and about a non-standard projection.
         /// </summary>
-        private float FarRimRampV()
+        private float HorizonRampV()
         {
-            Vector3 away = _cam.transform.position - _contentCentre;
-            away.y = 0f;
-            if (away.sqrMagnitude < 1e-4f) away = _cam.transform.forward;
-            away.y = 0f;
-            if (away.sqrMagnitude < 1e-4f) return WaterFog.FogRampV;
+            Vector3 ahead = _cam.transform.forward;
+            ahead.y = 0f;
+            if (ahead.sqrMagnitude < 1e-6f) ahead = Vector3.forward;   // camera pointing straight up or down
+            ahead.Normalize();
 
-            // The far side of the content from where the camera is standing, at the content's own
-            // height — i.e. the furthest piece of map that is still map.
-            Vector3 rim = _contentCentre - away.normalized * _contentRadius;
-            rim.y = _contentCentre.y;
+            // Far enough that its projected row is the horizon's to well under a pixel, and inside
+            // the far clip plane so the projection stays meaningful.
+            float far = Mathf.Max(1f, _cam.farClipPlane) * 0.9f;
+            Vector3 horizon = _cam.transform.position + ahead * far;
+            horizon.y = _cam.transform.position.y;
 
-            Vector3 vp = _cam.WorldToViewportPoint(rim);
+            Vector3 vp = _cam.WorldToViewportPoint(horizon);
             return WaterFog.RampVOfViewportY(vp.y, vp.z <= 0f);
         }
 

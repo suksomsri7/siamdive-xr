@@ -328,4 +328,105 @@ namespace DiveMap.Tests
             Assert.That(m.BackdropSpan, Is.EqualTo(m.BandTop - m.BandBottom).Within(1e-9));
         }
     }
+
+    /// <summary>
+    /// WO-E5i — the fog colour, and the regression WO-E5 created by making the fog reach the map
+    /// while its colour was nearly black.
+    /// </summary>
+    [TestFixture]
+    public class FogColourTests
+    {
+        private const float Atlantis = 95.3f * DepthLight.UnitsPerMetre;
+
+        private static float Lum(SeabedGeom.Rgb c) => 0.2126f * c.R + 0.7152f * c.G + 0.0722f * c.B;
+
+        /// <summary>A byte is "dark" to QcPixels when every channel is under this.</summary>
+        private const int DarkMax = 60;
+
+        // System.Math, not Mathf: Core and its tests are UnityEngine-free so that they can run on
+        // this machine in two seconds instead of in a 35-minute CI round.
+        private static int MaxByte(SeabedGeom.Rgb c)
+        {
+            int r = (int)System.Math.Round(c.R * 255f);
+            int g = (int)System.Math.Round(c.G * 255f);
+            int b = (int)System.Math.Round(c.B * 255f);
+            return System.Math.Max(r, System.Math.Max(g, b));
+        }
+
+        [Test]
+        public void SamplingTheRampAtTheSeabedsFarRimPaintsTheSeabedBlack()
+        {
+            // 🔴 The regression, as arithmetic. WO-E5 sampled the fog colour where the map's FAR
+            // RIM projects — low on screen for a diver, because a seabed is below them — and the
+            // bottom of the ramp times the attenuation at 95 m is essentially black. Combined with
+            // WO-E5's other change, a fog range that finally REACHES the map (80% at the far rim),
+            // the far half of every deep seabed was blended most of the way into it.
+            SeabedGeom.Rgb farRim = WaterFog.ColorAt(Atlantis, 0.95f);
+            Assert.That(MaxByte(farRim), Is.LessThan(DarkMax),
+                "every channel under 60 — a fully fogged pixel counts as DARK, which is the whole " +
+                "of the 63.00% the Atlantis map shot scored");
+        }
+
+        [Test]
+        public void TheHorizonRowIsTheWaterTheEyeLooksThrough()
+        {
+            // The fix. A diver looking at something far away is looking along a roughly horizontal
+            // path, and the backdrop at the horizon row IS that water — same ramp, same
+            // attenuation. Fading distant geometry into it makes the object and the water behind
+            // it the same colour by construction, which is what haze is.
+            SeabedGeom.Rgb horizon = WaterFog.ColorAt(Atlantis, 0.409f);   // level-ish camera
+            Assert.That(MaxByte(horizon), Is.GreaterThan(DarkMax * 2),
+                "the water a diver actually looks through is a blue haze, not a black wall");
+
+            SeabedGeom.Rgb farRim = WaterFog.ColorAt(Atlantis, 0.95f);
+            Assert.That(Lum(horizon), Is.GreaterThan(Lum(farRim) * 4f),
+                "the two rows differ by more than a factor of four in light at this depth");
+        }
+
+        [Test]
+        public void FogFadesIntoTheBackdropRowItStandsAgainst()
+        {
+            // The property that makes the choice unarguable rather than tuned: whatever row the
+            // fog is sampled at, it must equal the BACKDROP at that same row and depth. If those
+            // two ever drift apart, distant geometry fades toward a colour that is not behind it —
+            // which is the "black silhouette" failure DepthAtmosphere has now had twice.
+            foreach (float v in new[] { 0.2f, 0.409f, 0.5f, 0.9f })
+                foreach (float metres in new[] { 0f, 38f, 95.3f })
+                {
+                    float d = metres * DepthLight.UnitsPerMetre;
+                    SeabedGeom.Rgb fog = WaterFog.ColorAt(d, v);
+                    SeabedGeom.Rgb back = WaterFog.BackdropAt(v, d);
+                    Assert.That(fog.R, Is.EqualTo(back.R).Within(1e-4f), $"v={v} depth={metres}");
+                    Assert.That(fog.G, Is.EqualTo(back.G).Within(1e-4f), $"v={v} depth={metres}");
+                    Assert.That(fog.B, Is.EqualTo(back.B).Within(1e-4f), $"v={v} depth={metres}");
+                }
+        }
+
+        [Test]
+        public void TheDepthCueSurvivesTheFix()
+        {
+            // The user asked for "ตื้นอ่อน ลึกเข้ม" and it must not be traded away to get the
+            // shallows back: the same horizon row still dims with depth, it just no longer falls
+            // off a cliff into the deep stop.
+            SeabedGeom.Rgb shallow = WaterFog.ColorAt(7.5f * DepthLight.UnitsPerMetre, 0.409f);
+            SeabedGeom.Rgb deep = WaterFog.ColorAt(Atlantis, 0.409f);
+            Assert.That(Lum(deep), Is.LessThan(Lum(shallow)), "the deep must still be dimmer");
+            Assert.That(MaxByte(deep), Is.GreaterThan(DarkMax),
+                "…but never so dim that a fully fogged pixel reads as dark");
+        }
+
+        [Test]
+        public void EveryMapDepthWeShipStaysOutOfTheDarkBand()
+        {
+            // The seven maps CI photographs, at their measured depths. Before the fix the fog
+            // colour crossed into "dark" somewhere between 28.8 m and 38 m and the dark percentage
+            // went 6% → 63% behind it. After it, none of them cross.
+            foreach (float metres in new[] { 7.5f, 18f, 28.8f, 37.7f, 38f, 68.3f, 95.3f })
+            {
+                SeabedGeom.Rgb fog = WaterFog.ColorAt(metres * DepthLight.UnitsPerMetre, 0.409f);
+                Assert.That(MaxByte(fog), Is.GreaterThan(DarkMax),
+                    $"at {metres} m a fully fogged pixel would count as dark");
+            }
+        }
+    }
 }
