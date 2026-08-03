@@ -43,6 +43,10 @@
     <Compile Include="../../DiveMap/Assets/Scripts/Core/MarineRouting.cs" />
     <Compile Include="../../DiveMap/Assets/Scripts/Core/AppModes.cs" />
     <Compile Include="../../DiveMap/Assets/Scripts/Core/SwimStyle.cs" />
+    <!-- WO-F3. The clip rules (which clip, how fast, clip-or-wave) are pure so that "does it
+         match the web's animRate" is a 2-second answer on this machine instead of a 35-minute
+         CI round. The Unity half is Runtime/Marine/BodyClips.cs and cannot be tested here. -->
+    <Compile Include="../../DiveMap/Assets/Scripts/Core/ClipPlay.cs" />
     <!-- SwimStyleTests asserts SwimStyle.UnitsPerMetre == DepthLight.UnitsPerMetre. Two metres in
          one project is what made every fin run √2 fast, so the two constants are now pinned to
          each other by a test rather than by a comment. DepthLight is pure (using System; only). -->
@@ -67,6 +71,7 @@
     <Compile Include="../../DiveMap/Assets/Tests/EditMode/SpeciesGenomeTests.cs" />
     <Compile Include="../../DiveMap/Assets/Tests/EditMode/SpeciesBehaviorTests.cs" />
     <Compile Include="../../DiveMap/Assets/Tests/EditMode/SwimStyleTests.cs" />
+    <Compile Include="../../DiveMap/Assets/Tests/EditMode/ClipPlayTests.cs" />
     <Compile Include="../../DiveMap/Assets/Tests/EditMode/HuntMathTests.cs" />
     <Compile Include="../../DiveMap/Assets/Tests/EditMode/SpeciesCoverageTests.cs" />
     <!-- WO-A. Reads the shipped manifest: the Atlantis outage was a manifest that pointed at

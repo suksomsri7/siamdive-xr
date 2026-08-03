@@ -448,7 +448,11 @@ jobs:
           # it moved with the budget (170 → 240) to keep the same headroom behind it.
           # WO-E3 added the DEPTH pass behind the model pass: the same animal at 15/30/52 m with
           # the ACES curve on and off — 12 frames, one model, no extra download. 560 → 640 s.
-          timeout 640 xvfb-run -a -s "-screen 0 1280x720x24" \
+          # WO-F3 added the ANIM pass last: three rigged GLBs downloaded, played and measured, no
+          # picture taken. Its own budget is 30 s/model + 6 frames, so 100 s worst case — and the
+          # fuse moves with it (640 → 760) because a timeout here truncates the log, which is the
+          # only evidence any of these passes produce.
+          timeout 760 xvfb-run -a -s "-screen 0 1280x720x24" \
             "$BIN" -qcshot "$PWD/qc_screenshot.png" -screen-width 1280 -screen-height 720 -force-glcore || true
           ls -la qc_screenshot.png || echo "::warning::no screenshot produced"
           ls -la qc_model_*.png || echo "::warning::no per-model QC shots — see [QCModel] lines in qc_player.log"
@@ -469,6 +473,24 @@ jobs:
           # calibration targets they are read against are in SwimStyleTests.
           grep -h '\[Swim\]' qc_player.log 2>/dev/null || \
             echo "::warning::no [Swim] lines — no animal resolved a swim style"
+          # WO-F3's oracle. One [Anim] line per animal and per QC model, carrying clips=N, the
+          # clip actually picked, its length, the playback rate and — when the wave shader stood
+          # in instead — the one-token REASON. "the turtle does not animate" has four causes
+          # (the GLB ships no clip / com.unity.modules.animation is missing so glTFast compiled
+          # its whole animation path out / the wrong clip was picked / it is playing at 0.06×)
+          # and no screenshot separates any of them. clips=0 on every line means the asset
+          # pipeline baked the clips out; clips=6 with mode=wave means this app dropped them.
+          #
+          # The QcAnimShot lines carry the part no pixel can show — verdict=, which is one of:
+          #   no-clips     the GLB shipped no animation          (asset pipeline)
+          #   no-skin      clips arrived, the skinned mesh did not (Draco / import)
+          #   frozen-pose  curves exist and move nothing          (rig transfer hit wrong joints)
+          #   frozen-live  the file is fine, the app is not ticking it   (this app)
+          #   moving       it works
+          # poseDelta is measured with Animation.Sample() and is frame-rate-free; liveDelta and
+          # advanced= come from real frames, so poseDelta>0 with liveDelta=0 names the app.
+          grep -h '\[Anim\]' qc_player.log 2>/dev/null || \
+            echo "::warning::no [Anim] lines — nothing decided between clip and wave"
           # WO-E3's acceptance evidence: subject-against-water contrast, the shading range INSIDE
           # the subject, and whether the frame still gets bluer with depth (the cue the user asked
           # to keep). Three depths × ACES on/off, in the step log so the A/B is readable without

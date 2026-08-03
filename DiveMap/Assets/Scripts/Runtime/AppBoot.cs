@@ -515,6 +515,14 @@ namespace DiveMap.Runtime
             // CI that can see that, and it is the acceptance evidence for this work order.
             yield return QcModelShot.RunDepth(dir, Manifest, boatCenter, waterLevel);
 
+            // ── WO-F3: do the animated models actually ANIMATE? ────────────────────
+            // Every pass above measures pixels, and no number of pixels can answer that: a rigged
+            // animal frozen on frame 0 photographs exactly like a rigged animal mid-stroke. This
+            // one takes no picture — it loads three rigged GLBs, plays them, and measures how far
+            // the skeleton moved. Last, so that a failure or a timeout in it cannot cost any of
+            // the passes above their evidence.
+            yield return QcAnimShot.Run(boatCenter);
+
             Application.Quit(0);
         }
 
