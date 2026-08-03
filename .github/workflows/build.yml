@@ -439,13 +439,14 @@ jobs:
           sudo chown -R "$USER:$USER" . || true
           BIN=$(find . -path '*/build/*' -name 'DiveMap' -type f | head -1)
           echo "BIN=$BIN"; chmod +x "$BIN"
-          # 300 → 480 s. The same run now also does the MODEL pass (AppBoot.QcShot →
-          # QcModelShot): six real GLBs pulled off the CDN (~12.6 MB), instantiated one at a
+          # 300 → 480 → 560 s. The same run now also does the MODEL pass (AppBoot.QcShot →
+          # QcModelShot): nine real GLBs pulled off the CDN (~19 MB), instantiated one at a
           # time through the app's own loader, and photographed close up — the models that
           # every previous QC screenshot has been unable to contain, because this scene builds
-          # all but four of its objects out of generated geometry. The pass has its own 170 s
-          # internal budget and quits itself, so this ceiling is the outer fuse, not the plan.
-          timeout 480 xvfb-run -a -s "-screen 0 1280x720x24" \
+          # all but four of its objects out of generated geometry. The pass has its own 240 s
+          # internal budget and quits itself, so this ceiling is the outer fuse, not the plan;
+          # it moved with the budget (170 → 240) to keep the same headroom behind it.
+          timeout 560 xvfb-run -a -s "-screen 0 1280x720x24" \
             "$BIN" -qcshot "$PWD/qc_screenshot.png" -screen-width 1280 -screen-height 720 -force-glcore || true
           ls -la qc_screenshot.png || echo "::warning::no screenshot produced"
           ls -la qc_model_*.png || echo "::warning::no per-model QC shots — see [QCModel] lines in qc_player.log"

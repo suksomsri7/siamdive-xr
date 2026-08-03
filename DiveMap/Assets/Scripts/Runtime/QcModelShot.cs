@@ -18,7 +18,7 @@ namespace DiveMap.Runtime
     /// modules we ship, no CI screenshot has ever contained the thing being tested. Green shots,
     /// zero evidence. The user's phrasing: หลักฐานจากเว็บไม่นับ ต้องเป็นตัว Unity.
     ///
-    /// So: six representatives are downloaded through the app's OWN loader — manifest → CDN →
+    /// So: nine representatives are downloaded through the app's OWN loader — manifest → CDN →
     /// <see cref="AssetCacheStore"/> → glTFast → the same TameMetal/GoldFx post-pass a map item
     /// gets — placed one at a time, framed to fill the shot, and photographed. Going through the
     /// cache is deliberate: it means this pass also exercises the generation gate, which is the
@@ -42,10 +42,20 @@ namespace DiveMap.Runtime
     public static class QcModelShot
     {
         /// <summary>
-        /// The six the work order names — chosen as one of each way a model goes wrong: two
-        /// scanned CC0 props, a statue that also runs the gold FX path, two wrecks (one of them
-        /// the metallic hull the whole reflection-cube story is about), and two marine models,
-        /// including the barracuda that has just been re-exported at 2048².
+        /// One of each way a model goes wrong: scanned CC0 props, statues that also run the gold FX
+        /// path, wrecks (one of them the metallic hull the whole reflection-cube story is about),
+        /// and marine models, including the barracuda that has just been re-exported at 2048².
+        ///
+        /// 🔴 The last three are the point of this round. <c>cc0:statue_singha</c> and
+        /// <c>cc0:wreck_chang</c> are the two models the USER complained about by name, and in
+        /// every QC run so far neither of them has ever been photographed — the pass proved six
+        /// other models were fine while the two under complaint went unseen. <c>cc0:rock_cluster</c>
+        /// comes in as the control: 1.8 KB, Draco, no UVs and no textures at all, so anything that
+        /// goes wrong on it cannot be a texture problem.
+        ///
+        /// Both new statue/wreck URLs resolve to <c>maps.siamdive.com</c> rather than the Bunny
+        /// CDN, which is deliberate to leave in: that is the path a real map item takes for them,
+        /// and a QC pass that quietly tested a different host would be testing a different app.
         /// </summary>
         public static readonly string[] AssetIds =
         {
@@ -55,6 +65,9 @@ namespace DiveMap.Runtime
             "sw:htms732",
             "msh:barracuda",
             "msh:lionfish",
+            "cc0:statue_singha",
+            "cc0:wreck_chang",
+            "cc0:rock_cluster",
         };
 
         /// <summary>
@@ -78,6 +91,17 @@ namespace DiveMap.Runtime
             62.34,   // sw:htms732 — camouflage, legitimately the darkest of the six
             14.57,   // msh:barracuda
             0.86,    // msh:lionfish
+
+            // 🔴 −1 = NO BASELINE RECORDED, and it must stay −1 until a human has looked at this
+            // run's pictures. These three have never been photographed, so there is nothing to
+            // compare them against and any number written here would be a guess presented as
+            // evidence — the exact failure mode HANDOFF §6 rule 2 exists to stop. With −1 the gate
+            // falls back to the absolute MaxDarkPercent ceiling (QcPixels.DarkGate) and the log
+            // line prints "darkBaseline=none", which is what the next round reads the real numbers
+            // off. Fill these in in the NEXT push, from one run, after looking.
+            -1.0,    // cc0:statue_singha — baseline pending, look at the shot first
+            -1.0,    // cc0:wreck_chang   — baseline pending, look at the shot first
+            -1.0,    // cc0:rock_cluster  — baseline pending, look at the shot first
         };
 
         /// <summary>Baseline for <paramref name="assetId"/>, or −1 when none is recorded.</summary>
@@ -94,16 +118,23 @@ namespace DiveMap.Runtime
         private const float StageOffset = 4000f;
 
         /// <summary>Per model: download + parse + instantiate. A model that has not landed by now
-        /// is a FAIL worth reporting, not a reason to lose the other five.</summary>
+        /// is a FAIL worth reporting, not a reason to lose the other eight.</summary>
         private const float PerModelSeconds = 45f;
 
         /// <summary>
-        /// Whole-pass budget. llvmpipe renders at 135-300 ms a frame and the six GLBs are ~12.6 MB
+        /// Whole-pass budget. llvmpipe renders at 135-300 ms a frame and the nine GLBs are ~19 MB
         /// together; the pass measures well under this, and the ceiling is here so that a CDN going
         /// slow costs us the remaining models' log lines rather than the entire step — including
         /// the two screenshots already written and the artifact upload behind it.
+        ///
+        /// 170 s covered six models (the pass measured ~24 s of it, probes included). Three more,
+        /// two of them ~2 MB and served from maps.siamdive.com rather than the CDN, put the
+        /// expected figure near 36 s — but the budget is not sized for the expected case, it is
+        /// sized so that a SLOW model still leaves room for the ones behind it: at the 45 s
+        /// per-model ceiling, 240 s is what lets four models time out and the remaining five still
+        /// be photographed and logged.
         /// </summary>
-        private const float BudgetSeconds = 170f;
+        private const float BudgetSeconds = 240f;
 
         /// <summary>Settle time after the model lands, before the pair of frames.</summary>
         private const float SettleSeconds = 0.4f;
@@ -173,7 +204,7 @@ namespace DiveMap.Runtime
                                  r => shotOk = r);
                 if (shotOk) ok++; else fail++;
 
-                // Sequential on purpose: six 2048² models resident at once is not what a phone
+                // Sequential on purpose: nine 2048² models resident at once is not what a phone
                 // does, and not what this box has to spare either.
                 Resources.UnloadUnusedAssets();
                 yield return null;
@@ -218,7 +249,7 @@ namespace DiveMap.Runtime
                 yield return null;
 
             // RanToCompletion, not IsCompleted: a faulted task is "completed" too, and reading its
-            // Result rethrows — which would take the remaining five models down with it.
+            // Result rethrows — which would take the remaining eight models down with it.
             GltfImport import = task.Status == TaskStatus.RanToCompletion ? task.Result : null;
             bool loaded = import != null;
             float loadSecs = Time.realtimeSinceStartup - loadStart;
@@ -283,8 +314,8 @@ namespace DiveMap.Runtime
 
                 // A/B probes: same camera, same model, one shading input removed at a time, then
                 // the same white textureless material on each of the two shaders. Four extra
-                // frames a model — ~7 s across the pass, against a 170 s budget it currently uses
-                // 17 s of. See QcPixels.ProbeLine and QcPixels.NormalSourceVerdict.
+                // frames a model — ~10 s across the pass, against a 240 s budget the six-model
+                // version of it used 17 s of. See QcPixels.ProbeLine and QcPixels.NormalSourceVerdict.
                 QcPixels.Shot whiteAlbedo = default, noMetalRough = default;
                 QcPixels.Shot meshNormals = default, whiteGltf = default, greyAlbedo = default;
                 QcPixels.Shot bias4 = default, bias10 = default;
