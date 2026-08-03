@@ -1,4 +1,3 @@
-using DiveMap.Core;
 using UnityEngine;
 
 namespace DiveMap.Runtime
@@ -8,11 +7,9 @@ namespace DiveMap.Runtime
     ///
     /// <b>Gold glow</b> (<c>_fxGold</c> :1465). The web's own comment records that the sparkle
     /// sprites and light rays were REMOVED in v.0684 at the user's request, because an additive
-    /// sprite is overdraw and cost frames for decoration. What is left is free: the model's own
-    /// material re-authored as gold metal, no per-frame tick at all. Porting the removed version
-    /// would be porting a decision that was already reversed. The property names and the numbers
-    /// live in <see cref="GoldShading"/>, where a test can reach them — the first version of this
-    /// wrote to properties glTFast's shader does not have and was a silent no-op for months.
+    /// sprite is overdraw and cost frames for decoration. What is left is free: emissive on the
+    /// model's own material, no per-frame tick at all. Porting the removed version would be
+    /// porting a decision that was already reversed.
     ///
     /// <b>Beard sway</b> (<c>_fxBeard</c> :1476). Vertex displacement through the shader, so no
     /// rig is needed: a hump-shaped mask over the model's height makes the beard and the robe
@@ -22,18 +19,8 @@ namespace DiveMap.Runtime
     /// </summary>
     public static class GoldFx
     {
-        /// <summary>
-        /// Gold's base colour in LINEAR, from <see cref="GoldShading"/>. On a metal this is the
-        /// tint of the reflection, not "the colour of the object".
-        /// </summary>
-        public static readonly Color GoldLinear = new Color(
-            GoldShading.BaseColorLinearR, GoldShading.BaseColorLinearG, GoldShading.BaseColorLinearB, 1f);
-
-        /// <summary>The web's emissive gold #ffb733, in LINEAR, already scaled to strength.</summary>
-        public static readonly Color GoldEmissiveLinear = new Color(
-            GoldShading.EmissiveLinearR * GoldShading.EmissiveStrength,
-            GoldShading.EmissiveLinearG * GoldShading.EmissiveStrength,
-            GoldShading.EmissiveLinearB * GoldShading.EmissiveStrength, 1f);
+        /// <summary>#ffb733 — the web's emissive gold.</summary>
+        public static readonly Color Gold = new Color(1f, 0.718f, 0.200f, 1f);
 
         /// <summary>Asset ids that get the treatment. The web tags these by hand too.</summary>
         public static bool IsGolden(string assetId) =>
@@ -44,30 +31,15 @@ namespace DiveMap.Runtime
             !string.IsNullOrEmpty(assetId) &&
             (assetId.Contains("stone_king") || assetId.Contains("poseidon"));
 
-        /// <summary>First of <paramref name="names"/> this material actually has, or null.
-        /// Same helper, same order-of-candidates rule as <c>QcModelShot.PropOn</c>.</summary>
-        private static string PropOn(Material m, string[] names) =>
-            GoldShading.FirstPresent(names, m.HasProperty);
-
         /// <summary>
-        /// Turn every material on the object into gold metal. Materials are CLONED first: they
-        /// come from the shared GLB import, and tinting one in place would turn every copy of that
+        /// Make every material on the object glow gold. Materials are CLONED first: they come
+        /// from the shared GLB import, and tinting one in place would turn every copy of that
         /// model on the map gold as well.
-        ///
-        /// 🔴 THIS USED TO DO NOTHING AT ALL — see <see cref="GoldShading"/> for the property list
-        /// that proves it. Three writes, all three guarded on Unity Standard's property names, on
-        /// materials that glTFast had put on <c>glTF/PbrMetallicRoughness</c>, which has none of
-        /// them. Hence: candidates rather than names, the FULL metallic-roughness set rather than
-        /// emission alone, and a log line per material that says what it could not find.
-        ///
-        /// No <c>Shader.Find</c> and no shader swap anywhere in here, deliberately: a shader
-        /// reached only from code is stripped out of a player build and comes back magenta. This
-        /// only ever writes properties on the material the importer already made.
         /// </summary>
         public static void ApplyGold(GameObject go)
         {
             if (go == null) return;
-            int materials = 0, applied = 0;
+            int touched = 0;
 
             foreach (Renderer r in go.GetComponentsInChildren<Renderer>(true))
             {
@@ -76,51 +48,19 @@ namespace DiveMap.Runtime
                 {
                     Material m = mats[i];
                     if (m == null) continue;
-                    materials++;
-
-                    string colorProp = PropOn(m, GoldShading.BaseColorNames);
-                    string metalProp = PropOn(m, GoldShading.MetallicNames);
-                    string roughProp = PropOn(m, GoldShading.RoughnessNames);
-                    // Only one of the two conventions is written: whichever the shader speaks.
-                    string glossProp = roughProp ?? PropOn(m, GoldShading.SmoothnessNames);
-                    string emitProp = PropOn(m, GoldShading.EmissiveNames);
-
-                    // Gamma for the plain Color property, linear for the [HDR] one — glTFast's own
-                    // asymmetry (BuiltInMaterialGenerator.cs:383 vs :387), copied rather than
-                    // rediscovered. Getting this backwards is a 2.2-power error, not a nuance.
-                    if (colorProp != null) m.SetColor(colorProp, GoldLinear.gamma);
-                    if (metalProp != null) m.SetFloat(metalProp, GoldShading.Metallic);
-                    if (roughProp != null) m.SetFloat(roughProp, GoldShading.Roughness);
-                    else if (glossProp != null) m.SetFloat(glossProp, GoldShading.Smoothness);
-                    if (emitProp != null)
+                    if (m.HasProperty("_EmissionColor"))
                     {
-                        // The keyword is what compiles the emission branch in; the colour alone is
-                        // read by nothing (glTFPbrMetallicRoughness.shader: shader_feature _EMISSION,
-                        // and Emission() returns 0 without it).
                         m.EnableKeyword("_EMISSION");
-                        m.SetColor(emitProp, GoldEmissiveLinear);
+                        m.SetColor("_EmissionColor", Gold * 0.5f);
                         m.globalIlluminationFlags = MaterialGlobalIlluminationFlags.RealtimeEmissive;
                     }
-
-                    string texProp = PropOn(m, GoldShading.BaseColorTextureNames);
-                    bool baseTex = texProp != null && m.GetTexture(texProp) != null;
-
-                    // 🔴 One line per material, unconditionally, including the misses. `baseTex` is
-                    // here because the base-colour texture MULTIPLIES the factor: a dark albedo
-                    // atlas can swallow the gold with every property below reported as found, and
-                    // that is the next question anyone debugging this will ask.
-                    if (colorProp != null || metalProp != null || glossProp != null || emitProp != null) applied++;
-                    Debug.Log($"[Fx] gold mat={m.name} obj={go.name} " +
-                              $"shader={(m.shader != null ? m.shader.name : "(none)")} " +
-                              $"{GoldShading.Report(colorProp, metalProp, glossProp, emitProp)} " +
-                              $"baseTex={(baseTex ? "t" : "f")}");
+                    if (m.HasProperty("_Metallic")) m.SetFloat("_Metallic", 0.9f);
+                    if (m.HasProperty("_Glossiness")) m.SetFloat("_Glossiness", 0.75f);   // 1 − roughness 0.25
+                    touched++;
                 }
                 r.materials = mats;
             }
-
-            // The summary counts CHANGED as well as seen: "materials=3" on its own was the line
-            // that let the no-op look like a working pass.
-            Debug.Log($"[Fx] gold on {go.name} materials={materials} applied={applied}");
+            Debug.Log($"[Fx] gold on {go.name} materials={touched}");
         }
 
         /// <summary>Attach the sway. Does nothing if the object has no separable lower parts.</summary>

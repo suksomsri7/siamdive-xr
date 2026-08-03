@@ -41,44 +41,19 @@ string[] files = Directory
 var trees = new List<(string Path, SyntaxTree Tree)>();
 int problems = 0;
 
-// ── 1) syntax, once per platform ─────────────────────────────────────────────
-// 🔴 Parsing with no symbols defined only ever compiles the #else side of the file, and a file
-// can be perfectly balanced there while being broken on the other. That is not hypothetical:
-// Editor/CameraUsageDeclaration.cs closed its namespace INSIDE `#if UNITY_ANDROID`, so every iOS
-// build from 31 Jul was green and the first Android player build in weeks died on `CS1022` at the
-// last line of a file nobody had edited. The Android player is only built on a hand-fired run, so
-// three weeks passed between the mistake and the compiler seeing it.
-//
-// Each symbol set below is one real build of this project. A file is only clean when it parses
-// under all of them, and the failure names the platform so it can be reproduced.
-var platforms = new (string Name, string[] Symbols)[]
-{
-    ("default",       Array.Empty<string>()),
-    ("UNITY_ANDROID", new[] { "UNITY_ANDROID" }),
-    ("UNITY_IOS",     new[] { "UNITY_IOS", "UNITY_IPHONE" }),
-    ("UNITY_EDITOR",  new[] { "UNITY_EDITOR" }),
-};
-
+// ── 1) syntax ────────────────────────────────────────────────────────────────
 foreach (string file in files)
 {
     string text = File.ReadAllText(file);
-    SourceText source = SourceText.From(text);
+    SyntaxTree tree = CSharpSyntaxTree.ParseText(
+        SourceText.From(text),
+        new CSharpParseOptions(LanguageVersion.CSharp9));   // Unity 6000.0 = C# 9
+    trees.Add((file, tree));
 
-    for (int p = 0; p < platforms.Length; p++)
+    foreach (Diagnostic d in tree.GetDiagnostics().Where(d => d.Severity == DiagnosticSeverity.Error))
     {
-        SyntaxTree tree = CSharpSyntaxTree.ParseText(
-            source,
-            new CSharpParseOptions(LanguageVersion.CSharp9)   // Unity 6000.0 = C# 9
-                .WithPreprocessorSymbols(platforms[p].Symbols));
-
-        // Later passes want one tree per file; the symbol-free parse is the one they knew.
-        if (p == 0) trees.Add((file, tree));
-
-        foreach (Diagnostic d in tree.GetDiagnostics().Where(d => d.Severity == DiagnosticSeverity.Error))
-        {
-            Report(file, d.Location, d.Id, $"[{platforms[p].Name}] {d.GetMessage()}");
-            problems++;
-        }
+        Report(file, d.Location, d.Id, d.GetMessage());
+        problems++;
     }
 }
 

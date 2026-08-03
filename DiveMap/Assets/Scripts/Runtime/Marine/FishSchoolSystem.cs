@@ -743,19 +743,10 @@ namespace DiveMap.Runtime.Marine
                 Matrix4x4[] mats = sr.Matrices;
 
                 // ── Drive the beat ────────────────────────────────────────────────
-                // 🔴 Constant, and DartMul is deliberately not in it any more.
-                //
-                // This used to be Effort(sr.Cruise × DartMul, sr.Cruise), on the reasoning that a
-                // frightened school beats faster AND harder. The web does no such thing: uAmp is
-                // written once when the school is built and wRate is a literal compiled into the
-                // shader (builder.html:1506-1507), so a scattering shoal there swims faster at
-                // exactly the same fin rate. Ours reached 2.2× the rate on a scatter, on top of a
-                // rate that was already too high, and 200 barracuda vibrating in unison is what
-                // came back from the iPhone as "ครีบขยับเร็วไปมาก".
-                //
-                // DartMul keeps its real job — it is still what moves the fish — and loses this
-                // one. See SwimStyle.SchoolEffort.
-                const float effort = (float)SwimStyle.SchoolEffort;
+                // Effort: how hard this school is actually swimming. DartMul is 1 at cruise and
+                // rises as the shoal panics, so a frightened school beats faster AND harder — the
+                // thing that makes a scatter read as a scatter rather than a speed-up.
+                float effort = (float)SwimStyle.Effort(sr.Cruise * _schools[si].DartMul, sr.Cruise);
                 if (bends)
                 {
                     // dt, not Time.deltaTime: the boids move on the sim step (real-delta clamped

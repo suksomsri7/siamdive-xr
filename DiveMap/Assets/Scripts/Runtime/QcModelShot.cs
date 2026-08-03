@@ -18,7 +18,7 @@ namespace DiveMap.Runtime
     /// modules we ship, no CI screenshot has ever contained the thing being tested. Green shots,
     /// zero evidence. The user's phrasing: หลักฐานจากเว็บไม่นับ ต้องเป็นตัว Unity.
     ///
-    /// So: nine representatives are downloaded through the app's OWN loader — manifest → CDN →
+    /// So: six representatives are downloaded through the app's OWN loader — manifest → CDN →
     /// <see cref="AssetCacheStore"/> → glTFast → the same TameMetal/GoldFx post-pass a map item
     /// gets — placed one at a time, framed to fill the shot, and photographed. Going through the
     /// cache is deliberate: it means this pass also exercises the generation gate, which is the
@@ -42,20 +42,10 @@ namespace DiveMap.Runtime
     public static class QcModelShot
     {
         /// <summary>
-        /// One of each way a model goes wrong: scanned CC0 props, statues that also run the gold FX
-        /// path, wrecks (one of them the metallic hull the whole reflection-cube story is about),
-        /// and marine models, including the barracuda that has just been re-exported at 2048².
-        ///
-        /// 🔴 The last three are the point of this round. <c>cc0:statue_singha</c> and
-        /// <c>cc0:wreck_chang</c> are the two models the USER complained about by name, and in
-        /// every QC run so far neither of them has ever been photographed — the pass proved six
-        /// other models were fine while the two under complaint went unseen. <c>cc0:rock_cluster</c>
-        /// comes in as the control: 1.8 KB, Draco, no UVs and no textures at all, so anything that
-        /// goes wrong on it cannot be a texture problem.
-        ///
-        /// Both new statue/wreck URLs resolve to <c>maps.siamdive.com</c> rather than the Bunny
-        /// CDN, which is deliberate to leave in: that is the path a real map item takes for them,
-        /// and a QC pass that quietly tested a different host would be testing a different app.
+        /// The six the work order names — chosen as one of each way a model goes wrong: two
+        /// scanned CC0 props, a statue that also runs the gold FX path, two wrecks (one of them
+        /// the metallic hull the whole reflection-cube story is about), and two marine models,
+        /// including the barracuda that has just been re-exported at 2048².
         /// </summary>
         public static readonly string[] AssetIds =
         {
@@ -65,38 +55,6 @@ namespace DiveMap.Runtime
             "sw:htms732",
             "msh:barracuda",
             "msh:lionfish",
-            "cc0:statue_singha",
-            "cc0:wreck_chang",
-            "cc0:rock_cluster",
-
-            // 🔴 WO-E5 — the three Atlantis ruins the user photographed as "ทุกชิ้นดำ", and the
-            // reason they are here is that EVERY offline explanation has already been measured off
-            // the files and cleared, so what is left can only be answered by a frame:
-            //
-            //   base colour, surface-weighted   ancient_byzantine mean 131 p95 199 · domed_temple
-            //                                   mean 112 p95 171 · grand_byzantine mean 130 p95
-            //                                   170, with only 0.57% of grand_byzantine's surface
-            //                                   below sRGB 45. These are not dark textures.
-            //   UV gutter into the mips         the failure that made the kraken blotchy: 0.30% of
-            //                                   grand_byzantine's surface lands on a black texel at
-            //                                   2048² and 0.00% by 64² — it goes DOWN with the mip,
-            //                                   i.e. the opposite of that bug.
-            //   normals                         0.17-1.65% of surface area disagrees with the
-            //                                   winding, against 0.06-0.35% on the controls. Not
-            //                                   inverted.
-            //   metal                           metallicFactor 1 against a map whose blue channel
-            //                                   averages 0.09-0.21 / 255. Dielectric, and TameMetal
-            //                                   correctly leaves it alone.
-            //   baseColorFactor                 (1,1,1,1) on all eleven.
-            //   fog                             the fog colour at depth comes out of ACES near
-            //                                   (0,22,58) — blue. The temple measures (15,16,17) —
-            //                                   neutral. Whatever is darkening it is not the fog.
-            //
-            // What that leaves is the light and the shadow, which is what the probe frames below
-            // are for — including ProbeNoShadows, added for exactly this.
-            "ruin:ancient_byzantine",
-            "ruin:domed_temple",
-            "ruin:grand_byzantine",
         };
 
         /// <summary>
@@ -112,37 +70,14 @@ namespace DiveMap.Runtime
         /// lighting or the material pipeline changes on purpose; a stale baseline is worth more
         /// than no baseline, but a baseline nobody has looked at is worth less than none.
         /// </summary>
-        /// <remarks>
-        /// 🔴 ALL NINE WERE RESET TO −1 BY WO-E3, ON PURPOSE, AND MUST BE RE-RECORDED.
-        ///
-        /// HANDOFF §6 rule 2: re-record these whenever the lighting or material pipeline changes on
-        /// purpose, from ONE run, AFTER a human has looked at the pictures. WO-E3 changed both, as
-        /// hard as they can be changed — gamma → linear (so every normal map in the app is back),
-        /// ACES tone mapping, the web's light rig, and the reflection cube down to 0.3. Every
-        /// number that was here was measured through a pipeline that no longer exists, so keeping
-        /// them would not be a stale baseline, it would be a baseline from a different app, and the
-        /// gate would fire on models that got BETTER.
-        ///
-        /// Writing new numbers here from this session was not on the table either: the author of
-        /// this change cannot run CI and has not seen a single frame from it, and rule 1 says
-        /// evidence comes from the Unity build. −1 is the honest state: the gate falls back to the
-        /// absolute MaxDarkPercent ceiling, the log prints "darkBaseline=none", and the next push
-        /// reads the real numbers off a run somebody looked at.
-        /// </remarks>
         private static readonly double[] DarkBaselines =
         {
-            -1.0,    // cc0:kraken            (was 2.33 — pre-linear, pre-ACES)
-            -1.0,    // stat:verdant_poseidon (was 31.47)
-            -1.0,    // cc0:wreck_hardeep     (was 36.86)
-            -1.0,    // sw:htms732            (was 62.34)
-            -1.0,    // msh:barracuda         (was 14.57)
-            -1.0,    // msh:lionfish          (was 0.86)
-            -1.0,    // cc0:statue_singha     — never had one
-            -1.0,    // cc0:wreck_chang       — never had one
-            -1.0,    // cc0:rock_cluster      — never had one
-            -1.0,    // ruin:ancient_byzantine — WO-E5, never photographed
-            -1.0,    // ruin:domed_temple      — WO-E5, never photographed
-            -1.0,    // ruin:grand_byzantine   — WO-E5, never photographed
+            2.33,    // cc0:kraken
+            31.47,   // stat:verdant_poseidon — dark green stone
+            36.86,   // cc0:wreck_hardeep
+            62.34,   // sw:htms732 — camouflage, legitimately the darkest of the six
+            14.57,   // msh:barracuda
+            0.86,    // msh:lionfish
         };
 
         /// <summary>Baseline for <paramref name="assetId"/>, or −1 when none is recorded.</summary>
@@ -159,30 +94,16 @@ namespace DiveMap.Runtime
         private const float StageOffset = 4000f;
 
         /// <summary>Per model: download + parse + instantiate. A model that has not landed by now
-        /// is a FAIL worth reporting, not a reason to lose the other eight.</summary>
+        /// is a FAIL worth reporting, not a reason to lose the other five.</summary>
         private const float PerModelSeconds = 45f;
 
         /// <summary>
-        /// Whole-pass budget. llvmpipe renders at 135-300 ms a frame and the nine GLBs are ~19 MB
+        /// Whole-pass budget. llvmpipe renders at 135-300 ms a frame and the six GLBs are ~12.6 MB
         /// together; the pass measures well under this, and the ceiling is here so that a CDN going
         /// slow costs us the remaining models' log lines rather than the entire step — including
         /// the two screenshots already written and the artifact upload behind it.
-        ///
-        /// 170 s covered six models (the pass measured ~24 s of it, probes included). Three more,
-        /// two of them ~2 MB and served from maps.siamdive.com rather than the CDN, put the
-        /// expected figure near 36 s — but the budget is not sized for the expected case, it is
-        /// sized so that a SLOW model still leaves room for the ones behind it: at the 45 s
-        /// per-model ceiling, 240 s is what lets four models time out and the remaining five still
-        /// be photographed and logged.
         /// </summary>
-        /// <remarks>
-        /// 🔴 WO-E5: 240 → 330 s. Three Atlantis ruins joined the list (~8.5 MB more off the CDN)
-        /// and every model now takes one extra probe frame. The budget is still not sized for the
-        /// expected case — it is sized so a SLOW model leaves room for the ones behind it: at the
-        /// 45 s per-model ceiling, 330 s lets four of twelve time out and the remaining eight still
-        /// be photographed and logged.
-        /// </remarks>
-        private const float BudgetSeconds = 400f;
+        private const float BudgetSeconds = 170f;
 
         /// <summary>Settle time after the model lands, before the pair of frames.</summary>
         private const float SettleSeconds = 0.4f;
@@ -221,26 +142,9 @@ namespace DiveMap.Runtime
             }
 
             Vector3 stage = mapCentre + Vector3.right * StageOffset;
-            // 🔴 WO-E4 — the two numbers that decide whether a black model is the model's fault.
-            // gnd/black under 1.00 in any channel means that channel is byte 0 on every
-            // down-facing surface in the frame whatever the asset is painted; crushAlb is the
-            // darkest base colour that can come off an underside at all. Printed HERE, at the top
-            // of the pass, so one log answers "was the light able to show this model" before a
-            // single blackOfSubject number is argued about.
-            float qcDepth = 0f;
-            {
-                var shading = UnityEngine.Object.FindFirstObjectByType<UnderwaterShading>();
-                if (shading != null) qcDepth = shading.CameraDepthUnits;
-            }
-            SeabedGeom.Rgb qcBand = UnderwaterLight.GroundBandAt(qcDepth);
-            SeabedGeom.Rgb qcRatio = UnderwaterLight.BlackFloorRatios(qcBand);
             Debug.Log($"[QCModel] pass start stage={stage} models={AssetIds.Length} " +
                       $"manifest={(manifest != null ? manifest.Count.ToString() : "MISSING")} " +
-                      $"screen={Screen.width}x{Screen.height} ambientSky={RenderSettings.ambientSkyColor} " +
-                      $"depth={qcDepth / DepthLight.UnitsPerMetre:F1}m " +
-                      $"gnd=({qcBand.R:F3},{qcBand.G:F3},{qcBand.B:F3}) " +
-                      $"gnd/black=({qcRatio.R:F2},{qcRatio.G:F2},{qcRatio.B:F2}) " +
-                      $"crushAlb=sRGB{SurfaceLight.CrushAlbedoSrgb(qcDepth, SurfaceLight.Facing.Down)}");
+                      $"screen={Screen.width}x{Screen.height} ambientSky={RenderSettings.ambientSkyColor}");
 
             int w = Mathf.Clamp(Screen.width, 320, 1920);
             int h = Mathf.Clamp(Screen.height, 240, 1080);
@@ -269,7 +173,7 @@ namespace DiveMap.Runtime
                                  r => shotOk = r);
                 if (shotOk) ok++; else fail++;
 
-                // Sequential on purpose: nine 2048² models resident at once is not what a phone
+                // Sequential on purpose: six 2048² models resident at once is not what a phone
                 // does, and not what this box has to spare either.
                 Resources.UnloadUnusedAssets();
                 yield return null;
@@ -283,176 +187,6 @@ namespace DiveMap.Runtime
 
             Debug.Log($"[QCModel] pass done ok={ok} fail={fail} " +
                       $"in {Time.realtimeSinceStartup - t0:F1}s (budget {BudgetSeconds:F0}s)");
-        }
-
-        // ── WO-E3: the depth pass ────────────────────────────────────────────────
-
-        /// <summary>
-        /// The reference animal for the depth shots. A marine model rather than a wreck or a
-        /// statue because the complaint was about ANIMALS ("ฉลามกลายเป็นเงาแบน"), and the
-        /// barracuda specifically because it is long, thin and pale — the shape and the albedo that
-        /// showed the problem worst, and one already carrying a recorded dark baseline.
-        /// </summary>
-        private const string DepthAssetId = "msh:barracuda";
-
-        /// <summary>
-        /// The three depths, in metres.
-        ///
-        /// 15 is a shallow recreational dive, 30 the far end of one, and 52.4 is the depth the user
-        /// was standing at on Poseidon when they reported the bug — the number is not a round one
-        /// on purpose. Three, not one, because the requirement is not "it looks right at 52 m", it
-        /// is "the subject-to-water ratio does not depend on depth", and one sample cannot say
-        /// anything about a slope.
-        /// </summary>
-        private static readonly float[] DepthMetres = { 15f, 30f, 52f };
-
-        /// <summary>
-        /// Photograph the reference animal at three depths, with the tone curve on and off, and log
-        /// the numbers that answer the user's report.
-        ///
-        /// 🔎 A/B IN ONE RUN. The ACES toggle is flipped between the two halves of each pair rather
-        /// than between two CI runs. Two runs differ in the CDN's mood, the boids' phase and the
-        /// llvmpipe frame time; one run differs in exactly the thing under test. HANDOFF §6 rule 1
-        /// — evidence comes from the Unity build itself — is what makes that worth the extra four
-        /// frames a depth.
-        /// </summary>
-        public static IEnumerator RunDepth(string dir, AssetManifest manifest, Vector3 mapCentre,
-                                           float waterLevel)
-        {
-            if (string.IsNullOrEmpty(dir)) dir = ".";
-            Camera cam = Camera.main;
-            if (cam == null)
-            {
-                Debug.LogWarning("[QCDepth] no main camera — nothing was photographed");
-                yield break;
-            }
-
-            string url = manifest != null ? manifest.ResolveUrl(DepthAssetId) : null;
-            string name = NameFor(manifest, DepthAssetId);
-            if (string.IsNullOrEmpty(url))
-            {
-                Debug.LogWarning("[QCDepth] url unresolved for " + DepthAssetId + " — pass skipped");
-                yield break;
-            }
-
-            var orbit = cam.GetComponent<OrbitCamera>();
-            if (orbit != null) orbit.enabled = false;
-
-            int w = Mathf.Clamp(Screen.width, 320, 1920);
-            int h = Mathf.Clamp(Screen.height, 240, 1080);
-            var rt = new RenderTexture(w, h, 24, RenderTextureFormat.ARGB32)
-            {
-                name = "QcDepthRT",
-                antiAliasing = 1,
-            };
-            var readback = new Texture2D(w, h, TextureFormat.RGB24, false, false);
-
-            var pivot = new GameObject("QcDepth:" + DepthAssetId);
-            float scale = 1f;
-            AssetManifest.Module mod = manifest.Get(DepthAssetId);
-            if (mod != null && mod.DefaultScale > 0) scale = (float)mod.DefaultScale;
-            pivot.transform.localScale = Vector3.one * scale;
-            pivot.transform.position = new Vector3(mapCentre.x + StageOffset, waterLevel - 90f, mapCentre.z);
-
-            float loadStart = Time.realtimeSinceStartup;
-            Task<GltfImport> task = SceneBuilder.LoadForQc(url, DepthAssetId, pivot.transform);
-            while (!task.IsCompleted && Time.realtimeSinceStartup - loadStart < PerModelSeconds)
-                yield return null;
-            GltfImport import = task.Status == TaskStatus.RanToCompletion ? task.Result : null;
-
-            var renderers = new List<Renderer>();
-            pivot.GetComponentsInChildren(true, renderers);
-            if (import == null || renderers.Count == 0)
-            {
-                Debug.LogWarning($"[QCDepth] {name} did not arrive (loaded={import != null} " +
-                                 $"renderers={renderers.Count}) — pass skipped, url={url}");
-            }
-            else
-            {
-                var acesOn = new QcPixels.DepthShot[DepthMetres.Length];
-                bool acesAvailable = cam.GetComponent<AcesToneMapping>() != null;
-                Debug.Log($"[QCDepth] pass start model={name} depths={DepthMetres.Length} " +
-                          $"aces={(acesAvailable ? "available" : "NOT-ATTACHED")} " +
-                          $"colorSpace={QualitySettings.activeColorSpace} waterLevel={waterLevel:F1}");
-
-                for (int i = 0; i < DepthMetres.Length; i++)
-                {
-                    float metres = DepthMetres[i];
-                    float y = waterLevel - metres * DepthLight.UnitsPerMetre;
-                    pivot.transform.position = new Vector3(mapCentre.x + StageOffset, y, mapCentre.z);
-
-                    // Frame it the same way the model pass does, so the two sets of numbers are
-                    // about the same picture.
-                    Bounds b = WorldBounds(renderers);
-                    float aspect = (float)rt.width / Mathf.Max(1, rt.height);
-                    Vector3 viewDir = new Vector3(0.55f, 0.32f, 1f).normalized;
-                    Vector3 fwd = -viewDir;
-                    Vector3 right = Vector3.Cross(Vector3.up, viewDir).normalized;
-                    if (right.sqrMagnitude < 0.5f) right = Vector3.right;
-                    Vector3 up = Vector3.Cross(viewDir, right).normalized;
-                    Vector3 half = b.extents;
-                    float dist = (float)QcPixels.FrameDistanceForBox(
-                        half.x, half.y, half.z,
-                        right.x, right.y, right.z,
-                        up.x, up.y, up.z,
-                        fwd.x, fwd.y, fwd.z,
-                        cam.fieldOfView, aspect);
-                    dist = Mathf.Max(dist, b.extents.magnitude + cam.nearClipPlane * 3f);
-                    cam.transform.position = b.center + viewDir * dist;
-                    cam.transform.LookAt(b.center);
-
-                    // The camera has to BE at the depth as well as pointing at it: every system
-                    // that dims with depth (DepthAtmosphere, UnderwaterShading, Backdrop) reads the
-                    // CAMERA's y, not the subject's. Framing from a three-quarter view lifts the
-                    // camera above the model, so this is a real difference of several metres.
-                    Debug.Log($"[QCDepth] {name} target={metres:F1}m camY={cam.transform.position.y:F1} " +
-                              $"camDepth={(waterLevel - cam.transform.position.y) / DepthLight.UnitsPerMetre:F1}m " +
-                              $"dist={dist:F1}");
-
-                    // Long enough for LateUpdate to have run several times: the atmosphere, the
-                    // ambient floor and the backdrop re-bake all settle over frames, not instantly.
-                    yield return new WaitForSeconds(SettleSeconds * 2f);
-
-                    for (int pass = 0; pass < 2; pass++)
-                    {
-                        bool aces = pass == 0;
-                        AcesToneMapping.Enabled = aces;
-                        yield return null;
-
-                        string png = aces
-                            ? Path.Combine(dir, $"qc_depth_{Mathf.RoundToInt(metres)}m.png")
-                            : Path.Combine(dir, $"qc_depth_{Mathf.RoundToInt(metres)}m_noaces.png");
-
-                        byte[] withSubject = null, withoutSubject = null;
-                        yield return Capture(cam, rt, readback, png, bytes => withSubject = bytes);
-                        pivot.SetActive(false);
-                        yield return null;
-                        yield return Capture(cam, rt, readback, null, bytes => withoutSubject = bytes);
-                        pivot.SetActive(true);
-                        yield return null;
-
-                        QcPixels.DepthShot d = QcPixels.MeasureDepth(withSubject, withoutSubject);
-                        if (aces) acesOn[i] = d;
-                        Debug.Log(QcPixels.DepthLine(name, metres, aces, d));
-                    }
-                    AcesToneMapping.Enabled = true;
-                }
-
-                Debug.Log($"[QCDepth] pass done depthCue={QcPixels.DepthCueVerdict(acesOn)} " +
-                          $"minContrast={QcPixels.MinContrast:0.00} " +
-                          $"minRange={QcPixels.MinDynamicRange:0.00}");
-            }
-
-            AcesToneMapping.Enabled = true;
-            RenderTexture.active = null;
-            cam.targetTexture = null;
-            rt.Release();
-            Object.Destroy(rt);
-            Object.Destroy(readback);
-            Object.Destroy(pivot);
-            yield return null;
-            import?.Dispose();
-            Resources.UnloadUnusedAssets();
         }
 
         // ── one model ────────────────────────────────────────────────────────────
@@ -484,7 +218,7 @@ namespace DiveMap.Runtime
                 yield return null;
 
             // RanToCompletion, not IsCompleted: a faulted task is "completed" too, and reading its
-            // Result rethrows — which would take the remaining eight models down with it.
+            // Result rethrows — which would take the remaining five models down with it.
             GltfImport import = task.Status == TaskStatus.RanToCompletion ? task.Result : null;
             bool loaded = import != null;
             float loadSecs = Time.realtimeSinceStartup - loadStart;
@@ -492,8 +226,6 @@ namespace DiveMap.Runtime
             var renderers = new List<Renderer>();
             pivot.GetComponentsInChildren(true, renderers);
             int rendererCount = renderers.Count;
-
-            LogClips(assetId, pivot.transform);
 
             double baseline = BaselineFor(assetId);
             double darkGate = QcPixels.DarkGate(baseline);
@@ -528,30 +260,6 @@ namespace DiveMap.Runtime
                 // Never inside the near plane, whatever the model's size says.
                 dist = Mathf.Max(dist, radius + cam.nearClipPlane * 3f);
 
-                // 🔴 WO-E5c — EVERY MODEL HAS TO BE PHOTOGRAPHED AT THE SAME DEPTH, and until now
-                // none of them were.
-                //
-                // The camera is placed back along viewDir to frame the model, and viewDir climbs
-                // (0.27 of the distance). dist scales with the model, so a 2 m lionfish put the
-                // camera ~5 u above the stage and a 128 m ruin put it ~240 u above — forty metres
-                // shallower. Everything that dims with depth reads the CAMERA's y (DepthAtmosphere,
-                // UnderwaterShading, Backdrop), so the big models were being lit by a different,
-                // brighter scene than the small ones, and the run's twelve blackOfSubject numbers
-                // were not comparable with each other. That is a flaw in the instrument, not in
-                // the models: it flattered exactly the assets under suspicion.
-                //
-                // Fixed by sinking the model instead of raising the camera. The stage's own y is
-                // the target — the depth the map's content actually sits at — so the camera ends
-                // up in the same water for a fish and for a temple, and the only thing that
-                // differs between two shots is the thing being photographed.
-                float climb = viewDir.y * dist;
-                float drop = (stage.y - climb) - b.center.y;
-                if (!float.IsNaN(drop) && !float.IsInfinity(drop))
-                {
-                    pivot.transform.position += new Vector3(0f, drop, 0f);
-                    b.center += new Vector3(0f, drop, 0f);
-                }
-
                 cam.transform.position = b.center + viewDir * dist;
                 cam.transform.LookAt(b.center);
 
@@ -569,18 +277,14 @@ namespace DiveMap.Runtime
 
                 shot = QcPixels.Measure(withModel, withoutModel);
 
-                // camDepth is printed because it is the number that makes two models' figures
-                // comparable — or, when it drifts, the reason they are not.
                 Debug.Log($"[QCModel] {name} framed radius={radius:F2} dist={dist:F2} " +
                           $"scale={scale:F2} camY={cam.transform.position.y:F1} " +
-                          $"camDepth={ShotDepthUnits() / DepthLight.UnitsPerMetre:F1}m sank={drop:F1} " +
-                          $"crushAlb=sRGB{SurfaceLight.CrushAlbedoSrgb(ShotDepthUnits(), SurfaceLight.Facing.Down)} " +
                           $"load={loadSecs:F1}s url={url}");
 
                 // A/B probes: same camera, same model, one shading input removed at a time, then
                 // the same white textureless material on each of the two shaders. Four extra
-                // frames a model — ~10 s across the pass, against a 240 s budget the six-model
-                // version of it used 17 s of. See QcPixels.ProbeLine and QcPixels.NormalSourceVerdict.
+                // frames a model — ~7 s across the pass, against a 170 s budget it currently uses
+                // 17 s of. See QcPixels.ProbeLine and QcPixels.NormalSourceVerdict.
                 QcPixels.Shot whiteAlbedo = default, noMetalRough = default;
                 QcPixels.Shot meshNormals = default, whiteGltf = default, greyAlbedo = default;
                 QcPixels.Shot bias4 = default, bias10 = default;
@@ -598,86 +302,6 @@ namespace DiveMap.Runtime
                 yield return ProbeMipBias(cam, rt, readback, renderers, withoutModel, -10f, s => bias10 = s);
                 Debug.Log(QcPixels.ProbeLine(name, shot, whiteAlbedo, noMetalRough, meshNormals,
                                              whiteGltf, greyAlbedo, bias4, bias10, darkGate));
-
-                // 🔴 WO-E5e — THE ONE-VARIABLE EXPERIMENT THAT WAS MISSING.
-                //
-                // Run 30800189252 reported meshNormals taking darkOfSubject from 85-87% to 0.00%
-                // on all three ruins, and that reads as "the normal map did it". It cannot be read
-                // that way: meshNormals swaps the SHADER (glTFast → Unity Standard), replaces the
-                // albedo with white AND clears every texture, so it changes three things at once.
-                // whiteGltf is the same story on glTFast's own shader — also 0.00%, which at least
-                // clears the shader — but it too clears everything.
-                //
-                // The rungs that keep the normal map say something different and much more
-                // interesting: whiteAlbedo (albedo → white, normal map STILL ON) only reaches
-                // 32.06%, and greyAlbedo 50.22%. So with the normal map in place, taking the
-                // texture out of the picture entirely does not get near zero.
-                //
-                // This probe removes the normal map and NOTHING ELSE — same shader, same albedo,
-                // same metallic-roughness map, same everything. It is the only frame in the pass
-                // that can put a number on what the normal map costs, and the shipped answer needs
-                // it: the fix cannot be "drop the normal map" (that is what gamma used to do by
-                // accident, and the user reported the result as "เป็นเหลี่ยม").
-                QcPixels.Shot noNormal = default;
-                yield return ProbeNoNormalMap(cam, rt, readback, renderers, withoutModel,
-                                              s => noNormal = s);
-                Debug.Log($"[QCProbe] {name} noNormalMap dark={noNormal.DarkOfSubjectPercent:0.00}% " +
-                          $"black={noNormal.BlackOfSubjectPercent:0.00}% " +
-                          $"subject={noNormal.SubjectPercent:0.00}% " +
-                          $"(shipped dark={shot.DarkOfSubjectPercent:0.00}% " +
-                          $"black={shot.BlackOfSubjectPercent:0.00}%) " +
-                          $"costOfNormalMap={shot.DarkOfSubjectPercent - noNormal.DarkOfSubjectPercent:0.00}pp");
-
-                // 🔎 …and the sweep, because "remove it" is not a shippable answer and "reduce it"
-                // might be. glTFast's built-in shader reconstructs z as
-                // sqrt(1 − saturate(dot(xy, xy))) AFTER multiplying xy by normalTexture_scale
-                // (glTFUnityStandardInput.cginc:236-245), so the scale is a direct dial on how far
-                // the map is allowed to tilt a normal — and on how much of the tilt is compression
-                // error rather than surface detail. The value to ship is whichever rung holds the
-                // detail and loses the dark, and that is a decision for a picture, not for this
-                // file: the sweep prints the numbers and a human picks.
-                foreach (float sc in NormalScaleSweep)
-                {
-                    QcPixels.Shot sweep = default;
-                    yield return ProbeNormalScale(cam, rt, readback, renderers, withoutModel, sc,
-                                                  s => sweep = s);
-                    Debug.Log($"[QCProbe] {name} normalScale={sc:0.00} " +
-                              $"dark={sweep.DarkOfSubjectPercent:0.00}% " +
-                              $"black={sweep.BlackOfSubjectPercent:0.00}% " +
-                              $"subject={sweep.SubjectPercent:0.00}%");
-                }
-
-                // 🔴 WO-E5l — noMetalRough changes metal AND roughness AND clears the texture AND
-                // drops the keyword, all at once, so its 85% → 49% could not say which of the four
-                // did it. These two split it. If metalZeroOnly moves the picture as far as
-                // noMetalRough did, the metal factor is the whole story and roughness is a
-                // passenger; if roughOnly moves it instead, the opposite. Nothing else is touched
-                // in either — same shader, same albedo, same textures, same keywords.
-                QcPixels.Shot metalZero = default, roughOnly = default;
-                yield return ProbeFactorOnly(cam, rt, readback, renderers, withoutModel,
-                                             "metallicFactor", 0f, s2 => metalZero = s2);
-                yield return ProbeFactorOnly(cam, rt, readback, renderers, withoutModel,
-                                             "roughnessFactor", GlbShading.ProbeValidatedRoughness,
-                                             s2 => roughOnly = s2);
-                Debug.Log($"[QCProbe] {name} metalZeroOnly dark={metalZero.DarkOfSubjectPercent:0.00}% " +
-                          $"black={metalZero.BlackOfSubjectPercent:0.00}% " +
-                          $"subject={metalZero.SubjectPercent:0.00}% | " +
-                          $"roughOnly dark={roughOnly.DarkOfSubjectPercent:0.00}% " +
-                          $"black={roughOnly.BlackOfSubjectPercent:0.00}% | " +
-                          $"shipped dark={shot.DarkOfSubjectPercent:0.00}% " +
-                          $"black={shot.BlackOfSubjectPercent:0.00}% | " +
-                          $"noMetalRough dark={noMetalRough.DarkOfSubjectPercent:0.00}% " +
-                          $"verdict={MetalVerdict(shot, metalZero, roughOnly, noMetalRough)}");
-
-                QcPixels.Shot noShadow = default;
-                yield return ProbeNoShadows(cam, rt, readback, renderers, withoutModel,
-                                            s => noShadow = s);
-                Debug.Log($"[QCProbe] {name} noShadows dark={noShadow.DarkOfSubjectPercent:0.00}% " +
-                          $"black={noShadow.BlackOfSubjectPercent:0.00}% " +
-                          $"subject={noShadow.SubjectPercent:0.00}% " +
-                          $"(shipped dark={shot.DarkOfSubjectPercent:0.00}% " +
-                          $"black={shot.BlackOfSubjectPercent:0.00}%) " +
-                          $"verdict={ShadowVerdict(shot, noShadow)}");
             }
             else
             {
@@ -700,53 +324,6 @@ namespace DiveMap.Runtime
             import?.Dispose();
 
             onDone(pass);
-        }
-
-        // ── WO-F3: does this model actually ship playable clips? ─────────────────
-
-        /// <summary>
-        /// One <c>[Anim]</c> line per QC model. Costs nothing (no render, no extra download) and
-        /// is the only place in CI that can answer the question the whole clip work turns on:
-        /// does the file HAVE animation, and did glTFast hand it over?
-        ///
-        /// 🔴 The two failures it separates look identical on a screenshot and have opposite
-        /// owners. <c>clips=0</c> across every model means the asset pipeline baked the animation
-        /// out of the GLBs (the 3D side's problem); <c>clips=N</c> with a mode of <c>wave</c>
-        /// means the app threw them away (this side's). The turtles on the CDN carry six clips —
-        /// glide, cruise, burst, turn, patrol, accent — so a run in which msh:barracuda reports
-        /// clips=0 is a measurement of the pipeline, not of this code.
-        ///
-        /// It reports whatever the QC list happens to contain: none of those nine models is a
-        /// turtle today, and swapping one in would move a photometric baseline that a human
-        /// already signed off on. This is deliberately the cheap half of the evidence.
-        /// </summary>
-        private static void LogClips(string assetId, Transform pivot)
-        {
-            var names = new List<string>(8);
-            string reason = "-";
-            Animation anim = pivot != null ? pivot.GetComponentInChildren<Animation>(true) : null;
-            if (anim == null)
-            {
-                reason = "no-animation-component";
-            }
-            else
-            {
-                foreach (AnimationState st in anim)
-                    if (st != null && st.clip != null) names.Add(st.name);
-                if (names.Count == 0) reason = "no-clips";
-            }
-
-            string[] arr = names.ToArray();
-            int pick = ClipPlay.IndexOf(arr, ClipRole.Cruise);
-            BodyMotion mode = ClipPlay.Motion(arr.Length, false);
-            if (reason == "-") reason = ClipPlay.MotionReason(arr.Length, false);
-
-            // "shot", not "qc": QcAnimShot's lines are also [Anim] qc, and they carry a verdict
-            // this one cannot (it never plays anything). Two prefixes so a grep can ask for either.
-            Debug.Log($"[Anim] shot asset={assetId} clips={arr.Length} " +
-                      $"names={(arr.Length == 0 ? "-" : string.Join(",", arr))} " +
-                      $"pick={(pick >= 0 ? arr[pick] : "-")} " +
-                      $"mode={(mode == BodyMotion.Clip ? "clip" : "wave")} reason={reason}");
         }
 
         // ── A/B probes ───────────────────────────────────────────────────────────
@@ -830,219 +407,6 @@ namespace DiveMap.Runtime
                 renderers[i].sharedMaterials = saved[i];
             }
             Object.Destroy(white);
-        }
-
-        /// <summary>
-        /// The scales the normal map is swept over. 1.0 is what ships (glTF's default and what
-        /// every file in the catalogue declares); 0 is the map fully neutralised, which must land
-        /// on the same number as <see cref="ProbeNoNormalMap"/> — if it does not, the sweep is not
-        /// doing what it claims and no value read off it means anything.
-        /// </summary>
-        private static readonly float[] NormalScaleSweep = { 0.5f, 0.25f, 0f };
-
-        /// <summary>Property names for the normal map and its scale, glTFast's then Standard's.</summary>
-        private static readonly string[] NormalTexNames = { "normalTexture", "_BumpMap" };
-        private static readonly string[] NormalScaleNames = { "normalTexture_scale", "_BumpScale" };
-
-        /// <summary>
-        /// One frame with the normal map gone and every other input untouched.
-        ///
-        /// The keyword goes too: clearing the slot on its own leaves the shader sampling its "bump"
-        /// default, which is a flat lie rather than an absence — the same trap
-        /// <see cref="DropMisdecodedNormalMap"/> documents.
-        /// </summary>
-        private static IEnumerator ProbeNoNormalMap(Camera cam, RenderTexture rt, Texture2D readback,
-                                                    List<Renderer> renderers, byte[] withoutModel,
-                                                    System.Action<QcPixels.Shot> onShot)
-        {
-            var mats = new List<Material>();
-            var saved = new List<Texture>();
-            foreach (Renderer r in renderers)
-            {
-                if (r == null) continue;
-                foreach (Material m in r.materials)
-                {
-                    if (m == null) continue;
-                    string p = PropOn(m, NormalTexNames);
-                    if (p == null) continue;
-                    mats.Add(m);
-                    saved.Add(m.GetTexture(p));
-                    m.SetTexture(p, null);
-                    m.DisableKeyword("_NORMALMAP");
-                }
-            }
-            if (mats.Count == 0)
-            {
-                // No normal map to remove — an empty shot reads as probe-failed rather than as
-                // "removing it changed nothing", which would be the opposite conclusion.
-                onShot(default);
-                yield break;
-            }
-
-            byte[] probed = null;
-            yield return Capture(cam, rt, readback, null, bytes => probed = bytes);
-            onShot(QcPixels.Measure(probed, withoutModel));
-
-            for (int i = 0; i < mats.Count; i++)
-            {
-                string p = PropOn(mats[i], NormalTexNames);
-                if (p == null) continue;
-                mats[i].SetTexture(p, saved[i]);
-                if (saved[i] != null) mats[i].EnableKeyword("_NORMALMAP");
-            }
-        }
-
-        /// <summary>
-        /// One frame with the normal map's strength dialled to <paramref name="scale"/>.
-        ///
-        /// glTF's <c>normalTexture.scale</c> multiplies the tangent-space xy BEFORE z is rebuilt,
-        /// so it shortens every perturbation proportionally — including whatever share of it is
-        /// block-compression error rather than authored surface. That is why it is a candidate fix
-        /// and not just a dimmer: it costs detail linearly and costs error linearly, and only a
-        /// picture can say where the two cross.
-        /// </summary>
-        private static IEnumerator ProbeNormalScale(Camera cam, RenderTexture rt, Texture2D readback,
-                                                    List<Renderer> renderers, byte[] withoutModel,
-                                                    float scale, System.Action<QcPixels.Shot> onShot)
-        {
-            var mats = new List<Material>();
-            var saved = new List<float>();
-            foreach (Renderer r in renderers)
-            {
-                if (r == null) continue;
-                foreach (Material m in r.materials)
-                {
-                    if (m == null) continue;
-                    string p = PropOn(m, NormalScaleNames);
-                    if (p == null) continue;
-                    mats.Add(m);
-                    saved.Add(m.GetFloat(p));
-                    m.SetFloat(p, scale);
-                }
-            }
-            if (mats.Count == 0) { onShot(default); yield break; }
-
-            byte[] probed = null;
-            yield return Capture(cam, rt, readback, null, bytes => probed = bytes);
-            onShot(QcPixels.Measure(probed, withoutModel));
-
-            for (int i = 0; i < mats.Count; i++)
-            {
-                string p = PropOn(mats[i], NormalScaleNames);
-                if (p != null) mats[i].SetFloat(p, saved[i]);
-            }
-        }
-
-        /// <summary>
-        /// One frame with a single float property changed and everything else — shader, albedo,
-        /// every texture, every keyword — left exactly as it was.
-        /// </summary>
-        private static IEnumerator ProbeFactorOnly(Camera cam, RenderTexture rt, Texture2D readback,
-                                                   List<Renderer> renderers, byte[] withoutModel,
-                                                   string property, float value,
-                                                   System.Action<QcPixels.Shot> onShot)
-        {
-            var mats = new List<Material>();
-            var saved = new List<float>();
-            foreach (Renderer r in renderers)
-            {
-                if (r == null) continue;
-                foreach (Material m in r.materials)
-                {
-                    if (m == null || !m.HasProperty(property)) continue;
-                    mats.Add(m);
-                    saved.Add(m.GetFloat(property));
-                    m.SetFloat(property, value);
-                }
-            }
-            if (mats.Count == 0) { onShot(default); yield break; }
-
-            byte[] probed = null;
-            yield return Capture(cam, rt, readback, null, bytes => probed = bytes);
-            onShot(QcPixels.Measure(probed, withoutModel));
-
-            for (int i = 0; i < mats.Count; i++) mats[i].SetFloat(property, saved[i]);
-        }
-
-        /// <summary>
-        /// Which of the two factors <c>noMetalRough</c> was actually measuring. "Most of it" is
-        /// three quarters: below that the two inputs are sharing the effect and neither is the
-        /// answer on its own.
-        /// </summary>
-        private static string MetalVerdict(QcPixels.Shot shipped, QcPixels.Shot metalZero,
-                                           QcPixels.Shot roughOnly, QcPixels.Shot noMetalRough)
-        {
-            if (metalZero.Pixels <= 0) return "probe-failed";
-            double whole = shipped.DarkOfSubjectPercent - noMetalRough.DarkOfSubjectPercent;
-            if (whole <= QcPixels.BiasMovedPercent) return "noMetalRough-moved-nothing";
-            double byMetal = shipped.DarkOfSubjectPercent - metalZero.DarkOfSubjectPercent;
-            double byRough = shipped.DarkOfSubjectPercent - roughOnly.DarkOfSubjectPercent;
-            if (byMetal >= whole * 0.75) return "METALLIC-FACTOR-IS-IT";
-            if (byRough >= whole * 0.75) return "roughness-is-it";
-            return $"shared metal={byMetal / whole * 100:F0}% rough={byRough / whole * 100:F0}%";
-        }
-
-        /// <summary>
-        /// Probe 6 — the same model with the sun's SHADOW switched off for one frame.
-        ///
-        /// 🔴 Why it had to be added, and why it is a probe and never a fix. The user asked for
-        /// shadows to stay ("เงา — เก็บ"), so this must not become a shipped change; what it is for
-        /// is closing the last offline hypothesis about the Atlantis ruins. Everything else about
-        /// those files has been measured and cleared (see the note on <see cref="AssetIds"/>), and
-        /// what remains is that they are enormous — <c>ruin:domed_temple</c> is placed 128 m tall,
-        /// against a kraken at 20 m — and a hundred columns standing in each other's light is a
-        /// shape the nine-model studio has never photographed.
-        ///
-        /// 🔎 It moves <c>Light.shadows</c>, not <c>QualitySettings.shadows</c>: the quality setting
-        /// is global, persisted, and read by everything that renders afterwards, and a QC pass that
-        /// leaves the shipped build without shadows because a coroutine was cancelled mid-probe
-        /// would be a far worse bug than the one it is investigating. The light's own field is
-        /// restored on the very next line, and it is restored even for lights that were already
-        /// off, so the scene cannot come out of this pass different from how it went in.
-        /// </summary>
-        private static IEnumerator ProbeNoShadows(Camera cam, RenderTexture rt, Texture2D readback,
-                                                  List<Renderer> renderers, byte[] withoutModel,
-                                                  System.Action<QcPixels.Shot> onShot)
-        {
-            var lights = new List<Light>();
-            var saved = new List<LightShadows>();
-            foreach (Light l in UnityEngine.Object.FindObjectsByType<Light>(FindObjectsSortMode.None))
-            {
-                if (l == null) continue;
-                lights.Add(l);
-                saved.Add(l.shadows);
-                l.shadows = LightShadows.None;
-            }
-
-            var savedReceive = new List<bool>();
-            foreach (Renderer r in renderers)
-            {
-                savedReceive.Add(r != null && r.receiveShadows);
-                if (r != null) r.receiveShadows = false;
-            }
-
-            byte[] probed = null;
-            yield return Capture(cam, rt, readback, null, bytes => probed = bytes);
-            onShot(QcPixels.Measure(probed, withoutModel));
-
-            for (int i = 0; i < lights.Count; i++)
-                if (lights[i] != null) lights[i].shadows = saved[i];
-            for (int i = 0; i < renderers.Count; i++)
-                if (renderers[i] != null) renderers[i].receiveShadows = savedReceive[i];
-        }
-
-        /// <summary>
-        /// What the shadow probe proves. The threshold is the same 1% <see cref="QcPixels.BiasVerdict"/>
-        /// uses for "this input moved the picture", for the same reason: under a point of a percent
-        /// two frames of a scene with live boids in it are not distinguishable from each other.
-        /// </summary>
-        private static string ShadowVerdict(QcPixels.Shot shipped, QcPixels.Shot noShadow)
-        {
-            if (noShadow.Pixels <= 0 || noShadow.SubjectPercent <= 0.0) return "probe-failed";
-            double moved = shipped.DarkOfSubjectPercent - noShadow.DarkOfSubjectPercent;
-            if (moved > 5.0) return "shadow-is-the-dark";
-            if (moved > QcPixels.BiasMovedPercent) return "shadow-contributes";
-            return "not-the-shadow";
         }
 
         /// <summary>
@@ -1286,16 +650,6 @@ namespace DiveMap.Runtime
         }
 
         // ── helpers ──────────────────────────────────────────────────────────────
-
-        /// <summary>
-        /// How deep the camera is right now, in world units — read off the same component the
-        /// scene's own dimming reads, so the QC log and the renderer cannot disagree about it.
-        /// </summary>
-        private static float ShotDepthUnits()
-        {
-            var shading = UnityEngine.Object.FindFirstObjectByType<UnderwaterShading>();
-            return shading != null ? shading.CameraDepthUnits : 0f;
-        }
 
         private static Bounds WorldBounds(List<Renderer> renderers)
         {

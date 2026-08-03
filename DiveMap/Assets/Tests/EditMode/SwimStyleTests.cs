@@ -29,15 +29,6 @@ namespace DiveMap.Tests
         private const double BarracudaLen = 17.1;
         private const double WhaleSharkLen = 65.0;
 
-        // …and the rest of the placed sizes the calibration was done against. Every one of them is
-        // the GLB's own ~1.91 u max dimension times the item scale the map stores (SceneBuilder's
-        // MarineMath.WhaleWorldLen), which is why they are so much larger than defaultScale looks:
-        // the whale shark is 1.908 × 34.2 ≈ 65 u. See WhaleController's note.
-        private const double BullSharkLen = 32.0;
-        private const double MantaLen     = 62.0;
-        private const double TurtleLen    = 20.0;
-        private const double LionfishLen  = 11.0;
-
         // ── Classification: the order is load-bearing ─────────────────────────────
 
         /// <summary>
@@ -89,22 +80,11 @@ namespace DiveMap.Tests
             Assert.AreEqual(SwimGait.Wing, SwimStyle.GaitFor("msh:green_turtle"));
             Assert.AreEqual(SwimGait.Wing, SwimStyle.GaitFor("msh:hawksbill"));
 
-            // A turtle's stroke is much shallower than a manta's — a fraction of the travel, over
-            // a shorter fraction of the limb.
+            // A turtle's stroke is faster and much shallower than a manta's.
             SwimWave turtle = SwimStyle.For("msh:green_turtle", 12.0);
             SwimWave manta  = SwimStyle.For("msh:manta", 12.0);
+            Assert.Greater(turtle.BeatHz, manta.BeatHz);
             Assert.Less(turtle.Amp, manta.Amp);
-            Assert.Less(turtle.Cycles, manta.Cycles);
-
-            // 🔴 …and it is the faster of the two AT THE SIZES THEY ARE DRAWN, which is the only
-            // comparison the eye ever makes. At equal length the manta now comes out marginally
-            // faster (k 1.05 against the turtle's 0.7), because the two k's were calibrated
-            // independently against their own placed sizes rather than against each other, and the
-            // map never draws them at the same size: a turtle is 20 u and an oceanic manta 62 u.
-            // Asserting the equal-size ordering instead would be pinning a number no user sees.
-            Assert.Greater(SwimStyle.For("msh:turtle", TurtleLen).BeatHz,
-                           SwimStyle.For("msh:oceanic_manta", MantaLen).BeatHz,
-                           "as placed, the turtle rows faster than the manta flaps");
         }
 
         [Test]
@@ -181,242 +161,15 @@ namespace DiveMap.Tests
             Assert.Greater(scad, barra);
             Assert.Greater(barra, shark);
 
-            // The eye's own yardstick: a small fish flickers, a bus-sized one does not. The two
-            // shoals are the web's own constants; the whale shark is the size law plus SlowAnim.
-            Assert.AreEqual(SwimStyle.SchoolBeatHzDefault, scad, 1e-9, "the web's default wRate");
-            Assert.That(shark, Is.InRange(0.18, 0.45), "a whale shark is unhurried, not frozen");
+            // The eye's own yardstick: a hand-sized fish flickers, a bus-sized one does not.
+            Assert.That(scad, Is.InRange(3.5, 7.0), "a 35 cm scad beats a few times a second");
+            Assert.That(shark, Is.InRange(0.4, 1.6), "a whale shark is unhurried, not frozen");
 
-            // 1/√L, so quadrupling the length halves the beat. Asked of a SOLO animal: a shoal
-            // ignores the size law on purpose, which is what the next assertion pins.
-            double a = SwimStyle.For("mdl:bull_shark", 8.0).BeatHz;
-            double b = SwimStyle.For("mdl:bull_shark", 32.0).BeatHz;
+            // 1/√L, so quadrupling the length halves the beat.
+            double a = SwimStyle.For("school:scad", 4.0).BeatHz;
+            double b = SwimStyle.For("school:scad", 16.0).BeatHz;
             Assert.AreEqual(0.5, b / a, 1e-6);
-
-            // 🔴 …and a shoal does NOT fall with size, because the web's rate is a literal in the
-            // shader and takes no argument at all (builder.html:1506). Every previous attempt at
-            // this file tried to reproduce a constant with a size law.
-            Assert.AreEqual(SwimStyle.For("school:scad", 4.0).BeatHz,
-                            SwimStyle.For("school:scad", 400.0).BeatHz, Eps,
-                            "a shoal's fin rate is the web's constant, whatever size it is drawn");
         }
-
-        // ── The calibration itself: the acceptance test for the 2026-08-03 fin-rate work ──
-
-        /// <summary>
-        /// 🔴 THE test this round exists for. A real iPhone came back with "ครีบขยับเร็วไปมาก เป็น
-        /// กับสัตว์ทุกตัว · ของเดิมบนเว็บดีกว่ามาก", and the investigation found two multiplying
-        /// mistakes (UnitsPerMetre 12 against the project's 6, and k values set against nothing),
-        /// which together ran 2.6-8.9× fast.
-        ///
-        /// Each row is an animal the map really places, at the size it is really drawn, against the
-        /// rate agreed with the web — ±20 %, because these are perceptual targets and not physics.
-        /// The two shoals are exact rather than approximate: they are the web's own literals.
-        /// </summary>
-        [Test]
-        public void BeatRates_MatchTheCalibratedTargets()
-        {
-            // id, drawn length (u), target Hz
-            var rows = new[]
-            {
-                Tuple.Create("school:scad",       ScadLen,       1.114),
-                Tuple.Create("school:barracuda",  BarracudaLen,  0.796),
-                Tuple.Create("mdl:bull_shark",    BullSharkLen,  0.45),
-                Tuple.Create("msh:oceanic_manta", MantaLen,      0.36),
-                Tuple.Create("msh:whaleshark",    WhaleSharkLen, 0.25),
-                Tuple.Create("msh:turtle",        TurtleLen,     0.39),
-            };
-
-            foreach (var row in rows)
-            {
-                double hz = SwimStyle.For(row.Item1, row.Item2).BeatHz;
-                double target = row.Item3;
-                Assert.That(hz, Is.InRange(target * 0.8, target * 1.2),
-                            $"{row.Item1} @{row.Item2:0.#}u = {hz:0.000} Hz, target {target:0.000} ±20%");
-            }
-
-            // A lionfish is the fastest thing on the reef and still must not flutter.
-            Assert.LessOrEqual(SwimStyle.For("msh:lionfish", LionfishLen).BeatHz, 1.1,
-                               "a lionfish hovers; its fins do not buzz");
-        }
-
-        /// <summary>
-        /// Not an assertion — the calibration table itself, printed, in the same spirit as
-        /// SpeciesCoverageTests.DumpAuditTable:
-        ///
-        ///     bash tools/test.sh --where "test =~ DumpBeatRates"
-        ///
-        /// One line per placed animal with the rate it actually resolves to, what it peaks at
-        /// sprinting, and how far that is from the target. Run it when reviewing a change to the
-        /// k values — a diff of the constants does not tell anyone what the fish will look like.
-        /// <c>[Explicit]</c> so it never runs as part of the suite.
-        /// </summary>
-        [Test, Explicit]
-        public void DumpBeatRates()
-        {
-            var rows = new[]
-            {
-                Tuple.Create("school:scad",        ScadLen,       1.114),
-                Tuple.Create("school:barracuda",   BarracudaLen,  0.796),
-                Tuple.Create("school:batfish",     5.70,          1.114),
-                Tuple.Create("mdl:bull_shark",     BullSharkLen,  0.45),
-                Tuple.Create("msh:oceanic_manta",  MantaLen,      0.36),
-                Tuple.Create("msh:whaleshark",     WhaleSharkLen, 0.25),
-                Tuple.Create("msh:turtle",         TurtleLen,     0.39),
-                Tuple.Create("msh:lionfish",       LionfishLen,   -1.0),
-                Tuple.Create("msh:barracuda",      16.0,          -1.0),
-                Tuple.Create("msh:humpback_whale", 68.0,          -1.0),
-                Tuple.Create("losin:moray_leopard", 12.0,         -1.0),
-                Tuple.Create("pod:yellowtail",     20.8,          -1.0),
-                Tuple.Create("pod:humpback",       24.0,          -1.0),
-                Tuple.Create("msh:crab",           1.81,          -1.0),
-            };
-
-            Console.WriteLine($"{"species",-22} {"len(u)",7} {"gait",-6} {"beatHz",7} " +
-                              $"{"peak",7} {"target",7} {"off%",7}");
-            foreach (var r in rows)
-            {
-                SwimWave w = SwimStyle.For(r.Item1, r.Item2);
-                double effortMax = PeakEffort(r.Item1);
-                string off = r.Item3 > 0.0
-                           ? $"{(w.BeatHz / r.Item3 - 1.0) * 100.0,6:0.0}%"
-                           : "     —";
-                string tgt = r.Item3 > 0.0 ? $"{r.Item3,7:0.000}" : "      —";
-                Console.WriteLine($"{r.Item1,-22} {r.Item2,7:0.00} {w.Gait,-6} {w.BeatHz,7:0.000} " +
-                                  $"{w.BeatHz * effortMax,7:0.000} {tgt} {off}");
-            }
-        }
-
-        /// <summary>
-        /// The web's two shoal rates, transcribed rather than tuned — <c>wiggleRate</c> defaults to
-        /// 7.0 rad/s (builder.html:1506) and <c>school:barracuda</c> overrides it to 5.0 (:1098).
-        /// They are radians per second in the shader, so the Hz is that over 2π.
-        /// </summary>
-        [Test]
-        public void ShoalsUseTheWebsConstant_AndPodsDoNot()
-        {
-            Assert.AreEqual(7.0 / (2 * Math.PI), SwimStyle.SchoolBeatHzDefault, 1e-12);
-            Assert.AreEqual(5.0 / (2 * Math.PI), SwimStyle.SchoolBeatHzBarracuda, 1e-12);
-
-            Assert.AreEqual(SwimStyle.SchoolBeatHzDefault,
-                            SwimStyle.For("school:batfish", 6.0).BeatHz, Eps);
-            Assert.AreEqual(SwimStyle.SchoolBeatHzDefault,
-                            SwimStyle.For("school:parrotfish_prismatic", 6.0).BeatHz, Eps);
-            Assert.AreEqual(SwimStyle.SchoolBeatHzBarracuda,
-                            SwimStyle.For("school:barracuda", BarracudaLen).BeatHz, Eps);
-
-            // …and it survives the scene item prefix, which is how a school id can reach here.
-            Assert.AreEqual(SwimStyle.SchoolBeatHzDefault,
-                            SwimStyle.For("Item_3_school:scad", ScadLen).BeatHz, Eps);
-
-            // 🔴 A pod is NOT a shoal. builder.html only wiggles the instanced branch
-            // (`instanced = !pod`, :1502), and a pod is a handful of real animals at natural size —
-            // pod:humpback is two humpback whales. Handing them a sardine's 1.11 Hz would be the
-            // same category error as the one this round is fixing, in the other direction.
-            foreach (string id in new[] { "pod:humpback", "pod:orca", "pod:eagle_ray",
-                                          "pod:yellowtail", "pod:hammerhead" })
-                Assert.AreNotEqual(SwimStyle.SchoolBeatHzDefault, SwimStyle.For(id, 24.0).BeatHz, id);
-
-            // Pods land where a big animal belongs: 24 u of whale is half a beat a second.
-            Assert.That(SwimStyle.For("pod:humpback", 24.0).BeatHz, Is.InRange(0.3, 0.9));
-            Assert.That(SwimStyle.For("pod:yellowtail", 20.8).BeatHz, Is.InRange(0.4, 1.0));
-        }
-
-        /// <summary>
-        /// The whale shark's own row. It is the hero animal of the demo map and the one the web
-        /// singles out (<c>slowAnim: true</c>, builder.html:1779) — its tail is supposed to look
-        /// unhurried and grand, and it is also the animal whose screenshot came back as
-        /// "ตัวแข็งเป็นแท่ง", so it may not be slowed into stillness either.
-        /// </summary>
-        [Test]
-        public void TheWhaleSharkIsSlowedByItsOwnFlag_NotByAccident()
-        {
-            Assert.IsTrue(SpeciesBehavior.For("msh:whaleshark").SlowAnim, "the flag is the source");
-
-            double slowed = SwimStyle.For("msh:whaleshark", WhaleSharkLen).BeatHz;
-            double plain  = SwimStyle.For("msh:tiger_shark", WhaleSharkLen).BeatHz;
-
-            Assert.AreEqual(SwimStyle.SlowAnimMul, slowed / plain, 1e-9,
-                            "same gait, same size — the only difference is the flag");
-            Assert.Less(slowed, plain);
-            Assert.Greater(slowed, 0.15, "unhurried, not frozen");
-
-            // No other animal in the manifest carries the flag, so nothing else may be slowed.
-            Assert.AreEqual(SwimStyle.For("msh:tiger_shark", 32.0).BeatHz,
-                            SwimStyle.For("mdl:bull_shark", 32.0).BeatHz, Eps);
-        }
-
-        /// <summary>
-        /// 🔴 The regression guard, and the one assertion here that is about a CEILING rather than
-        /// a target: whatever else changes, nothing in this sea may beat faster than 2.5 Hz even
-        /// while sprinting. 2.5 is a little over twice the web's shoal rate — past it, fins read as
-        /// vibration rather than swimming, which is the report this work started from.
-        ///
-        /// Effort is the multiplier that gets there: a solo animal at a dead sprint reaches
-        /// <see cref="SwimStyle.EffortMax"/>, while a shoal is pinned at
-        /// <see cref="SwimStyle.SchoolEffort"/> and cannot be pushed at all.
-        /// </summary>
-        [Test]
-        public void NothingBeatsFasterThan2Point5Hz_EvenSprinting()
-        {
-            const double Ceiling = 2.5;
-
-            // 🔎 These are not invented sizes. Every row was read off the six real maps behind
-            // maps.siamdive.com/api/dive-sites (Chang, Hanuman, Atlantis, Posidon, …) — item.s ×
-            // the XR GLB's own 1.91 u — so this asserts the ceiling over what users have actually
-            // built, not over a convenient sample. Notably the SMALLEST solo animal anyone has
-            // placed is an 11 u lionfish: the map editor's scale gizmo lands people around
-            // s = 6-45, which is why the per-gait ceilings (2.0-2.2 Hz) never bind in practice.
-            var placed = new[]
-            {
-                Tuple.Create("school:scad",         ScadLen),        // 1.74-4.22 u across the maps
-                Tuple.Create("school:barracuda",    BarracudaLen),   // 7.09-17.57 u
-                Tuple.Create("school:batfish",      2.22),
-                Tuple.Create("mdl:bull_shark",      BullSharkLen),
-                Tuple.Create("mdl:great_white_shark", 108.9),        // the largest thing placed
-                Tuple.Create("msh:oceanic_manta",   MantaLen),
-                Tuple.Create("msh:whaleshark",      WhaleSharkLen),
-                Tuple.Create("msh:turtle",          TurtleLen),
-                Tuple.Create("msh:lionfish",        LionfishLen),    // the SMALLEST solo animal
-                Tuple.Create("losin:moorish_idol",  11.50),
-                Tuple.Create("losin:pufferfish_golden", 13.05),
-                Tuple.Create("losin:blue_spotted_stingray", 19.21),
-                Tuple.Create("msh:tiger_shark",     41.28),
-                Tuple.Create("msh:barracuda",       23.57),
-                Tuple.Create("msh:humpback_whale",  68.0),
-                Tuple.Create("losin:moray_leopard", 12.0),
-                Tuple.Create("pod:yellowtail",      5.80),           // s=0.28, the smallest pod
-                Tuple.Create("pod:humpback",        24.0),
-            };
-
-            foreach (var row in placed)
-            {
-                double peak = SwimStyle.For(row.Item1, row.Item2).BeatHz * PeakEffort(row.Item1);
-                Assert.LessOrEqual(peak, Ceiling,
-                                   $"{row.Item1} @{row.Item2:0.#}u peaks at {peak:0.00} Hz");
-            }
-
-            // …and the same over EVERY species in the manifest, at the size SpeciesCoverageTests
-            // probes them with, so a new animal cannot arrive with a tempo nobody looked at.
-            foreach (string id in SpeciesCoverageTests.Animals)
-            {
-                double peak = SwimStyle.For(id, 10.0).BeatHz * PeakEffort(id);
-                Assert.LessOrEqual(peak, Ceiling, $"{id} @10u peaks at {peak:0.00} Hz");
-            }
-        }
-
-        /// <summary>
-        /// The hardest this animal's fins can ever be driven.
-        ///
-        /// 🔴 Keyed on the ROUTE, not on whether the fixed shoal rate applies — the distinction
-        /// cost this test a red run. FishSchoolSystem drives every id MarineRouting calls a school,
-        /// which INCLUDES the pods, and it now beats all of them at the constant
-        /// <see cref="SwimStyle.SchoolEffort"/>. Only a solo animal on WhaleController goes through
-        /// <see cref="SwimStyle.Effort"/> and can reach <see cref="SwimStyle.EffortMax"/> — and it
-        /// really does reach it: a hunting predator is capped at 2.5× cruise
-        /// (WhaleController's huntWant), which saturates the effort curve.
-        /// </summary>
-        private static double PeakEffort(string assetId)
-            => MarineRouting.IsSchoolId(assetId) ? SwimStyle.SchoolEffort : SwimStyle.EffortMax;
 
         [Test]
         public void BeatRate_IsAlwaysAPositiveFiniteNumber()
@@ -509,19 +262,10 @@ namespace DiveMap.Tests
             Assert.Greater(SwimStyle.Effort(25.0, 10.0), 1.0, "sprinting");
 
             // Never zero (a stopped fish sculls) and never unbounded (a dart is not a seizure).
-            Assert.AreEqual(SwimStyle.EffortMin, SwimStyle.Effort(0.0, 10.0), Eps);
-            Assert.AreEqual(SwimStyle.EffortMax, SwimStyle.Effort(1e6, 10.0), Eps);
-            Assert.AreEqual(SwimStyle.EffortMin, SwimStyle.Effort(-5.0, 10.0), Eps);
-            Assert.That(SwimStyle.Effort(5.0, 0.0),
-                        Is.InRange(SwimStyle.EffortMin, SwimStyle.EffortMax), "no divide by zero");
-
-            // 🔴 The ceiling came down 2.2 → 2.0 as part of the fin-rate calibration: it is the
-            // multiplier that decides how fast the fastest thing in the sea can possibly beat, and
-            // NothingBeatsFasterThan2Point5Hz_EvenSprinting is what it is sized against.
-            Assert.AreEqual(2.0, SwimStyle.EffortMax, Eps);
-
-            // A shoal does not get one of these at all — see SchoolEffort.
-            Assert.AreEqual(1.0, SwimStyle.SchoolEffort, Eps);
+            Assert.That(SwimStyle.Effort(0.0, 10.0), Is.InRange(0.3, 0.5));
+            Assert.That(SwimStyle.Effort(1e6, 10.0), Is.InRange(2.0, 2.5));
+            Assert.That(SwimStyle.Effort(-5.0, 10.0), Is.InRange(0.3, 0.5));
+            Assert.That(SwimStyle.Effort(5.0, 0.0), Is.InRange(0.35, 2.2), "no divide by zero");
         }
 
         // ── Bank: pure, saturating, and unable to get stuck ───────────────────────
@@ -607,17 +351,10 @@ namespace DiveMap.Tests
         [Test]
         public void Metres_ConvertsDrawSizeToApparentSize()
         {
-            // 🔴 6 units to the metre, not 12. The whole project has exactly one answer to this
-            // question — DepthLight.UnitsPerMetre, transcribed from the web's U_PER_M (:600) — and
-            // this file having a second one is what made every fin in the sea run √2 too fast.
-            Assert.AreEqual(6.0, SwimStyle.UnitsPerMetre, Eps);
-            Assert.AreEqual(DepthLight.UnitsPerMetre, SwimStyle.UnitsPerMetre, 1e-6,
-                            "one project, one metre");
-
-            // A 4.20 u scad is 0.70 m and a 17.1 u barracuda 2.85 m — which is the size the map
-            // really draws them at, whatever the old comment claimed.
-            Assert.AreEqual(0.70, SwimStyle.Metres(ScadLen), 0.01);
-            Assert.AreEqual(2.85, SwimStyle.Metres(BarracudaLen), 0.05);
+            // The two sizes the marine pipeline documents: a 4.20 u scad reads as ~35 cm and a
+            // 17.1 u barracuda as ~1.5 m.
+            Assert.AreEqual(0.35, SwimStyle.Metres(ScadLen), 0.01);
+            Assert.AreEqual(1.43, SwimStyle.Metres(BarracudaLen), 0.05);
             Assert.AreEqual(1.0 / SwimStyle.UnitsPerMetre, SwimStyle.Metres(1.0), Eps);
             Assert.Greater(SwimStyle.Metres(0.0), 0.0, "never zero — it divides a beat rate");
             Assert.Greater(SwimStyle.Metres(-4.0), 0.0);

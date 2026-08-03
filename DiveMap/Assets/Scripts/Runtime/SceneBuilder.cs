@@ -1044,7 +1044,7 @@ namespace DiveMap.Runtime
         private static void TameMetal(GameObject root, string assetId)
         {
             if (root == null) return;
-            int fixedCount = 0, droppedNormals = 0, materials = 0, unsampledMetal = 0;
+            int fixedCount = 0, droppedNormals = 0, materials = 0;
             bool gamma = QualitySettings.activeColorSpace == ColorSpace.Gamma;
             foreach (Renderer r in root.GetComponentsInChildren<Renderer>(true))
             {
@@ -1062,38 +1062,6 @@ namespace DiveMap.Runtime
                         fixedCount++;
                     }
                     if (DropMisdecodedNormalMap(m, assetId, gamma)) droppedNormals++;
-
-                    // 🔴 WO-E5m — the half TameMetal was never able to see, and the measurement
-                    // that found it. Setting metallicFactor to 0 and changing NOTHING else took
-                    // darkOfSubject from 65% to 8% on the kraken, 75% to 31% on the Singha and 85%
-                    // to 55% on the domed temple, while the roughness twin of the same probe moved
-                    // almost nothing. See GlbShading.MappedMetalFactor.
-                    //
-                    // The rule above cannot reach these: its case is "a high factor and NO map",
-                    // and these all ship a map. Theirs is "a high factor ON TOP of a map" — 1.0 is
-                    // glTF's DEFAULT metallicFactor, so a file that never wrote the field gets it,
-                    // and the map beside it measures 0-1 out of 255. The authored intent is "the
-                    // metal comes from the map, and the map says none"; writing 0 delivers exactly
-                    // that, and delivers it even if the map's blue channel does not survive the
-                    // transcode to the device.
-                    //
-                    // Logged per material either way — a material left alone is as much evidence as
-                    // one that is changed.
-                    bool hasMap = HasMetalMap(m);
-                    bool keyword = m.IsKeywordEnabled("_METALLICGLOSSMAP");
-                    foreach (string factor in MetalFactorNames)
-                    {
-                        if (!m.HasProperty(factor)) continue;
-                        float before = m.GetFloat(factor);
-                        float fix = GlbShading.MappedMetalFactor(before, hasMap);
-                        if (fix >= 0f) { m.SetFloat(factor, fix); unsampledMetal++; }
-                        Debug.Log($"[Metal] {assetId} mat={m.name} {factor}={before:F3} " +
-                                  $"mrTexture={(hasMap ? "bound" : "NULL")} " +
-                                  $"_METALLICGLOSSMAP={(keyword ? "on" : "OFF")} " +
-                                  $"roughnessFactor={(m.HasProperty("roughnessFactor") ? m.GetFloat("roughnessFactor").ToString("F3") : "n/a")} " +
-                                  $"-> {(fix >= 0f ? $"TAMED (metal {before:F3} → {fix:F3})" : "left alone")}");
-                        break;
-                    }
                 }
             }
             if (fixedCount > 0)
@@ -1103,7 +1071,6 @@ namespace DiveMap.Runtime
             // between "the pass is clean", "the pass skipped everything" and "the pass was never
             // called on this model" — three different bugs that cost a CI round each to tell apart.
             Debug.Log($"[Shading] {assetId}: materials={materials} tamedMetal={fixedCount} " +
-                      $"unsampledMapMetal={unsampledMetal} " +
                       $"droppedNormalMap={droppedNormals} gamma={(gamma ? "t" : "f")} " +
                       $"tilt={GlbShading.NeutralTiltDegrees():F0}°");
         }
@@ -1955,30 +1922,6 @@ namespace DiveMap.Runtime
         /// read as being in front of the floor glow, and a low alpha: this is meant to be
         /// noticed as light on sand, not as a second texture.
         /// </summary>
-        /// <remarks>
-        /// 🔴 WO-E5k — READ BEFORE ACCUSING THIS OF PAINTING THE SEABED BLACK.
-        ///
-        /// Run 30818116631's ray probe put 17 of 20 rays through Atlantis's black region into
-        /// <c>Map/Caustics</c>, and the natural next thought is "it must be alpha-blending instead
-        /// of adding". It is not. The values below are the material's, verbatim:
-        ///
-        ///     _SrcBlend = SrcAlpha      _DstBlend = One      ⟹  dst + src.rgb × src.a
-        ///     _ZWrite   = 0             queue     = 3050     ⟹  writes no depth, occludes nothing
-        ///     colour    = (0.78, 0.92, 1.00) at alpha 0.13   ⟹  a pale, nearly white tint
-        ///     texture   = RGBA(200, 235, 255, 120-255)       ⟹  bright everywhere
-        ///
-        /// <c>One</c> as the destination factor is additive by definition: the framebuffer term is
-        /// multiplied by 1 and the source is added to it. Every channel of what is added is
-        /// positive. This surface CANNOT subtract light from what is behind it, at any alpha, at
-        /// any depth, and no tuning of its colour can make it do so.
-        ///
-        /// 🔎 Why the probe named it anyway: it is the seabed's OWN top-surface mesh, parented at
-        /// +0.4 u. Its bounds are therefore the whole 340 u disc, sitting a third of a metre above
-        /// another 340 u disc — so a ray aimed anywhere at the floor enters this one first, every
-        /// time. "Caustics 17/20" and Posidon's "Seabed 16/20" are the same answer with different
-        /// names on it. QcMapShot now reports the runner-up and flags the tie for exactly this
-        /// reason.
-        /// </remarks>
         private static Material CausticsMaterial()
         {
             var mat = BaseMat(true);

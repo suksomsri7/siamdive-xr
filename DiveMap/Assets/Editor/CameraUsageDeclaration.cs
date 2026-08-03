@@ -73,12 +73,8 @@ namespace DiveMap.EditorTools
             return true;
         }
     }
-// 🔴 The `}` that used to sit here closed the NAMESPACE, inside `#if UNITY_ANDROID`. On iOS the
-// whole block is skipped, so the file balanced and every iOS build since 31 Jul was green; on
-// Android the namespace shut at this line and the closing brace at the end of the file became one
-// too many — `CS1022 end-of-file expected`, on a line nobody had touched. It went unseen because
-// the Android player is only built on a hand-fired run (CI §4.95 saves quota), so the compiler was
-// never asked. Keep the class's brace above, and let the namespace close once, at the end.
+// The `}` that used to sit here closed the NAMESPACE, inside `#if UNITY_ANDROID`: harmless on iOS
+// where the block is skipped, one brace too many on Android. Compile-only, no effect on rendering.
 #endif
 
     /// <summary>

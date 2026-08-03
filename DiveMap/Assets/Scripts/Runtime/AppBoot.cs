@@ -63,14 +63,10 @@ namespace DiveMap.Runtime
                 camGo.AddComponent<AudioListener>();
             }
             cam.clearFlags = CameraClearFlags.SolidColor;
-            // Mid ocean-blue backdrop — the fallback if the gradient quad cannot be built. Read off
-            // the ramp itself rather than typed in, so it cannot drift away from the gradient it is
-            // standing in for (it did: the ramp moved to the web's stops in WO-E3 and a hard-coded
-            // 0.30/0.52/0.66 would still be the old one).
-            {
-                SeabedGeom.Rgb bg = SeabedGeom.GradientStop(0.5f);
-                cam.backgroundColor = new Color(bg.R, bg.G, bg.B, 1f);
-            }
+            // Mid ocean-blue backdrop (web waterBg gradient reads ~this at frame centre).
+            // The old near-black (0.02,0.08,0.15) sank the whole shot into darkness (QC r2).
+            // Still set: it is the fallback if the gradient backdrop cannot be built.
+            cam.backgroundColor = new Color(0.30f, 0.52f, 0.66f, 1f);
 
             // The seabed is now the web's full 340 u footprint (WO-XR-04.2), and the orbit
             // camera pulls back to 950 u — with Main.unity's 1000 u far plane the far half of
@@ -84,12 +80,6 @@ namespace DiveMap.Runtime
             // scene.background (bright surface haze on top → deep blue below). This, not fog,
             // is what gives the web its sense of depth.
             Backdrop.Attach(cam);
-
-            // WO-E3: the film curve the web renders through (builder.html:485). Last thing in the
-            // camera's chain and, because the uGUI canvas is ScreenSpaceOverlay, the last thing
-            // BEFORE the UI rather than over it. Returns null and attaches nothing if the shader is
-            // missing or unsupported — an untone-mapped frame, never a magenta one.
-            AcesToneMapping.Attach(cam);
 
             _orbit = cam.GetComponent<OrbitCamera>();
             if (_orbit == null) _orbit = cam.gameObject.AddComponent<OrbitCamera>();
@@ -126,38 +116,20 @@ namespace DiveMap.Runtime
         // cubemap contributes about 3% to them and the metallic tame-down in SceneBuilder skips
         // them by design. Their base colour maps average sRGB 108-202; they are BRIGHT models.
         // When one of these goes black it is the ambient, not the material. See UnderwaterShading.
-        /// <summary>An authored Core colour as a Unity one — the bands live in Core now.</summary>
-        private static Color Rgb(SeabedGeom.Rgb c) => new Color(c.R, c.G, c.B);
-
         private void SetupLighting()
         {
-            // 🔴 WO-E3 — THE WEB'S HEMISPHERE LIGHT, not four rounds of compensation.
-            //
-            // builder.html:510: `new THREE.HemisphereLight(0xbfe6ff, 0x123040, 1.05)`. Unity's
-            // Trilight ambient is the same idea with a third band, so it maps directly: sky = the
-            // web's sky colour × its intensity, ground = the web's ground colour × the same, and
-            // the equator band is what a hemisphere light returns at the horizon — the midpoint.
-            //
-            // What was here before (sky 0.348/0.478/0.574 and two bands lifted again after the
-            // "sharks are black on Posidon" report) is roughly HALF the web's sky term. It got
-            // there honestly: in gamma, with no tone mapping, a sky band this bright clipped the
-            // sand to white in wide shots, so it was pulled down — and then the shadowed side of
-            // everything went black, so the lower bands were pushed back up, twice. That is the
-            // signature of compensating for the pipeline rather than fixing it. With light adding
-            // up in linear and ACES rolling off the top, the web's own numbers are the ones that
-            // belong here, and the reason the web reads better at 512² than this app did at 2048²
-            // is largely in these three lines: bright hemisphere, dark water.
-            //
-            // 🔴 WO-E4: the three literals moved to UnderwaterLight.Web*Band and are read from
-            // there. They were the only copy in the project, which is exactly why the ground band
-            // could be dimmed below the tone curve's crush point for months without anything being
-            // able to notice: the floor that was supposed to catch it was built out of the water
-            // colour and had no idea what band it was flooring. Now UnderwaterLight.GroundBandAt
-            // and this line are the same numbers by construction, and that function is tested.
             RenderSettings.ambientMode         = UnityEngine.Rendering.AmbientMode.Trilight;
-            RenderSettings.ambientSkyColor     = Rgb(UnderwaterLight.WebSkyBand);     // 0xbfe6ff × 1.05
-            RenderSettings.ambientEquatorColor = Rgb(UnderwaterLight.WebEquatorBand); // hemisphere at the horizon = midpoint
-            RenderSettings.ambientGroundColor  = Rgb(UnderwaterLight.WebGroundBand);  // 0x123040 × 1.05
+            RenderSettings.ambientSkyColor     = new Color(0.348f, 0.478f, 0.574f); // r4 −13% (sand still cream vs web); boat lit by reflection cube, ~unaffected
+            // 🔴 The two lower bands lifted (equator 0.278→0.315, ground 0.20→0.235) after the
+            // "sharks are black on Posidon" report. These are the only light a surface gets when it
+            // is not facing the sun, and the sand — which faces straight up into the SKY band and
+            // straight into the sun — was reading ten times brighter than a shark's flank in the
+            // same frame. The deep-water half of that fix is <see cref="UnderwaterShading"/>; this
+            // is the part that also helps the map view, where the depth floor deliberately does
+            // nothing. Kept monotonic (sky > equator > ground) so objects still shade top to bottom
+            // instead of going flat.
+            RenderSettings.ambientEquatorColor = new Color(0.315f, 0.430f, 0.500f);
+            RenderSettings.ambientGroundColor  = new Color(0.235f, 0.325f, 0.375f); // 0x123040 lifted (no black undersides)
             // WO-XR-04.3: the web's underwater fog — THREE.Fog(0x123a55, near, far) with
             // near = max(500, reach·1.1) and far = max(9000, maxD·3.4). At orbit distance this
             // is only a 3-7% wash (Fable's survey), and that is the point: it must colour the
@@ -165,15 +137,11 @@ namespace DiveMap.Runtime
             // ship with fog enabled so the linear-fog shader variants survive build stripping.
             RenderSettings.fog = true;
             RenderSettings.fogMode = FogMode.Linear;
-            // 🔴 WO-E3: back to the web's #123a55, and this time it is safe to be.
-            //
-            // It was abandoned because the backdrop drawn behind it had been lifted to a bright
-            // cyan ramp, so anything fading toward this colour read as a silhouette against the
-            // background — true, and the wrong thing to change. The backdrop is the web's four
-            // stops again (SeabedGeom), on which #123a55 is a point (WaterFog.FogRampV), so the fog
-            // and the background are now the same water by arithmetic. WaterFog.ColorAt(0) IS this
-            // colour; DepthAtmosphere dims it with depth, together with the backdrop and the
-            // ambient, by one shared vector.
+            // 🔴 NOT the web's #123a55 any more. That colour is about a third as bright as the
+            // backdrop gradient drawn behind everything, so distant geometry faded toward navy over
+            // a bright cyan background and read as a black silhouette. The fog now reads off the
+            // same ramp as the backdrop (WaterFog) — this is the surface end of it, and
+            // DepthAtmosphere moves it down the ramp as the camera descends.
             {
                 SeabedGeom.Rgb f = WaterFog.ColorAt(0f);
                 RenderSettings.fogColor = new Color(f.R, f.G, f.B);
@@ -186,18 +154,9 @@ namespace DiveMap.Runtime
             // colour is its own base colour (olive), so the hull reads bright green-olive.
             // Diffuse sand is unaffected — reflection only feeds specular. (built-in RP:
             // feeds unity_SpecCube0 globally via DefaultReflectionMode.Custom.)
-            //
-            // 🔴 WO-E3: intensity 1 → 0.3, and ONLY as part of this change.
-            // HANDOFF §6 records that lowering it on its own was measured and made things WORSE:
-            // a 4×4 mip-less cube is a poor reflection but it was carrying real light onto surfaces
-            // that had nothing else, because the normal maps were being thrown away (gamma) and
-            // nothing rolled off the top of the range (no tone mapping). Both of those reasons are
-            // gone in this commit, and a flat blue cube at full strength is now the thing flattening
-            // wet surfaces — it adds the same constant to every pixel regardless of which way it
-            // faces, which is the definition of losing surface detail.
             RenderSettings.defaultReflectionMode  = UnityEngine.Rendering.DefaultReflectionMode.Custom;
             RenderSettings.customReflectionTexture = AmbientReflectionCube(new Color(0.60f, 0.72f, 0.82f));
-            RenderSettings.reflectionIntensity     = 0.3f;
+            RenderSettings.reflectionIntensity     = 1f;
 
             // Key light (sun): reuse the scene's directional if there is one, else make it.
             Light sun = null;
@@ -210,26 +169,17 @@ namespace DiveMap.Runtime
                 sun.type = LightType.Directional;
             }
             sun.color = new Color(1f, 0.957f, 0.839f); // 0xfff3df
-            // 🔴 WO-E3: 0.82 → 1.2, the web's own figure (builder.html:511,
-            // `new THREE.DirectionalLight(0xfff3df, 1.2)`).
-            //
-            // The reasoning for 0.82 — "under 50 m the sun is a direction, not a key light" — is
-            // good physics and was the wrong lever: the light a diver loses with depth is now taken
-            // off by DepthLight, which multiplies the ambient AND the water AND the background by
-            // the same curve. Dimming the key on top of that was a second, permanent, depth-blind
-            // dimmer, and its real effect was to flatten the shading gradient that carries surface
-            // detail — the complaint this whole work order exists for. It also clipped less than it
-            // looked like it did: what was "the sand clips to white in wide shots" is the shoulder
-            // ACES now handles.
-            sun.intensity = 1.2f;
+            // r2 1.05 → 1.0 → 0.82. Under 50 m of water the sun is not a key light any more, it is
+            // a direction; the light that reaches you is overwhelmingly scattered and comes from
+            // everywhere. The rig here was an above-water rig — one hard directional plus a thin
+            // ambient — and that is precisely the combination that gives bright up-facing sand, a
+            // hard terminator across a statue, and no light at all on a shark's flank. Trading a
+            // fifth of the sun for the ambient lift above keeps the sand where it was (it was
+            // clipping to white in wide shots anyway) and gives every vertical surface something.
+            sun.intensity = 0.82f;
             sun.transform.rotation = Quaternion.Euler(52f, -35f, 0f); // high, angled — web pos (60,160,70)
-            // 🔑 The user asked for shadows to STAY (they are not in the web at all). Kept, but
-            // eased: 0.5 → 0.35. The shadow term multiplies whatever light is left after the depth
-            // curve, and with the ambient now taking the full curve instead of half of it, a
-            // half-strength shadow on a deep flank was removing light that is no longer there to
-            // spare. 0.35 keeps the shape a shadow gives an object without punching a hole in it.
             sun.shadows = LightShadows.Soft;
-            sun.shadowStrength = 0.35f;
+            sun.shadowStrength = 0.5f;                 // was 1.0 — soften the wreck's self-shadow band
             // 🔴 ProjectSettings ships Android and iPhone on quality level 2 ("Medium"), which is
             // pixelLightCount = 1. ONE per-pixel light on the phone, whatever the editor or the CI
             // screenshots (level 5, four lights) suggest. With the drone out there are five lights
@@ -253,7 +203,7 @@ namespace DiveMap.Runtime
                 fill.shadows = LightShadows.None;
             }
             fill.color = new Color(0.247f, 0.471f, 0.659f); // 0x3f78a8
-            fill.intensity = 0.5f;                           // WO-E3: the web's own 0.5 (builder.html:512)
+            fill.intensity = 0.65f;                          // r2 0.55 → a touch more lift on the shadowed hull
             fill.transform.rotation = Quaternion.Euler(-14f, 145f, 0f); // opposite/low — web pos (-90,40,-70)
             // ⚠️ On the phone this light is NOT per-pixel (see the note on the sun): with one slot
             // and the sun holding it, the fill is folded into the ambient probe instead. Tuning its
@@ -383,10 +333,7 @@ namespace DiveMap.Runtime
             TourController.Configure(result);
             ArSession.Configure(result);   // F1 — AR needs the footprint to place the viewer
             EnvMode.Reset();   // new scene, new lights/water to capture
-            // shallow bright, deep dark and blue — and, since WO-E5, the fog range too: it is
-            // derived from the map's own size and where the camera is standing rather than from the
-            // web's orbit-framing constants, which could not reach a map this small (WaterFog.RangeAt).
-            DepthAtmosphere.Configure(result.WaterLevel, result.Center, result.Radius);
+            DepthAtmosphere.Configure(result.WaterLevel);   // shallow bright, deep dark and blue
             // …and the floor under all of that: however many dimmers stack on the way down, an
             // object underwater is never lit by less than the water it is standing in.
             UnderwaterShading.Configure(result.WaterLevel);
@@ -453,7 +400,7 @@ namespace DiveMap.Runtime
                 // FishSchoolSystem sits on the Map root (added by SceneBuilder when there are
                 // schools); the close-up angle-2 uses it to find the scad shoal nearest the wreck.
                 var marine = _mapRoot != null ? _mapRoot.GetComponent<FishSchoolSystem>() : null;
-                StartCoroutine(QcShot(qcPath, marine, result.FrameCenter, result.WaterLevel));
+                StartCoroutine(QcShot(qcPath, marine, result.FrameCenter));
             }
         }
 
@@ -465,8 +412,7 @@ namespace DiveMap.Runtime
             return null;
         }
 
-        private IEnumerator QcShot(string path, FishSchoolSystem marine, Vector3 boatCenter,
-                                   float waterLevel)
+        private IEnumerator QcShot(string path, FishSchoolSystem marine, Vector3 boatCenter)
         {
             // ── มุมที่ 1: wide framing (เดิม) ────────────────────────────────────────
             // รอให้ render settle 2 วิ (GLB วาง เฟรมแรกๆ อาจยังไม่ครบ)
@@ -520,50 +466,6 @@ namespace DiveMap.Runtime
             // code generates: only four GLBs in it come off the CDN. Everything the model bugs
             // live in — 222 of 226 modules — has never been in a CI frame. This is that frame.
             yield return QcModelShot.Run(dir, Manifest, boatCenter);
-
-            // ── WO-E3: the same animal at 15 / 30 / 52 m, tone curve on and off ─────
-            // The model pass above photographs each model at ONE depth and asks "is it dark". The
-            // user's report was not about darkness, it was about the subject falling behind its own
-            // background as the camera descended — a slope, not a value. This is the only frame in
-            // CI that can see that, and it is the acceptance evidence for this work order.
-            yield return QcModelShot.RunDepth(dir, Manifest, boatCenter, waterLevel);
-
-            // ── WO-F3: do the animated models actually ANIMATE? ────────────────────
-            // Every pass above measures pixels, and no number of pixels can answer that: a rigged
-            // animal frozen on frame 0 photographs exactly like a rigged animal mid-stroke. This
-            // one takes no picture — it loads three rigged GLBs, plays them, and measures how far
-            // the skeleton moved. Last, so that a failure or a timeout in it cannot cost any of
-            // the passes above their evidence.
-            yield return QcAnimShot.Run(boatCenter);
-
-            // ── WO-E5f: two files, one variable, one frame each ────────────────────
-            // Every theory this session has produced about the dark models was argued from
-            // statistics taken off the files, and two of them were wrong — one explained the wrong
-            // number, the other was a window artefact quoted as a property. What none of them could
-            // do is change one input and look. These pairs differ in exactly one thing and are
-            // byte-identical in everything else, so the two frames cannot disagree for any other
-            // reason. First, because it is the pass whose answer decides what the rest is for.
-            yield return QcPilotAb.Run(dir, Manifest, boatCenter);
-
-            // ── WO-E5d: WHERE do the Atlantis ruins lose their light? ──────────────
-            // In DAYLIGHT, against a reference surface of known albedo, one shading input removed
-            // at a time. Every offline explanation for "ซุ้มดำ" has been measured on the files and
-            // cleared, and the user's own daylight screenshot rules out the water: a surface of the
-            // ruins' measured albedo lit by nothing but the daylight ambient works out at byte
-            // 80-100, and the dome's body photographs at byte 3. This is the pass that says which
-            // rung loses it. Before QcMapShot, because that one rebuilds the scene.
-            yield return QcRuinLadder.Run(dir, Manifest, boatCenter);
-
-            // ── WO-E5: the maps themselves, from where the player's eyes are ───────
-            // Everything above photographs either nine models alone in a studio or ONE map from an
-            // orbit pose. The user's answer to that was "ผมถามคุณ QC ยังไงครับ คุณไม่ได้ถ่ายรูป
-            // แคปเจอร์หน้าจอมาดูเองด้วยหรอ" — and they were right: Atlantis, Posidon and Hanuman,
-            // the three maps every complaint has been about, had never been in a CI frame.
-            //
-            // LAST, because it rebuilds the scene one map at a time and destroys what is on screen
-            // to do it. Nothing runs after it but the quit, so there is nothing left to break.
-            yield return QcMapShot.Run(dir, _builder, Manifest, _mapRoot);
-            _mapRoot = null;
 
             Application.Quit(0);
         }

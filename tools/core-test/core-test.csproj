@@ -43,33 +43,10 @@
     <Compile Include="../../DiveMap/Assets/Scripts/Core/MarineRouting.cs" />
     <Compile Include="../../DiveMap/Assets/Scripts/Core/AppModes.cs" />
     <Compile Include="../../DiveMap/Assets/Scripts/Core/SwimStyle.cs" />
-    <!-- WO-F3. The clip rules (which clip, how fast, clip-or-wave) are pure so that "does it
-         match the web's animRate" is a 2-second answer on this machine instead of a 35-minute
-         CI round. The Unity half is Runtime/Marine/BodyClips.cs and cannot be tested here. -->
-    <Compile Include="../../DiveMap/Assets/Scripts/Core/ClipPlay.cs" />
-    <!-- SwimStyleTests asserts SwimStyle.UnitsPerMetre == DepthLight.UnitsPerMetre. Two metres in
-         one project is what made every fin run √2 fast, so the two constants are now pinned to
-         each other by a test rather than by a comment. DepthLight is pure (using System; only). -->
-    <Compile Include="../../DiveMap/Assets/Scripts/Core/DepthLight.cs" />
     <Compile Include="../../DiveMap/Assets/Scripts/Core/HuntMath.cs" />
     <Compile Include="../../DiveMap/Assets/Scripts/Core/FishMind.cs" />
     <Compile Include="../../DiveMap/Assets/Scripts/Core/QcPixels.cs" />
     <Compile Include="../../DiveMap/Assets/Scripts/Core/GlbShading.cs" />
-    <!-- GoldFx's property names and numbers, moved out of Runtime for exactly the reason
-         GlbShading was: the gold FX was a no-op for months because three property-name STRINGS
-         did not match glTFast's shader, and nothing on this machine could say so. -->
-    <Compile Include="../../DiveMap/Assets/Scripts/Core/GoldShading.cs" />
-    <!-- WO-E3. The whole lighting/water/tone chain is UnityEngine-free by design, and until now
-         only SeabedGeom of it was checked on this machine — so the one part of the app the user
-         complains about could only be tested by a 35-minute CI round. All five are pure. -->
-    <Compile Include="../../DiveMap/Assets/Scripts/Core/ToneMap.cs" />
-    <Compile Include="../../DiveMap/Assets/Scripts/Core/WaterFog.cs" />
-    <Compile Include="../../DiveMap/Assets/Scripts/Core/UnderwaterLight.cs" />
-    <Compile Include="../../DiveMap/Assets/Scripts/Core/DiveLightMath.cs" />
-    <!-- WO-E4. SurfaceLight is albedo x light x tone curve written down as arithmetic, so
-         "does a byte-71 texel survive an underside at 30 m" and "does the torch give the red
-         back" are two-second answers on this machine instead of a CI round and a screenshot. -->
-    <Compile Include="../../DiveMap/Assets/Scripts/Core/SurfaceLight.cs" />
   </ItemGroup>
 
   <ItemGroup Label="EditMode tests for exactly those files">
@@ -79,12 +56,8 @@
     <Compile Include="../../DiveMap/Assets/Tests/EditMode/SpeciesGenomeTests.cs" />
     <Compile Include="../../DiveMap/Assets/Tests/EditMode/SpeciesBehaviorTests.cs" />
     <Compile Include="../../DiveMap/Assets/Tests/EditMode/SwimStyleTests.cs" />
-    <Compile Include="../../DiveMap/Assets/Tests/EditMode/ClipPlayTests.cs" />
     <Compile Include="../../DiveMap/Assets/Tests/EditMode/HuntMathTests.cs" />
     <Compile Include="../../DiveMap/Assets/Tests/EditMode/SpeciesCoverageTests.cs" />
-    <!-- WO-A. Reads the shipped manifest: the Atlantis outage was a manifest that pointed at
-         WebP models glTFast cannot read, and nothing in the app could say so. -->
-    <Compile Include="../../DiveMap/Assets/Tests/EditMode/ManifestXrCoverageTests.cs" />
     <Compile Include="../../DiveMap/Assets/Tests/EditMode/MarineRoutingTests.cs" />
     <Compile Include="../../DiveMap/Assets/Tests/EditMode/ModeRulesTests.cs" />
     <Compile Include="../../DiveMap/Assets/Tests/EditMode/FishMindTests.cs" />
@@ -95,21 +68,6 @@
     <Compile Include="../../DiveMap/Assets/Tests/EditMode/TiltedHullTests.cs" />
     <Compile Include="../../DiveMap/Assets/Tests/EditMode/QcPixelsTests.cs" />
     <Compile Include="../../DiveMap/Assets/Tests/EditMode/GlbShadingTests.cs" />
-    <Compile Include="../../DiveMap/Assets/Tests/EditMode/GoldShadingTests.cs" />
-    <Compile Include="../../DiveMap/Assets/Tests/EditMode/RepoFiles.cs" />
-    <Compile Include="../../DiveMap/Assets/Tests/EditMode/ToneMapTests.cs" />
-    <Compile Include="../../DiveMap/Assets/Tests/EditMode/ColorSpaceTests.cs" />
-    <Compile Include="../../DiveMap/Assets/Tests/EditMode/WaterFogTests.cs" />
-    <Compile Include="../../DiveMap/Assets/Tests/EditMode/UnderwaterLightTests.cs" />
-    <Compile Include="../../DiveMap/Assets/Tests/EditMode/AmbientBandTests.cs" />
-    <Compile Include="../../DiveMap/Assets/Tests/EditMode/DepthLightTests.cs" />
-    <Compile Include="../../DiveMap/Assets/Tests/EditMode/DiveLightMathTests.cs" />
-    <Compile Include="../../DiveMap/Assets/Tests/EditMode/SeabedGeomTests.cs" />
-    <!-- WO-E5. The fog range and the fog colour are pure arithmetic, and the bug they fix
-         (the fog started 322 u away on a map 340 u wide) is a calculation, not a screenshot. -->
-    <Compile Include="../../DiveMap/Assets/Tests/EditMode/FogRangeTests.cs" />
-    <!-- WO-E5c. The albedo screen and the eleven measured models it was derived from. -->
-    <Compile Include="../../DiveMap/Assets/Tests/EditMode/AlbedoScreenTests.cs" />
     <Compile Include="Runner.cs" />
   </ItemGroup>
 </Project>

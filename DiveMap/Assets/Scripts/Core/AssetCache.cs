@@ -44,32 +44,14 @@ namespace DiveMap.Core
         ///
         /// An index row written before this field existed decodes as generation 0, which is
         /// exactly the set of files that needs replacing.
-        ///
-        /// generation 3 (2026-08-03): the UV-gutter dilation pass rewrote the base-colour and
-        /// metallic-roughness textures of the re-exported models, and the singha statue's solids
-        /// were rebuilt — all of it uploaded OVER the existing <c>models/xr/</c> URLs. Without the
-        /// bump a device that has opened these maps once keeps serving itself the pre-dilation
-        /// bytes and the fix reads as "แก้แล้วเหมือนไม่ได้แก้".
-        ///
-        /// generation 4 (2026-08-03): the albedo lift. Five models' base-colour textures were
-        /// re-encoded — singha, HTMS Chang, htms732, hardeep, poseidon — after the in-frame probe
-        /// proved their black came from the texture, not the lighting: forcing a white albedo took
-        /// blackOfSubject from 20.21% to 0.00%, and raising every light in the app had moved it by
-        /// nothing at all. Same URLs again, and maps.siamdive.com serves /models/* as
-        /// <c>immutable, max-age=31536000</c>, so without this a phone that has opened Hanuman once
-        /// would keep the old dark bytes for a year.
         /// </summary>
-        /// generation 5 (2026-08-03): the rig batch. 132 files — 66 animal models, both LODs —
-        /// were rebuilt with a skeleton and swim clips transferred onto the high-resolution master
-        /// and uploaded over the same URLs. The app had never played a clip in its life, so a
-        /// device holding generation-4 bytes would keep a catalogue of animals that cannot move
-        /// while the manifest next to it says <c>"animated": true</c>.
-        /// generation 6 (2026-08-03): the eleven Atlantis ruins were rebuilt at the triangle count
-        /// the website ships — 35k back up to ~101k — after the decimation was measured to be what
-        /// made them black: pctDark 1.54% → 0.50% on the domed temple, and every one of the eleven
-        /// landed on the web's own figure to the digit. Same URLs, so a phone that has opened
-        /// Atlantis once would keep the cut-down meshes and none of it would show.
-        public const int Generation = 6;
+        /// generation 7 (2026-08-03): the rollback. Every rendering change of 3 Aug was reverted
+        /// after the build made from them was worse on the phone than the one before — but the
+        /// FILES on the CDN moved that day and cannot be un-moved from here: ruins rebuilt at the
+        /// web's triangle count, animals given skeletons, 143 textures dilated, some albedo lifted.
+        /// A device holding generation-2 bytes would pair this app with a mixture of files from
+        /// both sides of the day, which is a state nobody has ever looked at.
+        public const int Generation = 7;
 
         /// <summary>
         /// Is a cached file's generation still good enough to serve?
