@@ -179,84 +179,46 @@ namespace DiveMap.Core
         /// <inheritdoc cref="ProbeValidatedMetallic"/>
         public const float ProbeValidatedRoughness = 0.6f;
 
-        // ── WO-E5e: the normal maps were destroyed BEFORE the app ever saw them ──
+        // ── WO-E5e, RETRACTED. Kept because the mistake is worth more than the claim was ──
         //
-        // 🔴 THE SAME BUG CAME BACK THROUGH A DIFFERENT DOOR. Everything above this line is about a
-        // normal map being sRGB-decoded by a sampler in a gamma project, and the fix was to move
-        // the project to linear — which worked, and which turned every normal map in the app back
-        // ON (<c>[Shading] … dropped=f</c>). What came back on is not a normal map.
+        // 🔴 THE CLAIM: "ETC1S destroyed the normal maps — 49.96% of the master's independent x/y
+        // movement survives as 0.01% on the device." It was wrong, and it was wrong in a way that
+        // is easy to repeat, so the correction is written down instead of deleted.
         //
-        // THE MEASUREMENT, on the very files the CDN serves against the 4096² masters they were
-        // built from. ETC1 — Unity reports the device format as <c>RGB_ETC_UNorm</c> — splits every
-        // 4×4 into sub-blocks that share ONE base colour plus a per-pixel LUMINANCE modifier added
-        // equally to R, G and B. Inside a sub-block R and G can therefore only move TOGETHER. A
-        // tangent-space normal map puts x in R and y in G and they must move INDEPENDENTLY, so the
-        // share of the local variation lying along (1, −1) is precisely what the format cannot
-        // represent. Measured as a fraction of total local variance:
+        // The measurement was real. The INFERENCE from it was not. Independent x/y energy is a
+        // function of the NEIGHBOURHOOD it is measured over, and the first version measured it over
+        // one 4×4 ETC1 block and then quoted the answer as if it described the whole map. Measured
+        // properly — same definition, same files, window swept:
         //
-        //                              master PNG 4096²      shipped KTX2 (ETC1S)
-        //     domed_temple                 49.96 %                  0.01 %
-        //     grand_byzantine              50.11 %                  0.49 %
-        //     rms lost, bytes           11.74 / 15.55            0.15 / 1.40
+        //     window        2×2     4×4     8×8    16×16   64×64   whole
+        //     master       49.96   50.02   49.89   49.87   49.79   49.70    (4096² PNG)
+        //     shipped       0.02    0.01   31.29   38.27   41.73   42.21    (2048² ETC1S)
+        //     kraken        0.07    0.05   31.08   37.53   40.74   41.22
         //
-        // Half of every master normal map is independent R/G movement, which is what a normal map
-        // IS. Essentially none of it survives to the device. What is left is the component where R
-        // and G rise and fall together — i.e. x ≈ y at every texel — so every perturbed normal
-        // tilts along the SAME tangent-space diagonal instead of in the direction the surface
-        // actually turns.
+        // A real normal map is scale-invariant: the master reads ~50% at every window, because x
+        // and y are independent axes at every spatial frequency. ETC1S flattens x onto y INSIDE a
+        // block — that part of the first measurement was correct and is what 0.01% describes — but
+        // each block keeps its own base colour, so everything coarser than 4×4 survives. 42.21 of
+        // the master's 49.70 is 85%. The loss is real, it is high-frequency detail, and it is about
+        // 15%. It is not 4,000×.
         //
-        // 🔎 And that is why the damage arrives as hard-edged patches rather than as softness,
-        // which is the observation this file already explains once for the gamma bug: tangent
-        // direction follows the UV chart, so one shared diagonal tilt turns a different way in
-        // every chart. The user's daylight screenshot is bimodal for exactly that reason —
-        // 68.7 % of the dome's body under byte 16 and 15.7 % at sand level, with 0.62 % in the
-        // whole range between.
+        // Two facts that should have stopped the claim before it was written:
+        //   • corr(R, G) on the shipped map is 0.164 (master 0.006). Had x collapsed onto y it
+        //     would be ~1.0. Sample texels: (146,105,253) (233,125,183) (171,72,229) — plainly
+        //     independent channels.
+        //   • THE WEB SHIPS ETC1S NORMAL MAPS TOO, at 512², and scores WORSE on this very metric
+        //     (kraken 0.2995, singha 0.3333, chang 0.3058, htms732 0.2724 against our 0.39-0.42) —
+        //     while being the thing the user holds up as looking right. A mechanism that is
+        //     stronger on the good picture than on the bad one is not the cause of the difference.
         //
-        // 🔴 IT IS NOT A RUIN PROBLEM. Run 30800189252 reports darkOfSubject 65-95 % across the
-        // entire catalogue — poseidon 95.16, htms732 76.08, chang 70.98, kraken 65.38 — because
-        // every texture in the app goes through the same toktx ETC1S pass. "ทุกวัตถุ" is right.
+        // 🔎 The lesson, stated so the next person gets it for free: a statistic computed over a
+        // window is a statement about that window. Before quoting one as a property of a texture,
+        // sweep the window and check it is flat — the master is, and that is what made it a fair
+        // number to quote; the shipped file is not, and that is what made it an unfair one.
         //
-        // 🔎 WHAT THIS IS NOT. It is not something a clamp can fix. Spherical harmonics summing
-        // below zero writes EXACTLY (0,0,0), so it can only ever account for
-        // <c>blackOfSubject</c> — 0.12-33 % — and the number that has to move is
-        // <c>darkOfSubject</c>, which is a level, not a clamp. Clamping the ambient would also
-        // need a custom shader, and this project has twice shipped one that was stripped from the
-        // player build and rendered magenta.
-
-        /// <summary>
-        /// Fraction of a tangent-space normal map's local variation that a luminance-modifier block
-        /// format such as ETC1 physically cannot store: the part where x rises while y falls.
-        ///
-        /// Stated as arithmetic rather than as a paragraph so the claim is checkable. For a map
-        /// whose x and y are INDEPENDENT — which is the definition of a usable tangent-space normal
-        /// map — the two projections carry equal energy and this returns 0.5.
-        /// </summary>
-        /// <param name="sharedVariance">Energy along (1, 1) — what the format keeps.</param>
-        /// <param name="independentVariance">Energy along (1, −1) — what it discards.</param>
-        public static double LostToLumaBlockFormat(double sharedVariance, double independentVariance)
-        {
-            double total = sharedVariance + independentVariance;
-            return total <= 0.0 ? 0.0 : independentVariance / total;
-        }
-
-        /// <summary>
-        /// What a healthy tangent-space normal map measures on
-        /// <see cref="LostToLumaBlockFormat"/> — half, because x and y are independent axes.
-        /// The masters measure 0.4996 and 0.5011.
-        /// </summary>
-        public const double HealthyIndependentFraction = 0.5;
-
-        /// <summary>
-        /// Below this, a normal map has been flattened onto one diagonal and is no longer a normal
-        /// map, whatever its file extension says. The shipped ETC1S files measure 0.0001 and 0.0049
-        /// against masters at 0.4996 and 0.5011, so anything in between is already catastrophic;
-        /// a tenth of healthy is a generous line and still fails every file in the catalogue today.
-        /// </summary>
-        public const double MinIndependentFraction = 0.05;
-
-        /// <summary>Has this normal map survived its encoding?</summary>
-        public static bool NormalMapSurvivedEncoding(double sharedVariance, double independentVariance)
-            => LostToLumaBlockFormat(sharedVariance, independentVariance) >= MinIndependentFraction;
+        // No gate is derived from any of this. There was one — a "normal map survived its encoding"
+        // threshold — and it was removed rather than re-tuned, because the quantity it screened on
+        // does not separate the pictures that look right from the ones that do not.
 
         /// <summary>At or below this a factor is already harmless.</summary>
         public const float MetalFactorFloor = 0.05f;

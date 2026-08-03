@@ -155,60 +155,53 @@ namespace DiveMap.Tests
             }
         }
 
-        // ── WO-E5e ───────────────────────────────────────────────────────────────
+        // ── WO-E5e, RETRACTED ────────────────────────────────────────────────────
 
         [Test]
-        public void AHealthyNormalMapSplitsItsEnergyEvenly()
+        public void IndependentXyEnergyIsAStatementAboutAWindowNotAboutATexture()
         {
-            // x and y are independent axes, so a real tangent-space map carries equal energy along
-            // (1,1) and (1,-1). The 4096² masters measure 0.4996 and 0.5011.
-            Assert.That(GlbShading.LostToLumaBlockFormat(1.0, 1.0),
-                        Is.EqualTo(GlbShading.HealthyIndependentFraction).Within(1e-9));
-            Assert.That(GlbShading.NormalMapSurvivedEncoding(11.75 * 11.75, 11.74 * 11.74), Is.True,
-                        "the domed_temple master must pass");
-            Assert.That(GlbShading.NormalMapSurvivedEncoding(15.52 * 15.52, 15.55 * 15.55), Is.True,
-                        "the grand_byzantine master must pass");
-        }
-
-        [Test]
-        public void TheShippedEtc1sNormalMapsAreNotNormalMapsAnyMore()
-        {
-            // 🔴 The measurement, kept as a test so it cannot be forgotten the next time somebody
-            // reads "[Shading] … dropped=f" and concludes the normal maps are fine. These are the
-            // real numbers off the real CDN files, as rms bytes per sub-block.
+            // 🔴 This fixture used to gate on "did the normal map survive its encoding", built on a
+            // measurement taken over one 4×4 ETC1 block and quoted as a property of the whole map.
+            // The gate is gone; the table that killed it stays, because the mistake is the reusable
+            // part. Same definition, same files, window swept — independent x/y energy, per cent:
             //
-            //                     shared   lost      independent fraction
-            //   domed_temple       13.31    0.15            0.0001
-            //   grand_byzantine    20.03    1.40            0.0049
-            //   cc0:kraken         12.56    0.30            0.0006
-            //   HTMS Chang         12.61    0.49            0.0015
-            var shipped = new[]
-            {
-                new[] { 13.31, 0.15 },   // ruin:domed_temple
-                new[] { 20.03, 1.40 },   // ruin:grand_byzantine
-                new[] { 12.56, 0.30 },   // cc0:kraken       — a model nobody complained about
-                new[] { 12.61, 0.49 },   // cc0:wreck_chang  — likewise
-            };
-            foreach (double[] m in shipped)
-            {
-                double frac = GlbShading.LostToLumaBlockFormat(m[0] * m[0], m[1] * m[1]);
-                Assert.That(frac, Is.LessThan(0.01),
-                    "ETC1S kept essentially none of the independent x/y movement");
-                Assert.That(GlbShading.NormalMapSurvivedEncoding(m[0] * m[0], m[1] * m[1]), Is.False,
-                    "every shipped normal map in the catalogue fails, which is why the report is " +
-                    "\"ทุกวัตถุ\" and not \"the ruins\"");
-            }
+            //     window        2×2     4×4     8×8    16×16   64×64   whole
+            //     master       49.96   50.02   49.89   49.87   49.79   49.70
+            //     shipped       0.02    0.01   31.29   38.27   41.73   42.21
+            //
+            // A real normal map is scale-invariant because x and y are independent axes at every
+            // frequency. ETC1S flattens x onto y inside a block and keeps a base colour per block,
+            // so the loss is high-frequency only: 42.21 of 49.70 survives, about 85%.
+            double[] master = { 49.96, 50.02, 49.89, 49.87, 49.79, 49.70 };
+            double[] shipped = { 0.02, 0.01, 31.29, 38.27, 41.73, 42.21 };
+
+            double masterSpread = 0.0;
+            for (int i = 0; i < master.Length; i++)
+                for (int j = 0; j < master.Length; j++)
+                    masterSpread = System.Math.Max(masterSpread, System.Math.Abs(master[i] - master[j]));
+            Assert.That(masterSpread, Is.LessThan(1.0),
+                "a real normal map reads the same at every window — that is what makes the number quotable");
+
+            double shippedSpread = shipped[shipped.Length - 1] - shipped[1];
+            Assert.That(shippedSpread, Is.GreaterThan(40.0),
+                "the shipped file does not — so no single window's answer describes it");
+
+            Assert.That(shipped[shipped.Length - 1] / master[master.Length - 1], Is.GreaterThan(0.80),
+                "about 85% of the master's independent content actually survives to the device");
         }
 
         [Test]
-        public void TheGateIsGenerousAndStillFailsEverything()
+        public void TheWebScoresWorseOnThisMetricAndIsTheGoodPicture()
         {
-            // The line is a tenth of healthy — nowhere near the masters, nowhere near the shipped
-            // files. It exists so that a re-encode has an unambiguous target rather than "better".
-            Assert.That(GlbShading.MinIndependentFraction,
-                        Is.LessThan(GlbShading.HealthyIndependentFraction / 5.0));
-            Assert.That(GlbShading.NormalMapSurvivedEncoding(1.0, 0.06), Is.True);
-            Assert.That(GlbShading.NormalMapSurvivedEncoding(1.0, 0.04), Is.False);
+            // The fact that should have stopped the claim before it was written. The web ships
+            // ETC1S normal maps at 512² and measures LOWER independent x/y energy than we do at
+            // 2048², while being the render the user holds up as correct. A mechanism that is
+            // stronger on the good picture than on the bad one is not what separates them.
+            double[] web = { 0.2995, 0.3333, 0.3058, 0.2724 };   // kraken, singha, chang, htms732
+            double ours = 0.39;                                   // our weakest of the same set
+            foreach (double w in web)
+                Assert.That(w, Is.LessThan(ours),
+                    "the web is more damaged on this metric than we are, and looks better");
         }
     }
 }

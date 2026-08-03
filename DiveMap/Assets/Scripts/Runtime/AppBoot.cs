@@ -536,6 +536,15 @@ namespace DiveMap.Runtime
             // the passes above their evidence.
             yield return QcAnimShot.Run(boatCenter);
 
+            // ── WO-E5f: two files, one variable, one frame each ────────────────────
+            // Every theory this session has produced about the dark models was argued from
+            // statistics taken off the files, and two of them were wrong — one explained the wrong
+            // number, the other was a window artefact quoted as a property. What none of them could
+            // do is change one input and look. These pairs differ in exactly one thing and are
+            // byte-identical in everything else, so the two frames cannot disagree for any other
+            // reason. First, because it is the pass whose answer decides what the rest is for.
+            yield return QcPilotAb.Run(dir, Manifest, boatCenter);
+
             // ── WO-E5d: WHERE do the Atlantis ruins lose their light? ──────────────
             // In DAYLIGHT, against a reference surface of known albedo, one shading input removed
             // at a time. Every offline explanation for "ซุ้มดำ" has been measured on the files and
