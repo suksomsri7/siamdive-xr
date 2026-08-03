@@ -44,8 +44,14 @@ namespace DiveMap.Core
         ///
         /// An index row written before this field existed decodes as generation 0, which is
         /// exactly the set of files that needs replacing.
+        ///
+        /// generation 3 (2026-08-03): the UV-gutter dilation pass rewrote the base-colour and
+        /// metallic-roughness textures of the re-exported models, and the singha statue's solids
+        /// were rebuilt — all of it uploaded OVER the existing <c>models/xr/</c> URLs. Without the
+        /// bump a device that has opened these maps once keeps serving itself the pre-dilation
+        /// bytes and the fix reads as "แก้แล้วเหมือนไม่ได้แก้".
         /// </summary>
-        public const int Generation = 2;
+        public const int Generation = 3;
 
         /// <summary>
         /// Is a cached file's generation still good enough to serve?
