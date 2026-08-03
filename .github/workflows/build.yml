@@ -529,6 +529,11 @@ jobs:
             # had never needed a new glob before — so the round that was supposed to end "we only
             # ever photographed models on a grey backdrop" ended with the same evidence as always.
             qc_map_*.png
+            # Same omission as qc_map_* the round before: QcRuinLadder and QcPilotAb each wrote
+            # their frames and neither glob existed, so the two passes built to settle an argument
+            # about pixels shipped their numbers and left the pixels on the runner.
+            qc_ladder_*.png
+            qc_pilot_*.png
             qc_player.log
             qc_ui*.png
             qc_ui_player.log
