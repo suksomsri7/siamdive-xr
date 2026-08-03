@@ -397,3 +397,36 @@ WO-XR-04 (ปลา GLB จริง + caustics/FX) ↔ WO-XR-02m AR (ARCore) �
 
 ### โมเดล (245/275 ชี้ Bunny 2048²)
 ledger ทั้งหมดใน `/root/projects/siamdive-xr-models/*.jsonl` (commit `0cd3674`) · raw archive `/root/asset-masters/` + `predilation_backup/` (rollback dilation ได้) · maps repo = `4d8a1d7`
+
+## §10 — คำตัดสินปิด session ภาพ 3-4 ส.ค. — **อ่านก่อนแตะเรื่องภาพทุกครั้ง override §6-§9**
+
+> **user (4 ส.ค. เช้า, เทสบนไอโฟนจริง): "version 237 ดีสุด หลังจาก version นี้แก้ไขได้ผิดทางทั้งหมด"**
+> build 244 (Linear+ACES): "ยังดำปกติ ไม่เห็นเปลี่ยน" · build 255 (ทั้งหมด+metallic): "แย่กว่าเดิมมากๆ"
+
+**สถานะ**: main = `4b359f3` (build 257) = `800898c` (ก่อน session) + 3 อย่างที่ไม่แตะเรนเดอร์:
+manifest ซุ้ม Atlantis 11 ตัว (ไม่มี = กล่องเหลือง — user พิสูจน์เองตอนลง 237 แท้) · `AssetCache.Generation` 2→7 · วงเล็บ `#if UNITY_ANDROID`
+งานทั้งวันอยู่ใน git `7f5d561..2be23ec` + branch `rollback-visual` — **ห้ามหยิบกลับทั้งก้อน**
+
+### ทำไมผิดทาง (เชิงกระบวนการ)
+1. **optimize เข้าหาเครื่องวัดที่ผิด** — ตัดสินทุกรอบด้วย QcModelShot สตูดิโอ llvmpipe (เวทีลอย y≈98 แสงตัวเอง) ซึ่งไม่ใช่สิ่งที่ user เห็น · เลขดีขึ้นทุกรอบ (metallic: kraken dark 65→8%) เครื่องจริงแย่ลงทุกรอบ
+2. เปลี่ยนภาพซ้อน 5+ ชั้นใน 1 วัน (Linear+ACES+แสง+env+fog×2+ground band+bounce+metallic+MSAA+เงา) → attribution พัง → ต้อง revert ทั้งก้อน
+3. ไม่เคย reproduce อาการของ user ใน instrument ก่อนแก้
+4. เดาสาเหตุผิด 8 ครั้ง (rig/ความลึก/texture/normal/tangent/ACES/สีหมอก/caustics) — ทุกครั้ง user หักล้าง (โหมดกลางวัน · ขับชน · ไฟฉาย · "หั่นทำไม")
+
+### ของที่ยังจริง
+- **ไฟล์ CDN ใหม่ทั้งชุดใช้ได้ ไม่ต้อง rollback** — user เทส 237 คู่ไฟล์ใหม่ (dilation 143 · rig 66 โมเดล 132 ไฟล์ · ซุ้ม 101k tris 22 ไฟล์ · albedo lift บางส่วน) แล้วบอกดีสุด ⇒ **renderer ฝั่งแอปคือตัวแปรเดียวที่ทำให้แย่**
+- backups ครบ: `/root/asset-masters/{prerig,preruin,prelift,predilation}_backup/` + ledgers `siamdive-xr-models/*.jsonl`
+- ตาราง diff เว็บ vs Unity (§8) ยังเป็นข้อเท็จจริง — แต่พอร์ตทีละชิ้นพิสูจน์แล้วว่าพัง ถ้าจะไล่เว็บให้ทำเป็น **preset เดียวทั้งชุดหลัง toggle แล้ว A/B บนเครื่องจริง**
+- ตัวแยกจาก user ที่ใช้ได้จริง: **เงา/แสงไม่พอ → ไฟฉายลบได้ · หมอก/แผ่นทับ/วัสดุ → ไฟฉายลบไม่ได้**
+
+### ⚠️ ของค้างที่ session ใหม่ต้องรู้
+1. **repo maps มีไฟล์ lift ค้าง uncommitted 12 ไฟล์** (Humpback_whale, Silver_Dolphin, Singha, Stone_King ฯลฯ ×xr0/xr1) — สถานะ "รอ commit + vercel --prod" ใน `lift_toe.jsonl` · **ห้าม commit/deploy โดยไม่ตัดสินใจก่อน**
+2. ปัญหาดั้งเดิมของ user **ยังไม่มีข้อไหนถูกแก้ในสายตาเขา**: ปื้นดำ/texture มืด · เว็บดูดีกว่า · ครีบเร็ว (CI ว่าตรงเว็บแล้วแต่ user ยังเห็นเร็ว — amp/ความเร็วว่าย/บริบท ไม่ใช่ Hz) · ฝูงกระจาย · Posidon มืด
+3. QC ที่สร้างวันนี้ (QcMapShot 7 แมพ/QcPilotAb/QcRuinLadder/QcBlack/QcAnimShot) ถูก revert ออกไปพร้อมกัน — **ของพวกนี้ดี ควรหยิบกลับเป็นอันดับแรก** (เป็นเครื่องมือ ไม่แตะภาพ) โดย cherry-pick เฉพาะไฟล์ QC
+
+### กติกา session ถัดไป (user เคาะ: **Fable คุม / Opus ทำ**)
+1. baseline = `4b359f3` · **หนึ่งการเปลี่ยนภาพต่อหนึ่ง build เท่านั้น**
+2. **ตัดสินผ่าน = รูปจากไอโฟน user บนแมพจริง** · CI = ตาข่าย regression เท่านั้น
+3. ก่อนแก้ต้อง reproduce อาการของ user ใน instrument ให้เห็นก่อน (มุมผู้เล่น แมพจริง เงื่อนไขเดียวกับรูปเขา)
+4. log ของแอปมาก่อนการคำนวณมือ · สถิติต้องกวาดพารามิเตอร์ก่อนอ้าง
+5. ลำดับแนะนำ: ① cherry-pick QC กลับ (ไม่แตะภาพ) → ยิง CI เก็บ baseline รูป 7 แมพของ build 257 ② เลือกปัญหาเดียวจากลิสต์ของ user → reproduce → แก้ → build → user ยืนยัน → ค่อยข้อถัดไป
