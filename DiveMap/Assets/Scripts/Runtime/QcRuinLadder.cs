@@ -477,7 +477,11 @@ namespace DiveMap.Runtime
                       $"lightmapScaleOffset={r.lightmapScaleOffset} " +
                       $"realtimeLightmapIndex={r.realtimeLightmapIndex} " +
                       $"reflectionProbeUsage={r.reflectionProbeUsage} " +
-                      $"receiveGI={r.receiveGI} " +
+                      // receiveGI is MeshRenderer's and Editor-only — it exists to drive lightmap
+                      // baking, not runtime shading, so a player build has no such property and the
+                      // whole assembly fails to compile. lightmapIndex below is the runtime-visible
+                      // half of the same question and is the one that decides whether this renderer
+                      // takes the LIGHTMAP path or the light-probe path.
                       $"probeAnchor={(r.probeAnchor != null ? r.probeAnchor.name : "(none)")} " +
                       $"isPartOfStaticBatch={r.isPartOfStaticBatch} " +
                       $"receiveShadows={r.receiveShadows} shadowCasting={r.shadowCastingMode} " +
