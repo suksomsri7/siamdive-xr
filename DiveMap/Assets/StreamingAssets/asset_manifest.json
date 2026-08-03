@@ -2595,7 +2595,9 @@
    "animated": false,
    "school": null,
    "fx": null,
-   "behavior": null
+   "behavior": null,
+   "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/ruin_byzantine_arch_xr0.glb",
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/ruin_byzantine_arch_xr1.glb"
   },
   {
    "id": "ruin:crystal_arch",
@@ -2607,7 +2609,9 @@
    "animated": false,
    "school": null,
    "fx": null,
-   "behavior": null
+   "behavior": null,
+   "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/ruin_crystal_arch_xr0.glb",
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/ruin_crystal_arch_xr1.glb"
   },
   {
    "id": "ruin:grand_byzantine",
@@ -2619,7 +2623,9 @@
    "animated": false,
    "school": null,
    "fx": null,
-   "behavior": null
+   "behavior": null,
+   "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/ruin_grand_byzantine_xr0.glb",
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/ruin_grand_byzantine_xr1.glb"
   },
   {
    "id": "ruin:domed_temple",
@@ -2631,7 +2637,9 @@
    "animated": false,
    "school": null,
    "fx": null,
-   "behavior": null
+   "behavior": null,
+   "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/ruin_domed_temple_xr0.glb",
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/ruin_domed_temple_xr1.glb"
   },
   {
    "id": "ruin:fantasy_gate",
@@ -2643,7 +2651,9 @@
    "animated": false,
    "school": null,
    "fx": null,
-   "behavior": null
+   "behavior": null,
+   "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/ruin_fantasy_gate_xr0.glb",
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/ruin_fantasy_gate_xr1.glb"
   },
   {
    "id": "ruin:stepped_stone",
@@ -2655,7 +2665,9 @@
    "animated": false,
    "school": null,
    "fx": null,
-   "behavior": null
+   "behavior": null,
+   "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/ruin_stepped_stone_xr0.glb",
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/ruin_stepped_stone_xr1.glb"
   },
   {
    "id": "ruin:ornate_monument",
@@ -2667,7 +2679,8 @@
    "animated": false,
    "school": null,
    "fx": null,
-   "behavior": null
+   "behavior": null,
+   "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/ruin_ornate_monument_xr0.glb"
   },
   {
    "id": "ruin:broken_pillars",
@@ -2679,7 +2692,9 @@
    "animated": false,
    "school": null,
    "fx": null,
-   "behavior": null
+   "behavior": null,
+   "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/ruin_broken_pillars_xr0.glb",
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/ruin_broken_pillars_xr1.glb"
   },
   {
    "id": "ruin:long_arch",
@@ -2691,7 +2706,9 @@
    "animated": false,
    "school": null,
    "fx": null,
-   "behavior": null
+   "behavior": null,
+   "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/ruin_long_arch_xr0.glb",
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/ruin_long_arch_xr1.glb"
   },
   {
    "id": "ruin:ancient_byzantine",
@@ -2703,7 +2720,9 @@
    "animated": false,
    "school": null,
    "fx": null,
-   "behavior": null
+   "behavior": null,
+   "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/ruin_ancient_byzantine_xr0.glb",
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/ruin_ancient_byzantine_xr1.glb"
   },
   {
    "id": "ruin:ancient_ornate",
@@ -2715,7 +2734,9 @@
    "animated": false,
    "school": null,
    "fx": null,
-   "behavior": null
+   "behavior": null,
+   "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/ruin_ancient_ornate_xr0.glb",
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/ruin_ancient_ornate_xr1.glb"
   },
   {
    "id": "stat:verdant_poseidon",

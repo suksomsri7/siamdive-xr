@@ -69,6 +69,9 @@
     <Compile Include="../../DiveMap/Assets/Tests/EditMode/SwimStyleTests.cs" />
     <Compile Include="../../DiveMap/Assets/Tests/EditMode/HuntMathTests.cs" />
     <Compile Include="../../DiveMap/Assets/Tests/EditMode/SpeciesCoverageTests.cs" />
+    <!-- WO-A. Reads the shipped manifest: the Atlantis outage was a manifest that pointed at
+         WebP models glTFast cannot read, and nothing in the app could say so. -->
+    <Compile Include="../../DiveMap/Assets/Tests/EditMode/ManifestXrCoverageTests.cs" />
     <Compile Include="../../DiveMap/Assets/Tests/EditMode/MarineRoutingTests.cs" />
     <Compile Include="../../DiveMap/Assets/Tests/EditMode/ModeRulesTests.cs" />
     <Compile Include="../../DiveMap/Assets/Tests/EditMode/FishMindTests.cs" />
