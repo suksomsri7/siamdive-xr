@@ -126,6 +126,9 @@ namespace DiveMap.Runtime
         // cubemap contributes about 3% to them and the metallic tame-down in SceneBuilder skips
         // them by design. Their base colour maps average sRGB 108-202; they are BRIGHT models.
         // When one of these goes black it is the ambient, not the material. See UnderwaterShading.
+        /// <summary>An authored Core colour as a Unity one — the bands live in Core now.</summary>
+        private static Color Rgb(SeabedGeom.Rgb c) => new Color(c.R, c.G, c.B);
+
         private void SetupLighting()
         {
             // 🔴 WO-E3 — THE WEB'S HEMISPHERE LIGHT, not four rounds of compensation.
@@ -144,10 +147,17 @@ namespace DiveMap.Runtime
             // up in linear and ACES rolling off the top, the web's own numbers are the ones that
             // belong here, and the reason the web reads better at 512² than this app did at 2048²
             // is largely in these three lines: bright hemisphere, dark water.
+            //
+            // 🔴 WO-E4: the three literals moved to UnderwaterLight.Web*Band and are read from
+            // there. They were the only copy in the project, which is exactly why the ground band
+            // could be dimmed below the tone curve's crush point for months without anything being
+            // able to notice: the floor that was supposed to catch it was built out of the water
+            // colour and had no idea what band it was flooring. Now UnderwaterLight.GroundBandAt
+            // and this line are the same numbers by construction, and that function is tested.
             RenderSettings.ambientMode         = UnityEngine.Rendering.AmbientMode.Trilight;
-            RenderSettings.ambientSkyColor     = new Color(0.787f, 0.947f, 1.050f); // 0xbfe6ff × 1.05
-            RenderSettings.ambientEquatorColor = new Color(0.430f, 0.572f, 0.657f); // hemisphere at the horizon = midpoint
-            RenderSettings.ambientGroundColor  = new Color(0.074f, 0.198f, 0.264f); // 0x123040 × 1.05
+            RenderSettings.ambientSkyColor     = Rgb(UnderwaterLight.WebSkyBand);     // 0xbfe6ff × 1.05
+            RenderSettings.ambientEquatorColor = Rgb(UnderwaterLight.WebEquatorBand); // hemisphere at the horizon = midpoint
+            RenderSettings.ambientGroundColor  = Rgb(UnderwaterLight.WebGroundBand);  // 0x123040 × 1.05
             // WO-XR-04.3: the web's underwater fog — THREE.Fog(0x123a55, near, far) with
             // near = max(500, reach·1.1) and far = max(9000, maxD·3.4). At orbit distance this
             // is only a 3-7% wash (Fable's survey), and that is the point: it must colour the

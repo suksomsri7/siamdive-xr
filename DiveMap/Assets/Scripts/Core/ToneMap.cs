@@ -175,6 +175,23 @@ namespace DiveMap.Core
             return LinearToSrgb(SrgbToLinear(srgb) * k);
         }
 
+        /// <summary>
+        /// Raise an sRGB-authored channel until it carries at least <paramref name="minLinear"/>
+        /// of LIGHT — and never dim it. The mirror image of <see cref="ScaleLight"/>: same reason
+        /// for existing (these numbers are authored sRGB, the requirement is about radiance), same
+        /// refusal to do the comparison in the wrong space.
+        ///
+        /// 🔎 A floor rather than a set, for the reason <see cref="UnderwaterLight.Raise"/> gives:
+        /// four systems write the ambient and a rule that only ever raises cannot lose an argument
+        /// with any of them.
+        /// </summary>
+        public static float LiftLight(float srgb, float minLinear)
+        {
+            if (minLinear <= 0f) return srgb;
+            if (srgb > 0f && SrgbToLinear(srgb) >= minLinear) return srgb;
+            return LinearToSrgb(minLinear);
+        }
+
         /// <summary>The byte an sRGB texture (or a screenshot) holds for a linear value.</summary>
         public static byte LinearToByte(float linear)
         {

@@ -62,6 +62,10 @@
     <Compile Include="../../DiveMap/Assets/Scripts/Core/WaterFog.cs" />
     <Compile Include="../../DiveMap/Assets/Scripts/Core/UnderwaterLight.cs" />
     <Compile Include="../../DiveMap/Assets/Scripts/Core/DiveLightMath.cs" />
+    <!-- WO-E4. SurfaceLight is albedo x light x tone curve written down as arithmetic, so
+         "does a byte-71 texel survive an underside at 30 m" and "does the torch give the red
+         back" are two-second answers on this machine instead of a CI round and a screenshot. -->
+    <Compile Include="../../DiveMap/Assets/Scripts/Core/SurfaceLight.cs" />
   </ItemGroup>
 
   <ItemGroup Label="EditMode tests for exactly those files">
@@ -92,6 +96,9 @@
     <Compile Include="../../DiveMap/Assets/Tests/EditMode/ColorSpaceTests.cs" />
     <Compile Include="../../DiveMap/Assets/Tests/EditMode/WaterFogTests.cs" />
     <Compile Include="../../DiveMap/Assets/Tests/EditMode/UnderwaterLightTests.cs" />
+    <Compile Include="../../DiveMap/Assets/Tests/EditMode/AmbientBandTests.cs" />
+    <Compile Include="../../DiveMap/Assets/Tests/EditMode/DepthLightTests.cs" />
+    <Compile Include="../../DiveMap/Assets/Tests/EditMode/DiveLightMathTests.cs" />
     <Compile Include="../../DiveMap/Assets/Tests/EditMode/SeabedGeomTests.cs" />
     <Compile Include="Runner.cs" />
   </ItemGroup>

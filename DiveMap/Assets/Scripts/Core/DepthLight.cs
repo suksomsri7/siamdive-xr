@@ -69,6 +69,47 @@ namespace DiveMap.Core
         }
 
         /// <summary>
+        /// 🔴 DEPTH IS NOT THE SAME QUESTION AS PATH, AND ONLY ONE OF THEM IS WHAT A TORCH ANSWERS.
+        ///
+        /// The user's sentence, which is the whole design note: "ถ้าแสงสีแดงหาย ทำให้พื้นดำ แต่ในโลกจริง
+        /// คือเมื่อโดนแสงไฟฉาย สีเดิมจะกลับมา". It is right, and it is right because Beer–Lambert
+        /// absorbs along the DISTANCE THE LIGHT TRAVELS THROUGH WATER, not along the depth of the
+        /// thing being lit:
+        ///
+        ///   • daylight / ambient — surface → object. At 30 m that path IS 30 m, so red is gone
+        ///     (e^-30/5 ≈ 0.002) and <see cref="Attenuation"/> is the correct model for it.
+        ///   • a torch — lamp → object → eye. A diver's torch is held a metre or two from the wall,
+        ///     so its path is a metre or two whatever the depth, red survives almost intact, and
+        ///     the rust comes back orange. That is why divers carry one.
+        ///
+        /// So the depth curve must never be applied to a lamp. This function is the honest model of
+        /// what a lamp's path costs, and it exists to be read as much as to be called — the numbers
+        /// it returns are why <see cref="DiveLightMath"/>'s lamps are NOT attenuated at all:
+        ///
+        ///   path  2 m → R 0.670    path  9 m → R 0.165    path 18 m → R 0.027
+        ///
+        /// The drone aims its lamps <see cref="DiveLightMath.Reach"/> = 54 u = 9 m ahead and the
+        /// camera trails it by about as much again, so a literal round-trip path is ~18 m and a
+        /// literal model would leave 2.7% of the red — i.e. it would delete the feature. The app's
+        /// camera stands ten times further from the subject than a diver's mask does; applying the
+        /// diver's-eye absorption to the app's camera distance would be modelling the wrong
+        /// geometry. Not attenuating the lamp is the closer approximation to what the user is
+        /// describing, and it is deliberate rather than an oversight.
+        ///
+        /// No <see cref="Floor"/> here: the floor is a playability prop for the ambient (the deep
+        /// must stay readable), and a short path does not need propping up.
+        /// </summary>
+        public static void PathTransmittance(float pathUnits, out float r, out float g, out float b)
+        {
+            float m = pathUnits / UnitsPerMetre;
+            if (m <= 0f || float.IsNaN(m)) { r = g = b = 1f; return; }
+
+            r = (float)Math.Exp(-m / RedDepth);
+            g = (float)Math.Exp(-m / GreenDepth);
+            b = (float)Math.Exp(-m / BlueDepth);
+        }
+
+        /// <summary>
         /// Overall brightness at a depth — the average of the three channels. Handy for a single
         /// dimmer (sun intensity) where a tint would be wrong.
         /// </summary>

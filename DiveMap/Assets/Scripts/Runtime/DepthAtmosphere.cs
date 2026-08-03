@@ -90,7 +90,22 @@ namespace DiveMap.Runtime
             // BRIGHTER than the water as the camera descends.
             RenderSettings.ambientSkyColor = Dim(_baseSky, tint);
             RenderSettings.ambientEquatorColor = Dim(_baseEquator, tint);
-            RenderSettings.ambientGroundColor = Dim(_baseGround, tint);
+
+            // 🔴 WO-E4 — the ground band is the one that could not survive its own multiplication.
+            //
+            // Dimming it exactly like the other two is arithmetically consistent and visually
+            // fatal: the band starts at 0xffffff's 1.4% (0x123040 × 1.05), so red lands at 0.87 ×
+            // ToneMap.BlackFloor, and everything under that comes out of ACES as EXACTLY byte 0.
+            // Past ~15 m every down-facing surface in the app had its red pinned to zero whatever
+            // the model's albedo, and the darkest base colour that could make it off an underside
+            // at all was sRGB 72 — against a Singha atlas that is 47.9% darker than 71.
+            //
+            // So the dim, the seabed bounce and the floor are one function in Core, tested there,
+            // and applied here as a raise: whatever EnvMode or the headlamps left in the baseline
+            // is still honoured wherever it is already brighter. UnderwaterShading applies the same
+            // function again at order 500 — belt and braces, and idempotent because both are maxes.
+            RenderSettings.ambientGroundColor =
+                Raise(Dim(_baseGround, tint), UnderwaterLight.GroundBandAt(depth));
 
             // The background, dimmed by the very same vector. This is the half of the fix that is
             // visible: the gradient fills most of the frame and was baked once, at the surface.
@@ -141,6 +156,13 @@ namespace DiveMap.Runtime
             ToneMap.ScaleLight(c.r, k.r),
             ToneMap.ScaleLight(c.g, k.g),
             ToneMap.ScaleLight(c.b, k.b),
+            c.a);
+
+        /// <summary>Per-channel max against an authored Core colour — a floor, never a set.</summary>
+        private static Color Raise(Color c, SeabedGeom.Rgb floor) => new Color(
+            Mathf.Max(c.r, floor.R),
+            Mathf.Max(c.g, floor.G),
+            Mathf.Max(c.b, floor.B),
             c.a);
 
         private void OnDestroy()

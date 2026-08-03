@@ -72,6 +72,41 @@ namespace DiveMap.Core
 
         public static Atmosphere For(bool headlightOn) => headlightOn ? HeadlightOn : HeadlightOff;
 
+        /// <summary>Headlamp intensity when the lamps are on (<c>DroneLights.Apply</c>).</summary>
+        public const float LampIntensity = 2.6f;
+
+        /// <summary>
+        /// The lamp's own colour, 0xf2f9ff — near white, and that is the point.
+        ///
+        /// 🔴 This is the constant that makes "โดนไฟฉาย สีเดิมจะกลับมา" true. Red does not come
+        /// back because something un-dims it; it comes back because a WHITE light multiplied by a
+        /// red albedo is red, and nothing on the lamp's path takes the red out again (see
+        /// <see cref="DepthLight.PathTransmittance"/> for why the lamp is not attenuated). Tint
+        /// this blue "to match the water" and the feature is gone.
+        /// </summary>
+        public static readonly SeabedGeom.Rgb LampColor = new SeabedGeom.Rgb(0.949f, 0.976f, 1f);
+
+        /// <summary>
+        /// Fraction of a lamp's intensity that reaches a surface <paramref name="distanceUnits"/>
+        /// away — Unity's built-in legacy point/spot falloff, <c>1 / (1 + 25·d²/r²)</c>, and hard
+        /// zero at and beyond the range.
+        ///
+        /// 🔴 The zero is the feature, not an optimisation. "ไฟฉายเดิมสว่างทั้งแมพ" is a report
+        /// this project has already had once: the web throws its lamps 460 u across a 340 u map,
+        /// which lights the far rim as brightly as the sand underfoot and makes carrying a torch
+        /// pointless. <see cref="LampRange"/> is 90 u by the user's own instruction and MUST NOT be
+        /// widened; this function is here so a test can state "nothing past the range gets a single
+        /// photon from the lamp" rather than trusting that Unity still behaves that way.
+        /// </summary>
+        public static float LampFalloff(float distanceUnits, float range = LampRange)
+        {
+            if (range <= 0f || float.IsNaN(distanceUnits)) return 0f;
+            if (distanceUnits >= range) return 0f;
+            if (distanceUnits <= 0f) return 1f;
+            float d = distanceUnits / range;
+            return 1f / (1f + 25f * d * d);
+        }
+
         // ── headlamp placement (builder.html 3752-3757) ───────────────────────────
 
         /// <summary>How far ahead of the drone the lamps aim.</summary>

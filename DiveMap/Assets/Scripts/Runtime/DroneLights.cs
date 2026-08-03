@@ -36,6 +36,15 @@ namespace DiveMap.Runtime
         private Light _sun, _fill;
         private bool _saved;
 
+        /// <summary>
+        /// Per-pixel light slots the tour asks for while the lamps are on: the sun plus both
+        /// headlamps. The phone ships with ONE (QualitySettings.asset, level 2 "Medium", which is
+        /// the default for Android and iPhone), and AppBoot pins the sun to it — so without this
+        /// the torch is a vertex light on every device a user actually holds.
+        /// </summary>
+        private const int TourPixelLights = 3;
+        private int _savedPixelLights = 1;
+
         public bool HeadlightOn => _on;
 
         public static DroneLights Attach(Transform parent)
@@ -162,15 +171,48 @@ namespace DiveMap.Runtime
         {
             DiveLightMath.Atmosphere a = DiveLightMath.For(_on);
 
+            // Before anything is changed — the light budget below has to know what it is borrowing.
+            EnsureSaved();
+
             _dive.intensity = a.DiveLight;
-            _lampA.intensity = _on ? 2.6f : 0f;
-            _lampB.intensity = _on ? 2.6f : 0f;
+            _lampA.intensity = _on ? DiveLightMath.LampIntensity : 0f;
+            _lampB.intensity = _on ? DiveLightMath.LampIntensity : 0f;
+
+            // 🔴 WO-E4 — THE REASON THE TORCH DID NOT BRING THE COLOUR BACK ON A PHONE.
+            //
+            // The user's report is "โดนแสงไฟฉาย สีเดิมควรกลับมา", and the light model was never
+            // the thing stopping it: nothing in this project multiplies a Light by the depth curve
+            // (DepthLight.Attenuation is consumed by DepthAtmosphere and WaterFog only, i.e. by
+            // the ambient, the fog and the backdrop), and these lamps are 0xf2f9ff — white light
+            // on a red albedo is red. What stopped it is the light BUDGET:
+            //
+            //   ProjectSettings/QualitySettings.asset ships Android and iPhone on level 2
+            //   ("Medium"), pixelLightCount = 1 — ONE per-pixel light on the device — and
+            //   AppBoot pins the sun to that slot with LightRenderMode.ForcePixel. So on a phone
+            //   both headlamps were demoted to the vertex/SH term: a soft flat wash with no beam
+            //   shape and no per-pixel falloff, which is exactly "ส่องเท่าไหร่สีก็ไม่กลับมา".
+            //
+            // Raised only while the lamps are actually on, and put straight back afterwards, so
+            // the map view keeps its one-light budget and the cost lands only where the feature
+            // is. Three slots = the sun plus both lamps; the dive light stays on the vertex path.
+            if (_on)
+            {
+                _lampA.renderMode = LightRenderMode.ForcePixel;
+                _lampB.renderMode = LightRenderMode.ForcePixel;
+                if (QualitySettings.pixelLightCount < TourPixelLights)
+                    QualitySettings.pixelLightCount = TourPixelLights;
+            }
+            else
+            {
+                _lampA.renderMode = LightRenderMode.Auto;
+                _lampB.renderMode = LightRenderMode.Auto;
+                if (_saved) QualitySettings.pixelLightCount = _savedPixelLights;
+            }
             _poolA.gameObject.SetActive(_on);
             _poolB.gameObject.SetActive(_on);
             _beamA.gameObject.SetActive(_on);
             _beamB.gameObject.SetActive(_on);
 
-            EnsureSaved();
             RenderSettings.fog = true;
             RenderSettings.fogMode = FogMode.Linear;
             RenderSettings.fogColor = new Color(a.FogR, a.FogG, a.FogB);
@@ -183,7 +225,9 @@ namespace DiveMap.Runtime
             if (_fill != null) _fill.intensity = _savedFill * a.AmbientMul;
 
             Debug.Log($"[Tour] headlight={( _on ? "on" : "off")} fog={a.FogNear:F0}-{a.FogFar:F0} " +
-                      $"ambient×{a.AmbientMul:F2} diveLight={a.DiveLight:F1}");
+                      $"ambient×{a.AmbientMul:F2} diveLight={a.DiveLight:F1} " +
+                      $"lampRange={DiveLightMath.LampRange:F0}u pixelLights={QualitySettings.pixelLightCount} " +
+                      $"(scene had {_savedPixelLights})");
         }
 
         private void EnsureSaved()
@@ -196,6 +240,7 @@ namespace DiveMap.Runtime
             _savedSky = RenderSettings.ambientSkyColor;
             _savedEquator = RenderSettings.ambientEquatorColor;
             _savedGround = RenderSettings.ambientGroundColor;
+            _savedPixelLights = QualitySettings.pixelLightCount;
 
             foreach (Light l in UnityEngine.Object.FindObjectsByType<Light>(FindObjectsSortMode.None))
             {
@@ -219,6 +264,11 @@ namespace DiveMap.Runtime
             RenderSettings.ambientGroundColor = _savedGround;
             if (_sun != null) _sun.intensity = _savedSun;
             if (_fill != null) _fill.intensity = _savedFill;
+            // The borrowed light budget goes back with everything else — a map view left on three
+            // per-pixel lights would cost frame rate for a torch that is no longer in the scene.
+            QualitySettings.pixelLightCount = _savedPixelLights;
+            if (_lampA != null) _lampA.renderMode = LightRenderMode.Auto;
+            if (_lampB != null) _lampB.renderMode = LightRenderMode.Auto;
             Debug.Log("[Tour] scene atmosphere restored");
         }
 

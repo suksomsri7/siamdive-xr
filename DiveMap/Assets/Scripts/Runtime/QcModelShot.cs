@@ -182,9 +182,26 @@ namespace DiveMap.Runtime
             }
 
             Vector3 stage = mapCentre + Vector3.right * StageOffset;
+            // 🔴 WO-E4 — the two numbers that decide whether a black model is the model's fault.
+            // gnd/black under 1.00 in any channel means that channel is byte 0 on every
+            // down-facing surface in the frame whatever the asset is painted; crushAlb is the
+            // darkest base colour that can come off an underside at all. Printed HERE, at the top
+            // of the pass, so one log answers "was the light able to show this model" before a
+            // single blackOfSubject number is argued about.
+            float qcDepth = 0f;
+            {
+                var shading = UnityEngine.Object.FindFirstObjectByType<UnderwaterShading>();
+                if (shading != null) qcDepth = shading.CameraDepthUnits;
+            }
+            SeabedGeom.Rgb qcBand = UnderwaterLight.GroundBandAt(qcDepth);
+            SeabedGeom.Rgb qcRatio = UnderwaterLight.BlackFloorRatios(qcBand);
             Debug.Log($"[QCModel] pass start stage={stage} models={AssetIds.Length} " +
                       $"manifest={(manifest != null ? manifest.Count.ToString() : "MISSING")} " +
-                      $"screen={Screen.width}x{Screen.height} ambientSky={RenderSettings.ambientSkyColor}");
+                      $"screen={Screen.width}x{Screen.height} ambientSky={RenderSettings.ambientSkyColor} " +
+                      $"depth={qcDepth / DepthLight.UnitsPerMetre:F1}m " +
+                      $"gnd=({qcBand.R:F3},{qcBand.G:F3},{qcBand.B:F3}) " +
+                      $"gnd/black=({qcRatio.R:F2},{qcRatio.G:F2},{qcRatio.B:F2}) " +
+                      $"crushAlb=sRGB{SurfaceLight.CrushAlbedoSrgb(qcDepth, SurfaceLight.Facing.Down)}");
 
             int w = Mathf.Clamp(Screen.width, 320, 1920);
             int h = Mathf.Clamp(Screen.height, 240, 1080);

@@ -143,15 +143,19 @@ namespace DiveMap.Tests
         }
 
         [Test]
-        public void ADownFacingSurfaceLosesItsRedChannelWhateverItsAlbedo()
+        public void TheBandTheUserPhotographedWasUnderTheFloor_AndThatIsWhyTheStatueWasBlack()
         {
             // 🔎 Measured, not invented: at the QC staging depth (waterLevel 240, stage y 98.06 →
-            // 23.4 m) the app logs its own ambient as
+            // 23.4 m) the app logged its own ambient as
             //     [Water] ... gnd=(0.022,0.148,0.231)
             // A surface facing straight down sees only that band. Its RED channel in linear is
-            // 0.0017, which is BELOW ToneMap.BlackFloor before any albedo is applied — so red is
-            // pinned to byte 0 on every down-facing surface in the scene even for a pure white
-            // model. Nothing an asset can do reaches it; only the ambient can.
+            // 0.0017, BELOW ToneMap.BlackFloor before any albedo is applied — so red was pinned to
+            // byte 0 on every down-facing surface in the scene even for a pure white model.
+            //
+            // 🔴 This is kept as the BEFORE picture and asserted as arithmetic, not as the app's
+            // current state: WO-E4 changed the band (UnderwaterLight.GroundBandAt) and
+            // AmbientBandTests holds the after. Both belong in the repo — a fix nobody can state
+            // the shape of is a fix nobody can tell has regressed.
             float gr = ToneMap.SrgbToLinear(0.022f);
             float gg = ToneMap.SrgbToLinear(0.148f);
             float gb = ToneMap.SrgbToLinear(0.231f);
@@ -164,6 +168,26 @@ namespace DiveMap.Tests
             Assert.Greater(ToneMap.LinearToByte(g), 0, "green still has something left at 23 m");
             Assert.Greater(ToneMap.LinearToByte(b), ToneMap.LinearToByte(g),
                            "blue outlives green underwater; that ordering is the depth cue");
+        }
+
+        [Test]
+        public void LiftLightRaisesInLight_AndNeverDims()
+        {
+            // The mirror of ScaleLight, and wrong in the same way if done in the wrong space: the
+            // value handed back is authored sRGB, the requirement is about radiance.
+            const float min = 0.01f;
+            float lifted = ToneMap.LiftLight(0.0f, min);
+            Assert.AreEqual(min, ToneMap.SrgbToLinear(lifted), 1e-6f);
+
+            // Already brighter → untouched, byte for byte.
+            Assert.AreEqual(0.5f, ToneMap.LiftLight(0.5f, min), 1e-6f);
+
+            // And doing it twice changes nothing.
+            Assert.AreEqual(lifted, ToneMap.LiftLight(lifted, min), 1e-6f);
+
+            // A naive max() on the authored numbers would raise this to 0.01 sRGB, which is a
+            // linear 0.00077 — thirteen times short of what was asked for.
+            Assert.Greater(lifted, min, "the lift was done in the authored numbers, not in light");
         }
 
         [Test]
