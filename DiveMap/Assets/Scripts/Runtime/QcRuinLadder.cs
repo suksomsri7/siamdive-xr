@@ -242,20 +242,44 @@ namespace DiveMap.Runtime
             float refAlbedoLinear = ToneMap.SrgbToLinear(ReferenceAlbedoSrgb);
             double expected = refAlbedoLinear <= 0f ? 0.0 : modelAlbedoLinear / refAlbedoLinear;
 
-            yield return Rung(cam, rt, readback, Path.Combine(dir, "qc_ladder_" + name + ".png"),
-                              empty, refRect, haveRef, name, "shipped", expected, null);
+            // 🔴 THE MASK IS COMPUTED ONCE, HERE, AND EVERY RUNG BELOW IS MEASURED ON IT.
+            //
+            // The first version of this ladder let each rung work out its own subject mask from
+            // "what differs from the empty frame", and the noAces rung then reported
+            // subject=100.00% — switching the tone curve off changes every pixel in the frame, so
+            // the mask became the whole picture and the rung's mean was taken over the water and
+            // the backdrop as well as the model. Set beside the shipped rung's model-only mean it
+            // read as a 6.4× brightening and reached a human before anybody noticed the two numbers
+            // described different sets of pixels. Every rung after this one changes the whole frame
+            // in some way — the curve, the albedo, the lights, the ambient — so every one of them
+            // would have repeated it.
+            byte[] shippedFrame = null;
+            yield return Capture(cam, rt, readback, Path.Combine(dir, "qc_ladder_" + name + ".png"),
+                                 x => shippedFrame = x);
+            bool[] mask = QcPixels.SubjectMask(shippedFrame, empty);
+            Report(shippedFrame, mask, refRect, haveRef, rt.width, rt.height, name, "shipped", expected);
 
-            yield return Rung(cam, rt, readback, null, empty, refRect, haveRef, name, "noAces", expected,
+            yield return Rung(cam, rt, readback, null, mask, refRect, haveRef, name, "noAces", expected,
                               () => AcesToneMapping.Enabled = false);
             AcesToneMapping.Enabled = true;
 
-            yield return AlbedoRung(cam, rt, readback, empty, refRect, haveRef, renderers, name,
+            yield return AlbedoRung(cam, rt, readback, mask, refRect, haveRef, renderers, name,
                                     "greyAlbedo", expected, (float)QcPixels.MeanAlbedo);
-            yield return AlbedoRung(cam, rt, readback, empty, refRect, haveRef, renderers, name,
+            yield return AlbedoRung(cam, rt, readback, mask, refRect, haveRef, renderers, name,
                                     "whiteAlbedo", expected, 1f);
 
-            yield return ShadowRung(cam, rt, readback, empty, refRect, haveRef, renderers, name, expected);
-            yield return SunRung(cam, rt, readback, empty, refRect, haveRef, name, expected);
+            yield return ShadowRung(cam, rt, readback, mask, refRect, haveRef, renderers, name, expected);
+            yield return SunRung(cam, rt, readback, mask, refRect, haveRef, name, expected);
+
+            // ── WO-E5h: is the ambient reaching these renderers AT ALL? ──────────
+            // The arithmetic that makes this the only suspect left: in daylight the dimmest band is
+            // 0.61 and the ruins' own albedo is 0.162 linear, so the darkest a surface of theirs can
+            // be — sun off entirely — is 0.099 scene-linear, i.e. byte 89. A quarter of the model
+            // photographs at byte 0, which needs scene-linear under ToneMap.BlackFloor = 0.00186.
+            // That is fifty times less light than the ambient alone would deliver, and the tone
+            // curve has been scanned against three.js at 37 points and is exact. So the ambient is
+            // not reaching those pixels, and these three rungs are the three ways that happens.
+            yield return GiStateRungs(cam, rt, readback, mask, refRect, haveRef, renderers, name, expected);
 
             Object.Destroy(reference);
             Object.Destroy(pivot);
@@ -266,7 +290,7 @@ namespace DiveMap.Runtime
         // ── rungs ────────────────────────────────────────────────────────────────
 
         private static IEnumerator Rung(Camera cam, RenderTexture rt, Texture2D readback, string png,
-                                        byte[] empty, Rect refRect, bool haveRef,
+                                        bool[] mask, Rect refRect, bool haveRef,
                                         string name, string rung, double expected,
                                         System.Action apply)
         {
@@ -274,13 +298,13 @@ namespace DiveMap.Runtime
             yield return null;
             byte[] frame = null;
             yield return Capture(cam, rt, readback, png, x => frame = x);
-            Report(frame, empty, refRect, haveRef, rt.width, rt.height, name, rung, expected);
+            Report(frame, mask, refRect, haveRef, rt.width, rt.height, name, rung, expected);
         }
 
         /// <summary>Replace every base colour with a flat known value — the albedo is gone and only
         /// the light is left.</summary>
         private static IEnumerator AlbedoRung(Camera cam, RenderTexture rt, Texture2D readback,
-                                              byte[] empty, Rect refRect, bool haveRef,
+                                              bool[] mask, Rect refRect, bool haveRef,
                                               List<Renderer> renderers, string name, string rung,
                                               double expected, float albedoSrgb)
         {
@@ -311,7 +335,7 @@ namespace DiveMap.Runtime
             // texture, it is asking whether a KNOWN albedo on this model returns what the same
             // known albedo returns on the quad beside it.
             double exp = ToneMap.SrgbToLinear(albedoSrgb) / ToneMap.SrgbToLinear(ReferenceAlbedoSrgb);
-            Report(frame, empty, refRect, haveRef, rt.width, rt.height, name, rung, exp);
+            Report(frame, mask, refRect, haveRef, rt.width, rt.height, name, rung, exp);
 
             for (int i = 0; i < mats.Count; i++)
             {
@@ -328,7 +352,7 @@ namespace DiveMap.Runtime
         /// <summary>The sun's shadow off for one frame — restored immediately. The user asked for
         /// shadows to stay, so this is a probe and must never become a change.</summary>
         private static IEnumerator ShadowRung(Camera cam, RenderTexture rt, Texture2D readback,
-                                              byte[] empty, Rect refRect, bool haveRef,
+                                              bool[] mask, Rect refRect, bool haveRef,
                                               List<Renderer> renderers, string name, double expected)
         {
             var lights = new List<Light>();
@@ -340,9 +364,124 @@ namespace DiveMap.Runtime
             }
             byte[] frame = null;
             yield return Capture(cam, rt, readback, null, x => frame = x);
-            Report(frame, empty, refRect, haveRef, rt.width, rt.height, name, "noShadow", expected);
+            Report(frame, mask, refRect, haveRef, rt.width, rt.height, name, "noShadow", expected);
             for (int i = 0; i < lights.Count; i++)
                 if (lights[i] != null) lights[i].shadows = saved[i];
+        }
+
+        /// <summary>
+        /// 🔴 WO-E5h — the three ways a renderer ends up with no ambient at all, tried one at a
+        /// time, plus the state that would have told us without a frame.
+        ///
+        /// Everything else has been eliminated on measurements: texture, UV gutter, mip drift,
+        /// normal map (<c>costOfNormalMap</c> 0.00pp on nine of twelve models), tangents
+        /// (<c>tangent-added</c> on a byte-clean pair: no-effect, −0.02pp), encoding
+        /// (<c>normalmap-uastc</c>: no-effect), metallic, occlusion, vertex colours, LOD, shadows
+        /// (26.75% → 26.42%), fog, depth, geometry, and the tone curve (scanned against three.js at
+        /// 37 points, worst relative difference 0.000e+00). What is left is that the light never
+        /// arrives, and in built-in RP a dynamic renderer can lose its ambient in exactly these
+        /// ways:
+        ///
+        ///   lightProbeUsage   BlendProbes with probes present but unlit hands the renderer black
+        ///                     SH instead of the ambient probe. Off forces the ambient probe.
+        ///   lightmapIndex     a renderer whose index is neither −1 nor 65535 takes the LIGHTMAP
+        ///                     path and samples a lightmap that does not exist. This is the classic
+        ///                     one, it is invisible in the inspector on a runtime-instantiated
+        ///                     object, and it produces exactly this symptom: no GI at all, per
+        ///                     renderer, regardless of material.
+        ///   the ambient itself Trilight ambient is sampled through spherical harmonics, and if the
+        ///                     variant that does that has been stripped from the player build there
+        ///                     is no ambient for anybody. Flat ambient at a bright neutral is the
+        ///                     control: if even THAT does not light the model, nothing reaches it
+        ///                     through the SH path and the problem is a shader variant, which this
+        ///                     project has shipped broken twice.
+        ///
+        /// 🔎 The reference quad is the control that makes all of this readable. It is in the same
+        /// frame, under the same lights, on the seabed's own material — and it is NOT a glTFast
+        /// renderer. Its GI state is logged beside the model's, so "the model's renderers differ
+        /// from a renderer that works" is a comparison rather than an assertion.
+        /// </summary>
+        private static IEnumerator GiStateRungs(Camera cam, RenderTexture rt, Texture2D readback,
+                                                bool[] mask, Rect refRect, bool haveRef,
+                                                List<Renderer> renderers, string name, double expected)
+        {
+            // ── what the renderers actually say, before anything is changed ──────
+            var reference = GameObject.Find("QcLadderReference");
+            Renderer refRenderer = reference != null ? reference.GetComponent<Renderer>() : null;
+            LogGiState(name, "reference-quad", refRenderer);
+            int shown = 0;
+            foreach (Renderer r in renderers)
+            {
+                if (r == null || shown >= 3) continue;   // three is enough to see a pattern
+                LogGiState(name, "model", r);
+                shown++;
+            }
+
+            // ── rung: force the ambient probe ────────────────────────────────────
+            var savedUsage = new List<UnityEngine.Rendering.LightProbeUsage>();
+            foreach (Renderer r in renderers)
+            {
+                savedUsage.Add(r != null ? r.lightProbeUsage : UnityEngine.Rendering.LightProbeUsage.Off);
+                if (r != null) r.lightProbeUsage = UnityEngine.Rendering.LightProbeUsage.Off;
+            }
+            yield return Rung(cam, rt, readback, null, mask, refRect, haveRef, name,
+                              "lightProbeOff", expected, null);
+            for (int i = 0; i < renderers.Count; i++)
+                if (renderers[i] != null) renderers[i].lightProbeUsage = savedUsage[i];
+
+            // ── rung: take the lightmap path away ────────────────────────────────
+            var savedLightmap = new List<int>();
+            foreach (Renderer r in renderers)
+            {
+                savedLightmap.Add(r != null ? r.lightmapIndex : -1);
+                if (r != null) r.lightmapIndex = -1;
+            }
+            yield return Rung(cam, rt, readback, null, mask, refRect, haveRef, name,
+                              "lightmapIndexClear", expected, null);
+            for (int i = 0; i < renderers.Count; i++)
+                if (renderers[i] != null) renderers[i].lightmapIndex = savedLightmap[i];
+
+            // ── rung: a bright FLAT ambient, no spherical harmonics involved ─────
+            // The control for the whole ambient path. Flat ambient reaches a surface through a
+            // different route than Trilight's SH, so if the model is still black under a bright
+            // flat white the failure is not "which band" but "no ambient at all".
+            UnityEngine.Rendering.AmbientMode savedMode = RenderSettings.ambientMode;
+            Color savedLight = RenderSettings.ambientLight;
+            float savedIntensity = RenderSettings.ambientIntensity;
+            RenderSettings.ambientMode = UnityEngine.Rendering.AmbientMode.Flat;
+            RenderSettings.ambientLight = new Color(0.8f, 0.8f, 0.8f, 1f);
+            RenderSettings.ambientIntensity = 1f;
+            yield return Rung(cam, rt, readback, null, mask, refRect, haveRef, name,
+                              "flatAmbient0.8", expected, null);
+            RenderSettings.ambientMode = savedMode;
+            RenderSettings.ambientLight = savedLight;
+            RenderSettings.ambientIntensity = savedIntensity;
+            yield return null;
+        }
+
+        /// <summary>
+        /// One line per renderer, always — including when everything looks normal. The rule this
+        /// project keeps relearning is that silence is ambiguous between "fine", "skipped" and
+        /// "never ran", and a GI field that reads correctly is as much evidence as one that does not.
+        /// </summary>
+        private static void LogGiState(string model, string which, Renderer r)
+        {
+            if (r == null)
+            {
+                Debug.Log($"[QCGi] {model} {which} renderer=MISSING");
+                return;
+            }
+            Debug.Log($"[QCGi] {model} {which} name={r.gameObject.name} " +
+                      $"lightProbeUsage={r.lightProbeUsage} " +
+                      $"lightmapIndex={r.lightmapIndex} " +
+                      $"lightmapScaleOffset={r.lightmapScaleOffset} " +
+                      $"realtimeLightmapIndex={r.realtimeLightmapIndex} " +
+                      $"reflectionProbeUsage={r.reflectionProbeUsage} " +
+                      $"receiveGI={r.receiveGI} " +
+                      $"probeAnchor={(r.probeAnchor != null ? r.probeAnchor.name : "(none)")} " +
+                      $"isPartOfStaticBatch={r.isPartOfStaticBatch} " +
+                      $"receiveShadows={r.receiveShadows} shadowCasting={r.shadowCastingMode} " +
+                      $"enabled={r.enabled} shader={(r.sharedMaterial != null && r.sharedMaterial.shader != null ? r.sharedMaterial.shader.name : "(none)")}");
         }
 
         /// <summary>
@@ -354,7 +493,7 @@ namespace DiveMap.Runtime
         /// ambient term and nothing else is left to blame.
         /// </summary>
         private static IEnumerator SunRung(Camera cam, RenderTexture rt, Texture2D readback,
-                                           byte[] empty, Rect refRect, bool haveRef,
+                                           bool[] mask, Rect refRect, bool haveRef,
                                            string name, double expected)
         {
             var lights = new List<Light>();
@@ -364,24 +503,22 @@ namespace DiveMap.Runtime
                 if (l == null || l.type != LightType.Directional) continue;
                 lights.Add(l); saved.Add(l.enabled); l.enabled = false;
             }
-            // The empty frame has to be re-taken: turning the sun off changes the background too,
-            // and measuring this rung against a lit background would score the whole frame as
-            // subject.
-            byte[] darkEmpty = null;
+            // 🔎 No re-derived mask here either. Turning the sun off changes the background as
+            // well as the model, so a freshly computed mask would swallow the whole frame — which
+            // is exactly the mistake the shipped rung's mask exists to prevent.
             byte[] frame = null;
             yield return Capture(cam, rt, readback, null, x => frame = x);
             for (int i = 0; i < lights.Count; i++) if (lights[i] != null) lights[i].enabled = saved[i];
             yield return null;
-            darkEmpty = empty;
-            Report(frame, darkEmpty, refRect, haveRef, rt.width, rt.height, name, "ambientOnly", expected);
+            Report(frame, mask, refRect, haveRef, rt.width, rt.height, name, "ambientOnly", expected);
         }
 
-        private static void Report(byte[] frame, byte[] empty, Rect refRect, bool haveRef,
+        private static void Report(byte[] frame, bool[] mask, Rect refRect, bool haveRef,
                                    int w, int h, string name, string rung, double expected)
         {
             var r = new QcPixels.Rung { Name = rung };
-            r.ModelLinear = QcPixels.SceneLinearOfSubject(frame, empty,
-                                                          out double subject, out double black);
+            r.ModelLinear = QcPixels.SceneLinearOfMask(frame, mask,
+                                                       out double subject, out double black);
             r.SubjectPercent = subject;
             r.BlackPercent = black;
             r.ReferenceLinear = haveRef

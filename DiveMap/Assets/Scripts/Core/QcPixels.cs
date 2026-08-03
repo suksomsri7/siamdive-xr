@@ -1141,9 +1141,81 @@ namespace DiveMap.Core
             public double Ratio => ReferenceLinear <= 1e-12 ? 0.0 : ModelLinear / ReferenceLinear;
         }
 
+        // 🔴 EVERY RUNG MUST BE MEASURED ON THE SAME MASK AS THE BASELINE, OR IT IS MEASURING A
+        // DIFFERENT POPULATION.
+        //
+        // This rule was learned the expensive way. The ladder's <c>noAces</c> rung recomputed its
+        // own subject mask from "what differs between this frame and the empty one", and switching
+        // the tone curve off changes EVERY pixel in the frame — so the mask became the whole frame
+        // (<c>subject=100.00%</c>) and the rung's mean was taken over the water and the backdrop as
+        // well as the model. Compared against the shipped rung's model-only mean it read as a 6.4×
+        // brightening, and that number reached a human before anybody noticed it was a comparison
+        // between two different sets of pixels.
+        //
+        // So the mask is computed ONCE, from the shipped rung, and handed to every rung after it.
+        // Any rung that changes the whole frame — the tone curve, the ambient, the lights — would
+        // otherwise repeat exactly the same mistake.
+
+        /// <summary>
+        /// Which pixels are the subject: those where <paramref name="frame"/> differs from
+        /// <paramref name="empty"/>. Computed once and reused, never per rung.
+        /// </summary>
+        public static bool[] SubjectMask(byte[] frame, byte[] empty, byte tolerance = SubjectTolerance)
+        {
+            int n = PixelCount(frame);
+            if (n == 0 || empty == null || empty.Length != frame.Length) return null;
+            var mask = new bool[n];
+            for (int i = 0; i < n; i++)
+            {
+                int p = i * Channels;
+                int dr = frame[p] - empty[p];
+                int dg = frame[p + 1] - empty[p + 1];
+                int db = frame[p + 2] - empty[p + 2];
+                if (dr < 0) dr = -dr;
+                if (dg < 0) dg = -dg;
+                if (db < 0) db = -db;
+                mask[i] = dr > tolerance || dg > tolerance || db > tolerance;
+            }
+            return mask;
+        }
+
+        /// <summary>
+        /// Mean scene-linear luminance over a FIXED mask — the form every rung after the first must
+        /// use. <paramref name="mask"/> null falls back to the whole frame and says so through
+        /// <paramref name="subjectPercent"/> = 100, rather than quietly measuring something else.
+        /// </summary>
+        public static double SceneLinearOfMask(byte[] frame, bool[] mask,
+                                               out double subjectPercent, out double blackPercent)
+        {
+            subjectPercent = 0.0;
+            blackPercent = 0.0;
+            int n = PixelCount(frame);
+            if (n == 0) return 0.0;
+            if (mask != null && mask.Length != n) mask = null;
+
+            double sum = 0.0;
+            long count = 0, black = 0;
+            for (int i = 0; i < n; i++)
+            {
+                if (mask != null && !mask[i]) continue;
+                int p = i * Channels;
+                count++;
+                if (frame[p] == 0 && frame[p + 1] == 0 && frame[p + 2] == 0) black++;
+                double display = ToneMap.SrgbToLinear((float)Luminance(frame[p], frame[p + 1], frame[p + 2]));
+                sum += ToneMap.InverseNeutral((float)display);
+            }
+            if (count == 0) return 0.0;
+            subjectPercent = 100.0 * count / n;
+            blackPercent = 100.0 * black / count;
+            return sum / count;
+        }
+
         /// <summary>
         /// Mean SCENE-LINEAR luminance of the pixels where <paramref name="frame"/> differs from
         /// <paramref name="empty"/> — i.e. of the subject — undoing the tone curve on the way.
+        ///
+        /// ⚠️ Only for the FIRST rung. Everything after it must go through
+        /// <see cref="SceneLinearOfMask"/> with the mask this one implies, for the reason above.
         /// </summary>
         public static double SceneLinearOfSubject(byte[] frame, byte[] empty,
                                                   out double subjectPercent,

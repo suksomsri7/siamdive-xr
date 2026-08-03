@@ -205,4 +205,90 @@ namespace DiveMap.Tests
                 $"the dome is receiving {shortfall:0.0}x less light than the ambient alone would give");
         }
     }
+
+    /// <summary>
+    /// WO-E5h — the rule the ladder learned the expensive way.
+    /// </summary>
+    [TestFixture]
+    public class RungMaskTests
+    {
+        private const int N = 100;
+
+        private static byte[] Flat(byte v)
+        {
+            var b = new byte[N * 3];
+            for (int i = 0; i < b.Length; i++) b[i] = v;
+            return b;
+        }
+
+        /// <summary>Twenty pixels of subject on eighty of background.</summary>
+        private static byte[] SubjectOn(byte bg, byte subject)
+        {
+            byte[] b = Flat(bg);
+            for (int i = 0; i < 20; i++) { int p = i * 3; b[p] = subject; b[p + 1] = subject; b[p + 2] = subject; }
+            return b;
+        }
+
+        [Test]
+        public void ARungThatChangesTheWholeFrameMustNotBeAllowedToRedefineTheSubject()
+        {
+            // 🔴 The bug, reproduced. The empty frame is dark background; the shipped frame adds a
+            // model on top of it. A later rung brightens EVERYTHING — which is what switching the
+            // tone curve off does — and if that rung recomputes "what differs from empty" it
+            // claims the whole frame as subject and averages the background in with the model.
+            byte[] empty = Flat(20);
+            byte[] shipped = SubjectOn(20, 40);
+            byte[] brightened = SubjectOn(200, 210);
+
+            bool[] mask = QcPixels.SubjectMask(shipped, empty);
+            int inMask = 0;
+            foreach (bool m in mask) if (m) inMask++;
+            Assert.That(inMask, Is.EqualTo(20), "the model is twenty pixels and stays twenty pixels");
+
+            // The wrong way: let the rung work out its own mask against the empty frame.
+            QcPixels.SceneLinearOfSubject(brightened, empty, out double wrongPct, out _);
+            Assert.That(wrongPct, Is.EqualTo(100.0).Within(1e-9),
+                "this is the subject=100.00% that reached a human as a 6.4x brightening");
+
+            // The right way: the mask the baseline defined.
+            QcPixels.SceneLinearOfMask(brightened, mask, out double rightPct, out _);
+            Assert.That(rightPct, Is.EqualTo(20.0).Within(1e-9),
+                "every rung has to be measured on the same pixels as the rung it is compared with");
+        }
+
+        [Test]
+        public void TheFixedMaskGivesAComparisonThatMeansSomething()
+        {
+            // With the mask held fixed, the ratio between two rungs is a statement about the model
+            // and nothing else — which is the entire purpose of a ladder.
+            byte[] empty = Flat(20);
+            byte[] shipped = SubjectOn(20, 40);
+            byte[] brightened = SubjectOn(200, 210);
+            bool[] mask = QcPixels.SubjectMask(shipped, empty);
+
+            double a = QcPixels.SceneLinearOfMask(shipped, mask, out _, out _);
+            double b = QcPixels.SceneLinearOfMask(brightened, mask, out _, out _);
+            Assert.That(b, Is.GreaterThan(a), "the brighter rung is brighter on the model's own pixels");
+
+            // …and a null mask is the whole frame, reported honestly rather than silently.
+            QcPixels.SceneLinearOfMask(shipped, null, out double allPct, out _);
+            Assert.That(allPct, Is.EqualTo(100.0).Within(1e-9));
+        }
+
+        [Test]
+        public void BlackPercentIsAlsoOnTheFixedMask()
+        {
+            // blackOfSubject was the one number still read off the noAces rung after the means were
+            // discounted, so it has to be on the same pixels too.
+            byte[] empty = Flat(20);
+            byte[] shipped = SubjectOn(20, 40);
+            bool[] mask = QcPixels.SubjectMask(shipped, empty);
+
+            byte[] modelWentBlack = SubjectOn(20, 0);
+            QcPixels.SceneLinearOfMask(modelWentBlack, mask, out double pct, out double black);
+            Assert.That(pct, Is.EqualTo(20.0).Within(1e-9));
+            Assert.That(black, Is.EqualTo(100.0).Within(1e-9),
+                "all twenty of the model's pixels are pure black, and none of the background counts");
+        }
+    }
 }
