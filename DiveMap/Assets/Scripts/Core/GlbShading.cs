@@ -179,6 +179,85 @@ namespace DiveMap.Core
         /// <inheritdoc cref="ProbeValidatedMetallic"/>
         public const float ProbeValidatedRoughness = 0.6f;
 
+        // ── WO-E5e: the normal maps were destroyed BEFORE the app ever saw them ──
+        //
+        // 🔴 THE SAME BUG CAME BACK THROUGH A DIFFERENT DOOR. Everything above this line is about a
+        // normal map being sRGB-decoded by a sampler in a gamma project, and the fix was to move
+        // the project to linear — which worked, and which turned every normal map in the app back
+        // ON (<c>[Shading] … dropped=f</c>). What came back on is not a normal map.
+        //
+        // THE MEASUREMENT, on the very files the CDN serves against the 4096² masters they were
+        // built from. ETC1 — Unity reports the device format as <c>RGB_ETC_UNorm</c> — splits every
+        // 4×4 into sub-blocks that share ONE base colour plus a per-pixel LUMINANCE modifier added
+        // equally to R, G and B. Inside a sub-block R and G can therefore only move TOGETHER. A
+        // tangent-space normal map puts x in R and y in G and they must move INDEPENDENTLY, so the
+        // share of the local variation lying along (1, −1) is precisely what the format cannot
+        // represent. Measured as a fraction of total local variance:
+        //
+        //                              master PNG 4096²      shipped KTX2 (ETC1S)
+        //     domed_temple                 49.96 %                  0.01 %
+        //     grand_byzantine              50.11 %                  0.49 %
+        //     rms lost, bytes           11.74 / 15.55            0.15 / 1.40
+        //
+        // Half of every master normal map is independent R/G movement, which is what a normal map
+        // IS. Essentially none of it survives to the device. What is left is the component where R
+        // and G rise and fall together — i.e. x ≈ y at every texel — so every perturbed normal
+        // tilts along the SAME tangent-space diagonal instead of in the direction the surface
+        // actually turns.
+        //
+        // 🔎 And that is why the damage arrives as hard-edged patches rather than as softness,
+        // which is the observation this file already explains once for the gamma bug: tangent
+        // direction follows the UV chart, so one shared diagonal tilt turns a different way in
+        // every chart. The user's daylight screenshot is bimodal for exactly that reason —
+        // 68.7 % of the dome's body under byte 16 and 15.7 % at sand level, with 0.62 % in the
+        // whole range between.
+        //
+        // 🔴 IT IS NOT A RUIN PROBLEM. Run 30800189252 reports darkOfSubject 65-95 % across the
+        // entire catalogue — poseidon 95.16, htms732 76.08, chang 70.98, kraken 65.38 — because
+        // every texture in the app goes through the same toktx ETC1S pass. "ทุกวัตถุ" is right.
+        //
+        // 🔎 WHAT THIS IS NOT. It is not something a clamp can fix. Spherical harmonics summing
+        // below zero writes EXACTLY (0,0,0), so it can only ever account for
+        // <c>blackOfSubject</c> — 0.12-33 % — and the number that has to move is
+        // <c>darkOfSubject</c>, which is a level, not a clamp. Clamping the ambient would also
+        // need a custom shader, and this project has twice shipped one that was stripped from the
+        // player build and rendered magenta.
+
+        /// <summary>
+        /// Fraction of a tangent-space normal map's local variation that a luminance-modifier block
+        /// format such as ETC1 physically cannot store: the part where x rises while y falls.
+        ///
+        /// Stated as arithmetic rather than as a paragraph so the claim is checkable. For a map
+        /// whose x and y are INDEPENDENT — which is the definition of a usable tangent-space normal
+        /// map — the two projections carry equal energy and this returns 0.5.
+        /// </summary>
+        /// <param name="sharedVariance">Energy along (1, 1) — what the format keeps.</param>
+        /// <param name="independentVariance">Energy along (1, −1) — what it discards.</param>
+        public static double LostToLumaBlockFormat(double sharedVariance, double independentVariance)
+        {
+            double total = sharedVariance + independentVariance;
+            return total <= 0.0 ? 0.0 : independentVariance / total;
+        }
+
+        /// <summary>
+        /// What a healthy tangent-space normal map measures on
+        /// <see cref="LostToLumaBlockFormat"/> — half, because x and y are independent axes.
+        /// The masters measure 0.4996 and 0.5011.
+        /// </summary>
+        public const double HealthyIndependentFraction = 0.5;
+
+        /// <summary>
+        /// Below this, a normal map has been flattened onto one diagonal and is no longer a normal
+        /// map, whatever its file extension says. The shipped ETC1S files measure 0.0001 and 0.0049
+        /// against masters at 0.4996 and 0.5011, so anything in between is already catastrophic;
+        /// a tenth of healthy is a generous line and still fails every file in the catalogue today.
+        /// </summary>
+        public const double MinIndependentFraction = 0.05;
+
+        /// <summary>Has this normal map survived its encoding?</summary>
+        public static bool NormalMapSurvivedEncoding(double sharedVariance, double independentVariance)
+            => LostToLumaBlockFormat(sharedVariance, independentVariance) >= MinIndependentFraction;
+
         /// <summary>At or below this a factor is already harmless.</summary>
         public const float MetalFactorFloor = 0.05f;
 

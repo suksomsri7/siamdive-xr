@@ -182,7 +182,7 @@ namespace DiveMap.Runtime
         /// 45 s per-model ceiling, 330 s lets four of twelve time out and the remaining eight still
         /// be photographed and logged.
         /// </remarks>
-        private const float BudgetSeconds = 330f;
+        private const float BudgetSeconds = 400f;
 
         /// <summary>Settle time after the model lands, before the pair of frames.</summary>
         private const float SettleSeconds = 0.4f;
@@ -599,6 +599,54 @@ namespace DiveMap.Runtime
                 Debug.Log(QcPixels.ProbeLine(name, shot, whiteAlbedo, noMetalRough, meshNormals,
                                              whiteGltf, greyAlbedo, bias4, bias10, darkGate));
 
+                // 🔴 WO-E5e — THE ONE-VARIABLE EXPERIMENT THAT WAS MISSING.
+                //
+                // Run 30800189252 reported meshNormals taking darkOfSubject from 85-87% to 0.00%
+                // on all three ruins, and that reads as "the normal map did it". It cannot be read
+                // that way: meshNormals swaps the SHADER (glTFast → Unity Standard), replaces the
+                // albedo with white AND clears every texture, so it changes three things at once.
+                // whiteGltf is the same story on glTFast's own shader — also 0.00%, which at least
+                // clears the shader — but it too clears everything.
+                //
+                // The rungs that keep the normal map say something different and much more
+                // interesting: whiteAlbedo (albedo → white, normal map STILL ON) only reaches
+                // 32.06%, and greyAlbedo 50.22%. So with the normal map in place, taking the
+                // texture out of the picture entirely does not get near zero.
+                //
+                // This probe removes the normal map and NOTHING ELSE — same shader, same albedo,
+                // same metallic-roughness map, same everything. It is the only frame in the pass
+                // that can put a number on what the normal map costs, and the shipped answer needs
+                // it: the fix cannot be "drop the normal map" (that is what gamma used to do by
+                // accident, and the user reported the result as "เป็นเหลี่ยม").
+                QcPixels.Shot noNormal = default;
+                yield return ProbeNoNormalMap(cam, rt, readback, renderers, withoutModel,
+                                              s => noNormal = s);
+                Debug.Log($"[QCProbe] {name} noNormalMap dark={noNormal.DarkOfSubjectPercent:0.00}% " +
+                          $"black={noNormal.BlackOfSubjectPercent:0.00}% " +
+                          $"subject={noNormal.SubjectPercent:0.00}% " +
+                          $"(shipped dark={shot.DarkOfSubjectPercent:0.00}% " +
+                          $"black={shot.BlackOfSubjectPercent:0.00}%) " +
+                          $"costOfNormalMap={shot.DarkOfSubjectPercent - noNormal.DarkOfSubjectPercent:0.00}pp");
+
+                // 🔎 …and the sweep, because "remove it" is not a shippable answer and "reduce it"
+                // might be. glTFast's built-in shader reconstructs z as
+                // sqrt(1 − saturate(dot(xy, xy))) AFTER multiplying xy by normalTexture_scale
+                // (glTFUnityStandardInput.cginc:236-245), so the scale is a direct dial on how far
+                // the map is allowed to tilt a normal — and on how much of the tilt is compression
+                // error rather than surface detail. The value to ship is whichever rung holds the
+                // detail and loses the dark, and that is a decision for a picture, not for this
+                // file: the sweep prints the numbers and a human picks.
+                foreach (float sc in NormalScaleSweep)
+                {
+                    QcPixels.Shot sweep = default;
+                    yield return ProbeNormalScale(cam, rt, readback, renderers, withoutModel, sc,
+                                                  s => sweep = s);
+                    Debug.Log($"[QCProbe] {name} normalScale={sc:0.00} " +
+                              $"dark={sweep.DarkOfSubjectPercent:0.00}% " +
+                              $"black={sweep.BlackOfSubjectPercent:0.00}% " +
+                              $"subject={sweep.SubjectPercent:0.00}%");
+                }
+
                 QcPixels.Shot noShadow = default;
                 yield return ProbeNoShadows(cam, rt, readback, renderers, withoutModel,
                                             s => noShadow = s);
@@ -760,6 +808,107 @@ namespace DiveMap.Runtime
                 renderers[i].sharedMaterials = saved[i];
             }
             Object.Destroy(white);
+        }
+
+        /// <summary>
+        /// The scales the normal map is swept over. 1.0 is what ships (glTF's default and what
+        /// every file in the catalogue declares); 0 is the map fully neutralised, which must land
+        /// on the same number as <see cref="ProbeNoNormalMap"/> — if it does not, the sweep is not
+        /// doing what it claims and no value read off it means anything.
+        /// </summary>
+        private static readonly float[] NormalScaleSweep = { 0.5f, 0.25f, 0f };
+
+        /// <summary>Property names for the normal map and its scale, glTFast's then Standard's.</summary>
+        private static readonly string[] NormalTexNames = { "normalTexture", "_BumpMap" };
+        private static readonly string[] NormalScaleNames = { "normalTexture_scale", "_BumpScale" };
+
+        /// <summary>
+        /// One frame with the normal map gone and every other input untouched.
+        ///
+        /// The keyword goes too: clearing the slot on its own leaves the shader sampling its "bump"
+        /// default, which is a flat lie rather than an absence — the same trap
+        /// <see cref="DropMisdecodedNormalMap"/> documents.
+        /// </summary>
+        private static IEnumerator ProbeNoNormalMap(Camera cam, RenderTexture rt, Texture2D readback,
+                                                    List<Renderer> renderers, byte[] withoutModel,
+                                                    System.Action<QcPixels.Shot> onShot)
+        {
+            var mats = new List<Material>();
+            var saved = new List<Texture>();
+            foreach (Renderer r in renderers)
+            {
+                if (r == null) continue;
+                foreach (Material m in r.materials)
+                {
+                    if (m == null) continue;
+                    string p = PropOn(m, NormalTexNames);
+                    if (p == null) continue;
+                    mats.Add(m);
+                    saved.Add(m.GetTexture(p));
+                    m.SetTexture(p, null);
+                    m.DisableKeyword("_NORMALMAP");
+                }
+            }
+            if (mats.Count == 0)
+            {
+                // No normal map to remove — an empty shot reads as probe-failed rather than as
+                // "removing it changed nothing", which would be the opposite conclusion.
+                onShot(default);
+                yield break;
+            }
+
+            byte[] probed = null;
+            yield return Capture(cam, rt, readback, null, bytes => probed = bytes);
+            onShot(QcPixels.Measure(probed, withoutModel));
+
+            for (int i = 0; i < mats.Count; i++)
+            {
+                string p = PropOn(mats[i], NormalTexNames);
+                if (p == null) continue;
+                mats[i].SetTexture(p, saved[i]);
+                if (saved[i] != null) mats[i].EnableKeyword("_NORMALMAP");
+            }
+        }
+
+        /// <summary>
+        /// One frame with the normal map's strength dialled to <paramref name="scale"/>.
+        ///
+        /// glTF's <c>normalTexture.scale</c> multiplies the tangent-space xy BEFORE z is rebuilt,
+        /// so it shortens every perturbation proportionally — including whatever share of it is
+        /// block-compression error rather than authored surface. That is why it is a candidate fix
+        /// and not just a dimmer: it costs detail linearly and costs error linearly, and only a
+        /// picture can say where the two cross.
+        /// </summary>
+        private static IEnumerator ProbeNormalScale(Camera cam, RenderTexture rt, Texture2D readback,
+                                                    List<Renderer> renderers, byte[] withoutModel,
+                                                    float scale, System.Action<QcPixels.Shot> onShot)
+        {
+            var mats = new List<Material>();
+            var saved = new List<float>();
+            foreach (Renderer r in renderers)
+            {
+                if (r == null) continue;
+                foreach (Material m in r.materials)
+                {
+                    if (m == null) continue;
+                    string p = PropOn(m, NormalScaleNames);
+                    if (p == null) continue;
+                    mats.Add(m);
+                    saved.Add(m.GetFloat(p));
+                    m.SetFloat(p, scale);
+                }
+            }
+            if (mats.Count == 0) { onShot(default); yield break; }
+
+            byte[] probed = null;
+            yield return Capture(cam, rt, readback, null, bytes => probed = bytes);
+            onShot(QcPixels.Measure(probed, withoutModel));
+
+            for (int i = 0; i < mats.Count; i++)
+            {
+                string p = PropOn(mats[i], NormalScaleNames);
+                if (p != null) mats[i].SetFloat(p, saved[i]);
+            }
         }
 
         /// <summary>

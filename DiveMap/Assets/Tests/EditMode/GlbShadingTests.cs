@@ -154,5 +154,61 @@ namespace DiveMap.Tests
                 }
             }
         }
+
+        // ── WO-E5e ───────────────────────────────────────────────────────────────
+
+        [Test]
+        public void AHealthyNormalMapSplitsItsEnergyEvenly()
+        {
+            // x and y are independent axes, so a real tangent-space map carries equal energy along
+            // (1,1) and (1,-1). The 4096² masters measure 0.4996 and 0.5011.
+            Assert.That(GlbShading.LostToLumaBlockFormat(1.0, 1.0),
+                        Is.EqualTo(GlbShading.HealthyIndependentFraction).Within(1e-9));
+            Assert.That(GlbShading.NormalMapSurvivedEncoding(11.75 * 11.75, 11.74 * 11.74), Is.True,
+                        "the domed_temple master must pass");
+            Assert.That(GlbShading.NormalMapSurvivedEncoding(15.52 * 15.52, 15.55 * 15.55), Is.True,
+                        "the grand_byzantine master must pass");
+        }
+
+        [Test]
+        public void TheShippedEtc1sNormalMapsAreNotNormalMapsAnyMore()
+        {
+            // 🔴 The measurement, kept as a test so it cannot be forgotten the next time somebody
+            // reads "[Shading] … dropped=f" and concludes the normal maps are fine. These are the
+            // real numbers off the real CDN files, as rms bytes per sub-block.
+            //
+            //                     shared   lost      independent fraction
+            //   domed_temple       13.31    0.15            0.0001
+            //   grand_byzantine    20.03    1.40            0.0049
+            //   cc0:kraken         12.56    0.30            0.0006
+            //   HTMS Chang         12.61    0.49            0.0015
+            var shipped = new[]
+            {
+                new[] { 13.31, 0.15 },   // ruin:domed_temple
+                new[] { 20.03, 1.40 },   // ruin:grand_byzantine
+                new[] { 12.56, 0.30 },   // cc0:kraken       — a model nobody complained about
+                new[] { 12.61, 0.49 },   // cc0:wreck_chang  — likewise
+            };
+            foreach (double[] m in shipped)
+            {
+                double frac = GlbShading.LostToLumaBlockFormat(m[0] * m[0], m[1] * m[1]);
+                Assert.That(frac, Is.LessThan(0.01),
+                    "ETC1S kept essentially none of the independent x/y movement");
+                Assert.That(GlbShading.NormalMapSurvivedEncoding(m[0] * m[0], m[1] * m[1]), Is.False,
+                    "every shipped normal map in the catalogue fails, which is why the report is " +
+                    "\"ทุกวัตถุ\" and not \"the ruins\"");
+            }
+        }
+
+        [Test]
+        public void TheGateIsGenerousAndStillFailsEverything()
+        {
+            // The line is a tenth of healthy — nowhere near the masters, nowhere near the shipped
+            // files. It exists so that a re-encode has an unambiguous target rather than "better".
+            Assert.That(GlbShading.MinIndependentFraction,
+                        Is.LessThan(GlbShading.HealthyIndependentFraction / 5.0));
+            Assert.That(GlbShading.NormalMapSurvivedEncoding(1.0, 0.06), Is.True);
+            Assert.That(GlbShading.NormalMapSurvivedEncoding(1.0, 0.04), Is.False);
+        }
     }
 }
