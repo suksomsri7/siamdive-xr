@@ -192,6 +192,54 @@ namespace DiveMap.Core
             return LinearToSrgb(minLinear);
         }
 
+        /// <summary>
+        /// Undo <see cref="Aces"/> for a NEUTRAL value: display-linear in, scene-linear out.
+        ///
+        /// 🔴 Why a QC pass needs it. Every number a screenshot can give is on the far side of the
+        /// tone curve, and the curve is steeply compressive — so a ratio measured in screen bytes
+        /// is not the ratio of the light that produced them. Comparing "the sand is 197 and the
+        /// ruin is 3" tells you almost nothing about how much light each surface received; putting
+        /// both back through this does, and that is the only form in which a shading ladder
+        /// (albedo → irradiance → curve → screen) can be read at all.
+        ///
+        /// Neutral only, and deliberately so: both matrices in <see cref="Aces"/> have rows summing
+        /// to 1, so a grey stays grey and the whole transform collapses to
+        /// <c>Fit(v · Exposure · ThreeJsGain)</c> — one monotonic scalar function, which is
+        /// invertible. A coloured pixel crosses per channel after the IN matrix has mixed them and
+        /// has no scalar inverse; a QC pass measures luminance, so neutral is the honest domain.
+        ///
+        /// Bisection rather than algebra because <see cref="Fit"/> is a ratio of quadratics and its
+        /// closed-form inverse has a sign choice that is wrong on one side of the toe. Forty
+        /// iterations is exact to a float either way, and this runs a handful of times per QC pass.
+        /// </summary>
+        /// <param name="displayLinear">A value as it comes OUT of <see cref="Aces"/>, 0-1.</param>
+        /// <returns>The scene-linear radiance that produces it. 0 maps to 0 — everything under
+        /// <see cref="BlackFloor"/> came out as 0 and the information is genuinely gone, so this
+        /// returns the largest scene value that still yields 0 rather than pretending otherwise.</returns>
+        public static float InverseNeutral(float displayLinear)
+        {
+            if (displayLinear <= 0f) return 0f;
+            if (displayLinear >= 1f) return float.MaxValue;
+
+            float lo = 0f, hi = 1f;
+            // Fit saturates well before 1 in scene-linear terms; walk the ceiling up until it
+            // brackets, so a highlight does not silently clamp to "1".
+            for (int i = 0; i < 40 && Aces1(hi) < displayLinear; i++) hi *= 2f;
+            for (int i = 0; i < 40; i++)
+            {
+                float mid = 0.5f * (lo + hi);
+                if (Aces1(mid) < displayLinear) lo = mid; else hi = mid;
+            }
+            return 0.5f * (lo + hi);
+        }
+
+        /// <summary>The neutral collapse of <see cref="Aces"/> — one scalar in, one out.</summary>
+        public static float Aces1(float sceneLinear)
+        {
+            float v = Fit(sceneLinear * Exposure * ThreeJsGain);
+            return v < 0f ? 0f : (v > 1f ? 1f : v);
+        }
+
         /// <summary>The byte an sRGB texture (or a screenshot) holds for a linear value.</summary>
         public static byte LinearToByte(float linear)
         {

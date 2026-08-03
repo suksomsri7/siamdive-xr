@@ -133,4 +133,76 @@ namespace DiveMap.Tests
                 "a screen at one threshold only holds while this band is narrow");
         }
     }
+
+    /// <summary>
+    /// WO-E5d — the arithmetic the daylight ladder is read against.
+    /// </summary>
+    [TestFixture]
+    public class DaylightAmbientTests
+    {
+        /// <summary>EnvMode's daylight bands: sky white x 0.72, ground 0xd8c9a8 x 0.72.</summary>
+        private const float DaySky = 0.72f;
+        private const float DayGround = 0.847f * 0.72f;
+
+        [Test]
+        public void AmbientAloneCannotProduceTheByteTheUserPhotographed()
+        {
+            // 🔴 The measurement that turned "ซุ้มดำ" from a texture question into a light one.
+            //
+            // The user switched the app to daylight — no fog, no depth curve, no ambient floor,
+            // none of the three multipliers that had been accused in turn — and photographed
+            // Atlantis again. The dome's body reads byte 3 (p50), 69% of it under 16.
+            //
+            // A surface of the ruins' OWN measured albedo, lit by nothing but the daylight ambient
+            // and with the sun switched off entirely, cannot be that dark. Not "should not be" —
+            // cannot, and this is the sum.
+            float albedo = ToneMap.SrgbToLinear(112f / 255f);   // domed_temple, surface-weighted
+
+            foreach (float band in new[] { DayGround, DaySky })
+            {
+                float scene = albedo * band;
+                byte b = ToneMap.LinearToByte(ToneMap.Aces1(scene));
+                Assert.That((int)b, Is.GreaterThan(60),
+                    $"ambient {band:0.00} alone on albedo {albedo:0.000} must not be dark");
+            }
+
+            // …and the shadow cannot take it there either: in the built-in pipeline the shadow term
+            // multiplies the DIRECT light and leaves the ambient alone, so switching the sun off
+            // entirely is the darkest a shadow could ever make this surface.
+            float darkest = albedo * DayGround;
+            Assert.That((int)ToneMap.LinearToByte(ToneMap.Aces1(darkest)), Is.GreaterThan(60),
+                "the fully shadowed case is still nowhere near the byte 3 that was photographed");
+        }
+
+        [Test]
+        public void TheToneCurveInvertsSoALadderCanBeReadInLight()
+        {
+            // A ratio measured in screen bytes is not a ratio of light — the curve is steeply
+            // compressive, and the whole ladder depends on being able to get back.
+            foreach (float scene in new[] { 0.002f, 0.01f, 0.05f, 0.162f, 0.4f, 0.9f })
+            {
+                float display = ToneMap.Aces1(scene);
+                float back = ToneMap.InverseNeutral(display);
+                Assert.That(back, Is.EqualTo(scene).Within(System.Math.Max(1e-4f, scene * 0.02f)),
+                    $"InverseNeutral must undo Aces1 at {scene}");
+            }
+            Assert.That(ToneMap.InverseNeutral(0f), Is.EqualTo(0f));
+        }
+
+        [Test]
+        public void HowMuchLightIsActuallyMissing()
+        {
+            // Stated as the one number the report turns on. What the dome measures, against what
+            // the same albedo under the dimmest daylight band would give.
+            float albedo = ToneMap.SrgbToLinear(112f / 255f);
+            float expected = albedo * DayGround;
+
+            // byte 3 -> display-linear -> scene-linear
+            float measured = ToneMap.InverseNeutral(ToneMap.SrgbToLinear(3f / 255f));
+
+            double shortfall = expected / System.Math.Max(measured, 1e-9f);
+            Assert.That(shortfall, Is.GreaterThan(10.0),
+                $"the dome is receiving {shortfall:0.0}x less light than the ambient alone would give");
+        }
+    }
 }

@@ -1092,6 +1092,128 @@ namespace DiveMap.Core
             return count == 0 ? 0.0 : sum / count;
         }
 
+        // ── WO-E5d: the shading ladder ───────────────────────────────────────────
+        //
+        // 🔴 WHY A LADDER AND NOT ANOTHER NUMBER. The Atlantis ruins have now been measured on the
+        // file (albedo, gutter, normals, metal, vertex colours, LOD, occlusion — all clean or
+        // cleared) and photographed on a phone in DAYLIGHT mode, where the depth curve, the fog and
+        // the ambient floor are all switched off before a line of them runs. They are still black.
+        // So the loss is somewhere between "the albedo the file holds" and "the byte on the screen",
+        // and no single measurement at either end can say where. A ladder measures every rung.
+        //
+        // The rungs are chosen so each one removes exactly one thing, in scene-linear (see
+        // ToneMap.InverseNeutral — a ratio in screen bytes is not a ratio of light):
+        //
+        //   shipped      the model as the player sees it
+        //   noAces       the same frame with the tone curve off — separates "we are dark" from
+        //                "we are in the part of the curve that crushes"
+        //   greyAlbedo   the model's albedo replaced by a KNOWN 0.65. Everything else identical,
+        //                so this rung is pure irradiance × BRDF
+        //   whiteAlbedo  albedo 1.0 — the same question with no albedo left at all
+        //   meshNormals  Unity's own shader, white, no textures: the mesh's own normals only
+        //   noShadow     the sun's shadow off for one frame
+        //   ambientOnly  the SUN off. In daylight the ambient bands are 0.53-0.72 and neutral, so a
+        //                surface of albedo 0.16 lit by nothing but them must land near byte 80-100.
+        //                It is the rung with a predictable answer, which makes it the one that can
+        //                convict: measured on the user's own daylight screenshot the dome's body
+        //                sits at byte 3, and no amount of shadow can do that to an ambient term.
+        //
+        // 🔎 AND A REFERENCE SURFACE IN THE SAME FRAME. Every rung is measured twice — once on the
+        // model and once on a plain quad of KNOWN albedo standing beside it, lit by the same sun
+        // and the same ambient through the same shader the seabed uses. Without it every number is
+        // a measurement of the whole scene; with it, modelLinear / referenceLinear is a measurement
+        // of the MODEL, and it has an arithmetic prediction: it should equal the model's own albedo
+        // divided by the reference's. Where the ladder departs from that prediction is the rung
+        // that owns the bug.
+        public struct Rung
+        {
+            public string Name;
+            /// <summary>Mean scene-linear luminance of the model's own pixels.</summary>
+            public double ModelLinear;
+            /// <summary>…and of the reference quad's, in the same frame.</summary>
+            public double ReferenceLinear;
+            /// <summary>% of the model's pixels that are exactly (0,0,0).</summary>
+            public double BlackPercent;
+            public double SubjectPercent;
+
+            /// <summary>The number the whole ladder is for: how much light the model returns per
+            /// unit of light a known surface returns, in the same frame.</summary>
+            public double Ratio => ReferenceLinear <= 1e-12 ? 0.0 : ModelLinear / ReferenceLinear;
+        }
+
+        /// <summary>
+        /// Mean SCENE-LINEAR luminance of the pixels where <paramref name="frame"/> differs from
+        /// <paramref name="empty"/> — i.e. of the subject — undoing the tone curve on the way.
+        /// </summary>
+        public static double SceneLinearOfSubject(byte[] frame, byte[] empty,
+                                                  out double subjectPercent,
+                                                  out double blackPercent,
+                                                  byte tolerance = SubjectTolerance)
+        {
+            subjectPercent = 0.0;
+            blackPercent = 0.0;
+            int n = PixelCount(frame);
+            if (n == 0 || empty == null || empty.Length != frame.Length) return 0.0;
+
+            double sum = 0.0;
+            long count = 0, black = 0;
+            for (int i = 0; i < n; i++)
+            {
+                int p = i * Channels;
+                int dr = frame[p] - empty[p];
+                int dg = frame[p + 1] - empty[p + 1];
+                int db = frame[p + 2] - empty[p + 2];
+                if (dr < 0) dr = -dr;
+                if (dg < 0) dg = -dg;
+                if (db < 0) db = -db;
+                if (dr <= tolerance && dg <= tolerance && db <= tolerance) continue;
+
+                count++;
+                if (frame[p] == 0 && frame[p + 1] == 0 && frame[p + 2] == 0) black++;
+                // byte → display-linear → scene-linear
+                double display = ToneMap.SrgbToLinear((float)Luminance(frame[p], frame[p + 1], frame[p + 2]));
+                sum += ToneMap.InverseNeutral((float)display);
+            }
+            if (count == 0) return 0.0;
+            subjectPercent = 100.0 * count / n;
+            blackPercent = 100.0 * black / count;
+            return sum / count;
+        }
+
+        /// <summary>Mean scene-linear luminance inside a rectangle — the reference quad.</summary>
+        public static double SceneLinearOfRect(byte[] frame, int width, int height,
+                                               int x0, int y0, int w, int h)
+        {
+            int n = PixelCount(frame);
+            if (n == 0 || width <= 0 || height <= 0 || width * height != n) return 0.0;
+            if (w <= 0 || h <= 0) return 0.0;
+            if (x0 < 0) x0 = 0;
+            if (y0 < 0) y0 = 0;
+            if (x0 + w > width) w = width - x0;
+            if (y0 + h > height) h = height - y0;
+            if (w <= 0 || h <= 0) return 0.0;
+
+            double sum = 0.0;
+            long count = 0;
+            for (int y = y0; y < y0 + h; y++)
+                for (int x = x0; x < x0 + w; x++)
+                {
+                    int p = (y * width + x) * Channels;
+                    double display = ToneMap.SrgbToLinear((float)Luminance(frame[p], frame[p + 1], frame[p + 2]));
+                    sum += ToneMap.InverseNeutral((float)display);
+                    count++;
+                }
+            return count == 0 ? 0.0 : sum / count;
+        }
+
+        /// <summary>One line per rung — the ladder, in the order it was climbed.</summary>
+        public static string RungLine(string model, Rung r, double expectedRatio)
+            => $"[QCLadder] {model} rung={r.Name} " +
+               $"modelLin={r.ModelLinear:0.00000} refLin={r.ReferenceLinear:0.00000} " +
+               $"ratio={r.Ratio:0.0000} expected={expectedRatio:0.0000} " +
+               $"shortfall={(expectedRatio <= 1e-9 ? 0.0 : r.Ratio / expectedRatio):0.000}x " +
+               $"black={r.BlackPercent:0.00}% subject={r.SubjectPercent:0.00}%";
+
         /// <summary>One token for what this map shot proves, worst first. "" when it is fine.</summary>
         public static string MapReason(MapShot m,
                                        double minSubjectPercent = MinSubjectPercent,

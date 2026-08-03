@@ -536,6 +536,15 @@ namespace DiveMap.Runtime
             // the passes above their evidence.
             yield return QcAnimShot.Run(boatCenter);
 
+            // ── WO-E5d: WHERE do the Atlantis ruins lose their light? ──────────────
+            // In DAYLIGHT, against a reference surface of known albedo, one shading input removed
+            // at a time. Every offline explanation for "ซุ้มดำ" has been measured on the files and
+            // cleared, and the user's own daylight screenshot rules out the water: a surface of the
+            // ruins' measured albedo lit by nothing but the daylight ambient works out at byte
+            // 80-100, and the dome's body photographs at byte 3. This is the pass that says which
+            // rung loses it. Before QcMapShot, because that one rebuilds the scene.
+            yield return QcRuinLadder.Run(dir, Manifest, boatCenter);
+
             // ── WO-E5: the maps themselves, from where the player's eyes are ───────
             // Everything above photographs either nine models alone in a studio or ONE map from an
             // orbit pose. The user's answer to that was "ผมถามคุณ QC ยังไงครับ คุณไม่ได้ถ่ายรูป
