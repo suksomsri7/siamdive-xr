@@ -50,8 +50,16 @@ namespace DiveMap.Core
         /// were rebuilt — all of it uploaded OVER the existing <c>models/xr/</c> URLs. Without the
         /// bump a device that has opened these maps once keeps serving itself the pre-dilation
         /// bytes and the fix reads as "แก้แล้วเหมือนไม่ได้แก้".
+        ///
+        /// generation 4 (2026-08-03): the albedo lift. Five models' base-colour textures were
+        /// re-encoded — singha, HTMS Chang, htms732, hardeep, poseidon — after the in-frame probe
+        /// proved their black came from the texture, not the lighting: forcing a white albedo took
+        /// blackOfSubject from 20.21% to 0.00%, and raising every light in the app had moved it by
+        /// nothing at all. Same URLs again, and maps.siamdive.com serves /models/* as
+        /// <c>immutable, max-age=31536000</c>, so without this a phone that has opened Hanuman once
+        /// would keep the old dark bytes for a year.
         /// </summary>
-        public const int Generation = 3;
+        public const int Generation = 4;
 
         /// <summary>
         /// Is a cached file's generation still good enough to serve?
