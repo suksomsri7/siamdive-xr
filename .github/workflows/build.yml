@@ -524,6 +524,11 @@ jobs:
             qc_screenshot2.png
             qc_model_*.png
             qc_depth_*.png
+            # 🔴 The map shots are the only frames that show what the PLAYER sees. QcMapShot wrote
+            # seven of them on the first run and none of them left the runner, because this list
+            # had never needed a new glob before — so the round that was supposed to end "we only
+            # ever photographed models on a grey backdrop" ended with the same evidence as always.
+            qc_map_*.png
             qc_player.log
             qc_ui*.png
             qc_ui_player.log
