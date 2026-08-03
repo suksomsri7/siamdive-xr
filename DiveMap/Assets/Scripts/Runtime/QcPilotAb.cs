@@ -102,15 +102,31 @@ namespace DiveMap.Runtime
                 ShippedUrl = Cdn + "cc0_kraken_xr0.glb",
                 PilotUrl = Cdn + "pilot_nmuastc_cc0_kraken_xr0.glb",
             },
-            // ── the tangent experiment, waiting for its file ──────────────────────
-            // new Pair
-            // {
-            //     Variable = "tangent-added",
-            //     Name = "Singha_Statue_Underwater",
-            //     ScaleAssetId = "cc0:statue_singha",
-            //     ShippedUrl = "https://maps.siamdive.com/models/xr/Singha_Statue_Underwater_xr0.glb",
-            //     PilotUrl = Cdn + "pilot_tangent_Singha_Statue_Underwater_xr0.glb",
-            // },
+            // ── the tangent experiment ────────────────────────────────────────────
+            // Eight shipped files carry a normal map and no TANGENT at all, these two among them:
+            // they were built on 22 Jul, before fix_tangents.mjs joined the pipeline. The web's
+            // copies have no tangent either — but three.js derives a basis in the fragment shader
+            // from screen-space derivatives when the attribute is missing, and Unity's Built-in
+            // Standard shader does not. The same absence is harmless there and not here, which is
+            // the only difference found so far that predicts "good on the web, black in the app".
+            // The halves differ by the added attribute alone: base colour, normal, MR and emissive all
+            // hash identical, triangles identical, bounds identical to four decimals.
+            new Pair
+            {
+                Variable = "tangent-added",
+                Name = "Singha_Statue_Underwater",
+                ScaleAssetId = "cc0:statue_singha",
+                ShippedUrl = "https://maps.siamdive.com/models/xr/Singha_Statue_Underwater_xr0.glb",
+                PilotUrl = Cdn + "pilot_tan_Singha_Statue_Underwater_xr0.glb",
+            },
+            new Pair
+            {
+                Variable = "tangent-added",
+                Name = "HTMS_Chang",
+                ScaleAssetId = "cc0:wreck_chang",
+                ShippedUrl = "https://maps.siamdive.com/models/xr/HTMS_Chang_xr0.glb",
+                PilotUrl = Cdn + "pilot_tan_HTMS_Chang_xr0.glb",
+            },
         };
 
         private const float PerFileSeconds = 45f;

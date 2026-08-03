@@ -64,7 +64,12 @@ namespace DiveMap.Core
         /// and uploaded over the same URLs. The app had never played a clip in its life, so a
         /// device holding generation-4 bytes would keep a catalogue of animals that cannot move
         /// while the manifest next to it says <c>"animated": true</c>.
-        public const int Generation = 5;
+        /// generation 6 (2026-08-03): the eleven Atlantis ruins were rebuilt at the triangle count
+        /// the website ships — 35k back up to ~101k — after the decimation was measured to be what
+        /// made them black: pctDark 1.54% → 0.50% on the domed temple, and every one of the eleven
+        /// landed on the web's own figure to the digit. Same URLs, so a phone that has opened
+        /// Atlantis once would keep the cut-down meshes and none of it would show.
+        public const int Generation = 6;
 
         /// <summary>
         /// Is a cached file's generation still good enough to serve?
