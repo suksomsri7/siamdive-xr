@@ -79,6 +79,94 @@ namespace DiveMap.Tests
         }
 
         [Test]
+        public void RowsOfTheAcesMatricesSumToOne_SoNeutralStaysNeutral()
+        {
+            // 🔴 The test that would have caught the InputMat typo, and the only kind that could.
+            // TheHlslCopyOfTheCurveHasNotDrifted pins C# to HLSL, and both copies carried the SAME
+            // wrong number — one had been retyped from the other — so they agreed with each other
+            // all the way through WO-E3. Arithmetic does not care how many copies agree.
+            //
+            // Every row of sRGB→AP1 and of AP1→sRGB sums to 1, because both map white to white.
+            // A neutral input therefore gives all three channels the same value going into
+            // RRTAndODTFit, and nothing after that can tint it. If grey comes out coloured, a row
+            // does not sum to 1. Before the fix, ToneMap.Aces(0.0074, 0.0074, 0.0074) returned
+            // bytes (5, 7, 5).
+            foreach (float v in new[] { 0.0074f, 0.02f, 0.2f, 0.6f, 1.0f })
+            {
+                ToneMap.Aces(v, v, v, out float r, out float g, out float b);
+                Assert.AreEqual(r, g, 1e-4f,
+                    $"neutral {v} came out tinted (r={r}, g={g}) — an ACES matrix row does not sum to 1");
+                Assert.AreEqual(g, b, 1e-4f,
+                    $"neutral {v} came out tinted (g={g}, b={b}) — an ACES matrix row does not sum to 1");
+            }
+        }
+
+        [Test]
+        public void TheToeAlsoHasAHardFloor_AndThatIsWhereBlackOfSubjectComesFrom()
+        {
+            // 🔴 The half of the toe nobody had written down. Fit()'s numerator carries a negative
+            // constant (-0.000090537), so the curve is NEGATIVE below its positive root and Aces()
+            // clamps that to exactly 0. "ACES lifts the bottom of the range" is true at a linear
+            // 0.02 (the test above) and false below ToneMap.BlackFloor, where it does the opposite.
+            //
+            // This matters because QcPixels.BlackOfSubjectPercent counts pixels that are EXACTLY
+            // (0,0,0). Since the pipeline moved to linear + ACES that statistic no longer means
+            // "no light reached this pixel" — it means "less light than the toe can represent",
+            // which is a much weaker accusation against the model being photographed.
+            Assert.Less(ToneMap.Fit(ToneMap.FitZeroCrossing * 0.9f), 0f,
+                        "Fit() must be negative below its root — that is what makes the clamp bite");
+            Assert.AreEqual(0f, ToneMap.Fit(ToneMap.FitZeroCrossing), 1e-6f,
+                        "FitZeroCrossing is not where Fit() actually crosses zero");
+            Assert.Greater(ToneMap.Fit(ToneMap.FitZeroCrossing * 1.1f), 0f);
+        }
+
+        [Test]
+        public void BlackFloorIsTheExactLinearValueThatBecomesByteZero()
+        {
+            // Stated for grey because both ACES matrices have rows summing to 1, so a neutral
+            // input stays neutral and the transform collapses to Fit(v · Exposure · ThreeJsGain).
+            ToneMap.Aces(ToneMap.BlackFloor * 0.95f, ToneMap.BlackFloor * 0.95f,
+                         ToneMap.BlackFloor * 0.95f, out float r0, out float g0, out float b0);
+            Assert.AreEqual(0, ToneMap.LinearToByte(r0), "just under BlackFloor must be byte 0");
+            Assert.AreEqual(0, ToneMap.LinearToByte(g0));
+            Assert.AreEqual(0, ToneMap.LinearToByte(b0));
+
+            ToneMap.Aces(ToneMap.BlackFloor * 4f, ToneMap.BlackFloor * 4f, ToneMap.BlackFloor * 4f,
+                         out _, out float g1, out _);
+            Assert.Greater(ToneMap.LinearToByte(g1), 0,
+                           "well above BlackFloor must survive, or the floor is in the wrong place");
+
+            // The number in human units: BlackFloor is byte 6 in a plain sRGB encode, so the whole
+            // 1..6 band the old gamma pipeline could show is now collapsed onto 0.
+            Assert.AreEqual(6, ToneMap.LinearToByte(ToneMap.BlackFloor), 1,
+                            "BlackFloor should sit around byte 6 before tone mapping");
+        }
+
+        [Test]
+        public void ADownFacingSurfaceLosesItsRedChannelWhateverItsAlbedo()
+        {
+            // 🔎 Measured, not invented: at the QC staging depth (waterLevel 240, stage y 98.06 →
+            // 23.4 m) the app logs its own ambient as
+            //     [Water] ... gnd=(0.022,0.148,0.231)
+            // A surface facing straight down sees only that band. Its RED channel in linear is
+            // 0.0017, which is BELOW ToneMap.BlackFloor before any albedo is applied — so red is
+            // pinned to byte 0 on every down-facing surface in the scene even for a pure white
+            // model. Nothing an asset can do reaches it; only the ambient can.
+            float gr = ToneMap.SrgbToLinear(0.022f);
+            float gg = ToneMap.SrgbToLinear(0.148f);
+            float gb = ToneMap.SrgbToLinear(0.231f);
+            Assert.Less(gr, ToneMap.BlackFloor,
+                        "the ground ambient band's red is supposed to be under the floor at 23 m");
+
+            ToneMap.Aces(gr, gg, gb, out float r, out float g, out float b);   // albedo 1.0 = white
+            Assert.AreEqual(0, ToneMap.LinearToByte(r),
+                            "red should be crushed even at albedo 1 — if not, re-measure the band");
+            Assert.Greater(ToneMap.LinearToByte(g), 0, "green still has something left at 23 m");
+            Assert.Greater(ToneMap.LinearToByte(b), ToneMap.LinearToByte(g),
+                           "blue outlives green underwater; that ordering is the depth cue");
+        }
+
+        [Test]
         public void TheSrgbTransferFunctionRoundTrips_AndAgreesWithGlbShading()
         {
             // GlbShading models the GPU sampler and is the file the normal-map diagnosis was
@@ -124,8 +212,15 @@ namespace DiveMap.Tests
             foreach (string c in new[] { "0.0245786", "0.000090537", "0.983729", "0.4329510", "0.238081" })
                 StringAssert.Contains(c, shader, $"RRTAndODTFit constant {c} is missing from the shader");
 
-            // The two colour matrices' leading terms — enough to catch a transposed or retyped copy.
-            foreach (string c in new[] { "0.59719", "0.90834", "0.83777", "1.60475", "1.10813", "1.07602" })
+            // 🔴 ALL EIGHTEEN terms, not the six diagonal ones. The old list of six was why the
+            // InputMat typo (0.13383 where 0.01566 belongs) survived: it sat off the diagonal, in
+            // both copies, and every term this test looked at was correct.
+            foreach (string c in new[] { "0.59719", "0.35458", "0.04823",
+                                         "0.07600", "0.90834", "0.01566",
+                                         "0.02840", "0.13383", "0.83777",
+                                         "1.60475", "-0.53108", "-0.07367",
+                                         "-0.10208", "1.10813", "-0.00605",
+                                         "-0.00327", "-0.07276", "1.07602" })
                 StringAssert.Contains(c, shader, $"ACES matrix term {c} is missing from the shader");
 
             // And the divisor that is easiest of all to lose.

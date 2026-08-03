@@ -44,8 +44,15 @@ namespace DiveMap.Core
 
         // ACES colour-space matrices (three.js tonemapping_pars_fragment.glsl.js). GLSL mat3
         // constructors take COLUMNS; these are the same matrices written out as rows.
+        // 🔴 InR1's third term is 0.01566, NOT 0.13383 — see the note in DM_AcesToneMap.shader.
+        // Both copies carried 0.13383 from WO-E3 until run 30780858496 was traced this far, and
+        // TheHlslCopyOfTheCurveHasNotDrifted could not catch it because both copies had drifted
+        // the same way (one was retyped from the other). Every row of sRGB→AP1 sums to 1; this one
+        // summed to 1.11817, which is a ~12% green lift on neutral and much more on blue-dominant
+        // underwater colour. RowsOfTheAcesMatricesSumToOne is the test that cannot be fooled by
+        // two identical copies, because it checks the arithmetic rather than the transcription.
         private static readonly float[] InR0 = { 0.59719f, 0.35458f, 0.04823f };
-        private static readonly float[] InR1 = { 0.07600f, 0.90834f, 0.13383f };
+        private static readonly float[] InR1 = { 0.07600f, 0.90834f, 0.01566f };
         private static readonly float[] InR2 = { 0.02840f, 0.13383f, 0.83777f };
 
         private static readonly float[] OutR0 = { 1.60475f, -0.53108f, -0.07367f };
@@ -81,6 +88,47 @@ namespace DiveMap.Core
             float b = v * (0.983729f * v + 0.4329510f) + 0.238081f;
             return b == 0f ? 0f : a / b;
         }
+
+        /// <summary>
+        /// 🔴 THE CURVE HAS A HARD ZERO, AND IT IS NOT AT ZERO.
+        ///
+        /// <see cref="Fit"/>'s numerator is <c>v² + 0.0245786·v − 0.000090537</c> — it carries a
+        /// NEGATIVE constant term, so the fit is negative for every input below its positive root
+        /// and <see cref="Clamp01"/> then turns that into exactly 0. This is the root:
+        ///
+        ///     v² + 0.0245786·v − 0.000090537 = 0   ⟹   v = 0.00325303
+        ///
+        /// It is a property of Stephen Hill's fit, not a bug we introduced — three.js does the same
+        /// thing — but nothing in this repo had ever written it down, and it is the mechanism
+        /// behind every <c>blackOfSubject</c> number the QC pass has ever printed.
+        /// <see cref="QcPixels.Shot.BlackOfSubjectPercent"/> counts pixels that are EXACTLY
+        /// (0,0,0); before WO-E3 there was no tone map, nothing clamped, and a dim surface landed
+        /// on byte 1 or 2. Since 5eda954 anything under <see cref="BlackFloor"/> lands on byte 0,
+        /// so "pure black" stopped meaning "no light reached this pixel" and started meaning "less
+        /// light than the toe can represent". Those are different accusations.
+        ///
+        /// 🔎 <see cref="DepthLight.Floor"/>'s docs say ACES "lifts and holds the bottom of the
+        /// range instead of letting it slide to black". That is true where it was measured (a
+        /// linear 0.02 → byte 40, pinned by a test) and false below <see cref="BlackFloor"/>,
+        /// where the same curve does the opposite and snaps to 0. Both halves are now tested.
+        /// </summary>
+        public const float FitZeroCrossing = 0.00325303f;
+
+        /// <summary>
+        /// Scene-linear radiance at or below which a NEUTRAL pixel comes out of <see cref="Aces"/>
+        /// as exactly 0 — <see cref="FitZeroCrossing"/> divided back through the exposure gain.
+        ///
+        /// Both matrices in <see cref="Aces"/> have rows summing to 1, so a neutral input stays
+        /// neutral and the whole transform collapses to <c>Fit(v · Exposure · ThreeJsGain)</c>;
+        /// that is why this threshold can be stated as one number for grey. A COLOURED pixel
+        /// crosses per channel after the IN matrix has mixed them, which is why underwater the red
+        /// channel reaches 0 long before the other two (deep water has almost no red left to mix
+        /// in) and a surface can be byte (0, 7, 14) — dark, but not "pure black".
+        ///
+        /// For scale: 0.00186 linear is byte 6 in a plain sRGB encode. Everything the old gamma
+        /// pipeline would have shown between byte 1 and byte 6 is now byte 0.
+        /// </summary>
+        public const float BlackFloor = 0.00185887f;
 
         // ── sRGB transfer function ───────────────────────────────────────────────
         // The same curve as GlbShading.SrgbToLinear (which models a GPU sampler and is asserted

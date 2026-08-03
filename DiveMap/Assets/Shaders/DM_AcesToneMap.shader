@@ -59,9 +59,17 @@ Shader "DiveMap/AcesToneMap"
 
             // three.js tonemapping_pars_fragment.glsl.js — GLSL mat3 takes COLUMNS, so these are
             // written as float3x3 rows of the same matrices.
+            // 🔴 Row 1's third term is 0.01566, NOT 0.13383. It was 0.13383 here and in ToneMap.cs
+            // from WO-E3 until the QC pass on run 30780858496 was traced back this far: feeding the
+            // curve a NEUTRAL grey came out green (bytes 5,7,5), which cannot happen if the matrix
+            // is right, because every row of the sRGB→AP1 matrix sums to 1. This one summed to
+            // 1.11817 — the value had been copied down from the row below it. The effect was
+            // green getting 0.13383 of blue instead of 0.01566, i.e. 8.5× too much, and underwater
+            // (where blue is most of what is left) that is a depth-dependent green cast on the
+            // whole frame. RowsOfTheAcesMatricesSumToOne now pins it.
             static const float3x3 ACESInputMat = float3x3(
                 0.59719, 0.35458, 0.04823,
-                0.07600, 0.90834, 0.13383,
+                0.07600, 0.90834, 0.01566,
                 0.02840, 0.13383, 0.83777);
 
             static const float3x3 ACESOutputMat = float3x3(
