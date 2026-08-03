@@ -203,5 +203,54 @@ namespace DiveMap.Tests
                 Assert.That(w, Is.LessThan(ours),
                     "the web is more damaged on this metric than we are, and looks better");
         }
+
+        // ── WO-E5l ───────────────────────────────────────────────────────────────
+
+        [Test]
+        public void ATextureThatIsNotBeingSampledIsTheSameAsNoTextureAtAll()
+        {
+            // 🔴 The gap TameMetal was never able to see. Its rule is "a factor with NO texture was
+            // never authored", and these materials DO ship one — so it leaves them alone. But
+            // glTFast's shader only reads that texture inside #ifdef _METALLICGLOSSMAP, and with
+            // the keyword off the factor IS the metal: 1.0, which in built-in RP means no diffuse
+            // at all.
+            Assert.That(GlbShading.UnsampledMapMetalFactor(1f, hasMetalTexture: true, metalKeywordOn: false),
+                        Is.EqualTo(GlbShading.TamedMetal),
+                        "a bound-but-unsampled map with metallicFactor 1 is a black object");
+
+            // …and every case that must NOT be touched.
+            Assert.That(GlbShading.UnsampledMapMetalFactor(1f, true, true), Is.LessThan(0f),
+                        "keyword on: the texture is being read and the factor is honest");
+            Assert.That(GlbShading.UnsampledMapMetalFactor(1f, false, false), Is.LessThan(0f),
+                        "no texture at all is TamedMetalFactor's case, not this one");
+            Assert.That(GlbShading.UnsampledMapMetalFactor(0.02f, true, false), Is.LessThan(0f),
+                        "a factor already at the floor is harmless either way");
+        }
+
+        [Test]
+        public void TheGoldenTridentKeepsItsShine()
+        {
+            // GoldFx sets metallicFactor = 1 with NO metallic-roughness texture — a deliberate
+            // metal. The rule above fires only where a texture is present but unread, so gold is
+            // outside it by construction rather than by a special case.
+            Assert.That(GlbShading.UnsampledMapMetalFactor(1f, hasMetalTexture: false, metalKeywordOn: false),
+                        Is.LessThan(0f), "a deliberate metal with no map must stay a mirror");
+        }
+
+        [Test]
+        public void TheTwoMetalRulesDoNotOverlap()
+        {
+            // One material must never be claimed by both rules, or the order they run in becomes
+            // load-bearing — which is how this project got ghost maps and black tail fins.
+            foreach (float factor in new[] { 0f, 0.04f, 0.4f, 1f })
+                foreach (bool hasTex in new[] { true, false })
+                    foreach (bool keyword in new[] { true, false })
+                    {
+                        bool tamed = GlbShading.TamedMetalFactor(factor, hasTex) >= 0f;
+                        bool unsampled = GlbShading.UnsampledMapMetalFactor(factor, hasTex, keyword) >= 0f;
+                        Assert.That(tamed && unsampled, Is.False,
+                            $"factor={factor} hasTex={hasTex} keyword={keyword} matched both rules");
+                    }
+        }
     }
 }

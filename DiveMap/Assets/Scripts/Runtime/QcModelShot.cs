@@ -647,6 +647,28 @@ namespace DiveMap.Runtime
                               $"subject={sweep.SubjectPercent:0.00}%");
                 }
 
+                // 🔴 WO-E5l — noMetalRough changes metal AND roughness AND clears the texture AND
+                // drops the keyword, all at once, so its 85% → 49% could not say which of the four
+                // did it. These two split it. If metalZeroOnly moves the picture as far as
+                // noMetalRough did, the metal factor is the whole story and roughness is a
+                // passenger; if roughOnly moves it instead, the opposite. Nothing else is touched
+                // in either — same shader, same albedo, same textures, same keywords.
+                QcPixels.Shot metalZero = default, roughOnly = default;
+                yield return ProbeFactorOnly(cam, rt, readback, renderers, withoutModel,
+                                             "metallicFactor", 0f, s2 => metalZero = s2);
+                yield return ProbeFactorOnly(cam, rt, readback, renderers, withoutModel,
+                                             "roughnessFactor", GlbShading.ProbeValidatedRoughness,
+                                             s2 => roughOnly = s2);
+                Debug.Log($"[QCProbe] {name} metalZeroOnly dark={metalZero.DarkOfSubjectPercent:0.00}% " +
+                          $"black={metalZero.BlackOfSubjectPercent:0.00}% " +
+                          $"subject={metalZero.SubjectPercent:0.00}% | " +
+                          $"roughOnly dark={roughOnly.DarkOfSubjectPercent:0.00}% " +
+                          $"black={roughOnly.BlackOfSubjectPercent:0.00}% | " +
+                          $"shipped dark={shot.DarkOfSubjectPercent:0.00}% " +
+                          $"black={shot.BlackOfSubjectPercent:0.00}% | " +
+                          $"noMetalRough dark={noMetalRough.DarkOfSubjectPercent:0.00}% " +
+                          $"verdict={MetalVerdict(shot, metalZero, roughOnly, noMetalRough)}");
+
                 QcPixels.Shot noShadow = default;
                 yield return ProbeNoShadows(cam, rt, readback, renderers, withoutModel,
                                             s => noShadow = s);
@@ -909,6 +931,55 @@ namespace DiveMap.Runtime
                 string p = PropOn(mats[i], NormalScaleNames);
                 if (p != null) mats[i].SetFloat(p, saved[i]);
             }
+        }
+
+        /// <summary>
+        /// One frame with a single float property changed and everything else — shader, albedo,
+        /// every texture, every keyword — left exactly as it was.
+        /// </summary>
+        private static IEnumerator ProbeFactorOnly(Camera cam, RenderTexture rt, Texture2D readback,
+                                                   List<Renderer> renderers, byte[] withoutModel,
+                                                   string property, float value,
+                                                   System.Action<QcPixels.Shot> onShot)
+        {
+            var mats = new List<Material>();
+            var saved = new List<float>();
+            foreach (Renderer r in renderers)
+            {
+                if (r == null) continue;
+                foreach (Material m in r.materials)
+                {
+                    if (m == null || !m.HasProperty(property)) continue;
+                    mats.Add(m);
+                    saved.Add(m.GetFloat(property));
+                    m.SetFloat(property, value);
+                }
+            }
+            if (mats.Count == 0) { onShot(default); yield break; }
+
+            byte[] probed = null;
+            yield return Capture(cam, rt, readback, null, bytes => probed = bytes);
+            onShot(QcPixels.Measure(probed, withoutModel));
+
+            for (int i = 0; i < mats.Count; i++) mats[i].SetFloat(property, saved[i]);
+        }
+
+        /// <summary>
+        /// Which of the two factors <c>noMetalRough</c> was actually measuring. "Most of it" is
+        /// three quarters: below that the two inputs are sharing the effect and neither is the
+        /// answer on its own.
+        /// </summary>
+        private static string MetalVerdict(QcPixels.Shot shipped, QcPixels.Shot metalZero,
+                                           QcPixels.Shot roughOnly, QcPixels.Shot noMetalRough)
+        {
+            if (metalZero.Pixels <= 0) return "probe-failed";
+            double whole = shipped.DarkOfSubjectPercent - noMetalRough.DarkOfSubjectPercent;
+            if (whole <= QcPixels.BiasMovedPercent) return "noMetalRough-moved-nothing";
+            double byMetal = shipped.DarkOfSubjectPercent - metalZero.DarkOfSubjectPercent;
+            double byRough = shipped.DarkOfSubjectPercent - roughOnly.DarkOfSubjectPercent;
+            if (byMetal >= whole * 0.75) return "METALLIC-FACTOR-IS-IT";
+            if (byRough >= whole * 0.75) return "roughness-is-it";
+            return $"shared metal={byMetal / whole * 100:F0}% rough={byRough / whole * 100:F0}%";
         }
 
         /// <summary>

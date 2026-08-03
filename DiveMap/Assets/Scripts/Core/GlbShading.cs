@@ -220,6 +220,65 @@ namespace DiveMap.Core
         // threshold — and it was removed rather than re-tuned, because the quantity it screened on
         // does not separate the pictures that look right from the ones that do not.
 
+        // ── WO-E5l: metallicFactor = 1 with the map's keyword OFF is a black object ──
+        //
+        // 🔴 THE SHADER SAYS IT IN FIVE LINES. glTFast's built-in-RP PBR
+        // (glTFUnityStandardInput.cginc:190-198):
+        //
+        //     #ifdef _METALLICGLOSSMAP
+        //         mg.rg = tex2D(metallicRoughnessTexture, uv).bg;
+        //         mg.r *= metallicFactor;          // metal = texture.B x factor  ~= 0
+        //     #else
+        //         mg.r = metallicFactor;           // metal = factor = 1.0  -> FULL METAL
+        //     #endif
+        //
+        // Every GLB in this catalogue declares metallicFactor = 1 and carries a metallic-roughness
+        // texture whose blue channel measures 0-1 out of 255. With the keyword ON that multiplies
+        // out to a dielectric, which is what every previous investigation assumed. With the keyword
+        // OFF the texture is never sampled and the factor IS the material: metal 1.0, which in the
+        // built-in pipeline means NO DIFFUSE AT ALL — the surface returns only its specular
+        // reflection of the environment, and this scene's environment is a 4x4 uniform cube at
+        // reflectionIntensity 0.3. A black object with a faint sheen.
+        //
+        // 🔎 And the keyword can be off. It is declared `#pragma shader_feature_local`, and
+        // shader_feature variants are stripped from a player build unless something in Resources or
+        // Always-Included keeps them alive. This project has shipped a stripped variant twice.
+        //
+        // 🔎 It also explains, without adding anything, every result that has resisted explanation:
+        //   whiteAlbedo still 32% dark   — metal 1 has no diffuse, so albedo cannot help;
+        //   noMetalRough 85% -> 49%      — the only probe that touches the factor;
+        //   costOfNormalMap 0.00pp       — normal maps are irrelevant to a surface with no diffuse;
+        //   dark on EVERY model          — every file declares metallicFactor = 1;
+        //   the torch cannot fix it      — a lamp adds diffuse, and there is none to add to;
+        //   daylight does not fix it     — likewise for ambient;
+        //   the web is fine              — three.js always multiplies by the texture.
+        //
+        // 🔴 TameMetal cannot catch this. Its rule is "a factor with NO texture was never authored",
+        // and these materials DO ship a texture — so it deliberately leaves them alone. The rule
+        // below is the missing half: a texture that is present but NOT BEING SAMPLED is the same
+        // situation as no texture at all, and only the keyword can say which it is.
+
+        /// <summary>
+        /// What <c>metallicFactor</c> should become when the material ships a metallic-roughness
+        /// texture that the shader is NOT sampling.
+        ///
+        /// Narrow on purpose, and narrower than <see cref="TamedMetalFactor"/>: it fires only when
+        /// a texture is present AND the keyword that would read it is off. A material with no
+        /// texture at all is <see cref="TamedMetalFactor"/>'s case and is left to it; a material
+        /// whose keyword is on is genuinely authored and is not touched, so a deliberate metal —
+        /// the golden trident sets <c>metallicFactor = 1</c> with no map — keeps its shine.
+        /// </summary>
+        /// <returns>The factor to write, or a negative number for "leave it alone".</returns>
+        public static float UnsampledMapMetalFactor(float metallicFactor,
+                                                    bool hasMetalTexture,
+                                                    bool metalKeywordOn)
+        {
+            if (!hasMetalTexture) return -1f;   // TamedMetalFactor's job, not this one
+            if (metalKeywordOn) return -1f;     // the texture is being read; the factor is honest
+            if (metallicFactor <= MetalFactorFloor) return -1f;
+            return TamedMetal;
+        }
+
         /// <summary>At or below this a factor is already harmless.</summary>
         public const float MetalFactorFloor = 0.05f;
 

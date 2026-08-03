@@ -1044,7 +1044,7 @@ namespace DiveMap.Runtime
         private static void TameMetal(GameObject root, string assetId)
         {
             if (root == null) return;
-            int fixedCount = 0, droppedNormals = 0, materials = 0;
+            int fixedCount = 0, droppedNormals = 0, materials = 0, unsampledMetal = 0;
             bool gamma = QualitySettings.activeColorSpace == ColorSpace.Gamma;
             foreach (Renderer r in root.GetComponentsInChildren<Renderer>(true))
             {
@@ -1062,6 +1062,29 @@ namespace DiveMap.Runtime
                         fixedCount++;
                     }
                     if (DropMisdecodedNormalMap(m, assetId, gamma)) droppedNormals++;
+
+                    // 🔴 WO-E5l — the half TameMetal was never able to see. See GlbShading:
+                    // glTFast's shader reads the metallic-roughness texture only inside
+                    // #ifdef _METALLICGLOSSMAP; with the keyword off, metallicFactor IS the metal,
+                    // and every file in this catalogue declares 1. Metal 1 in built-in RP means no
+                    // diffuse at all — a black object with a faint cube reflection, which is the
+                    // report. Logged per material either way, because a keyword that is ON is
+                    // exactly as much evidence as one that is off.
+                    bool hasMap = HasMetalMap(m);
+                    bool keyword = m.IsKeywordEnabled("_METALLICGLOSSMAP");
+                    foreach (string factor in MetalFactorNames)
+                    {
+                        if (!m.HasProperty(factor)) continue;
+                        float before = m.GetFloat(factor);
+                        float fix = GlbShading.UnsampledMapMetalFactor(before, hasMap, keyword);
+                        if (fix >= 0f) { m.SetFloat(factor, fix); unsampledMetal++; }
+                        Debug.Log($"[Metal] {assetId} mat={m.name} {factor}={before:F3} " +
+                                  $"mrTexture={(hasMap ? "bound" : "NULL")} " +
+                                  $"_METALLICGLOSSMAP={(keyword ? "on" : "OFF")} " +
+                                  $"roughnessFactor={(m.HasProperty("roughnessFactor") ? m.GetFloat("roughnessFactor").ToString("F3") : "n/a")} " +
+                                  $"-> {(fix >= 0f ? fix.ToString("F3") + " TAMED" : "left alone")}");
+                        break;
+                    }
                 }
             }
             if (fixedCount > 0)
@@ -1071,6 +1094,7 @@ namespace DiveMap.Runtime
             // between "the pass is clean", "the pass skipped everything" and "the pass was never
             // called on this model" — three different bugs that cost a CI round each to tell apart.
             Debug.Log($"[Shading] {assetId}: materials={materials} tamedMetal={fixedCount} " +
+                      $"unsampledMapMetal={unsampledMetal} " +
                       $"droppedNormalMap={droppedNormals} gamma={(gamma ? "t" : "f")} " +
                       $"tilt={GlbShading.NeutralTiltDegrees():F0}°");
         }
