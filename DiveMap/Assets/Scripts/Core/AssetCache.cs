@@ -59,7 +59,12 @@ namespace DiveMap.Core
         /// <c>immutable, max-age=31536000</c>, so without this a phone that has opened Hanuman once
         /// would keep the old dark bytes for a year.
         /// </summary>
-        public const int Generation = 4;
+        /// generation 5 (2026-08-03): the rig batch. 132 files — 66 animal models, both LODs —
+        /// were rebuilt with a skeleton and swim clips transferred onto the high-resolution master
+        /// and uploaded over the same URLs. The app had never played a clip in its life, so a
+        /// device holding generation-4 bytes would keep a catalogue of animals that cannot move
+        /// while the manifest next to it says <c>"animated": true</c>.
+        public const int Generation = 5;
 
         /// <summary>
         /// Is a cached file's generation still good enough to serve?
