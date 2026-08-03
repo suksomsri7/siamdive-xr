@@ -577,7 +577,9 @@ namespace DiveMap.Runtime
             BodyMotion mode = ClipPlay.Motion(arr.Length, false);
             if (reason == "-") reason = ClipPlay.MotionReason(arr.Length, false);
 
-            Debug.Log($"[Anim] qc asset={assetId} clips={arr.Length} " +
+            // "shot", not "qc": QcAnimShot's lines are also [Anim] qc, and they carry a verdict
+            // this one cannot (it never plays anything). Two prefixes so a grep can ask for either.
+            Debug.Log($"[Anim] shot asset={assetId} clips={arr.Length} " +
                       $"names={(arr.Length == 0 ? "-" : string.Join(",", arr))} " +
                       $"pick={(pick >= 0 ? arr[pick] : "-")} " +
                       $"mode={(mode == BodyMotion.Clip ? "clip" : "wave")} reason={reason}");

@@ -56,6 +56,9 @@ namespace DiveMap.Runtime.Marine
         /// <summary>Every clip name, in the GLB's own order — for the log line.</summary>
         public string NamesCsv => _names.Length == 0 ? "-" : string.Join(",", _names);
 
+        /// <summary>The same names as an array, for <see cref="ClipPlay.ProbeLine"/>.</summary>
+        public string[] NamesArray => _names;
+
         /// <summary>
         /// Find the GLB's animation and take it over. Returns a one-token reason on failure and
         /// <c>-</c> on success; never throws, and a failure leaves <see cref="Active"/> false so
@@ -101,6 +104,14 @@ namespace DiveMap.Runtime.Marine
             // cross-fade out of an unrelated clip on frame one reads as a twitch.
             _anim.playAutomatically = false;
             _anim.Stop();
+
+            // 🔴 AlwaysAnimate, stated rather than inherited. It IS the default, but the default is
+            // exactly the kind of thing a future Unity upgrade changes quietly, and the failure it
+            // would produce — a rig that animates when you look at it and freezes when you do not —
+            // is invisible in a screenshot and impossible to reproduce on purpose. The QC pass
+            // measures an off-screen model with nothing rendering it, so without this the oracle
+            // would be measuring the culling rule instead of the clip.
+            _anim.cullingType = AnimationCullingType.AlwaysAnimate;
             return "-";
         }
 
@@ -159,5 +170,75 @@ namespace DiveMap.Runtime.Marine
 
         /// <summary>0..1 from the placement seed. Same hash family as the rest of the reef.</summary>
         private static double FishMindPhase(uint seed) => FishMind.Rand01(seed, 0, 77);
+
+        // ── CI oracle (QcAnimShot) ────────────────────────────────────────────────
+
+        /// <summary>Clip time in seconds, or 0. The live probe reads this before and after.</summary>
+        public float CurrentTime =>
+            _cur >= 0 && _cur < _states.Length && _states[_cur] != null ? _states[_cur].time : 0f;
+
+        /// <summary>
+        /// Pose the rig BY HAND at t=0 and again at <paramref name="frac"/>·length, and return the
+        /// largest distance any bone moved between the two.
+        ///
+        /// 🔴 Deterministic, and that is the whole value of it. It does not wait for a frame, does
+        /// not depend on <c>Time.deltaTime</c>, and cannot be fooled by a CI machine running at
+        /// 3 fps — <c>Animation.Sample()</c> writes the pose synchronously. So a zero from this
+        /// method means the CURVES are empty or aimed at joints that are not these joints, which
+        /// is a completely different bug from "the app never ticked it", and the two used to be
+        /// indistinguishable.
+        ///
+        /// Leaves the clip exactly where it found it, so calling it does not disturb playback.
+        /// </summary>
+        public double PoseDelta(Transform[] bones, float frac)
+        {
+            if (!Active || _cur < 0 || bones == null || bones.Length == 0) return 0.0;
+            AnimationState st = _states[_cur];
+            if (st == null || st.length <= 0f) return 0.0;
+
+            float saved = st.time;
+
+            st.time = 0f;
+            _anim.Sample();
+            Vector3[] a = Capture(bones);
+
+            st.time = Mathf.Clamp01(frac) * st.length;
+            _anim.Sample();
+            double moved = MaxMove(bones, a);
+
+            st.time = saved;
+            _anim.Sample();
+            return moved;
+        }
+
+        /// <summary>World position of every bone, for a before/after comparison.</summary>
+        public static Vector3[] Capture(Transform[] bones)
+        {
+            if (bones == null) return System.Array.Empty<Vector3>();
+            var p = new Vector3[bones.Length];
+            for (int i = 0; i < bones.Length; i++)
+                if (bones[i] != null) p[i] = bones[i].position;
+            return p;
+        }
+
+        /// <summary>
+        /// Largest distance any bone has moved since <paramref name="before"/> was captured.
+        /// MAX and not mean: a swim cycle moves the tail a long way and the skull barely at all,
+        /// so an average over a 5-joint rig is dominated by the joints that are supposed to be
+        /// still and would report "frozen" for a perfectly good clip.
+        /// </summary>
+        public static double MaxMove(Transform[] bones, Vector3[] before)
+        {
+            if (bones == null || before == null) return 0.0;
+            int n = Mathf.Min(bones.Length, before.Length);
+            double worst = 0.0;
+            for (int i = 0; i < n; i++)
+            {
+                if (bones[i] == null) continue;
+                double d = (bones[i].position - before[i]).magnitude;
+                if (d > worst) worst = d;
+            }
+            return worst;
+        }
     }
 }

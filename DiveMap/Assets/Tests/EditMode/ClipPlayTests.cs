@@ -323,6 +323,152 @@ namespace DiveMap.Tests
             Assert.AreEqual(0.15, ClipPlay.GlideFloor, Eps);
         }
 
+        // ── The CI oracle (QcAnimShot) ────────────────────────────────────────────
+
+        /// <summary>The clip names on the three rigged models now on the CDN, read out of the GLB
+        /// headers themselves. They are what the picker below is actually graded on.</summary>
+        private static readonly string[] WhalesharkClips =
+            { "glide", "cruise", "burst", "turn", "patrol", "accent" };
+        private static readonly string[] BullSharkClips = { "AAction" };
+        private static readonly string[] MantaClips =
+            { "glide", "cruise", "strong", "barrelroll", "hover", "banking" };
+
+        /// <summary>
+        /// 🔴 The three rigged models cover three different shapes of clip set, and the picker has
+        /// to survive all three. The manta is the one that would have gone unnoticed: it has six
+        /// clips, none of them called <c>burst</c> or <c>turn</c>, so a picker that only knew the
+        /// turtle's vocabulary would land on clip 0 for every role and still look plausible in a
+        /// log. It resolves through the web's SECOND choices (<c>strong</c>, <c>banking</c>) —
+        /// which are in the table only because they were transcribed from builder.html:1439-1440
+        /// rather than invented from the turtle.
+        /// </summary>
+        [Test]
+        public void IndexOf_HandlesAllThreeRiggedModelsOnTheCdn()
+        {
+            // whaleshark — the web's own vocabulary, every role distinct
+            Assert.AreEqual("cruise", WhalesharkClips[ClipPlay.IndexOf(WhalesharkClips, ClipRole.Cruise)]);
+            Assert.AreEqual("burst", WhalesharkClips[ClipPlay.IndexOf(WhalesharkClips, ClipRole.Fast)]);
+            Assert.AreEqual("glide", WhalesharkClips[ClipPlay.IndexOf(WhalesharkClips, ClipRole.Glide)]);
+
+            // bull shark — one clip, Blender's un-renamed default take. Every role must land on it
+            // and none may miss: a single-clip model is the commonest thing the pipeline produces.
+            foreach (ClipRole role in new[] { ClipRole.Cruise, ClipRole.Glide, ClipRole.Fast, ClipRole.Turn })
+                Assert.AreEqual("AAction", BullSharkClips[ClipPlay.IndexOf(BullSharkClips, role)],
+                                "role=" + role);
+
+            // manta — six clips under names the turtle does not use
+            Assert.AreEqual("cruise", MantaClips[ClipPlay.IndexOf(MantaClips, ClipRole.Cruise)]);
+            Assert.AreEqual("glide", MantaClips[ClipPlay.IndexOf(MantaClips, ClipRole.Glide)]);
+            Assert.AreEqual("strong", MantaClips[ClipPlay.IndexOf(MantaClips, ClipRole.Fast)]);
+            Assert.AreEqual("banking", MantaClips[ClipPlay.IndexOf(MantaClips, ClipRole.Turn)]);
+        }
+
+        /// <summary>
+        /// The whaleshark rig is the only file that exercises the SlowAnim band end to end, so the
+        /// rate the QC pass will print for it is pinned here: whatever else changes, that model
+        /// must not come back playing at the ordinary 0.9.
+        /// </summary>
+        [Test]
+        public void RiggedWhaleshark_PlaysInTheSlowBandNotTheOrdinaryOne()
+        {
+            double ts = ClipPlay.TimeScale(1.0, ClipPlay.SlowAnimFor("msh:whaleshark"),
+                                           ClipPlay.AnimMulFor("msh:whaleshark"), false);
+            Assert.AreEqual(ClipPlay.SlowRateMin, ts, Eps);
+            Assert.Less(ts, ClipPlay.RateMin);
+        }
+
+        /// <summary>
+        /// The verdict names the FIRST thing wrong, in the order a human would fix them, and the
+        /// order is the whole value: a model with no clips also has no bones and no motion, and a
+        /// verdict of "frozen-live" on it would send the wrong person looking.
+        /// </summary>
+        [Test]
+        public void Verdict_NamesTheFirstThingWrong()
+        {
+            // nothing shipped
+            Assert.AreEqual("no-clips",
+                ClipPlay.Verdict(new ClipPlay.ClipProbe(0, 0, 0, 0, 0, 6)));
+            // clips arrived, the skin did not (Draco / import)
+            Assert.AreEqual("no-skin",
+                ClipPlay.Verdict(new ClipPlay.ClipProbe(6, 0, 0, 0, 0, 6)));
+            // curves exist and move nothing — rig transfer aimed at joints that are not these
+            Assert.AreEqual("frozen-pose",
+                ClipPlay.Verdict(new ClipPlay.ClipProbe(6, 5, 0.0, 0.0, 0.0, 6)));
+            // the FILE is fine and the APP is not ticking it. This is the one that used to be
+            // invisible, and it is the one that describes this app before WO-F3.
+            Assert.AreEqual("frozen-live",
+                ClipPlay.Verdict(new ClipPlay.ClipProbe(6, 5, 0.42, 0.0, 0.0, 6)));
+            // it works
+            Assert.AreEqual("moving",
+                ClipPlay.Verdict(new ClipPlay.ClipProbe(6, 5, 0.42, 0.19, 1.8, 6)));
+        }
+
+        /// <summary>Only <c>moving</c> passes. A pass function that accepts anything else is how a
+        /// green run stops meaning anything.</summary>
+        [Test]
+        public void Passes_OnlyAcceptsMoving()
+        {
+            Assert.IsTrue(ClipPlay.Passes(new ClipPlay.ClipProbe(6, 5, 0.42, 0.19, 1.8, 6)));
+            Assert.IsFalse(ClipPlay.Passes(new ClipPlay.ClipProbe(6, 5, 0.42, 0.0, 0.0, 6)));
+            Assert.IsFalse(ClipPlay.Passes(new ClipPlay.ClipProbe(0, 0, 0, 0, 0, 6)));
+        }
+
+        /// <summary>
+        /// The gate is "not exactly zero", not a quality bar. A bone that moved 1e-9 is float noise
+        /// off a flat curve; one that moved 0.05 on a 1.9-unit model is a real stroke. Both sides
+        /// of that line are asserted so nobody later "tightens" it into rejecting real motion.
+        /// </summary>
+        [Test]
+        public void Verdict_ThresholdSeparatesNoiseFromARealStroke()
+        {
+            Assert.AreEqual("frozen-pose",
+                ClipPlay.Verdict(new ClipPlay.ClipProbe(6, 5, 1e-9, 1e-9, 2.0, 6)));
+            Assert.AreEqual("moving",
+                ClipPlay.Verdict(new ClipPlay.ClipProbe(6, 5, 0.05, 0.05, 2.0, 6)));
+            Assert.Less(ClipPlay.MinPoseDelta, 0.001,
+                        "the gate must stay far below any real bone movement");
+        }
+
+        /// <summary>
+        /// The log line is the ONLY evidence this pass produces, so it is worth a test. Every field
+        /// a reader needs must be on it, and the whole thing must stay greppable — one line, no
+        /// spaces inside a value.
+        /// </summary>
+        [Test]
+        public void ProbeLine_CarriesEveryFieldAndStaysGreppable()
+        {
+            string line = ClipPlay.ProbeLine(
+                "msh:whaleshark", WhalesharkClips, ClipRole.Cruise, "cruise", 2.0, 0.32, "-",
+                new ClipPlay.ClipProbe(6, 5, 0.42, 0.19, 1.8, 6));
+
+            StringAssert.StartsWith("[Anim] qc ", line);
+            StringAssert.Contains("asset=msh:whaleshark", line);
+            StringAssert.Contains("clips=6", line);
+            StringAssert.Contains("pick=cruise", line);
+            StringAssert.Contains("bones=5", line);
+            StringAssert.Contains("timeScale=0.32", line);
+            StringAssert.Contains("mode=clip", line);
+            StringAssert.Contains("verdict=moving", line);
+            Assert.IsFalse(line.Contains("\n"), "the line must stay one line");
+        }
+
+        /// <summary>A model that shipped nothing still produces a complete, readable line rather
+        /// than a hole in the log — an absent line and a failing line look the same in CI.</summary>
+        [Test]
+        public void ProbeLine_SurvivesAModelThatShippedNothing()
+        {
+            string line = ClipPlay.ProbeLine(
+                null, null, ClipRole.Cruise, null, 0, 0, "no-animation-component",
+                new ClipPlay.ClipProbe(0, 0, 0, 0, 0, 6));
+
+            StringAssert.Contains("clips=0", line);
+            StringAssert.Contains("names=-", line);
+            StringAssert.Contains("pick=-", line);
+            StringAssert.Contains("mode=wave", line);
+            StringAssert.Contains("reason=no-animation-component", line);
+            StringAssert.Contains("verdict=no-clips", line);
+        }
+
         /// <summary>
         /// The effort that feeds TimeScale is SwimStyle's — one number, two consumers. If those
         /// two ever drift apart, a rigged turtle and an un-rigged one stop slowing down at the

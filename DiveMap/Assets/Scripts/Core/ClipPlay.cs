@@ -240,6 +240,105 @@ namespace DiveMap.Core
             return "-";
         }
 
+        // ── The CI oracle: did the clip actually MOVE anything? ───────────────────
+
+        /// <summary>
+        /// The smallest skeleton displacement, in world units, that counts as motion.
+        ///
+        /// 🔴 It is a "not exactly zero" gate, not a quality bar, and that is deliberate. The XR
+        /// marine models are ~1.9 units across before their item scale, so a flipper stroke moves a
+        /// bone by 0.05-0.5 — three orders of magnitude clear of this. Anything at or under 1e-4 is
+        /// a rig that was bound and then never driven, which is the ONE failure that looks
+        /// identical to success in every other log line we have.
+        /// </summary>
+        public const double MinPoseDelta = 1e-4;
+
+        /// <summary>Clip-seconds that must be consumed for the live probe to count as running.</summary>
+        public const double MinTimeAdvanced = 1e-3;
+
+        /// <summary>
+        /// One model's answer to "is the clip really playing", measured two independent ways.
+        ///
+        /// 🔴 Two ways, because they fail separately and the difference names the owner.
+        /// <see cref="PoseDelta"/> poses the rig by hand (set the time, sample, read the bones) and
+        /// so tests the FILE and the import: non-zero means glTFast built real curves against real
+        /// joints. <see cref="LiveDelta"/> and <see cref="TimeAdvanced"/> let Unity's own animation
+        /// update run for a few frames and so test the APP: non-zero means the component is
+        /// enabled, un-culled, and being ticked. A file that is fine inside a harness that is not
+        /// running it produces poseDelta &gt; 0 with liveDelta = 0, and nothing else in CI can say so.
+        /// </summary>
+        public readonly struct ClipProbe
+        {
+            /// <summary>Clips glTFast handed over.</summary>
+            public readonly int Clips;
+            /// <summary>Bones on the skinned renderer. 0 = the skin did not survive import.</summary>
+            public readonly int Bones;
+            /// <summary>Largest bone movement between t=0 and t=½·length, posed deterministically.</summary>
+            public readonly double PoseDelta;
+            /// <summary>Largest bone movement across <see cref="Frames"/> of ordinary Update.</summary>
+            public readonly double LiveDelta;
+            /// <summary>Clip-seconds consumed in those frames.</summary>
+            public readonly double TimeAdvanced;
+            /// <summary>How many frames the live probe ran for.</summary>
+            public readonly int Frames;
+
+            public ClipProbe(int clips, int bones, double poseDelta, double liveDelta,
+                             double timeAdvanced, int frames)
+            {
+                Clips = clips; Bones = bones; PoseDelta = poseDelta;
+                LiveDelta = liveDelta; TimeAdvanced = timeAdvanced; Frames = frames;
+            }
+        }
+
+        /// <summary>
+        /// One greppable token naming the FIRST thing that is wrong, in the order a human would
+        /// have to fix them. Never a sentence: the CI step greps these lines out of a 20 MB log and
+        /// a verdict with a space in it wraps and stops being findable.
+        ///
+        ///   <c>no-clips</c>      — the GLB shipped no animation (asset pipeline's problem)
+        ///   <c>no-skin</c>       — clips arrived but the skinned mesh did not (Draco/import)
+        ///   <c>frozen-pose</c>   — curves exist and move nothing (rig transfer targeted wrong joints)
+        ///   <c>frozen-live</c>   — the file is fine; the app is not ticking it (our problem)
+        ///   <c>moving</c>        — it works
+        /// </summary>
+        public static string Verdict(ClipProbe p)
+        {
+            if (p.Clips <= 0) return "no-clips";
+            if (p.Bones <= 0) return "no-skin";
+            if (p.PoseDelta <= MinPoseDelta) return "frozen-pose";
+            if (p.TimeAdvanced <= MinTimeAdvanced || p.LiveDelta <= MinPoseDelta) return "frozen-live";
+            return "moving";
+        }
+
+        /// <summary>Did this model pass? Only <c>moving</c> does.</summary>
+        public static bool Passes(ClipProbe p) => Verdict(p) == "moving";
+
+        /// <summary>
+        /// The <c>[Anim]</c> line for one QC model. Built here rather than in the harness for the
+        /// same reason <c>QcPixels.Line</c> is: a log line that is the ONLY evidence a run produces
+        /// is a thing worth having a test for.
+        /// </summary>
+        public static string ProbeLine(string assetId, string[] names, ClipRole role,
+                                       string pick, double length, double timeScale,
+                                       string reason, ClipProbe p)
+        {
+            string verdict = Verdict(p);
+            return "[Anim] qc asset=" + (assetId ?? "-")
+                 + " clips=" + p.Clips
+                 + " names=" + (names == null || names.Length == 0 ? "-" : string.Join(",", names))
+                 + " pick=" + (string.IsNullOrEmpty(pick) ? "-" : pick)
+                 + " role=" + role
+                 + " length=" + length.ToString("0.00") + "s"
+                 + " timeScale=" + timeScale.ToString("0.00")
+                 + " bones=" + p.Bones
+                 + " poseDelta=" + p.PoseDelta.ToString("0.0000")
+                 + " liveDelta=" + p.LiveDelta.ToString("0.0000")
+                 + " advanced=" + p.TimeAdvanced.ToString("0.000") + "s/" + p.Frames + "f"
+                 + " mode=" + (Motion(p.Clips, false) == BodyMotion.Clip ? "clip" : "wave")
+                 + " reason=" + (string.IsNullOrEmpty(reason) ? "-" : reason)
+                 + " verdict=" + verdict;
+        }
+
         // ── Shared with SwimStyle ─────────────────────────────────────────────────
 
         /// <summary>
