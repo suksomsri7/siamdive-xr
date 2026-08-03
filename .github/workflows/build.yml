@@ -460,6 +460,12 @@ jobs:
           # no model in it is logged FAIL by the harness (QcPixels.Passes), not quietly passed.
           grep -h '\[QCModel\]' qc_player.log 2>/dev/null || \
             echo "::warning::no [QCModel] lines — the model QC pass did not run"
+          # The swim oracle, in the step log for the same reason. A screenshot cannot show a beat
+          # rate, so "ครีบขยับเร็วไปมาก" can only ever be checked against these numbers: one
+          # [Swim] line per school and per hero animal, carrying worldLen and beatHz. The
+          # calibration targets they are read against are in SwimStyleTests.
+          grep -h '\[Swim\]' qc_player.log 2>/dev/null || \
+            echo "::warning::no [Swim] lines — no animal resolved a swim style"
 
       # Second, SEPARATE run for the UI shots (WO-XR-05). It must not share a process
       # with -qcshot: that mode ends in Application.Quit(0) inside AppBoot.QcShot, so

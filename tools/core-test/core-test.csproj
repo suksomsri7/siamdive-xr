@@ -43,6 +43,10 @@
     <Compile Include="../../DiveMap/Assets/Scripts/Core/MarineRouting.cs" />
     <Compile Include="../../DiveMap/Assets/Scripts/Core/AppModes.cs" />
     <Compile Include="../../DiveMap/Assets/Scripts/Core/SwimStyle.cs" />
+    <!-- SwimStyleTests asserts SwimStyle.UnitsPerMetre == DepthLight.UnitsPerMetre. Two metres in
+         one project is what made every fin run √2 fast, so the two constants are now pinned to
+         each other by a test rather than by a comment. DepthLight is pure (using System; only). -->
+    <Compile Include="../../DiveMap/Assets/Scripts/Core/DepthLight.cs" />
     <Compile Include="../../DiveMap/Assets/Scripts/Core/HuntMath.cs" />
     <Compile Include="../../DiveMap/Assets/Scripts/Core/FishMind.cs" />
     <Compile Include="../../DiveMap/Assets/Scripts/Core/QcPixels.cs" />
