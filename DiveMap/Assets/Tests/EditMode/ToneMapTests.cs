@@ -251,5 +251,113 @@ namespace DiveMap.Tests
             StringAssert.Contains("_Exposure / 0.6", shader,
                 "the shader has lost three.js's /0.6 — every frame is ~1.5 stops dark");
         }
+
+        // ── WO-E5g: the curve, scanned against a fresh port of three.js ──────────
+
+        /// <summary>
+        /// three.js r160's ACESFilmicToneMapping, transcribed HERE from the GLSL and sharing not one
+        /// line with <see cref="ToneMap"/>. The point of a second copy is that it was written from
+        /// the source rather than from the thing under test — two copies of the same mistake agree
+        /// perfectly, which is how the ACESInputMat row survived a whole work order.
+        ///
+        /// GLSL <c>mat3</c> takes COLUMNS, so these are the web's literals in the web's order and
+        /// the multiply below reads them as columns.
+        /// </summary>
+        private static readonly double[][] InCols =
+        {
+            new[] { 0.59719, 0.07600, 0.02840 },
+            new[] { 0.35458, 0.90834, 0.13383 },
+            new[] { 0.04823, 0.01566, 0.83777 },
+        };
+
+        private static readonly double[][] OutCols =
+        {
+            new[] {  1.60475, -0.10208, -0.00327 },
+            new[] { -0.53108,  1.10813, -0.07276 },
+            new[] { -0.07367, -0.00605,  1.07602 },
+        };
+
+        private static double[] MulCols(double[][] cols, double[] v)
+        {
+            var o = new double[3];
+            for (int i = 0; i < 3; i++)
+                for (int j = 0; j < 3; j++) o[i] += cols[j][i] * v[j];
+            return o;
+        }
+
+        /// <summary>The web's whole function, in the web's order.</summary>
+        private static double[] ThreeJs(double c, double exposure = 1.05)
+        {
+            var v = new[] { c, c, c };
+            for (int i = 0; i < 3; i++) v[i] *= exposure / 0.6;   // color *= toneMappingExposure / 0.6
+            v = MulCols(InCols, v);
+            for (int i = 0; i < 3; i++)
+                v[i] = (v[i] * (v[i] + 0.0245786) - 0.000090537)
+                     / (v[i] * (0.983729 * v[i] + 0.4329510) + 0.238081);
+            v = MulCols(OutCols, v);
+            for (int i = 0; i < 3; i++) v[i] = v[i] < 0.0 ? 0.0 : (v[i] > 1.0 ? 1.0 : v[i]);
+            return v;
+        }
+
+        [Test]
+        public void OurCurveIsTheWebsCurveAtEveryScannedValue()
+        {
+            // 🔴 The scan the ACES investigation turned on. Run 30800189252's ladder showed the
+            // models' pure black vanishing when the curve was switched off, which reads as "our
+            // ACES is crushing them" — so the curve was put beside a fresh port of the web's and
+            // swept, 37 points logarithmically from 1e-4 to 4.0. They do not differ by one part in
+            // 10^12 anywhere. The port is exact: same matrices, same fit, same exposure, same
+            // ORDER, and the /0.6 is a division applied before the input matrix, as three.js does.
+            double worst = 0.0, worstAt = 0.0;
+            for (double s = 1e-4; s <= 4.0001; s *= System.Math.Pow(10.0, 1.0 / 8.0))
+            {
+                double[] web = ThreeJs(s);
+                ToneMap.Aces((float)s, (float)s, (float)s,
+                             out float r, out float g, out float b);
+                double[] ours = { r, g, b };
+                for (int i = 0; i < 3; i++)
+                {
+                    double rel = web[i] <= 1e-9 ? System.Math.Abs(ours[i])
+                                                : System.Math.Abs(ours[i] - web[i]) / web[i];
+                    if (rel > worst) { worst = rel; worstAt = s; }
+                }
+            }
+            Assert.That(worst, Is.LessThan(1e-5),
+                $"our curve departs from three.js by {worst:0.000e+00} at scene-linear {worstAt:0.00000}");
+        }
+
+        [Test]
+        public void TheCurveIsExoneratedAndTheDarknessIsUpstreamOfIt()
+        {
+            // 🔴 What the scan means for the hunt, written down so the next reader does not spend a
+            // CI round on the tone curve. The curve is the web's, exactly. So what it returns for
+            // the light a surface actually receives is not negotiable:
+            //
+            //     scene-linear   byte
+            //       0.00186        0     <- ToneMap.BlackFloor: at or below this, ACES writes 0
+            //       0.005          3
+            //       0.02          22
+            //       0.05          52
+            //       0.10          90
+            //       0.162        123
+            //
+            // In DAYLIGHT the ambient bands are 0.53-0.72 and neutral, and the ruins' own measured
+            // albedo is 0.162 linear, so the DIMMEST a surface of theirs can be — sun off entirely,
+            // lit by the ground band alone — is 0.162 x 0.61 = 0.099, i.e. byte 89. The ladder
+            // photographs 26.75% of that model at byte 0, which needs scene-linear under 0.00186:
+            // fifty times less light than the ambient alone would deliver.
+            //
+            // The curve turns "far too dark" into "exactly zero" — that is its toe, and it is why
+            // switching it off makes blackOfSubject vanish while leaving the pixels dark. It is not
+            // what made them dark. Something upstream is taking the ambient away from those pixels.
+            ToneMap.Aces(0.162f * 0.61f, 0.162f * 0.61f, 0.162f * 0.61f,
+                         out float r, out float g, out float b);
+            Assert.That((int)ToneMap.LinearToByte(g), Is.GreaterThan(80),
+                "ambient alone on the ruins' own albedo is a mid-grey through this curve");
+
+            // …and the level that DOES come out black, for scale.
+            Assert.That(ToneMap.Aces1(ToneMap.BlackFloor), Is.EqualTo(0f).Within(1e-7f));
+            Assert.That((int)ToneMap.LinearToByte(ToneMap.Aces1(0.002f)), Is.LessThan(2));
+        }
     }
 }
