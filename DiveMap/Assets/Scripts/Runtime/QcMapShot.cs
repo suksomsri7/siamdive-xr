@@ -433,7 +433,7 @@ namespace DiveMap.Runtime
                     }
                     if (best == null) { missed++; continue; }
 
-                    string key = $"{Path(best.transform)} | shader=" +
+                    string key = $"{PathOf(best.transform)} | shader=" +
                                  (best.sharedMaterial != null && best.sharedMaterial.shader != null
                                      ? best.sharedMaterial.shader.name : "(none)") +
                                  " | mat=" + (best.sharedMaterial != null ? best.sharedMaterial.name : "(none)");
@@ -514,7 +514,10 @@ namespace DiveMap.Runtime
         }
 
         /// <summary>Full scene path, so a log line names the object without ambiguity.</summary>
-        private static string Path(Transform t)
+        // Named PathOf, not Path: a private method called Path shadows System.IO.Path for the
+        // whole class, and the failure surfaces as CS0119 on an unrelated Path.Combine 200 lines
+        // away rather than on the declaration that caused it.
+        private static string PathOf(Transform t)
         {
             string s = t.name;
             for (Transform p = t.parent; p != null; p = p.parent) s = p.name + "/" + s;
