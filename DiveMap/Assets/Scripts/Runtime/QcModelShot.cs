@@ -68,6 +68,35 @@ namespace DiveMap.Runtime
             "cc0:statue_singha",
             "cc0:wreck_chang",
             "cc0:rock_cluster",
+
+            // 🔴 WO-E5 — the three Atlantis ruins the user photographed as "ทุกชิ้นดำ", and the
+            // reason they are here is that EVERY offline explanation has already been measured off
+            // the files and cleared, so what is left can only be answered by a frame:
+            //
+            //   base colour, surface-weighted   ancient_byzantine mean 131 p95 199 · domed_temple
+            //                                   mean 112 p95 171 · grand_byzantine mean 130 p95
+            //                                   170, with only 0.57% of grand_byzantine's surface
+            //                                   below sRGB 45. These are not dark textures.
+            //   UV gutter into the mips         the failure that made the kraken blotchy: 0.30% of
+            //                                   grand_byzantine's surface lands on a black texel at
+            //                                   2048² and 0.00% by 64² — it goes DOWN with the mip,
+            //                                   i.e. the opposite of that bug.
+            //   normals                         0.17-1.65% of surface area disagrees with the
+            //                                   winding, against 0.06-0.35% on the controls. Not
+            //                                   inverted.
+            //   metal                           metallicFactor 1 against a map whose blue channel
+            //                                   averages 0.09-0.21 / 255. Dielectric, and TameMetal
+            //                                   correctly leaves it alone.
+            //   baseColorFactor                 (1,1,1,1) on all eleven.
+            //   fog                             the fog colour at depth comes out of ACES near
+            //                                   (0,22,58) — blue. The temple measures (15,16,17) —
+            //                                   neutral. Whatever is darkening it is not the fog.
+            //
+            // What that leaves is the light and the shadow, which is what the probe frames below
+            // are for — including ProbeNoShadows, added for exactly this.
+            "ruin:ancient_byzantine",
+            "ruin:domed_temple",
+            "ruin:grand_byzantine",
         };
 
         /// <summary>
@@ -111,6 +140,9 @@ namespace DiveMap.Runtime
             -1.0,    // cc0:statue_singha     — never had one
             -1.0,    // cc0:wreck_chang       — never had one
             -1.0,    // cc0:rock_cluster      — never had one
+            -1.0,    // ruin:ancient_byzantine — WO-E5, never photographed
+            -1.0,    // ruin:domed_temple      — WO-E5, never photographed
+            -1.0,    // ruin:grand_byzantine   — WO-E5, never photographed
         };
 
         /// <summary>Baseline for <paramref name="assetId"/>, or −1 when none is recorded.</summary>
@@ -143,7 +175,14 @@ namespace DiveMap.Runtime
         /// per-model ceiling, 240 s is what lets four models time out and the remaining five still
         /// be photographed and logged.
         /// </summary>
-        private const float BudgetSeconds = 240f;
+        /// <remarks>
+        /// 🔴 WO-E5: 240 → 330 s. Three Atlantis ruins joined the list (~8.5 MB more off the CDN)
+        /// and every model now takes one extra probe frame. The budget is still not sized for the
+        /// expected case — it is sized so a SLOW model leaves room for the ones behind it: at the
+        /// 45 s per-model ceiling, 330 s lets four of twelve time out and the remaining eight still
+        /// be photographed and logged.
+        /// </remarks>
+        private const float BudgetSeconds = 330f;
 
         /// <summary>Settle time after the model lands, before the pair of frames.</summary>
         private const float SettleSeconds = 0.4f;
@@ -531,6 +570,16 @@ namespace DiveMap.Runtime
                 yield return ProbeMipBias(cam, rt, readback, renderers, withoutModel, -10f, s => bias10 = s);
                 Debug.Log(QcPixels.ProbeLine(name, shot, whiteAlbedo, noMetalRough, meshNormals,
                                              whiteGltf, greyAlbedo, bias4, bias10, darkGate));
+
+                QcPixels.Shot noShadow = default;
+                yield return ProbeNoShadows(cam, rt, readback, renderers, withoutModel,
+                                            s => noShadow = s);
+                Debug.Log($"[QCProbe] {name} noShadows dark={noShadow.DarkOfSubjectPercent:0.00}% " +
+                          $"black={noShadow.BlackOfSubjectPercent:0.00}% " +
+                          $"subject={noShadow.SubjectPercent:0.00}% " +
+                          $"(shipped dark={shot.DarkOfSubjectPercent:0.00}% " +
+                          $"black={shot.BlackOfSubjectPercent:0.00}%) " +
+                          $"verdict={ShadowVerdict(shot, noShadow)}");
             }
             else
             {
@@ -683,6 +732,69 @@ namespace DiveMap.Runtime
                 renderers[i].sharedMaterials = saved[i];
             }
             Object.Destroy(white);
+        }
+
+        /// <summary>
+        /// Probe 6 — the same model with the sun's SHADOW switched off for one frame.
+        ///
+        /// 🔴 Why it had to be added, and why it is a probe and never a fix. The user asked for
+        /// shadows to stay ("เงา — เก็บ"), so this must not become a shipped change; what it is for
+        /// is closing the last offline hypothesis about the Atlantis ruins. Everything else about
+        /// those files has been measured and cleared (see the note on <see cref="AssetIds"/>), and
+        /// what remains is that they are enormous — <c>ruin:domed_temple</c> is placed 128 m tall,
+        /// against a kraken at 20 m — and a hundred columns standing in each other's light is a
+        /// shape the nine-model studio has never photographed.
+        ///
+        /// 🔎 It moves <c>Light.shadows</c>, not <c>QualitySettings.shadows</c>: the quality setting
+        /// is global, persisted, and read by everything that renders afterwards, and a QC pass that
+        /// leaves the shipped build without shadows because a coroutine was cancelled mid-probe
+        /// would be a far worse bug than the one it is investigating. The light's own field is
+        /// restored on the very next line, and it is restored even for lights that were already
+        /// off, so the scene cannot come out of this pass different from how it went in.
+        /// </summary>
+        private static IEnumerator ProbeNoShadows(Camera cam, RenderTexture rt, Texture2D readback,
+                                                  List<Renderer> renderers, byte[] withoutModel,
+                                                  System.Action<QcPixels.Shot> onShot)
+        {
+            var lights = new List<Light>();
+            var saved = new List<LightShadows>();
+            foreach (Light l in UnityEngine.Object.FindObjectsByType<Light>(FindObjectsSortMode.None))
+            {
+                if (l == null) continue;
+                lights.Add(l);
+                saved.Add(l.shadows);
+                l.shadows = LightShadows.None;
+            }
+
+            var savedReceive = new List<bool>();
+            foreach (Renderer r in renderers)
+            {
+                savedReceive.Add(r != null && r.receiveShadows);
+                if (r != null) r.receiveShadows = false;
+            }
+
+            byte[] probed = null;
+            yield return Capture(cam, rt, readback, null, bytes => probed = bytes);
+            onShot(QcPixels.Measure(probed, withoutModel));
+
+            for (int i = 0; i < lights.Count; i++)
+                if (lights[i] != null) lights[i].shadows = saved[i];
+            for (int i = 0; i < renderers.Count; i++)
+                if (renderers[i] != null) renderers[i].receiveShadows = savedReceive[i];
+        }
+
+        /// <summary>
+        /// What the shadow probe proves. The threshold is the same 1% <see cref="QcPixels.BiasVerdict"/>
+        /// uses for "this input moved the picture", for the same reason: under a point of a percent
+        /// two frames of a scene with live boids in it are not distinguishable from each other.
+        /// </summary>
+        private static string ShadowVerdict(QcPixels.Shot shipped, QcPixels.Shot noShadow)
+        {
+            if (noShadow.Pixels <= 0 || noShadow.SubjectPercent <= 0.0) return "probe-failed";
+            double moved = shipped.DarkOfSubjectPercent - noShadow.DarkOfSubjectPercent;
+            if (moved > 5.0) return "shadow-is-the-dark";
+            if (moved > QcPixels.BiasMovedPercent) return "shadow-contributes";
+            return "not-the-shadow";
         }
 
         /// <summary>

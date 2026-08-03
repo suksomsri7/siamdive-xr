@@ -383,7 +383,10 @@ namespace DiveMap.Runtime
             TourController.Configure(result);
             ArSession.Configure(result);   // F1 — AR needs the footprint to place the viewer
             EnvMode.Reset();   // new scene, new lights/water to capture
-            DepthAtmosphere.Configure(result.WaterLevel);   // shallow bright, deep dark and blue
+            // shallow bright, deep dark and blue — and, since WO-E5, the fog range too: it is
+            // derived from the map's own size and where the camera is standing rather than from the
+            // web's orbit-framing constants, which could not reach a map this small (WaterFog.RangeAt).
+            DepthAtmosphere.Configure(result.WaterLevel, result.Center, result.Radius);
             // …and the floor under all of that: however many dimmers stack on the way down, an
             // object underwater is never lit by less than the water it is standing in.
             UnderwaterShading.Configure(result.WaterLevel);
@@ -532,6 +535,17 @@ namespace DiveMap.Runtime
             // the skeleton moved. Last, so that a failure or a timeout in it cannot cost any of
             // the passes above their evidence.
             yield return QcAnimShot.Run(boatCenter);
+
+            // ── WO-E5: the maps themselves, from where the player's eyes are ───────
+            // Everything above photographs either nine models alone in a studio or ONE map from an
+            // orbit pose. The user's answer to that was "ผมถามคุณ QC ยังไงครับ คุณไม่ได้ถ่ายรูป
+            // แคปเจอร์หน้าจอมาดูเองด้วยหรอ" — and they were right: Atlantis, Posidon and Hanuman,
+            // the three maps every complaint has been about, had never been in a CI frame.
+            //
+            // LAST, because it rebuilds the scene one map at a time and destroys what is on screen
+            // to do it. Nothing runs after it but the quit, so there is nothing left to break.
+            yield return QcMapShot.Run(dir, _builder, Manifest, _mapRoot);
+            _mapRoot = null;
 
             Application.Quit(0);
         }

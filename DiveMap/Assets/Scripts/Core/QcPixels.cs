@@ -821,5 +821,244 @@ namespace DiveMap.Core
             if (last <= first + BlueShiftSlack) return "depth-cue-flat";
             return "depth-cue-held";
         }
+
+        // ── WO-E5: the WHOLE MAP, from where the player stands ───────────────────
+        //
+        // 🔴 WHY THIS EXISTS, in the user's own words: "texture ของฉากและวัตถุไม่ตรงตามโมเดลจริงๆ
+        // เลย ผมถามคุณ QC ยังไงครับ คุณไม่ได้ถ่ายรูปแคปเจอร์หน้าจอมาดูเองด้วยหรอ".
+        //
+        // They are right, and the gap is structural rather than careless. Every QC pass in this
+        // project photographs either NINE MODELS ALONE against a gradient (QcModelShot) or ONE map,
+        // HTMS Chang, from an orbit pose (QcShot angle 1/2). Atlantis, Posidon, Hanuman, Harddeep,
+        // T-13 and Tu-1 — the maps the complaints are actually about — have never been in a CI
+        // frame, and neither has the diver's-eye pose the player spends the whole game in. So the
+        // numbers kept improving in the studio while the game kept looking worse, and both were
+        // true.
+        //
+        // 🔎 THREE FRAMES FROM ONE POSE, and each pair answers a question no single frame can:
+        //
+        //   withMap  the shot. Everything below is measured against it.
+        //   noMap    the same pose with the map hidden — water and backdrop only. Whatever DIFFERS
+        //            is the map, which is the same trick <see cref="Measure"/> uses and the same
+        //            reason: a beautiful photograph of empty water must score 0% subject and FAIL,
+        //            not pass quietly. It is also the only way to measure the background gradient
+        //            with nothing standing in front of it.
+        //   noFog    the same pose with RenderSettings.fog off. The per-pixel difference from
+        //            withMap IS the fog's contribution, so "is there any fog in this picture"
+        //            stops being a matter of opinion and becomes a byte count. On the shipped
+        //            build this is expected to be ~0 — see WaterFog.RangeAt for why that is
+        //            arithmetic rather than a surprise.
+        public struct MapShot
+        {
+            /// <summary>% of the frame darker than <see cref="DarkMax"/> in every channel. The
+            /// user measured 33.1% off their own Atlantis screenshot; this is that number, taken
+            /// by the app instead of off a phone photo.</summary>
+            public double DarkPercent;
+
+            /// <summary>Whole-frame luminance percentiles, 0-1.</summary>
+            public double P50, P90, P99;
+
+            /// <summary>% of the frame the map occupies, and how bright it is.</summary>
+            public double SubjectPercent;
+            public double SubjectLuminance, SubjectP5, SubjectP95;
+
+            /// <summary>Everything that is not the map: water, backdrop, HUD.</summary>
+            public double WaterLuminance;
+
+            /// <summary>
+            /// Mean |Δluminance| between the frame and its no-fog twin, over the MAP's pixels,
+            /// ×100. This is the fog, measured. Under <see cref="MinFogWork"/> the fog is
+            /// decoration: it is switched on, it costs a shader variant, and it changes nothing
+            /// the player can see.
+            /// </summary>
+            public double FogWork;
+
+            /// <summary>The largest single-pixel fog contribution, ×100 — so a fog that touches
+            /// only the far rim still registers even when its mean is small.</summary>
+            public double FogWorkMax;
+
+            /// <summary>
+            /// Top-of-frame minus bottom-of-frame luminance in the MAP-FREE shot, 0-1: the
+            /// background gradient as the camera actually sees it. The web's ramp spans 0.89 → 0.02
+            /// in authored sRGB, but a diver looking level only ever sees its top third, so the
+            /// span that reaches the screen is the number worth gating on — not the one in the file.
+            /// </summary>
+            public double BackdropSpan;
+
+            /// <summary>Renderers that landed, and items the builder gave up on.</summary>
+            public int Renderers, Loaded, Failed;
+
+            public int Pixels;
+        }
+
+        /// <summary>
+        /// Below this the fog is not doing anything a player could see. 0.4 of a byte, averaged
+        /// over the map's own pixels: quarter of a byte is under the dither noise of an 8-bit
+        /// frame, and half a byte is the smallest difference that survives a screenshot.
+        /// </summary>
+        public const double MinFogWork = 0.4;
+
+        /// <summary>
+        /// The background gradient has to span at least this much luminance across the frame, or
+        /// the water is a flat wall. Measured off the user's Posidon screenshot, the shipped build
+        /// spans 0.031 (byte 172.6 at the top of the frame to 164.7 at the bottom of the visible
+        /// sky) — which is what "ฉากไม่มีมิติเลย" is, in numbers.
+        /// </summary>
+        public const double MinBackdropSpan = 0.08;
+
+        /// <summary>
+        /// Fraction of the frame's rows sampled at each end for <see cref="MapShot.BackdropSpan"/>.
+        /// A tenth is wide enough to average out the dither and narrow enough that the seabed,
+        /// which fills the bottom of a diver's view, does not eat the sample.
+        /// </summary>
+        public const double BackdropBandFraction = 0.10;
+
+        /// <summary>
+        /// Measure one map pose. <paramref name="height"/> is needed because the backdrop span is
+        /// a question about ROWS and a flat byte array has no idea which row it is in; pass 0 and
+        /// the span is reported as 0 rather than guessed at.
+        /// </summary>
+        public static MapShot MeasureMap(byte[] withMap, byte[] noMap, byte[] noFog,
+                                         int width, int height,
+                                         byte tolerance = SubjectTolerance)
+        {
+            var m = new MapShot();
+            int n = PixelCount(withMap);
+            if (n == 0) return m;
+            m.Pixels = n;
+            m.DarkPercent = AtOrBelowPercent(withMap, (byte)(DarkMax - 1));
+
+            var all = new System.Collections.Generic.List<double>(n);
+            var subject = new System.Collections.Generic.List<double>();
+            double waterSum = 0.0; long waterCount = 0;
+            double fogSum = 0.0; long fogCount = 0; double fogMax = 0.0;
+
+            bool haveNoMap = noMap != null && noMap.Length == withMap.Length;
+            bool haveNoFog = noFog != null && noFog.Length == withMap.Length;
+
+            for (int i = 0; i < n; i++)
+            {
+                int p = i * Channels;
+                double lum = Luminance(withMap[p], withMap[p + 1], withMap[p + 2]);
+                all.Add(lum);
+
+                bool isSubject = false;
+                if (haveNoMap)
+                {
+                    int dr = withMap[p] - noMap[p];
+                    int dg = withMap[p + 1] - noMap[p + 1];
+                    int db = withMap[p + 2] - noMap[p + 2];
+                    if (dr < 0) dr = -dr;
+                    if (dg < 0) dg = -dg;
+                    if (db < 0) db = -db;
+                    isSubject = dr > tolerance || dg > tolerance || db > tolerance;
+                }
+
+                if (isSubject) subject.Add(lum);
+                else { waterSum += lum; waterCount++; }
+
+                if (haveNoFog && (isSubject || !haveNoMap))
+                {
+                    double d = System.Math.Abs(
+                        lum - Luminance(noFog[p], noFog[p + 1], noFog[p + 2]));
+                    fogSum += d; fogCount++;
+                    if (d > fogMax) fogMax = d;
+                }
+            }
+
+            all.Sort();
+            m.P50 = Percentile(all, 0.50);
+            m.P90 = Percentile(all, 0.90);
+            m.P99 = Percentile(all, 0.99);
+
+            m.SubjectPercent = 100.0 * subject.Count / n;
+            m.WaterLuminance = waterCount == 0 ? 0.0 : waterSum / waterCount;
+            if (subject.Count > 0)
+            {
+                double s = 0.0;
+                for (int i = 0; i < subject.Count; i++) s += subject[i];
+                m.SubjectLuminance = s / subject.Count;
+                subject.Sort();
+                m.SubjectP5 = Percentile(subject, 0.05);
+                m.SubjectP95 = Percentile(subject, 0.95);
+            }
+
+            m.FogWork = fogCount == 0 ? 0.0 : 100.0 * fogSum / fogCount;
+            m.FogWorkMax = 100.0 * fogMax;
+            m.BackdropSpan = BackdropSpanOf(haveNoMap ? noMap : withMap, width, height);
+            return m;
+        }
+
+        /// <summary>
+        /// Top band minus bottom band mean luminance. Rows run top-to-bottom in the caller's
+        /// buffer; which end is "top" does not matter to the magnitude, and the sign is reported
+        /// as given so a flipped readback shows up as a negative number rather than as a pass.
+        /// </summary>
+        public static double BackdropSpanOf(byte[] rgb, int width, int height)
+        {
+            int n = PixelCount(rgb);
+            if (n == 0 || width <= 0 || height <= 0 || width * height != n) return 0.0;
+            int band = (int)(height * BackdropBandFraction);
+            if (band < 1) band = 1;
+            if (band * 2 >= height) return 0.0;
+
+            double a = BandMean(rgb, width, 0, band);
+            double b = BandMean(rgb, width, height - band, band);
+            return a - b;
+        }
+
+        private static double BandMean(byte[] rgb, int width, int firstRow, int rows)
+        {
+            double sum = 0.0;
+            long count = 0;
+            for (int y = firstRow; y < firstRow + rows; y++)
+                for (int x = 0; x < width; x++)
+                {
+                    int p = (y * width + x) * Channels;
+                    sum += Luminance(rgb[p], rgb[p + 1], rgb[p + 2]);
+                    count++;
+                }
+            return count == 0 ? 0.0 : sum / count;
+        }
+
+        /// <summary>One token for what this map shot proves, worst first. "" when it is fine.</summary>
+        public static string MapReason(MapShot m,
+                                       double minSubjectPercent = MinSubjectPercent,
+                                       double minFogWork = MinFogWork,
+                                       double minBackdropSpan = MinBackdropSpan)
+        {
+            if (m.Pixels <= 0) return "readback-empty";
+            if (m.Renderers <= 0) return "nothing-loaded";
+            if (m.SubjectPercent < minSubjectPercent) return "map-not-in-frame";
+            if (m.FogWork < minFogWork) return "no-fog";
+            if (System.Math.Abs(m.BackdropSpan) < minBackdropSpan) return "flat-water";
+            return "";
+        }
+
+        /// <summary>Did this map pose pass its own gates?</summary>
+        public static bool MapPasses(MapShot m,
+                                     double minSubjectPercent = MinSubjectPercent,
+                                     double minFogWork = MinFogWork,
+                                     double minBackdropSpan = MinBackdropSpan)
+            => MapReason(m, minSubjectPercent, minFogWork, minBackdropSpan) == "";
+
+        /// <summary>One line per map pose — everything a reviewer needs without the picture.</summary>
+        public static string MapLine(string map, string pose, double depthMetres, MapShot m,
+                                     double minSubjectPercent = MinSubjectPercent,
+                                     double minFogWork = MinFogWork,
+                                     double minBackdropSpan = MinBackdropSpan)
+        {
+            string reason = MapReason(m, minSubjectPercent, minFogWork, minBackdropSpan);
+            return $"[QCMap] {map} pose={pose} depth={depthMetres:F1}m " +
+                   $"{(reason == "" ? "PASS" : "FAIL")}{(reason == "" ? "" : " " + reason)} " +
+                   $"dark={m.DarkPercent:0.00}% p50={m.P50:0.000} p90={m.P90:0.000} p99={m.P99:0.000} " +
+                   $"subject={m.SubjectPercent:0.00}% subjLum={m.SubjectLuminance:0.000} " +
+                   $"subjP5={m.SubjectP5:0.000} subjP95={m.SubjectP95:0.000} " +
+                   $"waterLum={m.WaterLuminance:0.000} " +
+                   $"objOverWater={(m.WaterLuminance <= 1e-9 ? 0.0 : m.SubjectLuminance / m.WaterLuminance):0.00} " +
+                   $"fogWork={m.FogWork:0.00} fogMax={m.FogWorkMax:0.00} " +
+                   $"backdropSpan={m.BackdropSpan:0.000} " +
+                   $"renderers={m.Renderers} loaded={m.Loaded} failed={m.Failed} px={m.Pixels}";
+        }
     }
 }

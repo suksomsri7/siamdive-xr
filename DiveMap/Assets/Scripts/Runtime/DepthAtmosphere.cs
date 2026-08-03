@@ -24,6 +24,13 @@ namespace DiveMap.Runtime
         private float _waterLevel;
         private Camera _cam;
 
+        // WO-E5 — the map's own size and where its middle is. The fog range is derived from these
+        // and from where the camera is standing (see WaterFog.RangeAt); without them the only
+        // lengths available were the web's orbit-framing constants, which is how the fog ended up
+        // starting 322 u away on a map 340 u wide.
+        private Vector3 _contentCentre;
+        private float _contentRadius = SeabedGeom.SandRadius;
+
         // The scene as some other system wants it at the surface.
         private Color _baseSky, _baseEquator, _baseGround, _baseFog;
         private float _baseFogStart, _baseFogEnd;
@@ -34,6 +41,13 @@ namespace DiveMap.Runtime
         private float _wroteFogStart, _wroteFogEnd;
 
         public static void Configure(float waterLevel)
+            => Configure(waterLevel, Vector3.zero, SeabedGeom.SandRadius);
+
+        /// <param name="contentCentre">Middle of the map's content, world space.</param>
+        /// <param name="contentRadius">Half-width of the content, world units — the length the fog
+        /// range is floored at so that flying into the middle of a map does not close the water in
+        /// on the diver's face.</param>
+        public static void Configure(float waterLevel, Vector3 contentCentre, float contentRadius)
         {
             if (_instance == null)
             {
@@ -41,7 +55,20 @@ namespace DiveMap.Runtime
                 _instance = go.AddComponent<DepthAtmosphere>();
             }
             _instance._waterLevel = waterLevel;
+            _instance._contentCentre = contentCentre;
+            _instance._contentRadius = contentRadius > 1f ? contentRadius : SeabedGeom.SandRadius;
             _instance._haveBase = false;   // new map, new baseline
+            _instance._loggedRange = false;
+        }
+
+        /// <summary>
+        /// The fog range the frame is actually being drawn with, for a QC pass to print beside the
+        /// picture. Zeroes when nothing has configured this yet, which is the honest answer.
+        /// </summary>
+        public static void CurrentRange(out float start, out float end)
+        {
+            start = _instance != null ? RenderSettings.fogStartDistance : 0f;
+            end = _instance != null ? RenderSettings.fogEndDistance : 0f;
         }
 
         private void LateUpdate()
@@ -124,14 +151,41 @@ namespace DiveMap.Runtime
             // attenuation, for the fog, for the backdrop, and for the ambient. The web's fog colour
             // is a point on the web's own gradient (WaterFog.FogRampV), so agreeing with the
             // background costs nothing and needs nobody to keep two numbers in step.
-            SeabedGeom.Rgb water = WaterFog.ColorAt(depth);
+            // 🔴 WO-E5 — …at the ramp position the HORIZON is actually at, not at the web's.
+            //
+            // #123a55 is the ramp at v = 0.90, which is where distant geometry meets the background
+            // when an orbit camera looks DOWN at a small map from 950 u away. A diver looks roughly
+            // level and their horizon lands near mid-screen, where the same ramp is about seven
+            // times brighter in blue. Fading distant objects toward the deep stop while they stand
+            // against the mid ramp is the "distant geometry reads as a black silhouette" failure
+            // this comment's own version 1 describes — it was fixed for the orbit camera and
+            // re-created for the diver. WaterFog.HorizonRampV is the projection, and it returns
+            // 0.90 for exactly the pitch the web's camera has, so this is not a departure from the
+            // web: it is the web's number stated as the thing it was a measurement OF.
+            float rampV = FarRimRampV();
+            SeabedGeom.Rgb water = WaterFog.ColorAt(depth, rampV);
             var mood = new SeabedGeom.Rgb(_baseFog.r, _baseFog.g, _baseFog.b);
             SeabedGeom.Rgb fog = WaterFog.Blend(water, mood, WaterFog.MoodWeight);
             RenderSettings.fogColor = new Color(fog.R, fog.G, fog.B, 1f);
 
-            float vis = DepthLight.VisibilityScale(depth);
-            RenderSettings.fogStartDistance = _baseFogStart * vis;
-            RenderSettings.fogEndDistance = _baseFogEnd * vis;
+            // 🔴 WO-E5 — the range, from the two lengths that describe the shot.
+            //
+            // What was here — the web's 500/9,000 scaled by the depth's visibility — could not
+            // reach the map: 322 u to 5,805 u at 61.8 m, against content that is at most 680 u
+            // across. The furthest thing a diver could look at was 6.5% fogged and most of the map
+            // was 0%. See WaterFog.RangeAt for the whole derivation; the short version is that the
+            // web's constants are a fact about the web's ORBIT FRAMING, and the app puts the player
+            // inside the same 340 u map instead of 950 u outside it.
+            //
+            // _baseFogStart/_baseFogEnd are no longer the source of the range, but they are still
+            // watched above, because another system writing them is still how this component knows
+            // its baseline was replaced.
+            float camToContent = Vector3.Distance(_cam.transform.position, _contentCentre);
+            WaterFog.RangeAt(depth, _contentRadius, camToContent, out float fStart, out float fEnd);
+            RenderSettings.fogStartDistance = fStart;
+            RenderSettings.fogEndDistance = fEnd;
+
+            LogRange(depth, camToContent, fStart, fEnd, rampV, fog);
 
             _wroteSky = RenderSettings.ambientSkyColor;
             _wroteEquator = RenderSettings.ambientEquatorColor;
@@ -139,6 +193,65 @@ namespace DiveMap.Runtime
             _wroteFog = RenderSettings.fogColor;
             _wroteFogStart = RenderSettings.fogStartDistance;
             _wroteFogEnd = RenderSettings.fogEndDistance;
+        }
+
+        /// <summary>
+        /// Which row of the backdrop the map's FAR RIM lands on, as a ramp position.
+        ///
+        /// Not modelled and not tuned: the point on the far side of the content, at the content's
+        /// own height, is put through the real camera matrix and the row it comes out on is the
+        /// answer. That is the row where distant geometry meets the background, which is the only
+        /// row the fog colour has any business matching. For a camera framed the way the web frames
+        /// its map it lands near the web's own 0.90; for a diver looking level it lands near
+        /// mid-frame, where the ramp carries several times the light.
+        ///
+        /// Behind the camera — which happens the instant the diver turns around — the projection
+        /// is meaningless, and <see cref="WaterFog.RampVOfViewportY"/> answers with the web's
+        /// constant rather than with a mirrored number.
+        /// </summary>
+        private float FarRimRampV()
+        {
+            Vector3 away = _cam.transform.position - _contentCentre;
+            away.y = 0f;
+            if (away.sqrMagnitude < 1e-4f) away = _cam.transform.forward;
+            away.y = 0f;
+            if (away.sqrMagnitude < 1e-4f) return WaterFog.FogRampV;
+
+            // The far side of the content from where the camera is standing, at the content's own
+            // height — i.e. the furthest piece of map that is still map.
+            Vector3 rim = _contentCentre - away.normalized * _contentRadius;
+            rim.y = _contentCentre.y;
+
+            Vector3 vp = _cam.WorldToViewportPoint(rim);
+            return WaterFog.RampVOfViewportY(vp.y, vp.z <= 0f);
+        }
+
+        // Log throttle: one line per 5 m of depth, plus the first frame of every map. The rule from
+        // the handoff is that the log has to speak when nothing happens too — a fog that is doing
+        // nothing must SAY it is doing nothing, which is the whole reason this went unnoticed for
+        // as long as it did.
+        private bool _loggedRange;
+        private float _loggedRangeMetres = float.MinValue;
+
+        private void LogRange(float depth, float camToContent, float start, float end,
+                              float rampV, SeabedGeom.Rgb fog)
+        {
+            float metres = depth / DepthLight.UnitsPerMetre;
+            if (_loggedRange && Mathf.Abs(metres - _loggedRangeMetres) < 5f) return;
+            _loggedRange = true;
+            _loggedRangeMetres = metres;
+
+            // The numbers a reviewer would otherwise re-derive off a screenshot: how much fog is on
+            // the near rim, the middle and the far rim of the CONTENT — not of the frustum, which
+            // is what "fog far = 9000" was silently being read as.
+            float near = Mathf.Max(0f, camToContent - _contentRadius);
+            float far = camToContent + _contentRadius;
+            Debug.Log($"[Fog] depth={metres:F1}m camToContent={camToContent:F0} r={_contentRadius:F0} " +
+                      $"range={start:F0}..{end:F0} " +
+                      $"factor near({near:F0})={WaterFog.FactorAt(near, start, end) * 100f:F0}% " +
+                      $"mid({camToContent:F0})={WaterFog.FactorAt(camToContent, start, end) * 100f:F0}% " +
+                      $"far({far:F0})={WaterFog.FactorAt(far, start, end) * 100f:F0}% " +
+                      $"rampV={rampV:F2} fog=({fog.R:F3},{fog.G:F3},{fog.B:F3})");
         }
 
         /// <summary>
