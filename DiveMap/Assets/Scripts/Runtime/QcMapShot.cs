@@ -356,6 +356,10 @@ namespace DiveMap.Runtime
                 Debug.Log(QcPixels.MapLine(name + "/" + shortId,
                                            retry ? "diver-retry" : "diver", depthMetres, shot));
 
+                // ── WO-E5j: WHAT is the black region? Three questions, no theory ──
+                yield return BlackRegionProbe(cam, rt, readback, withMap, noMap, result,
+                                              name + "/" + shortId);
+
                 // The second pose is only worth its four seconds when the first one failed at
                 // being a pose. Anything else — dark, flat, fogless — is a finding, and taking
                 // another photograph of it would be looking for a prettier answer.
@@ -372,6 +376,149 @@ namespace DiveMap.Runtime
             if (result.Root != null) Object.Destroy(result.Root);
             yield return null;
             onDone(pass);
+        }
+
+        // ── WO-E5j: what IS the black region ─────────────────────────────────────
+        //
+        // 🔴 WHY THIS IS THREE MEASUREMENTS AND NOT A HYPOTHESIS. Two rounds have been spent
+        // explaining the black lower half of a deep map's frame before establishing what it is —
+        // once as "the models are dark", once as "the fog colour is nearly black". The second one
+        // was refuted by a line the app had already printed: [Fog] said fog=(0.324,0.486,0.629),
+        // a pale blue, while the accusation rested on a hand calculation of (3,22,44). The app's
+        // own log outranks arithmetic about the app, always.
+        //
+        // So: three questions with numeric answers and no interpretation attached.
+        private static IEnumerator BlackRegionProbe(Camera cam, RenderTexture rt, Texture2D readback,
+                                                    byte[] withMap, byte[] noMap,
+                                                    SceneBuilder.BuildResult result, string label)
+        {
+            // ── 1. does the black survive the map being switched off? ────────────
+            QcPixels.DarkOrigin(withMap, noMap,
+                                out double darkPct, out double fromMap, out double fromBackdrop);
+            Debug.Log($"[QCBlack] {label} dark={darkPct:0.00}% ofWhichDrawnByTheMap={fromMap:0.00}% " +
+                      $"ofWhichBackground={fromBackdrop:0.00}%");
+
+            // ── 2. fire a ray through the black pixels and name what is there ────
+            // No colliders on map decor, so this walks the renderers and takes the nearest whose
+            // world bounds the ray enters. Bounds are coarser than geometry, so a hit is "this
+            // object is on that line of sight" rather than "this exact triangle" — which is exactly
+            // the question being asked: WHAT is in front of the camera where the picture is black.
+            int[] sample = QcPixels.DarkPixelSample(withMap, RayProbeCount);
+            if (sample.Length == 0)
+            {
+                Debug.Log($"[QCBlack] {label} no dark pixels to probe");
+            }
+            else
+            {
+                var renderers = new List<Renderer>();
+                if (result.Root != null) result.Root.GetComponentsInChildren(true, renderers);
+
+                var tally = new Dictionary<string, int>();
+                int missed = 0;
+                foreach (int idx in sample)
+                {
+                    // Row 0 of the readback is the BOTTOM of the screen (Texture2D is bottom-up),
+                    // and Camera.ViewportPointToRay uses the same convention, so no flip is needed.
+                    int px = idx % rt.width, py = idx / rt.width;
+                    Ray ray = cam.ViewportPointToRay(
+                        new Vector3((px + 0.5f) / rt.width, (py + 0.5f) / rt.height, 0f));
+
+                    Renderer best = null;
+                    float bestT = float.MaxValue;
+                    foreach (Renderer r in renderers)
+                    {
+                        if (r == null || !r.enabled || !r.gameObject.activeInHierarchy) continue;
+                        if (!r.bounds.IntersectRay(ray, out float t)) continue;
+                        if (t < bestT) { bestT = t; best = r; }
+                    }
+                    if (best == null) { missed++; continue; }
+
+                    string key = $"{Path(best.transform)} | shader=" +
+                                 (best.sharedMaterial != null && best.sharedMaterial.shader != null
+                                     ? best.sharedMaterial.shader.name : "(none)") +
+                                 " | mat=" + (best.sharedMaterial != null ? best.sharedMaterial.name : "(none)");
+                    tally.TryGetValue(key, out int c);
+                    tally[key] = c + 1;
+                }
+                foreach (KeyValuePair<string, int> kv in tally)
+                    Debug.Log($"[QCBlack] {label} rayHit x{kv.Value}/{sample.Length}  {kv.Key}");
+                if (missed > 0)
+                    Debug.Log($"[QCBlack] {label} rayHit x{missed}/{sample.Length}  " +
+                              "(nothing — open water / backdrop on that line of sight)");
+            }
+
+            // ── 3. the torch ────────────────────────────────────────────────────
+            //
+            // 🔦 THE CLEANEST DISCRIMINATOR WE HAVE, AND IT CAME FROM THE USER, NOT FROM US:
+            //
+            //     shine a lamp at the black and see whether it goes away.
+            //
+            //   IT BRIGHTENS  →  the surface is there and simply has no light on it. Shadow,
+            //                    or an ambient/direct term that is too low. Adding light fixes it.
+            //   IT DOES NOT   →  something is painted OVER the shading, after the light has been
+            //                    accounted for — fog, or the material itself. A lamp cannot reach
+            //                    through either, because both happen downstream of the lighting.
+            //
+            // That is a genuine bisection of the remaining space, it costs one light and two
+            // frames, and no amount of reasoning about ramps and attenuation curves substitutes
+            // for it. Written down here because it is the best test anybody produced all day.
+            if (sample.Length > 0)
+            {
+                double before = QcPixels.MeanLuminanceAt(withMap, sample);
+
+                var torchGo = new GameObject("QcBlackTorch");
+                torchGo.transform.SetParent(cam.transform, false);
+                var torch = torchGo.AddComponent<Light>();
+                torch.type = LightType.Point;
+                torch.color = Color.white;
+                torch.intensity = TorchIntensity;
+                torch.range = TorchRangeUnits;
+                torch.shadows = LightShadows.None;
+                torch.renderMode = LightRenderMode.ForcePixel;
+                yield return null;
+
+                byte[] lit = null;
+                yield return Capture(cam, rt, readback, null, b => lit = b);
+                Object.Destroy(torchGo);
+                yield return null;
+
+                double after = QcPixels.MeanLuminanceAt(lit, sample);
+                double gain = before <= 1e-9 ? (after > 1e-9 ? 999.0 : 1.0) : after / before;
+                Debug.Log($"[QCBlack] {label} torch range={TorchRangeUnits:F0}u intensity={TorchIntensity:F1} " +
+                          $"darkLumBefore={before:0.0000} darkLumAfter={after:0.0000} gain={gain:0.00}x " +
+                          $"verdict={TorchVerdict(gain)}");
+            }
+        }
+
+        /// <summary>How many dark pixels the ray probe samples. Twenty is the user's own number and
+        /// it is enough to see whether the hits are all one object or a spread.</summary>
+        private const int RayProbeCount = 20;
+
+        /// <summary>
+        /// The lamp. 150 units is 25 m — the drone's own headlamp reach, so the answer is about a
+        /// light the game actually has rather than about a studio light nobody will ever carry.
+        /// </summary>
+        private const float TorchRangeUnits = 150f;
+        private const float TorchIntensity = 4f;
+
+        /// <summary>
+        /// What the torch proves. The threshold is deliberately generous: a lamp that is genuinely
+        /// reaching a surface lifts it several times over, and anything under a quarter more is
+        /// within the noise of a scene with live boids in it.
+        /// </summary>
+        private static string TorchVerdict(double gain)
+        {
+            if (gain >= 2.0) return "LIT-BY-TORCH (surface is there, it had no light on it)";
+            if (gain >= 1.25) return "partly-lit";
+            return "TORCH-CANNOT-REACH (painted over the shading — fog or material)";
+        }
+
+        /// <summary>Full scene path, so a log line names the object without ambiguity.</summary>
+        private static string Path(Transform t)
+        {
+            string s = t.name;
+            for (Transform p = t.parent; p != null; p = p.parent) s = p.name + "/" + s;
+            return s;
         }
 
         // ── capture ──────────────────────────────────────────────────────────────

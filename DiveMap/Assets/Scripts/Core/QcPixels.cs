@@ -1286,6 +1286,99 @@ namespace DiveMap.Core
                $"shortfall={(expectedRatio <= 1e-9 ? 0.0 : r.Ratio / expectedRatio):0.000}x " +
                $"black={r.BlackPercent:0.00}% subject={r.SubjectPercent:0.00}%";
 
+        // ── WO-E5j: WHAT is the black region, asked without a theory attached ────
+        //
+        // 🔴 Two rounds have now been lost to explaining the black half of a deep map's frame before
+        // establishing what it is. The fog colour was accused and the app's own [Fog] line already
+        // said fog=(0.324,0.486,0.629) — a pale blue — while the accusation rested on a hand
+        // calculation of (3,22,44). The app's log outranks the arithmetic, always.
+        //
+        // So this asks one question with a numeric answer and no interpretation: of the pixels that
+        // are DARK in the real frame, how many are still there when the map is hidden? A pixel that
+        // survives the map being switched off is background; one that does not is something the map
+        // drew. That is the whole measurement.
+
+        /// <summary>
+        /// Split the frame's dark pixels between "the map drew this" and "this is the background".
+        /// </summary>
+        /// <param name="darkPercent">% of the whole frame that is dark.</param>
+        /// <param name="fromMapPercent">…of those, the % that CHANGE when the map is hidden.</param>
+        /// <param name="fromBackdropPercent">…and the % that do not.</param>
+        public static void DarkOrigin(byte[] withMap, byte[] noMap,
+                                      out double darkPercent,
+                                      out double fromMapPercent,
+                                      out double fromBackdropPercent,
+                                      byte darkMax = DarkMax,
+                                      byte tolerance = SubjectTolerance)
+        {
+            darkPercent = 0.0;
+            fromMapPercent = 0.0;
+            fromBackdropPercent = 0.0;
+            int n = PixelCount(withMap);
+            if (n == 0 || noMap == null || noMap.Length != withMap.Length) return;
+
+            long dark = 0, fromMap = 0;
+            for (int i = 0; i < n; i++)
+            {
+                int p = i * Channels;
+                if (withMap[p] >= darkMax || withMap[p + 1] >= darkMax || withMap[p + 2] >= darkMax) continue;
+                dark++;
+                int dr = withMap[p] - noMap[p];
+                int dg = withMap[p + 1] - noMap[p + 1];
+                int db = withMap[p + 2] - noMap[p + 2];
+                if (dr < 0) dr = -dr;
+                if (dg < 0) dg = -dg;
+                if (db < 0) db = -db;
+                if (dr > tolerance || dg > tolerance || db > tolerance) fromMap++;
+            }
+            darkPercent = 100.0 * dark / n;
+            if (dark == 0) return;
+            fromMapPercent = 100.0 * fromMap / dark;
+            fromBackdropPercent = 100.0 - fromMapPercent;
+        }
+
+        /// <summary>
+        /// Up to <paramref name="want"/> evenly spread pixel indices that are dark in
+        /// <paramref name="frame"/> — the pixels a ray probe should be fired through. Spread rather
+        /// than the first N, so the sample is of the whole dark region and not of its top edge.
+        /// </summary>
+        public static int[] DarkPixelSample(byte[] frame, int want, byte darkMax = DarkMax)
+        {
+            int n = PixelCount(frame);
+            if (n == 0 || want <= 0) return new int[0];
+
+            var all = new System.Collections.Generic.List<int>();
+            for (int i = 0; i < n; i++)
+            {
+                int p = i * Channels;
+                if (frame[p] < darkMax && frame[p + 1] < darkMax && frame[p + 2] < darkMax) all.Add(i);
+            }
+            if (all.Count == 0) return new int[0];
+            if (all.Count <= want) return all.ToArray();
+
+            var picked = new int[want];
+            for (int k = 0; k < want; k++) picked[k] = all[(int)((long)k * all.Count / want)];
+            return picked;
+        }
+
+        /// <summary>Mean luminance over a set of pixel indices — for measuring the same pixels
+        /// before and after a light is switched on.</summary>
+        public static double MeanLuminanceAt(byte[] frame, int[] indices)
+        {
+            if (frame == null || indices == null || indices.Length == 0) return 0.0;
+            int n = PixelCount(frame);
+            double sum = 0.0;
+            long count = 0;
+            foreach (int i in indices)
+            {
+                if (i < 0 || i >= n) continue;
+                int p = i * Channels;
+                sum += Luminance(frame[p], frame[p + 1], frame[p + 2]);
+                count++;
+            }
+            return count == 0 ? 0.0 : sum / count;
+        }
+
         /// <summary>One token for what this map shot proves, worst first. "" when it is fine.</summary>
         public static string MapReason(MapShot m,
                                        double minSubjectPercent = MinSubjectPercent,

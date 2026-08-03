@@ -291,4 +291,86 @@ namespace DiveMap.Tests
                 "all twenty of the model's pixels are pure black, and none of the background counts");
         }
     }
+
+    /// <summary>
+    /// WO-E5j — the three questions that ask WHAT the black region is, without a theory attached.
+    /// </summary>
+    [TestFixture]
+    public class BlackRegionTests
+    {
+        private const int N = 100;
+
+        private static byte[] Frame(byte bg, byte region, int regionCount)
+        {
+            var b = new byte[N * 3];
+            for (int i = 0; i < N; i++)
+            {
+                byte v = i < regionCount ? region : bg;
+                int p = i * 3;
+                b[p] = v; b[p + 1] = v; b[p + 2] = v;
+            }
+            return b;
+        }
+
+        [Test]
+        public void BlackThatSurvivesTheMapBeingHiddenIsBackground()
+        {
+            // The dark region is present in BOTH frames and unchanged: nothing the map drew is
+            // responsible for it.
+            byte[] withMap = Frame(150, 10, 40);
+            byte[] noMap = Frame(150, 10, 40);
+            QcPixels.DarkOrigin(withMap, noMap, out double dark, out double fromMap, out double fromBg);
+            Assert.That(dark, Is.EqualTo(40.0).Within(1e-9));
+            Assert.That(fromMap, Is.EqualTo(0.0).Within(1e-9));
+            Assert.That(fromBg, Is.EqualTo(100.0).Within(1e-9));
+        }
+
+        [Test]
+        public void BlackThatDisappearsWithTheMapIsSomethingTheMapDrew()
+        {
+            byte[] withMap = Frame(150, 10, 40);
+            byte[] noMap = Frame(150, 150, 40);   // hide the map and that region becomes water
+            QcPixels.DarkOrigin(withMap, noMap, out double dark, out double fromMap, out double fromBg);
+            Assert.That(dark, Is.EqualTo(40.0).Within(1e-9));
+            Assert.That(fromMap, Is.EqualTo(100.0).Within(1e-9));
+            Assert.That(fromBg, Is.EqualTo(0.0).Within(1e-9));
+        }
+
+        [Test]
+        public void TheDarkSampleIsSpreadAcrossTheRegionNotTakenFromItsEdge()
+        {
+            // A ray probe that fires twenty times into the top edge of the dark region measures the
+            // top edge, not the region. Evenly spread indices are what make twenty rays a sample.
+            byte[] frame = Frame(150, 10, 60);
+            int[] sample = QcPixels.DarkPixelSample(frame, 20);
+            Assert.That(sample.Length, Is.EqualTo(20));
+            Assert.That(sample[0], Is.LessThan(5));
+            Assert.That(sample[sample.Length - 1], Is.GreaterThan(50),
+                "the sample has to reach the far end of the dark region");
+
+            // Fewer dark pixels than asked for: take them all rather than inventing any.
+            Assert.That(QcPixels.DarkPixelSample(Frame(150, 10, 7), 20).Length, Is.EqualTo(7));
+            Assert.That(QcPixels.DarkPixelSample(Frame(150, 150, 0), 20).Length, Is.EqualTo(0));
+        }
+
+        [Test]
+        public void TheTorchIsMeasuredOnExactlyTheSamePixelsBeforeAndAfter()
+        {
+            // The whole point of the lamp test is that the SAME pixels are compared, so a light
+            // that brightens the background instead of the dark region cannot be mistaken for a
+            // light that reached it.
+            byte[] dark = Frame(150, 10, 40);
+            int[] sample = QcPixels.DarkPixelSample(dark, 20);
+
+            byte[] litRegion = Frame(150, 120, 40);      // the lamp reached the dark region
+            byte[] litBackground = Frame(240, 10, 40);   // the lamp only lifted the background
+
+            double before = QcPixels.MeanLuminanceAt(dark, sample);
+            Assert.That(QcPixels.MeanLuminanceAt(litRegion, sample) / before, Is.GreaterThan(2.0),
+                "a lamp that reaches the surface lifts it several times over");
+            Assert.That(QcPixels.MeanLuminanceAt(litBackground, sample) / before,
+                        Is.EqualTo(1.0).Within(1e-9),
+                "…and one that does not touch those pixels must measure no change at all");
+        }
+    }
 }
