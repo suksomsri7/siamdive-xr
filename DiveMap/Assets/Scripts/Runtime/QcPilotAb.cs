@@ -109,16 +109,31 @@ namespace DiveMap.Runtime
             // from screen-space derivatives when the attribute is missing, and Unity's Built-in
             // Standard shader does not. The same absence is harmless there and not here, which is
             // the only difference found so far that predicts "good on the web, black in the app".
-            // The halves differ by the added attribute alone: base colour, normal, MR and emissive all
-            // hash identical, triangles identical, bounds identical to four decimals.
-            new Pair
-            {
-                Variable = "tangent-added",
-                Name = "Singha_Statue_Underwater",
-                ScaleAssetId = "cc0:statue_singha",
-                ShippedUrl = "https://maps.siamdive.com/models/xr/Singha_Statue_Underwater_xr0.glb",
-                PilotUrl = Cdn + "pilot_tan_Singha_Statue_Underwater_xr0.glb",
-            },
+            // 🔴 ONE OF THESE TWO PAIRS IS CLEAN AND ONE IS NOT, and the difference was found by
+            // re-verifying the files rather than by trusting the note that came with them. Both
+            // were built to differ in the tangent attribute alone; only HTMS Chang actually does.
+            //
+            // Verified independently on the files the CDN serves, all four texture slots hashed:
+            //
+            //     HTMS Chang   base 03b0caba9b9b · normal 0ae98ea75f7d · mr fc2ef832b5ff
+            //                  · emissive 3962d69eaa36 — all four IDENTICAL either side.
+            //                  39,999 tris both, bounds equal to four decimals, 51,961 tangents
+            //                  added with zero degenerate and zero bad handedness. CLEAN.
+            //
+            //     Singha       normal, mr and emissive identical — but BASE COLOUR differs,
+            //                  6e94a32074c8 → d2b43f4e6019, and not by a re-encode's rounding:
+            //                  decoded to pixels, 93.2% of bytes differ, mean absolute difference
+            //                  5.9, maximum 59, and the pilot's mean base colour is 120.24 against
+            //                  the shipped 114.47 — a systematic lift of about 5.8 bytes.
+            //
+            // That matters because this project has already measured what an albedo lift does to
+            // this exact model: Singha's own lift took blackOfSubject from 20.21% to 5.64%. So a
+            // movement on that pair cannot be attributed to the tangent, and the Variable field
+            // below says so IN THE LOG rather than leaving it to whoever reads the numbers later.
+            //
+            // It is kept rather than dropped for two reasons: a null result is still informative
+            // (if a brighter albedo AND a tangent together do not move it, that is a strong
+            // statement), and one contaminated pair costs a line rather than a CI round.
             new Pair
             {
                 Variable = "tangent-added",
@@ -127,10 +142,23 @@ namespace DiveMap.Runtime
                 ShippedUrl = "https://maps.siamdive.com/models/xr/HTMS_Chang_xr0.glb",
                 PilotUrl = Cdn + "pilot_tan_HTMS_Chang_xr0.glb",
             },
+            new Pair
+            {
+                Variable = "tangent+albedo-CONFOUNDED",
+                Name = "Singha_Statue_Underwater",
+                ScaleAssetId = "cc0:statue_singha",
+                ShippedUrl = "https://maps.siamdive.com/models/xr/Singha_Statue_Underwater_xr0.glb",
+                PilotUrl = Cdn + "pilot_tan_Singha_Statue_Underwater_xr0.glb",
+            },
         };
 
         private const float PerFileSeconds = 45f;
-        private const float BudgetSeconds = 300f;
+        /// <remarks>
+        /// Five pairs is ten downloads. At the 45 s per-file ceiling this lets four files time out
+        /// and the remaining six still be photographed and compared — the budget is sized for the
+        /// slow case, not the expected one.
+        /// </remarks>
+        private const float BudgetSeconds = 420f;
         private const float SettleSeconds = 0.4f;
         private const float StageOffset = 8000f;
 
