@@ -878,12 +878,39 @@ namespace DiveMap.Core
             public double FogWorkMax;
 
             /// <summary>
-            /// Top-of-frame minus bottom-of-frame luminance in the MAP-FREE shot, 0-1: the
-            /// background gradient as the camera actually sees it. The web's ramp spans 0.89 → 0.02
-            /// in authored sRGB, but a diver looking level only ever sees its top third, so the
-            /// span that reaches the screen is the number worth gating on — not the one in the file.
+            /// TOP-of-screen minus BOTTOM-of-screen luminance in the MAP-FREE shot, 0-1 — the
+            /// background ramp with nothing standing in front of it. Positive means bright above
+            /// and dark below, which is the only way round water works.
+            ///
+            /// 🔴 IN SCREEN TERMS, NOT BUFFER TERMS. Run 30800189252 reported −0.552 / −0.576 /
+            /// −0.681 on the first three maps, which read as "the gradient is upside down" and is
+            /// not: <c>Texture2D.GetRawTextureData</c> hands back BOTTOM-UP rows, so the first
+            /// rows of the buffer are the bottom of the picture and the old subtraction was
+            /// bottom minus top. The magnitude was always right. <see cref="BackdropSpanOf"/>
+            /// now takes the row order explicitly and <see cref="BandTop"/>/<see cref="BandBottom"/>
+            /// are reported separately so the log states which end is bright instead of a reader
+            /// having to know the convention.
             /// </summary>
             public double BackdropSpan;
+
+            /// <summary>Mean luminance of the top and bottom bands of the MAP-FREE shot, in
+            /// SCREEN order. Logged raw so an inverted readback shows up as two numbers a human
+            /// can compare against the PNG rather than as a sign nobody can interpret.</summary>
+            public double BandTop, BandBottom;
+
+            /// <summary>
+            /// The same span measured on the REAL frame — what the player's eye is actually given.
+            ///
+            /// 🔎 This is the number the complaint is about, and it is deliberately NOT gated yet.
+            /// <see cref="BackdropSpan"/> asks "does the ramp exist and is it the right way up",
+            /// which is a structural question with a right answer. This one asks "does the picture
+            /// have vertical depth", and on a diver's view the bottom of the frame is bright sand
+            /// rather than deep water — so a low value here can mean a flat scene OR a perfectly
+            /// good one with a sandy floor, and there is no threshold that separates them until a
+            /// run with a picture beside it says where the line is. Measured off the user's own
+            /// Posidon screenshot the shipped build sits at 0.031.
+            /// </summary>
+            public double SeenSpan;
 
             /// <summary>Renderers that landed, and items the builder gave up on.</summary>
             public int Renderers, Loaded, Failed;
@@ -914,13 +941,38 @@ namespace DiveMap.Core
         public const double BackdropBandFraction = 0.10;
 
         /// <summary>
+        /// The frame has to contain some WATER, or every other number in this struct is measuring
+        /// nothing.
+        ///
+        /// 🔴 Hanuman, run 30800189252: <c>waterLum=0.000 subject=100.00% fogWork=0.07</c>, and the
+        /// pass reported <c>no-fog</c>. That verdict was true and useless — with 100% of the frame
+        /// scored as subject there was no background for the fog to be measured against, so the
+        /// camera was inside something rather than the fog being broken. A pose that sees no water
+        /// is a POSE failure and has to say so, before any conclusion is drawn about the shading.
+        /// 0.02 is well under the darkest water this project renders (the deep stop at 100 m still
+        /// lands near 0.05) and well over a readback of zeros.
+        /// </summary>
+        public const double MinWaterLuminance = 0.02;
+
+        /// <summary>
+        /// …and the same failure stated from the other side: a frame that is almost entirely
+        /// subject is a camera buried in geometry, whatever its luminance says.
+        /// </summary>
+        public const double MaxSubjectPercent = 95.0;
+
+        /// <summary>
         /// Measure one map pose. <paramref name="height"/> is needed because the backdrop span is
         /// a question about ROWS and a flat byte array has no idea which row it is in; pass 0 and
         /// the span is reported as 0 rather than guessed at.
         /// </summary>
+        /// <param name="bottomUpRows">True when row 0 of the buffers is the BOTTOM of the screen,
+        /// which is what <c>Texture2D.GetRawTextureData</c> hands back. Passed in rather than
+        /// assumed: getting it wrong flips the sign of the one number that says whether the water
+        /// is the right way up, and that is exactly what happened in run 30800189252.</param>
         public static MapShot MeasureMap(byte[] withMap, byte[] noMap, byte[] noFog,
                                          int width, int height,
-                                         byte tolerance = SubjectTolerance)
+                                         byte tolerance = SubjectTolerance,
+                                         bool bottomUpRows = true)
         {
             var m = new MapShot();
             int n = PixelCount(withMap);
@@ -985,26 +1037,45 @@ namespace DiveMap.Core
 
             m.FogWork = fogCount == 0 ? 0.0 : 100.0 * fogSum / fogCount;
             m.FogWorkMax = 100.0 * fogMax;
-            m.BackdropSpan = BackdropSpanOf(haveNoMap ? noMap : withMap, width, height);
+            byte[] clean = haveNoMap ? noMap : withMap;
+            m.BackdropSpan = BackdropSpanOf(clean, width, height, bottomUpRows,
+                                            out double top, out double bottom);
+            m.BandTop = top;
+            m.BandBottom = bottom;
+            m.SeenSpan = BackdropSpanOf(withMap, width, height, bottomUpRows, out _, out _);
             return m;
         }
 
         /// <summary>
-        /// Top band minus bottom band mean luminance. Rows run top-to-bottom in the caller's
-        /// buffer; which end is "top" does not matter to the magnitude, and the sign is reported
-        /// as given so a flipped readback shows up as a negative number rather than as a pass.
+        /// Mean luminance of the top band of the SCREEN minus the bottom band of the SCREEN.
+        ///
+        /// 🔴 The row order is a parameter, not an assumption. Unity hands a readback back
+        /// bottom-up, so the first rows of the buffer are the bottom of the picture; subtracting
+        /// them the other way round is what turned a perfectly healthy −0.68 ramp into a
+        /// "backdropSpan FAIL" in run 30800189252. Both bands come back out through
+        /// <paramref name="top"/> and <paramref name="bottom"/> so a caller logs the two numbers
+        /// rather than a sign, and a genuinely inverted picture is then visible as
+        /// "the bright band is the one at the bottom" instead of as a convention argument.
         /// </summary>
-        public static double BackdropSpanOf(byte[] rgb, int width, int height)
+        public static double BackdropSpanOf(byte[] rgb, int width, int height,
+                                            bool bottomUpRows,
+                                            out double top, out double bottom)
         {
+            top = 0.0;
+            bottom = 0.0;
             int n = PixelCount(rgb);
             if (n == 0 || width <= 0 || height <= 0 || width * height != n) return 0.0;
             int band = (int)(height * BackdropBandFraction);
             if (band < 1) band = 1;
             if (band * 2 >= height) return 0.0;
 
-            double a = BandMean(rgb, width, 0, band);
-            double b = BandMean(rgb, width, height - band, band);
-            return a - b;
+            double first = BandMean(rgb, width, 0, band);
+            double last = BandMean(rgb, width, height - band, band);
+
+            // Row 0 is the bottom of the screen when the buffer is bottom-up.
+            top = bottomUpRows ? last : first;
+            bottom = bottomUpRows ? first : last;
+            return top - bottom;
         }
 
         private static double BandMean(byte[] rgb, int width, int firstRow, int rows)
@@ -1030,8 +1101,16 @@ namespace DiveMap.Core
             if (m.Pixels <= 0) return "readback-empty";
             if (m.Renderers <= 0) return "nothing-loaded";
             if (m.SubjectPercent < minSubjectPercent) return "map-not-in-frame";
+            // Before anything about shading: was this a picture of the scene at all? A camera
+            // inside a rock scores 100% subject and 0.000 water, and every verdict below it would
+            // be a statement about the inside of a rock.
+            if (m.SubjectPercent > MaxSubjectPercent) return "camera-buried";
+            if (m.WaterLuminance < MinWaterLuminance) return "no-water";
             if (m.FogWork < minFogWork) return "no-fog";
-            if (System.Math.Abs(m.BackdropSpan) < minBackdropSpan) return "flat-water";
+            // A NEGATIVE span is not a small one — it is bright water below and dark water above,
+            // which no depth curve produces and no reader would guess from a magnitude.
+            if (m.BackdropSpan <= -minBackdropSpan) return "ramp-upside-down";
+            if (m.BackdropSpan < minBackdropSpan) return "flat-water";
             return "";
         }
 
@@ -1058,6 +1137,8 @@ namespace DiveMap.Core
                    $"objOverWater={(m.WaterLuminance <= 1e-9 ? 0.0 : m.SubjectLuminance / m.WaterLuminance):0.00} " +
                    $"fogWork={m.FogWork:0.00} fogMax={m.FogWorkMax:0.00} " +
                    $"backdropSpan={m.BackdropSpan:0.000} " +
+                   $"bandTop={m.BandTop:0.000} bandBottom={m.BandBottom:0.000} " +
+                   $"seenSpan={m.SeenSpan:0.000} " +
                    $"renderers={m.Renderers} loaded={m.Loaded} failed={m.Failed} px={m.Pixels}";
         }
     }

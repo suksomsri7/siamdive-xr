@@ -218,4 +218,114 @@ namespace DiveMap.Tests
             Assert.That(a.B, Is.EqualTo(b.B).Within(0.01f));
         }
     }
+
+    /// <summary>
+    /// WO-E5 follow-up — the two ways run 30800189252's <c>[QCMap]</c> lines were unreadable.
+    /// </summary>
+    [TestFixture]
+    public class MapShotMeasureTests
+    {
+        private const int W = 8, H = 40;
+
+        /// <summary>A frame whose SCREEN top is bright and whose SCREEN bottom is dark, laid out
+        /// bottom-up the way <c>Texture2D.GetRawTextureData</c> does it: buffer row 0 is dark.</summary>
+        private static byte[] BottomUpRamp(byte darkAtBottom, byte brightAtTop)
+        {
+            var b = new byte[W * H * 3];
+            for (int y = 0; y < H; y++)
+            {
+                double t = (double)y / (H - 1);            // 0 = buffer row 0 = screen bottom
+                byte v = (byte)(darkAtBottom + (brightAtTop - darkAtBottom) * t);
+                for (int x = 0; x < W; x++)
+                {
+                    int p = ((y * W) + x) * 3;
+                    b[p] = v; b[p + 1] = v; b[p + 2] = v;
+                }
+            }
+            return b;
+        }
+
+        [Test]
+        public void ABottomUpReadbackOfAHealthyRampScoresPositive()
+        {
+            // 🔴 This is the exact bug. Run 30800189252 reported −0.552 / −0.576 / −0.681 on
+            // Atlantis, Posidon and Chang, and it read as "the water is upside down". It was not:
+            // the buffer is bottom-up, the subtraction was not, and the magnitude was right all
+            // along. Told the row order, the same data comes back positive.
+            byte[] frame = BottomUpRamp(20, 220);
+
+            double span = QcPixels.BackdropSpanOf(frame, W, H, bottomUpRows: true,
+                                                  out double top, out double bottom);
+            Assert.That(span, Is.GreaterThan(0.0), "bright above, dark below is a healthy ramp");
+            Assert.That(top, Is.GreaterThan(bottom));
+            Assert.That(span, Is.GreaterThan(QcPixels.MinBackdropSpan));
+
+            // …and the old reading of the very same bytes, for the record.
+            double wrongWayRound = QcPixels.BackdropSpanOf(frame, W, H, bottomUpRows: false,
+                                                           out _, out _);
+            Assert.That(wrongWayRound, Is.EqualTo(-span).Within(1e-9),
+                "the two conventions differ by exactly a sign — the magnitude was never in doubt");
+        }
+
+        [Test]
+        public void AGenuinelyInvertedRampIsStillCaught()
+        {
+            // The reason the sign is not simply thrown away: a picture that really is bright below
+            // and dark above must fail, and must fail with a verdict that says so rather than with
+            // "flat-water", which would send the next reader looking at the gradient stops.
+            byte[] inverted = BottomUpRamp(220, 20);   // buffer row 0 (screen bottom) is the bright end
+            double span = QcPixels.BackdropSpanOf(inverted, W, H, bottomUpRows: true, out _, out _);
+            Assert.That(span, Is.LessThan(-QcPixels.MinBackdropSpan));
+
+            var m = new QcPixels.MapShot
+            {
+                Pixels = W * H, Renderers = 5, SubjectPercent = 40.0,
+                WaterLuminance = 0.3, FogWork = 2.0, BackdropSpan = span,
+            };
+            Assert.That(QcPixels.MapReason(m), Is.EqualTo("ramp-upside-down"));
+        }
+
+        [Test]
+        public void APoseWithNoWaterInItIsAPoseFailureNotAFogFailure()
+        {
+            // 🔴 Hanuman, run 30800189252: waterLum=0.000 subject=100.00% fogWork=0.07, reported
+            // as "no-fog". True, and misleading: with the whole frame scored as subject there was
+            // no background left for the fog to be measured against, so the number said nothing
+            // about the fog and everything about the camera being inside the map.
+            var buried = new QcPixels.MapShot
+            {
+                Pixels = 1000, Renderers = 50, SubjectPercent = 100.0,
+                WaterLuminance = 0.0, FogWork = 0.07, BackdropSpan = 0.5,
+            };
+            Assert.That(QcPixels.MapReason(buried), Is.EqualTo("camera-buried"),
+                "a frame that is all subject has to accuse the pose, not the shading");
+
+            // …and the same failure arriving as darkness rather than as coverage.
+            var noWater = new QcPixels.MapShot
+            {
+                Pixels = 1000, Renderers = 50, SubjectPercent = 60.0,
+                WaterLuminance = 0.001, FogWork = 0.07, BackdropSpan = 0.5,
+            };
+            Assert.That(QcPixels.MapReason(noWater), Is.EqualTo("no-water"));
+
+            // A healthy frame still reaches the fog verdict, or the gates above have simply
+            // swallowed the thing this pass exists to measure.
+            var fogless = new QcPixels.MapShot
+            {
+                Pixels = 1000, Renderers = 50, SubjectPercent = 40.0,
+                WaterLuminance = 0.30, FogWork = 0.07, BackdropSpan = 0.5,
+            };
+            Assert.That(QcPixels.MapReason(fogless), Is.EqualTo("no-fog"));
+        }
+
+        [Test]
+        public void MeasureMapReportsBothEndsSoASignNeverHasToBeInterpreted()
+        {
+            byte[] frame = BottomUpRamp(20, 220);
+            QcPixels.MapShot m = QcPixels.MeasureMap(frame, frame, frame, W, H,
+                                                     QcPixels.SubjectTolerance, bottomUpRows: true);
+            Assert.That(m.BandTop, Is.GreaterThan(m.BandBottom));
+            Assert.That(m.BackdropSpan, Is.EqualTo(m.BandTop - m.BandBottom).Within(1e-9));
+        }
+    }
 }

@@ -106,6 +106,25 @@ namespace DiveMap.Runtime
         private const float PitchDegrees = 6f;
 
         /// <summary>
+        /// The second pose, for a map whose own framing box has no place to stand in it.
+        ///
+        /// Hanuman's first pose came back <c>waterLum=0.000 subject=100.00%</c> — the camera was
+        /// inside the content, because "half the framing box, plus fifteen per cent" is a distance
+        /// that still lands inside a map whose content is spread rather than clustered. Standing
+        /// at 2.4 radii and climbing to a quarter of the map's own half-width guarantees the
+        /// content is IN FRONT of the camera rather than around it, and the steeper pitch keeps
+        /// the seabed in frame from up there. It is still a diver's view, just a diver who has
+        /// swum up to look at the site.
+        /// </summary>
+        private const float RetryStandOffOfRadius = 2.4f;
+
+        /// <inheritdoc cref="RetryStandOffOfRadius"/>
+        private const float RetryClimbOfRadius = 0.25f;
+
+        /// <inheritdoc cref="RetryStandOffOfRadius"/>
+        private const float RetryPitchDegrees = 14f;
+
+        /// <summary>
         /// Photograph every map in <see cref="MapIds"/> into
         /// <paramref name="dir"/>/qc_map_&lt;shortId&gt;.png and log one <c>[QCMap]</c> line each.
         ///
@@ -242,63 +261,111 @@ namespace DiveMap.Runtime
             // down at its middle. Derived from the map's own framing box so it works on a 40 u
             // wreck and on a 340 u city without a per-map number anywhere.
             float radius = Mathf.Max(20f, 0.5f * Mathf.Max(result.FrameSizeX, result.FrameSizeZ));
-            Vector3 centre = result.FrameCenter;
-            float eyeY = result.FrameMinY + EyeHeightUnits;
-            // Keep the diver under the surface whatever the map's geometry says — a camera above
-            // the water is a different scene entirely (EnvMode.Daylight branches on it).
-            eyeY = Mathf.Min(eyeY, result.WaterLevel - 3f * DepthLight.UnitsPerMetre);
 
-            Vector3 back = new Vector3(0.62f, 0f, 0.78f).normalized;   // a fixed, reproducible bearing
-            Vector3 eye = new Vector3(centre.x, 0f, centre.z) + back * (radius * StandOffOfRadius);
-            eye.y = eyeY;
-            cam.transform.position = eye;
-            cam.transform.rotation = Quaternion.Euler(PitchDegrees, Quaternion.LookRotation(
-                new Vector3(centre.x - eye.x, 0f, centre.z - eye.z)).eulerAngles.y, 0f);
-
-            float depthUnits = result.WaterLevel - eye.y;
-            float depthMetres = depthUnits / DepthLight.UnitsPerMetre;
-
-            // Long enough for several LateUpdates: the atmosphere, the backdrop bake and the
-            // ambient floor all settle over frames, not instantly, and the boids need a moment to
-            // stop being stacked on their spawn point.
-            yield return new WaitForSeconds(SettleSeconds);
-
-            DepthAtmosphere.CurrentRange(out float fogStart, out float fogEnd);
-            float camToContent = Vector3.Distance(cam.transform.position, result.Center);
-            Debug.Log($"[QCMap] {shortId} '{result.MapName}' posed eye={eye} depth={depthMetres:F1}m " +
-                      $"radius={radius:F0} camToContent={camToContent:F0} " +
-                      $"fog={(RenderSettings.fog ? "on" : "OFF")} range={fogStart:F0}..{fogEnd:F0} " +
-                      $"fogColor={RenderSettings.fogColor} " +
-                      $"nearRim={WaterFog.FactorAt(Mathf.Max(0f, camToContent - result.Radius), fogStart, fogEnd) * 100f:F0}% " +
-                      $"farRim={WaterFog.FactorAt(camToContent + result.Radius, fogStart, fogEnd) * 100f:F0}% " +
-                      $"loaded={result.Loaded} failed={result.Failed} renderers={renderers.Count} " +
-                      $"build={Time.realtimeSinceStartup - t0:F0}s");
-
-            // ── the three frames ─────────────────────────────────────────────────
-            string png = Path.Combine(dir, "qc_map_" + shortId + ".png");
-            byte[] withMap = null, noMap = null, noFog = null;
-            yield return Capture(cam, rt, readback, png, b => withMap = b);
-
-            bool hadFog = RenderSettings.fog;
-            RenderSettings.fog = false;
-            yield return null;
-            yield return Capture(cam, rt, readback, null, b => noFog = b);
-            RenderSettings.fog = hadFog;
-            yield return null;
-
-            if (result.Root != null) result.Root.SetActive(false);
-            yield return null;
-            yield return Capture(cam, rt, readback, null, b => noMap = b);
-            if (result.Root != null) result.Root.SetActive(true);
-            yield return null;
-
-            QcPixels.MapShot shot = QcPixels.MeasureMap(withMap, noMap, noFog, rt.width, rt.height);
-            shot.Renderers = renderers.Count;
-            shot.Loaded = result.Loaded;
-            shot.Failed = result.Failed;
-
+            QcPixels.MapShot shot = default;
             string name = string.IsNullOrEmpty(result.MapName) ? shortId : result.MapName;
-            Debug.Log(QcPixels.MapLine(name + "/" + shortId, "diver", depthMetres, shot));
+            float depthMetres = 0f;
+
+            // 🔴 TWO ATTEMPTS, and the second one is not a retry for luck.
+            //
+            // Hanuman, run 30800189252: waterLum=0.000 subject=100.00%. Every pixel of the frame
+            // differed from the map-hidden twin, which means the camera was inside the map's
+            // geometry — a 340 u framing box whose content happens to sit where the diver stands.
+            // The pass reported "no-fog", which was arithmetically true and completely misleading:
+            // with no background in the frame there was nothing for the fog to be measured
+            // against. A pose that cannot see water has failed at being a POSE, and the honest
+            // response is to take a different one rather than to publish a conclusion about
+            // shading drawn from the inside of a rock.
+            //
+            // The second pose backs off and climbs, which is the only direction that can help: it
+            // is the map's own bounding box that put the camera inside it, so standing further out
+            // and higher is the move that guarantees the content is in front rather than around.
+            for (int attempt = 0; attempt < 2; attempt++)
+            {
+                bool retry = attempt == 1;
+                float standOff = retry ? RetryStandOffOfRadius : StandOffOfRadius;
+                float climb = retry ? radius * RetryClimbOfRadius : EyeHeightUnits;
+                float pitch = retry ? RetryPitchDegrees : PitchDegrees;
+
+                Vector3 centre = result.FrameCenter;
+                float eyeY = result.FrameMinY + climb;
+                // Keep the diver under the surface whatever the map's geometry says — a camera
+                // above the water is a different scene entirely (EnvMode.Daylight branches on it).
+                eyeY = Mathf.Min(eyeY, result.WaterLevel - 3f * DepthLight.UnitsPerMetre);
+
+                Vector3 back = new Vector3(0.62f, 0f, 0.78f).normalized;   // fixed, reproducible bearing
+                Vector3 eye = new Vector3(centre.x, 0f, centre.z) + back * (radius * standOff);
+                eye.y = eyeY;
+                cam.transform.position = eye;
+                cam.transform.rotation = Quaternion.Euler(pitch, Quaternion.LookRotation(
+                    new Vector3(centre.x - eye.x, 0f, centre.z - eye.z)).eulerAngles.y, 0f);
+
+                float depthUnits = result.WaterLevel - eye.y;
+                depthMetres = depthUnits / DepthLight.UnitsPerMetre;
+
+                // Long enough for several LateUpdates: the atmosphere, the backdrop bake and the
+                // ambient floor all settle over frames, not instantly, and the boids need a moment
+                // to stop being stacked on their spawn point.
+                yield return new WaitForSeconds(SettleSeconds);
+
+                DepthAtmosphere.CurrentRange(out float fogStart, out float fogEnd);
+                float camToContent = Vector3.Distance(cam.transform.position, result.Center);
+                Debug.Log($"[QCMap] {shortId} '{result.MapName}' posed={(retry ? "diver-retry" : "diver")} " +
+                          $"eye={eye} depth={depthMetres:F1}m " +
+                          $"radius={radius:F0} camToContent={camToContent:F0} " +
+                          $"fog={(RenderSettings.fog ? "on" : "OFF")} range={fogStart:F0}..{fogEnd:F0} " +
+                          $"fogColor={RenderSettings.fogColor} " +
+                          $"nearRim={WaterFog.FactorAt(Mathf.Max(0f, camToContent - result.Radius), fogStart, fogEnd) * 100f:F0}% " +
+                          $"farRim={WaterFog.FactorAt(camToContent + result.Radius, fogStart, fogEnd) * 100f:F0}% " +
+                          $"loaded={result.Loaded} failed={result.Failed} renderers={renderers.Count} " +
+                          $"build={Time.realtimeSinceStartup - t0:F0}s");
+
+                // ── the three frames ─────────────────────────────────────────────
+                // The PNG is only rewritten when the shot is one worth keeping, so a map that
+                // needed the second pose ships the picture that was actually measured.
+                string png = Path.Combine(dir, "qc_map_" + shortId + ".png");
+                byte[] withMap = null, noMap = null, noFog = null;
+                yield return Capture(cam, rt, readback, png, b => withMap = b);
+
+                bool hadFog = RenderSettings.fog;
+                RenderSettings.fog = false;
+                yield return null;
+                yield return Capture(cam, rt, readback, null, b => noFog = b);
+                RenderSettings.fog = hadFog;
+                yield return null;
+
+                if (result.Root != null) result.Root.SetActive(false);
+                yield return null;
+                yield return Capture(cam, rt, readback, null, b => noMap = b);
+                if (result.Root != null) result.Root.SetActive(true);
+                yield return null;
+
+                // 🔎 bottomUpRows: Texture2D.GetRawTextureData hands rows back BOTTOM-UP, so the
+                // first rows of the buffer are the bottom of the picture. Passing it in rather
+                // than assuming it is the whole point — the first run of this pass reported
+                // backdropSpan −0.552/−0.576/−0.681 and read as "the gradient is upside down"
+                // when the magnitude had been right all along and only the subtraction was
+                // backwards. bandTop/bandBottom are logged separately so the two ends can be
+                // compared against the PNG instead of against a convention.
+                shot = QcPixels.MeasureMap(withMap, noMap, noFog, rt.width, rt.height,
+                                           QcPixels.SubjectTolerance, bottomUpRows: true);
+                shot.Renderers = renderers.Count;
+                shot.Loaded = result.Loaded;
+                shot.Failed = result.Failed;
+
+                Debug.Log(QcPixels.MapLine(name + "/" + shortId,
+                                           retry ? "diver-retry" : "diver", depthMetres, shot));
+
+                // The second pose is only worth its four seconds when the first one failed at
+                // being a pose. Anything else — dark, flat, fogless — is a finding, and taking
+                // another photograph of it would be looking for a prettier answer.
+                string reason = QcPixels.MapReason(shot);
+                if (reason != "camera-buried" && reason != "no-water" && reason != "map-not-in-frame")
+                    break;
+                if (retry)
+                    Debug.LogWarning($"[QCMap] {shortId} still {reason} after the second pose — " +
+                                     "this map's framing box does not contain a place to stand");
+            }
 
             bool pass = QcPixels.MapPasses(shot);
 
