@@ -748,5 +748,322 @@ namespace DiveMap.Tests
             Assert.Greater(QcPixels.FrameDistanceForBox(3, 2, 1,
                                r[0], r[1], r[2], u[0], u[1], u[2], f[0], f[1], f[2], 400.0, 1.0, 5.0), 0.0);
         }
+
+        // ── WO-E5: the whole-map pass (QcMapShot) ────────────────────────────────
+        //
+        // 🔴 These tests did not exist when QcMapShot was first written, and the cost of that is
+        // on the record: the pass shipped a backdropSpan of −0.552 on three maps in a row and it
+        // was read as "the water is upside down" for a whole CI round, when the only thing that
+        // was upside down was the subtraction — Texture2D.GetRawTextureData hands rows back
+        // BOTTOM-UP. A ten-line test of a known ramp would have caught it before the run.
+        // The tests below are that ten-line test, plus one for every verdict the pass can reach.
+
+        /// <summary>
+        /// A vertical grey ramp in UNITY READBACK ORDER: buffer row 0 is the BOTTOM of the screen.
+        /// <paramref name="bottomOfScreen"/> and <paramref name="topOfScreen"/> are named for what
+        /// a human sees, which is the only way to write a test that can catch a flipped axis.
+        /// </summary>
+        private static byte[] Ramp(int w, int h, byte bottomOfScreen, byte topOfScreen)
+        {
+            var px = new byte[w * h * 3];
+            for (int y = 0; y < h; y++)
+            {
+                byte v = (byte)(bottomOfScreen + (topOfScreen - bottomOfScreen) * y / (h - 1));
+                for (int x = 0; x < w; x++)
+                {
+                    int p = (y * w + x) * 3;
+                    px[p] = v; px[p + 1] = v; px[p + 2] = v;
+                }
+            }
+            return px;
+        }
+
+        private const int MapW = 8, MapH = 20;
+
+        /// <summary>
+        /// A healthy map pose: a bright-above ramp of water, a dark subject covering a fifth of the
+        /// frame, and a fog contribution big enough to see. Each test below breaks exactly one of
+        /// those and asserts the verdict changes to the matching token and to nothing else.
+        /// </summary>
+        private static void HealthyPose(out byte[] withMap, out byte[] noMap, out byte[] noFog)
+        {
+            noMap = Ramp(MapW, MapH, 60, 200);
+            withMap = (byte[])noMap.Clone();
+            Paint(withMap, 0, MapW * MapH / 5, 30, 30, 30);
+            noFog = (byte[])withMap.Clone();
+            Paint(noFog, 0, MapW * MapH / 5, 20, 20, 20);   // ~4% of a byte of fog work
+        }
+
+        private static QcPixels.MapShot Measured(byte[] with, byte[] no, byte[] noFog, int renderers = 12)
+        {
+            QcPixels.MapShot m = QcPixels.MeasureMap(with, no, noFog, MapW, MapH);
+            m.Renderers = renderers;
+            return m;
+        }
+
+        [Test]
+        public void TheBackdropRampIsMeasuredInSCREENOrder_NotBufferOrder()
+        {
+            // 🔴 The bug that cost run 30800189252 its conclusion. Row 0 of a Unity readback is the
+            // BOTTOM of the picture, so a perfectly healthy ramp — bright water above, dark below —
+            // reports NEGATIVE if the caller subtracts in buffer order. Both bands come back out so
+            // a reader sees which end is bright instead of having to know the convention.
+            byte[] ramp = Ramp(MapW, MapH, 60, 200);
+
+            double screenOrder = QcPixels.BackdropSpanOf(ramp, MapW, MapH, true,
+                                                         out double top, out double bottom);
+            Assert.Greater(screenOrder, 0.0, "bright-above water must report a POSITIVE span");
+            Assert.Greater(top, bottom, "the bright band is the one at the top of the screen");
+
+            double bufferOrder = QcPixels.BackdropSpanOf(ramp, MapW, MapH, false, out _, out _);
+            Assert.AreEqual(-screenOrder, bufferOrder, 1e-9,
+                            "the row order is the whole difference between the two readings");
+        }
+
+        [Test]
+        public void ABackdropSpanNeedsAUsableFrame()
+        {
+            byte[] ramp = Ramp(MapW, MapH, 60, 200);
+            Assert.AreEqual(0.0, QcPixels.BackdropSpanOf(null, MapW, MapH, true, out _, out _), 1e-9);
+            Assert.AreEqual(0.0, QcPixels.BackdropSpanOf(ramp, 0, MapH, true, out _, out _), 1e-9);
+            // width × height that does not match the buffer is a caller bug, not a measurement.
+            Assert.AreEqual(0.0, QcPixels.BackdropSpanOf(ramp, MapW, MapH + 3, true, out _, out _), 1e-9);
+            // …and a frame too short to hold two bands reports nothing rather than overlapping them.
+            Assert.AreEqual(0.0, QcPixels.BackdropSpanOf(Flat(MapW * 4, 90, 90, 90), MapW, 4, true,
+                                                         out _, out _), 1e-9);
+        }
+
+        [Test]
+        public void AHealthyMapPose_Passes()
+        {
+            HealthyPose(out byte[] with, out byte[] no, out byte[] noFog);
+            QcPixels.MapShot m = Measured(with, no, noFog);
+
+            Assert.AreEqual("", QcPixels.MapReason(m), "healthy pose: " + QcPixels.MapLine("x", "diver", 30, m));
+            Assert.IsTrue(QcPixels.MapPasses(m));
+            Assert.Greater(m.SubjectPercent, QcPixels.MinSubjectPercent);
+            Assert.Less(m.SubjectPercent, QcPixels.MaxSubjectPercent);
+            Assert.Greater(m.WaterLuminance, QcPixels.MinWaterLuminance);
+            Assert.Greater(m.FogWork, QcPixels.MinFogWork);
+            Assert.Greater(m.BackdropSpan, QcPixels.MinBackdropSpan);
+            Assert.Less(m.SubjectLuminance, m.WaterLuminance, "the subject here is darker than its water");
+        }
+
+        [Test]
+        public void APhotographOfEmptyWaterCannotPass()
+        {
+            // The rule the whole harness rests on: a beautiful picture of nothing is evidence that
+            // nothing was photographed. An identical pair differs by 0%, so subject is 0%.
+            byte[] water = Ramp(MapW, MapH, 60, 200);
+            QcPixels.MapShot m = Measured(water, water, water);
+            Assert.AreEqual(0.0, m.SubjectPercent, 1e-9);
+            Assert.AreEqual("map-not-in-frame", QcPixels.MapReason(m));
+            Assert.IsFalse(QcPixels.MapPasses(m));
+        }
+
+        [Test]
+        public void NothingLoadedIsReportedBeforeAnythingAboutShading()
+        {
+            HealthyPose(out byte[] with, out byte[] no, out byte[] noFog);
+            QcPixels.MapShot m = Measured(with, no, noFog, renderers: 0);
+            Assert.AreEqual("nothing-loaded", QcPixels.MapReason(m),
+                            "a map with no renderers in it has nothing to say about shading");
+            Assert.AreEqual("readback-empty", QcPixels.MapReason(new QcPixels.MapShot { Renderers = 5 }));
+        }
+
+        [Test]
+        public void ACameraInsideTheGeometryIsAPoseFailure_NotAShadingFinding()
+        {
+            // 🔴 Hanuman, run 30800189252: waterLum=0.000 subject=100.00%, reported as "no-fog".
+            // Arithmetically true and completely misleading — with no background in the frame there
+            // was nothing for the fog to be measured against. The camera being buried has to be
+            // said FIRST, or every verdict after it is a statement about the inside of a rock.
+            byte[] no = Ramp(MapW, MapH, 60, 200);
+            byte[] with = Flat(MapW * MapH, 12, 14, 18);       // every pixel differs from the water
+            QcPixels.MapShot m = Measured(with, no, with);
+            Assert.AreEqual(100.0, m.SubjectPercent, 1e-9);
+            Assert.AreEqual("camera-buried", QcPixels.MapReason(m));
+        }
+
+        [Test]
+        public void AFrameWithNoWaterInItIsRefused()
+        {
+            byte[] no = Flat(MapW * MapH, 2, 2, 3);            // background all but black
+            byte[] with = (byte[])no.Clone();
+            Paint(with, 0, MapW * MapH / 5, 200, 200, 200);    // a subject, so it is not "not-in-frame"
+            byte[] noFog = (byte[])with.Clone();
+            Paint(noFog, 0, MapW * MapH / 5, 180, 180, 180);
+            QcPixels.MapShot m = Measured(with, no, noFog);
+            Assert.Less(m.WaterLuminance, QcPixels.MinWaterLuminance);
+            Assert.AreEqual("no-water", QcPixels.MapReason(m));
+        }
+
+        [Test]
+        public void FogThatChangesNothingIsReportedAsNoFog()
+        {
+            // Fog switched on, costing a shader variant, and changing nothing a player can see. The
+            // no-fog twin is IDENTICAL to the shot, which is the definition of it.
+            HealthyPose(out byte[] with, out byte[] no, out _);
+            QcPixels.MapShot m = Measured(with, no, with);
+            Assert.AreEqual(0.0, m.FogWork, 1e-9);
+            Assert.AreEqual("no-fog", QcPixels.MapReason(m));
+
+            // A missing third frame is the same verdict rather than a crash or a quiet pass.
+            Assert.AreEqual("no-fog", QcPixels.MapReason(Measured(with, no, null)));
+        }
+
+        [Test]
+        public void FogWorkMaxSeesAFogThatOnlyTouchesTheFarRim()
+        {
+            // The mean can be under the gate while the fog is doing real work on a few far pixels,
+            // so the peak is carried separately instead of being averaged away.
+            HealthyPose(out byte[] with, out byte[] no, out _);
+            byte[] noFog = (byte[])with.Clone();
+            Paint(noFog, 0, 2, 200, 200, 200);   // two pixels of the subject, hugely changed
+            QcPixels.MapShot m = Measured(with, no, noFog);
+            Assert.Less(m.FogWork, m.FogWorkMax, "the peak must survive the averaging");
+            Assert.Greater(m.FogWorkMax, 50.0);
+        }
+
+        [Test]
+        public void FlatWaterAndUpsideDownWaterAreDifferentVerdicts()
+        {
+            // 🔴 A NEGATIVE span is not a small one. Bright water below and dark water above is a
+            // structural fault no depth curve produces, and it would be invisible if the gate only
+            // compared magnitudes — which is exactly how a flipped readback hid behind "flat".
+            HealthyPose(out byte[] with, out byte[] noRamp, out byte[] noFog);
+
+            byte[] flat = Flat(MapW * MapH, 130, 130, 130);
+            byte[] flatWith = (byte[])flat.Clone();
+            Paint(flatWith, 0, MapW * MapH / 5, 30, 30, 30);
+            byte[] flatNoFog = (byte[])flatWith.Clone();
+            Paint(flatNoFog, 0, MapW * MapH / 5, 20, 20, 20);
+            QcPixels.MapShot flatShot = Measured(flatWith, flat, flatNoFog);
+            Assert.AreEqual("flat-water", QcPixels.MapReason(flatShot));
+
+            byte[] upside = Ramp(MapW, MapH, 200, 60);    // bright at the BOTTOM of the screen
+            byte[] upsideWith = (byte[])upside.Clone();
+            Paint(upsideWith, 0, MapW * MapH / 5, 30, 30, 30);
+            byte[] upsideNoFog = (byte[])upsideWith.Clone();
+            Paint(upsideNoFog, 0, MapW * MapH / 5, 20, 20, 20);
+            QcPixels.MapShot upsideShot = Measured(upsideWith, upside, upsideNoFog);
+            Assert.Less(upsideShot.BackdropSpan, 0.0);
+            Assert.AreEqual("ramp-upside-down", QcPixels.MapReason(upsideShot));
+
+            // …and the healthy one is neither.
+            Assert.AreEqual("", QcPixels.MapReason(Measured(with, noRamp, noFog)));
+        }
+
+        [Test]
+        public void SeenSpanIsTheRealFrame_BackdropSpanIsTheMapFreeOne()
+        {
+            // Two different questions. BackdropSpan asks "does the ramp exist and is it the right
+            // way up", which has a right answer; SeenSpan asks "what did the player's eye get",
+            // which on a diver's view includes bright sand at the bottom of the frame and is
+            // therefore NOT gated. They must not be the same number when a map is in the way.
+            HealthyPose(out byte[] with, out byte[] no, out byte[] noFog);
+            QcPixels.MapShot m = Measured(with, no, noFog);
+            Assert.AreNotEqual(m.BackdropSpan, m.SeenSpan);
+            Assert.AreEqual(QcPixels.BackdropSpanOf(no, MapW, MapH, true, out _, out _),
+                            m.BackdropSpan, 1e-9);
+        }
+
+        [Test]
+        public void DarkOriginSplitsTheBlackBetweenTheMapAndTheBackground()
+        {
+            // 🔴 The question asked without a theory attached. Two rounds were lost to explaining
+            // the black region — once as "the models are dark", once as "the fog colour is nearly
+            // black" — before anybody established what it IS. A dark pixel that survives the map
+            // being hidden is background; one that does not is something the map drew.
+            byte[] no = Flat(1000, 100, 100, 100);
+            Paint(no, 0, 100, 10, 10, 10);            // 100 px of dark BACKGROUND
+            byte[] with = (byte[])no.Clone();
+            Paint(with, 100, 100, 5, 5, 5);           // 100 px the MAP drew dark over bright water
+
+            QcPixels.DarkOrigin(with, no, out double dark, out double fromMap, out double fromBg);
+            Assert.AreEqual(20.0, dark, 1e-9);        // 200 of 1000 px are dark
+            Assert.AreEqual(50.0, fromMap, 1e-9);
+            Assert.AreEqual(50.0, fromBg, 1e-9);
+            Assert.AreEqual(100.0, fromMap + fromBg, 1e-9);
+        }
+
+        [Test]
+        public void DarkOriginRefusesToGuessWithoutTheSecondFrame()
+        {
+            byte[] with = Flat(100, 10, 10, 10);
+            QcPixels.DarkOrigin(with, null, out double dark, out double fromMap, out double fromBg);
+            Assert.AreEqual(0.0, dark, 1e-9);
+            Assert.AreEqual(0.0, fromMap, 1e-9);
+            Assert.AreEqual(0.0, fromBg, 1e-9);
+
+            // No dark pixels at all: a percentage of nothing is 0, not a division by zero.
+            byte[] bright = Flat(100, 200, 200, 200);
+            QcPixels.DarkOrigin(bright, bright, out dark, out fromMap, out fromBg);
+            Assert.AreEqual(0.0, dark, 1e-9);
+            Assert.AreEqual(0.0, fromMap, 1e-9);
+        }
+
+        [Test]
+        public void TheDarkPixelSampleIsSpreadOverTheWholeRegion_NotItsTopEdge()
+        {
+            // A ray probe fired through the first twenty dark pixels measures the top edge of the
+            // black and reports it as the whole of it.
+            byte[] frame = Flat(1000, 200, 200, 200);
+            Paint(frame, 0, 400, 5, 5, 5);
+
+            int[] sample = QcPixels.DarkPixelSample(frame, 20);
+            Assert.AreEqual(20, sample.Length);
+            foreach (int i in sample)
+                Assert.Less(frame[i * 3], QcPixels.DarkMax, "sampled a pixel that is not dark");
+            Assert.Greater(sample[sample.Length - 1] - sample[0], 300,
+                           "the sample is bunched at one end of the dark region");
+
+            // Fewer dark pixels than asked for hands back what there is, and none hands back none.
+            Assert.AreEqual(400, QcPixels.DarkPixelSample(frame, 5000).Length);
+            Assert.AreEqual(0, QcPixels.DarkPixelSample(Flat(100, 200, 200, 200), 20).Length);
+            Assert.AreEqual(0, QcPixels.DarkPixelSample(frame, 0).Length);
+        }
+
+        [Test]
+        public void MeanLuminanceAtMeasuresTheSamePixelsBeforeAndAfterTheTorch()
+        {
+            // The torch test compares one set of pixels across two frames; an index that is not in
+            // the frame has to be dropped rather than counted as black, or the lamp gets credit for
+            // pixels that were never measured.
+            byte[] dark = Flat(100, 10, 10, 10);
+            byte[] lit = Flat(100, 100, 100, 100);
+            int[] idx = { 0, 5, 99 };
+
+            double before = QcPixels.MeanLuminanceAt(dark, idx);
+            double after = QcPixels.MeanLuminanceAt(lit, idx);
+            Assert.AreEqual(10.0 / 255.0, before, 1e-9);
+            Assert.AreEqual(100.0 / 255.0, after, 1e-9);
+            Assert.Greater(after / before, 2.0, "this is the gain the torch verdict is read off");
+
+            Assert.AreEqual(before, QcPixels.MeanLuminanceAt(dark, new[] { 0, 5, 99, -1, 4000 }), 1e-9);
+            Assert.AreEqual(0.0, QcPixels.MeanLuminanceAt(dark, new int[0]), 1e-9);
+            Assert.AreEqual(0.0, QcPixels.MeanLuminanceAt(null, idx), 1e-9);
+        }
+
+        [Test]
+        public void TheMapLineCarriesTheVerdictAndTheNumbersBehindIt()
+        {
+            // The line IS the CI evidence — it is what gets grepped out of Player.log into the step
+            // log — so its shape is pinned here rather than left to whoever edits the format next.
+            HealthyPose(out byte[] with, out byte[] no, out byte[] noFog);
+            QcPixels.MapShot m = Measured(with, no, noFog);
+
+            string pass = QcPixels.MapLine("Atlantis/miwv1abp1o71", "diver", 52.3, m);
+            StringAssert.StartsWith("[QCMap] Atlantis/miwv1abp1o71 pose=diver depth=52.3m PASS", pass);
+            foreach (string field in new[] { "dark=", "p50=", "subject=", "waterLum=", "objOverWater=",
+                                             "fogWork=", "backdropSpan=", "bandTop=", "bandBottom=",
+                                             "seenSpan=", "renderers=", "loaded=", "failed=", "px=" })
+                StringAssert.Contains(field, pass);
+
+            // A failure names itself in the same place, so a grep of the step log reads as a table.
+            string fail = QcPixels.MapLine("Hanuman", "diver-retry", 12.0, Measured(no, no, no));
+            StringAssert.Contains("FAIL map-not-in-frame", fail);
+            StringAssert.Contains("pose=diver-retry", fail);
+        }
     }
 }

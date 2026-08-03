@@ -467,6 +467,25 @@ namespace DiveMap.Runtime
             // live in — 222 of 226 modules — has never been in a CI frame. This is that frame.
             yield return QcModelShot.Run(dir, Manifest, boatCenter);
 
+            // ── ใบที่ 9-15: แมพจริงทั้ง 7 จากมุมสายตานักดำน้ำ ─────────────────────────
+            // Everything above photographs either nine models alone in a studio or ONE map — HTMS
+            // Chang — from an orbit pose. The user's answer to that was "ผมถามคุณ QC ยังไงครับ
+            // คุณไม่ได้ถ่ายรูปแคปเจอร์หน้าจอมาดูเองด้วยหรอ", and they were right: Atlantis,
+            // Posidon and Hanuman — the three maps every complaint has been about — had never
+            // been in a CI frame, and neither had the diver's-eye pose the player spends the
+            // whole game in.
+            //
+            // 🔴 CI-ONLY, AND THAT IS STRUCTURAL, NOT A FLAG. This whole method only runs when
+            // -qcshot was passed on the command line (see OnBuilt), a switch nothing but the
+            // workflow ever passes; the method ends in Application.Quit(0). A player build
+            // therefore never reaches this line, which matters because the pass DESTROYS the map
+            // on screen and rebuilds seven others in its place.
+            //
+            // LAST, for the same reason: nothing runs after it but the quit, so there is nothing
+            // left for the final map to break.
+            yield return QcMapShot.Run(dir, _builder, Manifest, _mapRoot);
+            _mapRoot = null;   // QcMapShot destroyed it; do not leave a dangling reference behind.
+
             Application.Quit(0);
         }
 

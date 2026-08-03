@@ -586,5 +586,442 @@ namespace DiveMap.Core
         public const double BoxFill = 0.9;
 
         private static double Clamp(double v, double lo, double hi) => v < lo ? lo : (v > hi ? hi : v);
+
+        // ── WO-E5: the whole-map QC pass (QcMapShot) ─────────────────────────────
+        //
+        // ⚠️ RESTORED AS A TOOL ONLY. Everything below is measurement: it reads frames back and
+        // counts bytes, and nothing in this file has ever changed how a frame is rendered. The
+        // shading work it was originally written beside was reverted (HANDOFF §10); the instrument
+        // was kept, because the reason it was built has not gone away.
+
+        /// <summary>
+        /// Rec.709 luminance of a display-encoded triple. Deliberately NOT linearised: the question
+        /// is what the eye gets from the finished frame.
+        /// </summary>
+        public static double Luminance(byte r, byte g, byte b)
+            => (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255.0;
+
+        /// <summary>Linear-interpolated percentile of an already-SORTED list.</summary>
+        private static double Percentile(System.Collections.Generic.List<double> sorted, double q)
+        {
+            if (sorted.Count == 0) return 0.0;
+            if (sorted.Count == 1) return sorted[0];
+            double pos = q * (sorted.Count - 1);
+            int lo = (int)pos;
+            int hi = lo + 1 >= sorted.Count ? sorted.Count - 1 : lo + 1;
+            double f = pos - lo;
+            return sorted[lo] + (sorted[hi] - sorted[lo]) * f;
+        }
+        // ── WO-E5: the WHOLE MAP, from where the player stands ───────────────────
+        //
+        // 🔴 WHY THIS EXISTS, in the user's own words: "texture ของฉากและวัตถุไม่ตรงตามโมเดลจริงๆ
+        // เลย ผมถามคุณ QC ยังไงครับ คุณไม่ได้ถ่ายรูปแคปเจอร์หน้าจอมาดูเองด้วยหรอ".
+        //
+        // They are right, and the gap is structural rather than careless. Every QC pass in this
+        // project photographs either NINE MODELS ALONE against a gradient (QcModelShot) or ONE map,
+        // HTMS Chang, from an orbit pose (QcShot angle 1/2). Atlantis, Posidon, Hanuman, Harddeep,
+        // T-13 and Tu-1 — the maps the complaints are actually about — have never been in a CI
+        // frame, and neither has the diver's-eye pose the player spends the whole game in. So the
+        // numbers kept improving in the studio while the game kept looking worse, and both were
+        // true.
+        //
+        // 🔎 THREE FRAMES FROM ONE POSE, and each pair answers a question no single frame can:
+        //
+        //   withMap  the shot. Everything below is measured against it.
+        //   noMap    the same pose with the map hidden — water and backdrop only. Whatever DIFFERS
+        //            is the map, which is the same trick <see cref="Measure"/> uses and the same
+        //            reason: a beautiful photograph of empty water must score 0% subject and FAIL,
+        //            not pass quietly. It is also the only way to measure the background gradient
+        //            with nothing standing in front of it.
+        //   noFog    the same pose with RenderSettings.fog off. The per-pixel difference from
+        //            withMap IS the fog's contribution, so "is there any fog in this picture"
+        //            stops being a matter of opinion and becomes a byte count. On the shipped
+        //            build this is expected to be ~0 — see WaterFog.RangeAt for why that is
+        //            arithmetic rather than a surprise.
+        public struct MapShot
+        {
+            /// <summary>% of the frame darker than <see cref="DarkMax"/> in every channel. The
+            /// user measured 33.1% off their own Atlantis screenshot; this is that number, taken
+            /// by the app instead of off a phone photo.</summary>
+            public double DarkPercent;
+
+            /// <summary>Whole-frame luminance percentiles, 0-1.</summary>
+            public double P50, P90, P99;
+
+            /// <summary>% of the frame the map occupies, and how bright it is.</summary>
+            public double SubjectPercent;
+            public double SubjectLuminance, SubjectP5, SubjectP95;
+
+            /// <summary>Everything that is not the map: water, backdrop, HUD.</summary>
+            public double WaterLuminance;
+
+            /// <summary>
+            /// Mean |Δluminance| between the frame and its no-fog twin, over the MAP's pixels,
+            /// ×100. This is the fog, measured. Under <see cref="MinFogWork"/> the fog is
+            /// decoration: it is switched on, it costs a shader variant, and it changes nothing
+            /// the player can see.
+            /// </summary>
+            public double FogWork;
+
+            /// <summary>The largest single-pixel fog contribution, ×100 — so a fog that touches
+            /// only the far rim still registers even when its mean is small.</summary>
+            public double FogWorkMax;
+
+            /// <summary>
+            /// TOP-of-screen minus BOTTOM-of-screen luminance in the MAP-FREE shot, 0-1 — the
+            /// background ramp with nothing standing in front of it. Positive means bright above
+            /// and dark below, which is the only way round water works.
+            ///
+            /// 🔴 IN SCREEN TERMS, NOT BUFFER TERMS. Run 30800189252 reported −0.552 / −0.576 /
+            /// −0.681 on the first three maps, which read as "the gradient is upside down" and is
+            /// not: <c>Texture2D.GetRawTextureData</c> hands back BOTTOM-UP rows, so the first
+            /// rows of the buffer are the bottom of the picture and the old subtraction was
+            /// bottom minus top. The magnitude was always right. <see cref="BackdropSpanOf"/>
+            /// now takes the row order explicitly and <see cref="BandTop"/>/<see cref="BandBottom"/>
+            /// are reported separately so the log states which end is bright instead of a reader
+            /// having to know the convention.
+            /// </summary>
+            public double BackdropSpan;
+
+            /// <summary>Mean luminance of the top and bottom bands of the MAP-FREE shot, in
+            /// SCREEN order. Logged raw so an inverted readback shows up as two numbers a human
+            /// can compare against the PNG rather than as a sign nobody can interpret.</summary>
+            public double BandTop, BandBottom;
+
+            /// <summary>
+            /// The same span measured on the REAL frame — what the player's eye is actually given.
+            ///
+            /// 🔎 This is the number the complaint is about, and it is deliberately NOT gated yet.
+            /// <see cref="BackdropSpan"/> asks "does the ramp exist and is it the right way up",
+            /// which is a structural question with a right answer. This one asks "does the picture
+            /// have vertical depth", and on a diver's view the bottom of the frame is bright sand
+            /// rather than deep water — so a low value here can mean a flat scene OR a perfectly
+            /// good one with a sandy floor, and there is no threshold that separates them until a
+            /// run with a picture beside it says where the line is. Measured off the user's own
+            /// Posidon screenshot the shipped build sits at 0.031.
+            /// </summary>
+            public double SeenSpan;
+
+            /// <summary>Renderers that landed, and items the builder gave up on.</summary>
+            public int Renderers, Loaded, Failed;
+
+            public int Pixels;
+        }
+
+        /// <summary>
+        /// Below this the fog is not doing anything a player could see. 0.4 of a byte, averaged
+        /// over the map's own pixels: quarter of a byte is under the dither noise of an 8-bit
+        /// frame, and half a byte is the smallest difference that survives a screenshot.
+        /// </summary>
+        public const double MinFogWork = 0.4;
+
+        /// <summary>
+        /// The background gradient has to span at least this much luminance across the frame, or
+        /// the water is a flat wall. Measured off the user's Posidon screenshot, the shipped build
+        /// spans 0.031 (byte 172.6 at the top of the frame to 164.7 at the bottom of the visible
+        /// sky) — which is what "ฉากไม่มีมิติเลย" is, in numbers.
+        /// </summary>
+        public const double MinBackdropSpan = 0.08;
+
+        /// <summary>
+        /// Fraction of the frame's rows sampled at each end for <see cref="MapShot.BackdropSpan"/>.
+        /// A tenth is wide enough to average out the dither and narrow enough that the seabed,
+        /// which fills the bottom of a diver's view, does not eat the sample.
+        /// </summary>
+        public const double BackdropBandFraction = 0.10;
+
+        /// <summary>
+        /// The frame has to contain some WATER, or every other number in this struct is measuring
+        /// nothing.
+        ///
+        /// 🔴 Hanuman, run 30800189252: <c>waterLum=0.000 subject=100.00% fogWork=0.07</c>, and the
+        /// pass reported <c>no-fog</c>. That verdict was true and useless — with 100% of the frame
+        /// scored as subject there was no background for the fog to be measured against, so the
+        /// camera was inside something rather than the fog being broken. A pose that sees no water
+        /// is a POSE failure and has to say so, before any conclusion is drawn about the shading.
+        /// 0.02 is well under the darkest water this project renders (the deep stop at 100 m still
+        /// lands near 0.05) and well over a readback of zeros.
+        /// </summary>
+        public const double MinWaterLuminance = 0.02;
+
+        /// <summary>
+        /// …and the same failure stated from the other side: a frame that is almost entirely
+        /// subject is a camera buried in geometry, whatever its luminance says.
+        /// </summary>
+        public const double MaxSubjectPercent = 95.0;
+
+        /// <summary>
+        /// Measure one map pose. <paramref name="height"/> is needed because the backdrop span is
+        /// a question about ROWS and a flat byte array has no idea which row it is in; pass 0 and
+        /// the span is reported as 0 rather than guessed at.
+        /// </summary>
+        /// <param name="bottomUpRows">True when row 0 of the buffers is the BOTTOM of the screen,
+        /// which is what <c>Texture2D.GetRawTextureData</c> hands back. Passed in rather than
+        /// assumed: getting it wrong flips the sign of the one number that says whether the water
+        /// is the right way up, and that is exactly what happened in run 30800189252.</param>
+        public static MapShot MeasureMap(byte[] withMap, byte[] noMap, byte[] noFog,
+                                         int width, int height,
+                                         byte tolerance = SubjectTolerance,
+                                         bool bottomUpRows = true)
+        {
+            var m = new MapShot();
+            int n = PixelCount(withMap);
+            if (n == 0) return m;
+            m.Pixels = n;
+            m.DarkPercent = AtOrBelowPercent(withMap, (byte)(DarkMax - 1));
+
+            var all = new System.Collections.Generic.List<double>(n);
+            var subject = new System.Collections.Generic.List<double>();
+            double waterSum = 0.0; long waterCount = 0;
+            double fogSum = 0.0; long fogCount = 0; double fogMax = 0.0;
+
+            bool haveNoMap = noMap != null && noMap.Length == withMap.Length;
+            bool haveNoFog = noFog != null && noFog.Length == withMap.Length;
+
+            for (int i = 0; i < n; i++)
+            {
+                int p = i * Channels;
+                double lum = Luminance(withMap[p], withMap[p + 1], withMap[p + 2]);
+                all.Add(lum);
+
+                bool isSubject = false;
+                if (haveNoMap)
+                {
+                    int dr = withMap[p] - noMap[p];
+                    int dg = withMap[p + 1] - noMap[p + 1];
+                    int db = withMap[p + 2] - noMap[p + 2];
+                    if (dr < 0) dr = -dr;
+                    if (dg < 0) dg = -dg;
+                    if (db < 0) db = -db;
+                    isSubject = dr > tolerance || dg > tolerance || db > tolerance;
+                }
+
+                if (isSubject) subject.Add(lum);
+                else { waterSum += lum; waterCount++; }
+
+                if (haveNoFog && (isSubject || !haveNoMap))
+                {
+                    double d = System.Math.Abs(
+                        lum - Luminance(noFog[p], noFog[p + 1], noFog[p + 2]));
+                    fogSum += d; fogCount++;
+                    if (d > fogMax) fogMax = d;
+                }
+            }
+
+            all.Sort();
+            m.P50 = Percentile(all, 0.50);
+            m.P90 = Percentile(all, 0.90);
+            m.P99 = Percentile(all, 0.99);
+
+            m.SubjectPercent = 100.0 * subject.Count / n;
+            m.WaterLuminance = waterCount == 0 ? 0.0 : waterSum / waterCount;
+            if (subject.Count > 0)
+            {
+                double s = 0.0;
+                for (int i = 0; i < subject.Count; i++) s += subject[i];
+                m.SubjectLuminance = s / subject.Count;
+                subject.Sort();
+                m.SubjectP5 = Percentile(subject, 0.05);
+                m.SubjectP95 = Percentile(subject, 0.95);
+            }
+
+            m.FogWork = fogCount == 0 ? 0.0 : 100.0 * fogSum / fogCount;
+            m.FogWorkMax = 100.0 * fogMax;
+            byte[] clean = haveNoMap ? noMap : withMap;
+            m.BackdropSpan = BackdropSpanOf(clean, width, height, bottomUpRows,
+                                            out double top, out double bottom);
+            m.BandTop = top;
+            m.BandBottom = bottom;
+            m.SeenSpan = BackdropSpanOf(withMap, width, height, bottomUpRows, out _, out _);
+            return m;
+        }
+
+        /// <summary>
+        /// Mean luminance of the top band of the SCREEN minus the bottom band of the SCREEN.
+        ///
+        /// 🔴 The row order is a parameter, not an assumption. Unity hands a readback back
+        /// bottom-up, so the first rows of the buffer are the bottom of the picture; subtracting
+        /// them the other way round is what turned a perfectly healthy −0.68 ramp into a
+        /// "backdropSpan FAIL" in run 30800189252. Both bands come back out through
+        /// <paramref name="top"/> and <paramref name="bottom"/> so a caller logs the two numbers
+        /// rather than a sign, and a genuinely inverted picture is then visible as
+        /// "the bright band is the one at the bottom" instead of as a convention argument.
+        /// </summary>
+        public static double BackdropSpanOf(byte[] rgb, int width, int height,
+                                            bool bottomUpRows,
+                                            out double top, out double bottom)
+        {
+            top = 0.0;
+            bottom = 0.0;
+            int n = PixelCount(rgb);
+            if (n == 0 || width <= 0 || height <= 0 || width * height != n) return 0.0;
+            int band = (int)(height * BackdropBandFraction);
+            if (band < 1) band = 1;
+            if (band * 2 >= height) return 0.0;
+
+            double first = BandMean(rgb, width, 0, band);
+            double last = BandMean(rgb, width, height - band, band);
+
+            // Row 0 is the bottom of the screen when the buffer is bottom-up.
+            top = bottomUpRows ? last : first;
+            bottom = bottomUpRows ? first : last;
+            return top - bottom;
+        }
+
+        private static double BandMean(byte[] rgb, int width, int firstRow, int rows)
+        {
+            double sum = 0.0;
+            long count = 0;
+            for (int y = firstRow; y < firstRow + rows; y++)
+                for (int x = 0; x < width; x++)
+                {
+                    int p = (y * width + x) * Channels;
+                    sum += Luminance(rgb[p], rgb[p + 1], rgb[p + 2]);
+                    count++;
+                }
+            return count == 0 ? 0.0 : sum / count;
+        }
+        // ── WO-E5j: WHAT is the black region, asked without a theory attached ────
+        //
+        // 🔴 Two rounds have now been lost to explaining the black half of a deep map's frame before
+        // establishing what it is. The fog colour was accused and the app's own [Fog] line already
+        // said fog=(0.324,0.486,0.629) — a pale blue — while the accusation rested on a hand
+        // calculation of (3,22,44). The app's log outranks the arithmetic, always.
+        //
+        // So this asks one question with a numeric answer and no interpretation: of the pixels that
+        // are DARK in the real frame, how many are still there when the map is hidden? A pixel that
+        // survives the map being switched off is background; one that does not is something the map
+        // drew. That is the whole measurement.
+
+        /// <summary>
+        /// Split the frame's dark pixels between "the map drew this" and "this is the background".
+        /// </summary>
+        /// <param name="darkPercent">% of the whole frame that is dark.</param>
+        /// <param name="fromMapPercent">…of those, the % that CHANGE when the map is hidden.</param>
+        /// <param name="fromBackdropPercent">…and the % that do not.</param>
+        public static void DarkOrigin(byte[] withMap, byte[] noMap,
+                                      out double darkPercent,
+                                      out double fromMapPercent,
+                                      out double fromBackdropPercent,
+                                      byte darkMax = DarkMax,
+                                      byte tolerance = SubjectTolerance)
+        {
+            darkPercent = 0.0;
+            fromMapPercent = 0.0;
+            fromBackdropPercent = 0.0;
+            int n = PixelCount(withMap);
+            if (n == 0 || noMap == null || noMap.Length != withMap.Length) return;
+
+            long dark = 0, fromMap = 0;
+            for (int i = 0; i < n; i++)
+            {
+                int p = i * Channels;
+                if (withMap[p] >= darkMax || withMap[p + 1] >= darkMax || withMap[p + 2] >= darkMax) continue;
+                dark++;
+                int dr = withMap[p] - noMap[p];
+                int dg = withMap[p + 1] - noMap[p + 1];
+                int db = withMap[p + 2] - noMap[p + 2];
+                if (dr < 0) dr = -dr;
+                if (dg < 0) dg = -dg;
+                if (db < 0) db = -db;
+                if (dr > tolerance || dg > tolerance || db > tolerance) fromMap++;
+            }
+            darkPercent = 100.0 * dark / n;
+            if (dark == 0) return;
+            fromMapPercent = 100.0 * fromMap / dark;
+            fromBackdropPercent = 100.0 - fromMapPercent;
+        }
+
+        /// <summary>
+        /// Up to <paramref name="want"/> evenly spread pixel indices that are dark in
+        /// <paramref name="frame"/> — the pixels a ray probe should be fired through. Spread rather
+        /// than the first N, so the sample is of the whole dark region and not of its top edge.
+        /// </summary>
+        public static int[] DarkPixelSample(byte[] frame, int want, byte darkMax = DarkMax)
+        {
+            int n = PixelCount(frame);
+            if (n == 0 || want <= 0) return new int[0];
+
+            var all = new System.Collections.Generic.List<int>();
+            for (int i = 0; i < n; i++)
+            {
+                int p = i * Channels;
+                if (frame[p] < darkMax && frame[p + 1] < darkMax && frame[p + 2] < darkMax) all.Add(i);
+            }
+            if (all.Count == 0) return new int[0];
+            if (all.Count <= want) return all.ToArray();
+
+            var picked = new int[want];
+            for (int k = 0; k < want; k++) picked[k] = all[(int)((long)k * all.Count / want)];
+            return picked;
+        }
+
+        /// <summary>Mean luminance over a set of pixel indices — for measuring the same pixels
+        /// before and after a light is switched on.</summary>
+        public static double MeanLuminanceAt(byte[] frame, int[] indices)
+        {
+            if (frame == null || indices == null || indices.Length == 0) return 0.0;
+            int n = PixelCount(frame);
+            double sum = 0.0;
+            long count = 0;
+            foreach (int i in indices)
+            {
+                if (i < 0 || i >= n) continue;
+                int p = i * Channels;
+                sum += Luminance(frame[p], frame[p + 1], frame[p + 2]);
+                count++;
+            }
+            return count == 0 ? 0.0 : sum / count;
+        }
+
+        /// <summary>One token for what this map shot proves, worst first. "" when it is fine.</summary>
+        public static string MapReason(MapShot m,
+                                       double minSubjectPercent = MinSubjectPercent,
+                                       double minFogWork = MinFogWork,
+                                       double minBackdropSpan = MinBackdropSpan)
+        {
+            if (m.Pixels <= 0) return "readback-empty";
+            if (m.Renderers <= 0) return "nothing-loaded";
+            if (m.SubjectPercent < minSubjectPercent) return "map-not-in-frame";
+            // Before anything about shading: was this a picture of the scene at all? A camera
+            // inside a rock scores 100% subject and 0.000 water, and every verdict below it would
+            // be a statement about the inside of a rock.
+            if (m.SubjectPercent > MaxSubjectPercent) return "camera-buried";
+            if (m.WaterLuminance < MinWaterLuminance) return "no-water";
+            if (m.FogWork < minFogWork) return "no-fog";
+            // A NEGATIVE span is not a small one — it is bright water below and dark water above,
+            // which no depth curve produces and no reader would guess from a magnitude.
+            if (m.BackdropSpan <= -minBackdropSpan) return "ramp-upside-down";
+            if (m.BackdropSpan < minBackdropSpan) return "flat-water";
+            return "";
+        }
+
+        /// <summary>Did this map pose pass its own gates?</summary>
+        public static bool MapPasses(MapShot m,
+                                     double minSubjectPercent = MinSubjectPercent,
+                                     double minFogWork = MinFogWork,
+                                     double minBackdropSpan = MinBackdropSpan)
+            => MapReason(m, minSubjectPercent, minFogWork, minBackdropSpan) == "";
+
+        /// <summary>One line per map pose — everything a reviewer needs without the picture.</summary>
+        public static string MapLine(string map, string pose, double depthMetres, MapShot m,
+                                     double minSubjectPercent = MinSubjectPercent,
+                                     double minFogWork = MinFogWork,
+                                     double minBackdropSpan = MinBackdropSpan)
+        {
+            string reason = MapReason(m, minSubjectPercent, minFogWork, minBackdropSpan);
+            return $"[QCMap] {map} pose={pose} depth={depthMetres:F1}m " +
+                   $"{(reason == "" ? "PASS" : "FAIL")}{(reason == "" ? "" : " " + reason)} " +
+                   $"dark={m.DarkPercent:0.00}% p50={m.P50:0.000} p90={m.P90:0.000} p99={m.P99:0.000} " +
+                   $"subject={m.SubjectPercent:0.00}% subjLum={m.SubjectLuminance:0.000} " +
+                   $"subjP5={m.SubjectP5:0.000} subjP95={m.SubjectP95:0.000} " +
+                   $"waterLum={m.WaterLuminance:0.000} " +
+                   $"objOverWater={(m.WaterLuminance <= 1e-9 ? 0.0 : m.SubjectLuminance / m.WaterLuminance):0.00} " +
+                   $"fogWork={m.FogWork:0.00} fogMax={m.FogWorkMax:0.00} " +
+                   $"backdropSpan={m.BackdropSpan:0.000} " +
+                   $"bandTop={m.BandTop:0.000} bandBottom={m.BandBottom:0.000} " +
+                   $"seenSpan={m.SeenSpan:0.000} " +
+                   $"renderers={m.Renderers} loaded={m.Loaded} failed={m.Failed} px={m.Pixels}";
+        }
     }
 }

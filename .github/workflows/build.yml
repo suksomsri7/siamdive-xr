@@ -445,10 +445,20 @@ jobs:
           # every previous QC screenshot has been unable to contain, because this scene builds
           # all but four of its objects out of generated geometry. The pass has its own 170 s
           # internal budget and quits itself, so this ceiling is the outer fuse, not the plan.
-          timeout 480 xvfb-run -a -s "-screen 0 1280x720x24" \
+          #
+          # 480 → 1120 s for the MAP pass (AppBoot.QcShot → QcMapShot), which runs behind the
+          # model pass and photographs all SEVEN maps from the diver's-eye pose. It fetches each
+          # map from the production API and builds every GLB in it — Posidon alone is 90 items —
+          # so it carries its own budgets: 150 s per map and 600 s for the pass, after which it
+          # logs `budget-exhausted` per map and returns. This fuse is 480 + 600 + 40 s of slack,
+          # i.e. it sits BEHIND the pass's own budget so a slow CDN produces a report rather
+          # than a killed process. A `timeout` kill truncates Player.log, and the log is the
+          # other half of what these passes produce.
+          timeout 1120 xvfb-run -a -s "-screen 0 1280x720x24" \
             "$BIN" -qcshot "$PWD/qc_screenshot.png" -screen-width 1280 -screen-height 720 -force-glcore || true
           ls -la qc_screenshot.png || echo "::warning::no screenshot produced"
           ls -la qc_model_*.png || echo "::warning::no per-model QC shots — see [QCModel] lines in qc_player.log"
+          ls -la qc_map_*.png || echo "::warning::no per-map QC shots — see [QCMap] lines in qc_player.log"
           # Find the log rather than guess its path: Unity puts it under the COMPANY NAME, so
           # renaming the company (which we did) silently produced no log at all — and the log is
           # half of what QC proves. `|| true` hid it perfectly.
@@ -459,6 +469,15 @@ jobs:
           # no model in it is logged FAIL by the harness (QcPixels.Passes), not quietly passed.
           grep -h '\[QCModel\]' qc_player.log 2>/dev/null || \
             echo "::warning::no [QCModel] lines — the model QC pass did not run"
+          # …and the same for the maps. One [QCMap] line per map carries the verdict and the
+          # numbers behind it (dark%, subject%, waterLum, fogWork, backdropSpan), so a regression
+          # is readable in the step log without downloading the pictures; [QCBlack] carries the
+          # ray-probe and torch answers for whatever is dark in the frame. A missing line means
+          # the pass never ran, which reads very differently from a pass that ran and failed.
+          grep -h '\[QCMap\]' qc_player.log 2>/dev/null || \
+            echo "::warning::no [QCMap] lines — the map QC pass did not run"
+          grep -h '\[QCBlack\]' qc_player.log 2>/dev/null || \
+            echo "::warning::no [QCBlack] lines — nothing probed the dark region"
 
       # Second, SEPARATE run for the UI shots (WO-XR-05). It must not share a process
       # with -qcshot: that mode ends in Application.Quit(0) inside AppBoot.QcShot, so
@@ -483,6 +502,12 @@ jobs:
             qc_screenshot.png
             qc_screenshot2.png
             qc_model_*.png
+            # 🔴 The map shots are the only frames in CI that show what the PLAYER sees. The first
+            # run of QcMapShot wrote seven of them and NONE left the runner, because this list had
+            # never needed a new glob before — so the round that was meant to end "we only ever
+            # photograph models on a grey backdrop" ended with exactly the same evidence as always.
+            # A new QC pass that writes files is not finished until its glob is on this list.
+            qc_map_*.png
             qc_player.log
             qc_ui*.png
             qc_ui_player.log
