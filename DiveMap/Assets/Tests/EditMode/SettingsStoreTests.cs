@@ -145,7 +145,10 @@ namespace DiveMap.Tests
             PlayerPrefs.DeleteKey(SettingsStore.SpeedPrefKey);
             SettingsStore.ResetCache();
             Assert.AreEqual(SettingsStore.SpeedNormal, SettingsStore.DroneSpeed);
-            Assert.AreEqual(1f, SettingsStore.SpeedScale, 1e-6f, "the default must be the tuned speed");
+            // Scale 1 = DroneFlight.Speed untouched = the web's SP 30 (builder.html:3770). Someone
+            // who never opens settings gets the speed the user tuned on the web and called
+            // "ดีมากๆ" — see EverySpeedPreset_IsAMultipleOfTheWebsFlightModel.
+            Assert.AreEqual(1f, SettingsStore.SpeedScale, 1e-6f, "the default must be the web's speed");
 
             PlayerPrefs.SetString(SettingsStore.SpeedPrefKey, "เร็วมาก");
             SettingsStore.ResetCache();
@@ -165,25 +168,66 @@ namespace DiveMap.Tests
         }
 
         /// <summary>
-        /// Every preset has to land somewhere a diver could actually go. "ช้า" must not be a
-        /// crawl and "เร็ว" must not put the drone back where the complaint started (5 m/s):
-        /// the whole point of the re-scale is that all three are believable underwater speeds.
+        /// The three presets, against the ONE speed they are multipliers of.
+        ///
+        /// 🔴 2026-08-04 — READ THIS BEFORE PINNING ABSOLUTE m/s HERE AGAIN.
+        ///
+        /// This test used to assert calm = 0.98, normal = 1.50, fast = 2.18 m/s, with the comment
+        /// "…must not put the drone back where the complaint started (5 m/s)". Those numbers came
+        /// from a round that read the web's speed as a metric implausibility and re-scaled the
+        /// whole flight model down (SP 30 → 9). The user then flew that build — 261, on a real
+        /// iPhone — and the verdict was the opposite one:
+        ///
+        ///     "โดรนเคลื่อนที่ช้าไป … เรื่องเหล่านี้เราปรับที่เว็บจนดีมากๆ ควรไปศึกษาจากเว็บ"
+        ///
+        /// So the web IS the specification, 5 m/s and all, and <see cref="DroneFlight.Speed"/> is
+        /// back to the web's <c>SP = 30</c> (builder.html:3770). The realism argument was not
+        /// wrong, it was aimed at the wrong control: it now lives in the preset a user can choose,
+        /// which is where a preference belongs, and NOT in the number everybody gets.
+        ///
+        /// Hence nothing below is a floating literal. Every assertion is a relationship to
+        /// <see cref="DroneFlight.Speed"/> and the scale constants, so that a future change to the
+        /// flight model moves this test with it instead of being blocked by it. The one absolute
+        /// is the 1.5 m/s migration promise in the "ช้า" preset, and it is anchored to the 9 u/s
+        /// it is promising to reproduce rather than typed in as a metres-per-second opinion.
         /// </summary>
         [Test]
-        public void EverySpeedPreset_IsABelievableDivingSpeed()
+        public void EverySpeedPreset_IsAMultipleOfTheWebsFlightModel()
         {
-            float calm = DroneFlight.MetresPerSecond(DroneFlight.Speed * SettingsStore.SpeedScaleOf(SettingsStore.SpeedCalm));
-            float normal = DroneFlight.MetresPerSecond(DroneFlight.Speed * SettingsStore.SpeedScaleOf(SettingsStore.SpeedNormal));
-            float fast = DroneFlight.MetresPerSecond(DroneFlight.Speed * SettingsStore.SpeedScaleOf(SettingsStore.SpeedFast));
+            float calmScale = SettingsStore.SpeedScaleOf(SettingsStore.SpeedCalm);
+            float normalScale = SettingsStore.SpeedScaleOf(SettingsStore.SpeedNormal);
+            float fastScale = SettingsStore.SpeedScaleOf(SettingsStore.SpeedFast);
 
-            Assert.AreEqual(0.98f, calm, 0.02f, "a fit diver sprinting");
-            Assert.AreEqual(1.50f, normal, 0.02f, "a DPV scooter");
-            Assert.AreEqual(2.18f, fast, 0.02f, "a fast scooter — and no more");
+            // 🔴 "ปกติ" is not a tuning of its own: it is the web, untouched. If this ever stops
+            // being exactly 1, the default has quietly become somebody's opinion again.
+            Assert.AreEqual(1f, normalScale, 1e-6f, "the default must be the web's own speed");
 
+            float calm = DroneFlight.MetresPerSecond(DroneFlight.Speed * calmScale);
+            float normal = DroneFlight.MetresPerSecond(DroneFlight.Speed * normalScale);
+            float fast = DroneFlight.MetresPerSecond(DroneFlight.Speed * fastScale);
+
+            // Each preset is its scale × the flight model, with no arithmetic of its own.
+            Assert.AreEqual(DroneFlight.MetresPerSecond(DroneFlight.Speed), normal, 1e-6f);
+            Assert.AreEqual(normal * calmScale, calm, 1e-4f);
+            Assert.AreEqual(normal * fastScale, fast, 1e-4f);
+
+            // Ordered, and distinct enough that a user can feel which one they picked.
             Assert.Less(calm, normal);
             Assert.Less(normal, fast);
-            Assert.Less(fast, 2.5f, "🔴 above this we are back to flying, which is the reported bug");
-            Assert.Greater(calm, 0.5f, "…and below this, crossing a site becomes a chore");
+            Assert.Less(calmScale, 0.75f, "if 'ช้า' is not clearly slower, the setting does nothing");
+            Assert.Greater(fastScale, 1.05f, "…and the same for 'เร็ว'");
+
+            // 🔴 The migration promise, from SettingsStore.CalmSpeedScale: "ช้า" reproduces the
+            // drone of build 261 EXACTLY, so the person who liked that pace still has it. 9 u/s is
+            // the old DroneFlight.Speed, quoted as the historical constant it is.
+            const float build261Speed = 9f;   // u/s — DroneFlight.Speed before 2026-08-04
+            Assert.AreEqual(build261Speed, DroneFlight.Speed * calmScale, 0.05f,
+                            "🔴 'ช้า' must keep reproducing build 261's drone");
+            Assert.AreEqual(DroneFlight.MetresPerSecond(build261Speed), calm, 0.02f);
+
+            // Nothing may be so slow that crossing a site is a chore — the failure mode at the
+            // other end, and the one that produced the 2026-08-04 report.
+            Assert.Greater(calm, 0.5f);
         }
 
         [Test]
