@@ -65,6 +65,25 @@ namespace DiveMap.Core
         /// separate visible change that the project has already been burned mixing in with others
         /// (build 255), and it has its own open work order. Flipping this to true is the entire
         /// diff when that one is picked up; the resolver and its tests already cover it.
+        ///
+        /// 🔴 wo-linear: THIS CONSTANT NO LONGER DECIDES ANYTHING ON THIS BRANCH, and it is left
+        /// false rather than flipped so that the record of that stays readable. In linear colour
+        /// space glTFast never consults this class at all — it builds its own <c>textureGamma[]</c>
+        /// (<c>GltfImport.cs:1676-1709</c>) in which metallic-roughness and occlusion ARE data,
+        /// and <see cref="DiveMap.Runtime.LinearDataTextures"/> stands down. So moving to linear
+        /// carries the metallic-roughness change WITH IT, whether or not this constant says so:
+        /// <c>mr.g</c> stops being sRGB-decoded and jumps (0.166 → 0.447 on the sample measured in
+        /// <c>QcPixels</c>), so <c>DM_FishWaveDetail</c>'s
+        /// <c>Smoothness = 1 − (1 − _Glossiness)·mr.g</c> goes DOWN and surfaces read rougher —
+        /// which is what the authoring said all along. That is a real second visible change riding
+        /// on the colour space, it cannot be separated from it, and it is listed as such in the
+        /// hand-off rather than discovered from a screenshot.
+        ///
+        /// The constants tuned against the DECODED values — <c>GlbShading.ShaderSmoothness</c>,
+        /// <c>WaveGlossFactor</c>, <c>WaveMetalFactor</c> — are deliberately NOT retuned here.
+        /// Retuning them would be compensating for the pipeline again, which is the mistake this
+        /// whole branch exists to stop; if round B's photographs say the animals are too matte,
+        /// that is the moment to move them, with a picture to point at.
         /// </summary>
         public const bool MetallicRoughnessAndOcclusionAreData = false;
 

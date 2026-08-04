@@ -64,9 +64,21 @@ namespace DiveMap.Runtime
     /// 🔴 SELF-DISABLING, like the drop it replaces. <see cref="WasLoadedAsLinearData"/> reports
     /// per texture, so <c>SceneBuilder</c>'s old "throw the normal map away" safety net still
     /// fires for any map that somehow did NOT come through here, and stops firing for the ones
-    /// that did. If the project ever does move to linear colour space, glTFast marks the textures
-    /// itself, this add-on's <c>linear: true</c> becomes the value it was already getting, and
-    /// nothing here has to be remembered or undone.
+    /// that did.
+    ///
+    /// 🔴 AND IN LINEAR IT STANDS DOWN — EXPLICITLY, NOT BY COINCIDENCE (wo-linear). The project
+    /// has now moved to linear colour space, which is the very condition this whole class was
+    /// built to substitute for. In linear, glTFast allocates <c>textureGamma[]</c> and marks
+    /// normal / occlusion / metallic-roughness as data itself (<c>GltfImport.cs:1676-1709</c>),
+    /// then passes <c>forceSampleLinear = true</c> down the add-on path as well
+    /// (<c>GltfImport.cs:1796, 1812-1820</c>). This loader would therefore be overriding
+    /// <c>true</c> with <c>true</c> — harmless, and exactly the kind of harmless that stops being
+    /// harmless the day one of the two classifications changes and nobody can say which one is in
+    /// force. glTFast's is the more thorough of the two (it covers MR and occlusion, which
+    /// <see cref="GltfTextureRoles"/> deliberately leaves alone), so in linear it owns the
+    /// decision outright and <see cref="LinearDataTextureLoader.IsAbleToLoad(GLTFast.Schema.TextureBase,out int)"/>
+    /// claims nothing. One texture, one decision, one system — stated in code rather than
+    /// arrived at by two systems happening to agree.
     /// </summary>
     public static class LinearDataTextures
     {
@@ -94,8 +106,14 @@ namespace DiveMap.Runtime
             if (_registered) return;
             _registered = true;
             ImportAddonRegistry.RegisterImportAddon(new LinearDataTextureAddon());
-            Debug.Log("[Shading] normal maps will be loaded as linear data " +
-                      $"(colourSpace={QualitySettings.activeColorSpace})");
+            bool linear = QualitySettings.activeColorSpace == ColorSpace.Linear;
+            // Say which system is in force, both ways round. A log that only speaks when this
+            // add-on is doing something cannot tell "glTFast has it" apart from "nobody has it".
+            Debug.Log(linear
+                ? "[Shading] normal maps: glTFast owns the linear/sRGB decision (colourSpace=Linear) "
+                  + "— LinearDataTextures registered but claiming nothing, by design"
+                : "[Shading] normal maps will be loaded as linear data by LinearDataTextures "
+                  + $"(colourSpace={QualitySettings.activeColorSpace})");
         }
 
         internal static void Note(Texture2D texture)
@@ -103,9 +121,23 @@ namespace DiveMap.Runtime
             if (texture != null) Linearised.Add(texture.GetInstanceID());
         }
 
-        /// <summary>Did this texture come through the add-on above?</summary>
+        /// <summary>
+        /// Was this texture loaded as linear DATA rather than as colour?
+        ///
+        /// 🔴 The question is about the texture, not about who answered it. In linear colour space
+        /// the add-on above claims nothing and glTFast does the marking, so the honest answer for
+        /// every texture is yes — and it has to be yes here, because
+        /// <c>SceneBuilder.DropMisdecodedNormalMap</c> feeds this straight into
+        /// <c>GlbShading.NormalMapIsMisdecoded</c>. Returning false in linear would say "nobody
+        /// linearised this map", which is untrue and is precisely the input that used to make the
+        /// app throw its normal maps away.
+        /// </summary>
         public static bool WasLoadedAsLinearData(UnityEngine.Texture texture)
-            => texture != null && Linearised.Contains(texture.GetInstanceID());
+        {
+            if (texture == null) return false;
+            if (QualitySettings.activeColorSpace == ColorSpace.Linear) return true;
+            return Linearised.Contains(texture.GetInstanceID());
+        }
 
         /// <summary>How many textures have been loaded as data so far. For the log line.</summary>
         public static int Count => Linearised.Count;
@@ -194,6 +226,13 @@ namespace DiveMap.Runtime
         {
             imageIndex = texture != null ? texture.GetImageIndex() : -1;
             if (texture == null || imageIndex < 0) return false;
+
+            // 🔴 In LINEAR, glTFast has already made this decision and made it more widely than we
+            // do (GltfImport.cs:1676 — normal, occlusion AND metallic-roughness), and it hands the
+            // add-on path the same forceSampleLinear it would have used itself. Claiming here would
+            // be a second opinion that can only ever agree, right up until the day it does not.
+            // See the class remark: in linear this loader owns nothing.
+            if (QualitySettings.activeColorSpace == ColorSpace.Linear) return false;
 
             // KTX2 only. A PNG normal map is not affected by any of this — Unity does no
             // conversion at all on a plain Texture2D in a gamma project — so claiming one would be

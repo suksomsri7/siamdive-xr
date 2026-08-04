@@ -95,36 +95,36 @@ namespace DiveMap.Runtime
         /// lighting or the material pipeline changes on purpose; a stale baseline is worth more
         /// than no baseline, but a baseline nobody has looked at is worth less than none.
         ///
-        /// 🔴 EVERY NUMBER BELOW IS STALE AS OF WO-L, and knowingly so. They were recorded with
-        /// the environment reflection cube on, which added ~13 of 255 to every lit pixel; with it
-        /// off (AppBoot.SetupLighting) the same models are legitimately darker and their
-        /// darkOfSubject will read higher. Expect these to trip and log FAIL — that is the gate
-        /// doing its job on a lighting change that was made on purpose, not a regression, and no
-        /// CI step turns a [QCModel] FAIL red. They are NOT pre-adjusted here: a baseline is "what
-        /// it looked like when a human last approved it", and guessing one forward would delete the
-        /// only fixed point this pass has. Re-record all of them, from one run, after the user has
-        /// looked at that run's pictures.
+        /// 🔴 ALL −1 ON wo-linear, DELIBERATELY. HANDOFF §6 rule 2: when the pipeline changes as a
+        /// whole, the baselines are reset rather than carried. Five of them were already stale as
+        /// of WO-L (recorded with the environment reflection cube on, which added ~13 of 255 to
+        /// every lit pixel), and this branch then changes the colour space, adds a tone curve and
+        /// re-rigs the lights — so a <c>darkOfSubject</c> from a gamma build is not a measurement
+        /// of the same quantity any more. Comparing against it would produce a number that looks
+        /// like evidence and is not, which is the specific failure §10 records ("optimise เข้าหา
+        /// เครื่องวัดที่ผิด").
+        ///
+        /// −1 means "no baseline", which DarkGate reads as the absolute ceiling — a loose "something
+        /// is catastrophically wrong" line, not a quality bar. The old values are preserved in the
+        /// comments beside each entry so that re-recording is a comparison and not a fresh start.
+        /// Re-record all of them from ONE run, after the user has looked at that run's pictures —
+        /// never from the first run that happens to be green.
         /// </summary>
         private static readonly double[] DarkBaselines =
         {
-            // 🔴 −1 = no baseline recorded, which DarkGate reads as "fall back to the absolute
-            // ceiling" — a loose "something is catastrophically wrong" line, not a quality bar.
-            // All seven marine models are here because nobody has signed off a picture of them
-            // yet. Fill them in from the run whose pictures the user approves, not from the first
-            // run that is green.
             -1.0,    // msh:whaleshark
             -1.0,    // msh:manta
             -1.0,    // msh:thresher_shark
             -1.0,    // msh:tiger_shark
             -1.0,    // mdl:great_white_shark
             -1.0,    // losin:hammerhead_shark
-            14.57,   // msh:barracuda
+            -1.0,    // msh:barracuda            (gamma-era: 14.57)
 
-            2.33,    // cc0:kraken
-            31.47,   // stat:verdant_poseidon — dark green stone
-            36.86,   // cc0:wreck_hardeep
-            62.34,   // sw:htms732 — camouflage, legitimately the darkest of the set
-            0.86,    // msh:lionfish
+            -1.0,    // cc0:kraken               (gamma-era: 2.33)
+            -1.0,    // stat:verdant_poseidon    (gamma-era: 31.47) — dark green stone
+            -1.0,    // cc0:wreck_hardeep        (gamma-era: 36.86)
+            -1.0,    // sw:htms732               (gamma-era: 62.34) — camouflage, legitimately the darkest
+            -1.0,    // msh:lionfish             (gamma-era: 0.86)
         };
 
         /// <summary>Baseline for <paramref name="assetId"/>, or −1 when none is recorded.</summary>

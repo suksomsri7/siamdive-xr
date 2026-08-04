@@ -83,23 +83,61 @@ namespace DiveMap.Tests
         }
 
         [Test]
-        public void TheAmbientThatBlackedOutTheSharks_IsBelowTheFloor()
+        public void TheLightRigItself_NoLongerNeedsTheFloorToAvoidSilhouettes()
         {
-            // The regression guard, stated as the thing that was wrong. This is the equator ambient
-            // measured at the depth on the reported screenshot (55.1 m, tour mode, headlamp on):
-            // the authored 0.278/0.392/0.461 after the depth curve and the headlamp multiplier.
-            // The floor has to beat it, or nothing has changed.
-            var reported = new SeabedGeom.Rgb(0.135f, 0.202f, 0.264f);
+            // 🔴 THIS TEST CHANGED MEANING IN WO-E3, AND THE CHANGE IS THE POINT.
+            //
+            // It used to compare the floor against one measured number — the equator ambient at
+            // 55.1 m on the reported screenshot, (0.135, 0.202, 0.264) — and demand the floor beat
+            // it. That comparison is void now, and not because the floor got worse: the WATER got
+            // darker. It used to be painted from a lifted six-stop ramp that ignored depth entirely
+            // (0.125, 0.386, 0.563 at 55 m); it is now the web's own #123a55 dimmed by the same
+            // curve as the light (0.018, 0.079, 0.176). Holding the old floor against the old water
+            // would be testing a scene that no longer exists.
+            //
+            // What replaces it is stronger, because it does not involve the floor at all: with the
+            // web's own hemisphere ambient (AppBoot's equator band) and the full depth curve on it,
+            // a mid-grey side face is ALREADY at least as bright as the water behind it, at every
+            // depth. The floor stops being the thing holding the picture up and goes back to being
+            // what its name says — a floor, for whatever else writes the ambient.
+            var authoredEquator = new SeabedGeom.Rgb(0.430f, 0.572f, 0.657f); // AppBoot, 0xbfe6ff/0x123040 hemisphere
+            const float albedo = UnderwaterLight.MidGreyAlbedo;
 
+            foreach (float metres in Depths)
+            {
+                float d = metres * M;
+                SeabedGeom.Rgb k = WaterFog.Attenuation(d);
+                SeabedGeom.Rgb water = WaterFog.ColorAt(d);
+
+                // In light, the way DepthAtmosphere actually dims it (ToneMap.ScaleLight).
+                float r = Lit(authoredEquator.R, k.R, albedo) / ToneMap.SrgbToLinear(water.R);
+                float g = Lit(authoredEquator.G, k.G, albedo) / ToneMap.SrgbToLinear(water.G);
+                float b = Lit(authoredEquator.B, k.B, albedo) / ToneMap.SrgbToLinear(water.B);
+
+                Assert.GreaterOrEqual(r, UnderwaterLight.MinLitFraction, $"red at {metres} m");
+                Assert.GreaterOrEqual(g, UnderwaterLight.MinLitFraction, $"green at {metres} m");
+                Assert.GreaterOrEqual(b, UnderwaterLight.MinLitFraction, $"blue at {metres} m");
+            }
+        }
+
+        /// <summary>Light off a surface of <paramref name="albedo"/> under an authored ambient
+        /// channel that the depth curve has dimmed.</summary>
+        private static float Lit(float ambientSrgb, float k, float albedo)
+            => ToneMap.SrgbToLinear(ToneMap.ScaleLight(ambientSrgb, k)) * ToneMap.SrgbToLinear(albedo);
+
+        [Test]
+        public void RaisingStillWorks_WhenSomethingElseHasDimmedTheAmbient()
+        {
+            // The floor's remaining job: DroneLights and EnvMode both write the ambient, and either
+            // of them can leave a channel under the water. Whatever they leave, this lifts.
+            var dimmed = new SeabedGeom.Rgb(0.001f, 0.002f, 0.003f);
             UnderwaterLight.AmbientFloor(55.1f * M,
                                          out SeabedGeom.Rgb sky,
                                          out SeabedGeom.Rgb eq,
                                          out SeabedGeom.Rgb gnd);
 
-            Assert.Greater(eq.G, reported.G, "green on a side face is no better than it was");
-            Assert.Greater(eq.B, reported.B, "blue on a side face is no better than it was");
-
-            SeabedGeom.Rgb raised = UnderwaterLight.Raise(reported, eq);
+            SeabedGeom.Rgb raised = UnderwaterLight.Raise(dimmed, eq);
+            Assert.AreEqual(eq.R, raised.R, 1e-6);
             Assert.AreEqual(eq.G, raised.G, 1e-6);
             Assert.AreEqual(eq.B, raised.B, 1e-6);
         }
@@ -165,7 +203,10 @@ namespace DiveMap.Tests
                                              out SeabedGeom.Rgb sky,
                                              out SeabedGeom.Rgb eq,
                                              out SeabedGeom.Rgb gnd);
-                Assert.Less(WaterFog.DistanceFromRamp(sky), 2e-3f,
+                // The ramp is sampled AT THIS DEPTH now (WO-E3): the backdrop is dimmed by the same
+                // attenuation as everything else, so "a colour the water uses" is a question that
+                // only means anything once you say how deep you are.
+                Assert.Less(WaterFog.DistanceFromRamp(sky, metres * M), 0.012f,
                             $"the ambient floor at {metres} m is not a colour the water uses");
             }
         }
