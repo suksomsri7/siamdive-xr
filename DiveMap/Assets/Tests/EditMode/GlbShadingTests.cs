@@ -126,33 +126,153 @@ namespace DiveMap.Tests
                 "re-adding it would take the per-texel gloss back off every scan for nothing");
         }
 
-        [Test]
-        public void CopyingAMaterialOntoTheSwimShaderDoesNotTurnTheAnimalIntoAMirror()
-        {
-            // WhaleController.CopyMaps moves a glTF material onto DM_FishWaveDetail, which cannot
-            // read glTF's packed metallic-roughness texture. Every XR model measured declares
-            // metallicFactor 1 against a map whose metal channel is 0.001 — carry the 1 over on its
-            // own and the whale is a mirror with nothing to reflect, which is black.
-            Assert.AreEqual(GlbShading.TamedMetal,
-                            GlbShading.CopiedMetalFactor(1.0f, sourceHadMetalTexture: true), 1e-6f);
+        // ── WO-animal-mat: the animals were shaded from half of glTF's arithmetic ────────────
 
-            // No texture: the factor really is the whole material, so it comes across — after the
-            // same taming, because a scanner's leftover 0.4 is no more authored here than there.
+        /// <summary>
+        /// The measured metallic-roughness map of every big animal that swims, straight off the
+        /// shipped CDN GLBs (<c>webcmp_probe.mjs</c>, UV-surface-area-weighted mean, 0-255).
+        /// Every one of them leaves both FACTORS at glTF's default of 1 and puts the real value in
+        /// the map — which is precisely why copying the factors alone produced a dead-matte animal.
+        /// </summary>
+        private static readonly object[] MeasuredAnimals =
+        {
+            //          model                    map.g   map.b
+            new object[] { "mdl_great_white_shark", 128.0, 0.0 },
+            new object[] { "mdl_whitetip_shark",    115.8, 130.3 },
+            new object[] { "mdl_bull_shark",        118.1, 0.0 },
+            new object[] { "msh_manta",             130.2, 1.2 },
+            new object[] { "msh_beluga_whale",      148.3, 0.0 },
+            new object[] { "msh_leopard_shark",     148.2, 0.0 },
+        };
+
+        /// <summary>
+        /// The map value as the SHADER receives it. Every texture in this app is a KTX2 and the
+        /// project is gamma, so the hardware applies an sRGB decode on every sample — the whole
+        /// subject of this file. glTFast's PBR shader reads the identical texture through the
+        /// identical sampler, so decoding here is not a fudge: it is the parity being asserted.
+        /// </summary>
+        private static double Sampled(double storedByte)
+            => GlbShading.SrgbToLinear(storedByte / 255.0);
+
+        [Test]
+        public void EveryAnimalUsedToRenderDeadMatteAndNowMatchesItsMap()
+        {
+            // 🔴 THE BUG, as one number. roughnessFactor is 1 on all six, so the old
+            // "_Glossiness = 1 − roughnessFactor" was 1 − 1 = ZERO smoothness — chalk — on every
+            // animal in the game, while the wreck beside it kept glTFast's shader and looked right.
+            float glossFactor = GlbShading.WaveGlossFactor(1f);
+            Assert.AreEqual(0f, glossFactor, 1e-6f, "this is the value that shipped, and it is the bug");
+
+            // Same factor, now multiplied by the map the shader finally reads. These are the
+            // smoothness values the animals must actually render at.
+            var expected = new[] { 0.784, 0.826, 0.819, 0.776, 0.703, 0.703 };
+            for (int i = 0; i < MeasuredAnimals.Length; i++)
+            {
+                var row = (object[])MeasuredAnimals[i];
+                double s = GlbShading.ShaderSmoothness(glossFactor, Sampled((double)row[1]));
+                Assert.AreEqual(expected[i], s, 5e-4, (string)row[0]);
+
+                // The point, stated as a range rather than a constant: every one of them is a wet
+                // animal, and none of them is anywhere near the 0 that shipped.
+                Assert.Greater(s, 0.69, (string)row[0]);
+                Assert.Less(s, 0.84, (string)row[0]);
+            }
+        }
+
+        [Test]
+        public void TheWhitetipStaysMetalAndNothingElseBecomesMetal()
+        {
+            // With a glTF-layout map bound the factor is glTF's own 1 and the MAP decides. That is
+            // the only way the one genuine metal in the catalogue survives.
+            float metalFactor = GlbShading.WaveMetalFactor(1f, hasGltfLayoutMap: true);
+            Assert.AreEqual(1f, metalFactor, 1e-6f);
+
+            // 🔴 mdl:whitetip_shark — map.b ≈ 130/255 over essentially its whole surface (63.7% of
+            // the texture is empty UV gutter; of the texels that land on the shark, effectively all
+            // sit at 0.4-0.6). Authored, not transcode noise: great white's b is 0.0 on the same
+            // surface. A wet metallic sheen, and nothing like a mirror.
+            double whitetip = GlbShading.ShaderMetallic(metalFactor, Sampled(130.3));
+            Assert.AreEqual(0.224, whitetip, 5e-4);
+            Assert.Greater(whitetip, 0.15, "the whitetip is the one real metal and must stay one");
+            Assert.Less(whitetip, 0.35, "…a sheen, not a mirror with nothing to reflect");
+
+            // Everything else is a dielectric and must render as one — including the 0.06 sheen the
+            // old code handed every animal indiscriminately, which is now gone from the five that
+            // never asked for it.
+            foreach (var o in MeasuredAnimals)
+            {
+                var row = (object[])o;
+                if ((string)row[0] == "mdl_whitetip_shark") continue;
+                double m = GlbShading.ShaderMetallic(metalFactor, Sampled((double)row[2]));
+                Assert.Less(m, 0.001, (string)row[0] + " ships no metal and must not be given any");
+            }
+        }
+
+        [Test]
+        public void TheStandInZeroIsNotCopiedOntoAShaderThatCanReadTheMap()
+        {
+            // 🔴 The ordering trap this rule exists for. SceneBuilder.TameMetal runs BEFORE
+            // AttachWhale, so by the time CopyMaps reads the material, MappedMetalFactor has already
+            // overwritten metallicFactor with 0 — a stand-in for a map the old shader could not
+            // read. Copy that 0 onto a shader that CAN read the map and the map is multiplied by
+            // zero: the whitetip's metal vanishes and the stand-in has outlived its reason.
+            Assert.AreEqual(0f, GlbShading.MappedMetalFactor(1f, hasMetalTexture: true), 1e-6f);
+            Assert.AreEqual(1f, GlbShading.WaveMetalFactor(0f, hasGltfLayoutMap: true), 1e-6f,
+                            "the map is present, so the map is the metal — not TameMetal's stand-in");
+            Assert.AreEqual(0.224,
+                            GlbShading.ShaderMetallic(GlbShading.WaveMetalFactor(0f, true), Sampled(130.3)),
+                            5e-4);
+
+            // No glTF-layout map: the factor IS the whole material and comes across as it stands,
+            // already tamed upstream. cc0:rock_b's scanner leftover reaches CopyMaps as TamedMetal.
             Assert.AreEqual(GlbShading.TamedMetal,
-                            GlbShading.CopiedMetalFactor(0.4f, sourceHadMetalTexture: false), 1e-6f);
-            Assert.AreEqual(0.0f, GlbShading.CopiedMetalFactor(0.0f, sourceHadMetalTexture: false), 1e-6f);
-            Assert.AreEqual(0.02f, GlbShading.CopiedMetalFactor(0.02f, sourceHadMetalTexture: false), 1e-6f);
+                            GlbShading.WaveMetalFactor(GlbShading.TamedMetal, hasGltfLayoutMap: false), 1e-6f);
+            Assert.AreEqual(0f, GlbShading.WaveMetalFactor(0f, hasGltfLayoutMap: false), 1e-6f);
+
+            // ⚠️ A Unity _MetallicGlossMap is metal = R, smoothness = A. It is never bound to
+            // _MetalRoughMap and must never license a factor of 1 either — that combination would
+            // shade the animal off whatever happens to be in the green and blue channels.
+            Assert.AreEqual(0.02f, GlbShading.WaveMetalFactor(0.02f, hasGltfLayoutMap: false), 1e-6f);
 
             // Whatever arrives, what leaves is a legal metallic value.
             foreach (float f in new[] { -5f, 0f, 0.5f, 1f, 7f })
             {
-                foreach (bool tex in new[] { true, false })
+                foreach (bool map in new[] { true, false })
                 {
-                    float v = GlbShading.CopiedMetalFactor(f, tex);
+                    float v = GlbShading.WaveMetalFactor(f, map);
                     Assert.GreaterOrEqual(v, 0f);
                     Assert.LessOrEqual(v, 1f);
                 }
             }
+        }
+
+        [Test]
+        public void AMaterialWithNoMapShadesExactlyAsItDidBefore()
+        {
+            // The shader's map defaults to "white" (g = b = 1), so every no-map material — the
+            // palette placeholder a failed download leaves behind, above all — comes out of the new
+            // arithmetic with the factors untouched. This is what makes the change safe.
+            foreach (float gloss in new[] { 0f, 0.1f, 0.5f, 1f })
+                Assert.AreEqual(gloss, GlbShading.ShaderSmoothness(gloss, 1.0), 1e-9);
+
+            foreach (float metal in new[] { 0f, GlbShading.TamedMetal, 0.5f, 1f })
+                Assert.AreEqual(metal, GlbShading.ShaderMetallic(metal, 1.0), 1e-9);
+
+            // And a fully rough map (g = 1) is still allowed to say "matte" — the map is not being
+            // second-guessed, only read.
+            Assert.AreEqual(0.0, GlbShading.ShaderSmoothness(0f, 1.0), 1e-9);
+        }
+
+        [Test]
+        public void TheSwimShaderIsNoLongerToldItCannotReadAMap()
+        {
+            // CopiedMetalFactor collapsed the metal to a flat 0.06 for every animal that shipped a
+            // map, because the shader of the day could not sample one. DM_FishWaveDetail now has
+            // _MetalRoughMap; re-adding the helper would mean re-deleting the map.
+            Assert.IsNull(typeof(GlbShading).GetMethod("CopiedMetalFactor"),
+                "the swim shader reads glTF's metallic-roughness map now — a scalar collapse of it " +
+                "is what made every animal matte, and 0.06 metal is what it gave the five sharks " +
+                "whose maps say zero");
         }
 
         // ── WO-E5m ───────────────────────────────────────────────────────────────

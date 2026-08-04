@@ -197,26 +197,89 @@ namespace DiveMap.Core
         /// </summary>
         public const float DefaultMetalFactorFloor = 0.9f;
 
+        // ── WO-animal-mat: the animals were shaded from HALF of glTF's arithmetic ───────────────
+        //
+        // 🔴 THE BUG, in one line of maths. glTF says
+        //
+        //       roughness = roughnessFactor × map.g        metal = metallicFactor × map.b
+        //
+        // and <c>WhaleController.CopyMaps</c> was carrying only the FACTORS onto the swim shader,
+        // because that shader could not read a map in glTF's channel layout. Every marine model in
+        // the catalogue leaves <c>roughnessFactor</c> at glTF's default of 1 and puts the real value
+        // in the map, so "1 − roughnessFactor" evaluated to 1 − 1 = 0: smoothness ZERO, a dead-matte
+        // chalk finish, on every animal that swims. The static wrecks never had this because they
+        // keep glTFast's own PBR shader, which reads the map — hence "the fish look wrong and the
+        // wreck next to them looks right".
+        //
+        // 🔴 MEASURED, on the shipped CDN files (webcmp_probe.mjs, UV-surface-area-weighted mean of
+        // the metallic-roughness map, 0-255):
+        //
+        //     model                     metallicFactor  roughnessFactor   map.g   map.b
+        //     mdl_great_white_shark_xr0        1               1          128.0     0.0
+        //     mdl_whitetip_shark_xr0           1               1          115.8   130.3
+        //     mdl_bull_shark_xr0               1               1          118.1     0.0
+        //     msh_manta_xr0                    1               1          130.2     1.2
+        //     msh_beluga_whale_xr0             1               1          148.3     0.0
+        //     msh_leopard_shark_xr0            1               1          148.2     0.0
+        //
+        // Six models, every factor at the default, every real value in the map. The fix is to sample
+        // the map — DM_FishWaveDetail gained <c>_MetalRoughMap</c> in glTF layout — and these two
+        // functions are that shader's arithmetic, written where a test can reach it.
+        //
+        // 🔎 whitetip is the one genuine metal in the set and the reason a blanket zero is wrong:
+        // 63.7% of its map is empty UV gutter, and of the texels that are actually on the shark,
+        // essentially all of them sit at b ≈ 0.4-0.6. That is an authored constant, not transcode
+        // noise — great white's b is 0.0 over the same surface.
+
         /// <summary>
-        /// What <c>_Metallic</c> should become when a glTF material is COPIED onto a shader that
-        /// cannot read glTF's packed metallic-roughness texture — the swim-wave material the big
-        /// animals get.
-        ///
-        /// 🔴 The factor on its own is not an approximation of the material, it is half of a
-        /// multiplication. Every XR model measured here ships <c>metallicFactor = 1</c> against a
-        /// texture whose metal channel reads 0.001, so the surface is a dielectric; carry the 1
-        /// across without the texture and the animal becomes a mirror, and a mirror in a scene
-        /// with one small reflection cube is black. Where there is no texture the factor IS the
-        /// material and copying it is right — subject to the same taming
-        /// <see cref="TamedMetalFactor"/> applies, because a scanner's leftover 0.4 is no more
-        /// authored on this shader than on the original.
+        /// <c>o.Smoothness</c> as DM_FishWaveDetail computes it: <c>1 − (1 − _Glossiness) × map.g</c>.
+        /// With a white map (g = 1) this is <c>_Glossiness</c>, so a material that ships no
+        /// metallic-roughness texture shades exactly as it did before the map existed.
         /// </summary>
-        public static float CopiedMetalFactor(float metallicFactor, bool sourceHadMetalTexture)
-        {
-            if (sourceHadMetalTexture) return TamedMetal;
-            float tamed = TamedMetalFactor(metallicFactor, hasMetalTexture: false);
-            return tamed >= 0f ? tamed : Clamp01(metallicFactor);
-        }
+        /// <param name="glossFactor">_Glossiness, i.e. 1 − roughnessFactor.</param>
+        /// <param name="mapRoughG">The map's GREEN channel as the shader receives it, 0-1.</param>
+        public static double ShaderSmoothness(double glossFactor, double mapRoughG)
+            => 1.0 - (1.0 - glossFactor) * mapRoughG;
+
+        /// <summary>
+        /// <c>o.Metallic</c> as DM_FishWaveDetail computes it: <c>_Metallic × map.b</c> — glTF's
+        /// <c>metallicFactor × map.b</c> exactly.
+        /// </summary>
+        /// <param name="metalFactor">_Metallic, from <see cref="WaveMetalFactor"/>.</param>
+        /// <param name="mapMetalB">The map's BLUE channel as the shader receives it, 0-1.</param>
+        public static double ShaderMetallic(double metalFactor, double mapMetalB)
+            => metalFactor * mapMetalB;
+
+        /// <summary>
+        /// What <c>_Metallic</c> should become when a glTF material is copied onto the swim shader,
+        /// now that the swim shader CAN read the map.
+        ///
+        /// 🔴 Why this is not <see cref="CopiedMetalFactor"/> and not the source's own factor either.
+        /// <see cref="MappedMetalFactor"/> has already overwritten <c>metallicFactor</c> with 0 on
+        /// this material — <c>SceneBuilder.TameMetal</c> runs before <c>AttachWhale</c>, by design —
+        /// and that 0 is a STAND-IN for a map that the shader of the day could not read. Copy the
+        /// stand-in onto a shader that reads the map and the map is multiplied by zero: whitetip's
+        /// authored metal disappears, and every other animal gets the same answer twice.
+        ///
+        /// So where a glTF-layout map is present the factor is 1 — glTF's own default, the value the
+        /// file actually declares — and the map speaks. Where there is none, the factor IS the whole
+        /// material and it comes across as it stands, already tamed by TameMetal upstream.
+        /// </summary>
+        /// <param name="metallicFactor">The source material's factor, post-TameMetal.</param>
+        /// <param name="hasGltfLayoutMap">
+        /// Is a map in glTF's OWN layout (G = rough, B = metal) being handed to the shader? A Unity
+        /// <c>_MetallicGlossMap</c> does NOT count: its metal is in R and its smoothness in A, so it
+        /// is never bound to <c>_MetalRoughMap</c> and must not license a factor of 1 either.
+        /// </param>
+        public static float WaveMetalFactor(float metallicFactor, bool hasGltfLayoutMap)
+            => hasGltfLayoutMap ? 1f : Clamp01(metallicFactor);
+
+        /// <summary>
+        /// What <c>_Glossiness</c> should become: <c>1 − roughnessFactor</c>, unchanged — but it is
+        /// only correct now that <see cref="ShaderSmoothness"/> multiplies the map back in. On its
+        /// own it reads 0 on every model in this catalogue, which was the bug.
+        /// </summary>
+        public static float WaveGlossFactor(float roughnessFactor) => Clamp01(1f - roughnessFactor);
 
         private static float Clamp01(float v) => v < 0f ? 0f : (v > 1f ? 1f : v);
 

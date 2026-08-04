@@ -479,37 +479,47 @@ namespace DiveMap.Runtime.Marine
                 to.SetColor("_Color", tint);
             }
 
-            // Roughness/metallic FACTORS only. glTF packs the maps into one texture (G = rough,
-            // B = metal) that Standard cannot read in that layout, so the scalars are the honest
-            // approximation rather than a wrong sample.
-            if (to.HasProperty("_Glossiness") && from.HasProperty("roughnessFactor"))
-                to.SetFloat("_Glossiness", Mathf.Clamp01(1f - from.GetFloat("roughnessFactor")));
+            // 🔴 The metallic-roughness map, which this used to throw away — and throwing it away
+            // was the whole "ผิวสัตว์สีผิด" bug. glTF puts roughness in G and metal in B and leaves
+            // the FACTORS at their default of 1, so copying factors alone gave every animal
+            // smoothness 1 − 1 = 0: dead matte, while the wreck beside it (still on glTFast's PBR
+            // shader, which reads the map) looked right. DM_FishWaveDetail now has _MetalRoughMap
+            // and does glTF's multiply itself; see GlbShading.ShaderSmoothness for the measurements.
+            //
+            // ⚠️ glTF layout ONLY. Unity's _MetallicGlossMap is metal = R, smoothness = A — the same
+            // data transposed into different channels — so it is deliberately NOT in this list.
+            // Binding one to a sampler that reads .g/.b would shade the animal off its occlusion
+            // channel, which is worse than the bug being fixed. ORM is welcome: R = occlusion,
+            // G = rough, B = metal, and only G and B are ever read.
+            Texture mrMap = Get(from, "metallicRoughnessTexture")
+                         ?? Get(from, "occlusionRoughnessMetallicTexture");
+            bool gltfLayoutMap = mrMap != null && to.HasProperty("_MetalRoughMap");
+            if (gltfLayoutMap) to.SetTexture("_MetalRoughMap", mrMap);
 
-            // 🔴 …but the metal factor is only honest when it stands alone. Where the source ships
-            // a metallic-roughness TEXTURE the factor is one half of a multiplication and the map
-            // is the other: every XR model measured declares metallicFactor = 1 against a map
-            // whose metal channel reads 0.001. Copying the 1 by itself turns the animal into a
-            // mirror, and a mirror with one small reflection cube to reflect is black.
-            // GlbShading.CopiedMetalFactor is where that rule is written down and tested.
+            // 1 − roughnessFactor, exactly as before. It is only correct now that the shader
+            // multiplies the map's green channel back in on top of it.
+            if (to.HasProperty("_Glossiness") && from.HasProperty("roughnessFactor"))
+                to.SetFloat("_Glossiness", GlbShading.WaveGlossFactor(from.GetFloat("roughnessFactor")));
+
+            // 🔴 With a map bound, the factor must be glTF's own 1 and NOT the 0 that
+            // SceneBuilder.TameMetal wrote a moment ago: that 0 stands in for a map nobody could
+            // read, and multiplying the map by it would erase the one animal — mdl:whitetip_shark,
+            // map.b ≈ 0.5 over its whole surface — that is genuinely metallic.
+            // GlbShading.WaveMetalFactor is where that rule is written down and tested.
             if (to.HasProperty("_Metallic") && from.HasProperty("metallicFactor"))
-                to.SetFloat("_Metallic", GlbShading.CopiedMetalFactor(
-                    from.GetFloat("metallicFactor"), HasMetalMap(from)));
+                to.SetFloat("_Metallic", GlbShading.WaveMetalFactor(
+                    from.GetFloat("metallicFactor"), gltfLayoutMap));
         }
 
         private static Texture Get(Material m, string prop)
             => m != null && m.HasProperty(prop) ? m.GetTexture(prop) : null;
 
-        /// <summary>
-        /// Does this source material carry the metal/roughness data in a TEXTURE? Named the three
-        /// ways glTFast, Unity's Standard and an ORM-packed export spell it, same list SceneBuilder
-        /// checks — see <see cref="CopyMaps"/> for why the answer changes what gets copied.
-        /// </summary>
-        private static bool HasMetalMap(Material m)
-        {
-            return Get(m, "metallicRoughnessTexture") != null
-                || Get(m, "_MetallicGlossMap") != null
-                || Get(m, "occlusionRoughnessMetallicTexture") != null;
-        }
+        // HasMetalMap used to live here, asking whether the source had a metal map under any of the
+        // three names glTFast, Unity's Standard and an ORM export use. CopyMaps no longer wants that
+        // question: it needs to know whether the map it is about to BIND is in glTF's channel layout,
+        // which is a different and stricter test, and it now does that inline where the binding
+        // happens. SceneBuilder keeps its own copy for the factor rules, where the loose test is
+        // still the right one.
 
         private static Mesh MeshOf(Renderer r)
         {

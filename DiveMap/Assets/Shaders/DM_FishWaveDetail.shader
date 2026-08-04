@@ -9,8 +9,8 @@
 // screen and can afford it. The wave itself lives in the .cginc precisely so splitting the
 // SHADING like this cannot make the two animate differently.
 //
-// Both maps default to no-ops ("bump" = flat, "black" = unlit), so a GLB that ships neither
-// renders exactly as it does under DM_Standard, plus the bend.
+// Every map defaults to a no-op ("bump" = flat, "black" = unlit, "white" = factors unchanged), so
+// a GLB that ships none of them renders exactly as it does under DM_Standard, plus the bend.
 Shader "DiveMap/FishWaveDetail"
 {
     Properties
@@ -21,6 +21,13 @@ Shader "DiveMap/FishWaveDetail"
         _Metallic   ("Metallic", Range(0,1)) = 0.0
         [Normal] _BumpMap ("Normal map", 2D) = "bump" {}
         _EmissionMap   ("Emission map", 2D) = "black" {}
+
+        // glTF's packed metallic-roughness map, in glTF's OWN channel layout: G = roughness,
+        // B = metal. NOT Unity's _MetallicGlossMap (metal = R, smoothness = A) — the name is
+        // deliberately different so nothing can bind one to the other by accident.
+        // "white" is the no-op: G = B = 1 leaves _Glossiness and _Metallic exactly as they are,
+        // so a material that never sets this renders identically to the version before it existed.
+        _MetalRoughMap ("Metal(B)/Rough(G) map — glTF layout", 2D) = "white" {}
         _EmissionColor ("Emission colour", Color) = (0,0,0,1)
         [Enum(UnityEngine.Rendering.CullMode)] _Cull ("Cull", Float) = 2
 
@@ -56,6 +63,7 @@ Shader "DiveMap/FishWaveDetail"
         sampler2D _MainTex;
         sampler2D _BumpMap;
         sampler2D _EmissionMap;
+        sampler2D _MetalRoughMap;
 
         // One UV set on purpose: glTF authors every map on TEXCOORD0, so asking the surface
         // compiler for uv_BumpMap as well would interpolate the same coordinates twice.
@@ -78,8 +86,19 @@ Shader "DiveMap/FishWaveDetail"
             o.Albedo     = c.rgb;
             o.Normal     = UnpackNormal(tex2D(_BumpMap, IN.uv_MainTex));
             o.Emission   = tex2D(_EmissionMap, IN.uv_MainTex).rgb * _EmissionColor.rgb;
-            o.Metallic   = _Metallic;
-            o.Smoothness = _Glossiness;
+
+            // glTF's own arithmetic, which is the ONLY reason this sample is here: the spec says
+            // metal = metallicFactor × map.b and rough = roughnessFactor × map.g. Collapsing that
+            // to the factor alone is what made every animal dead matte — the models ship
+            // roughnessFactor = 1 (glTF's default) against a map whose green channel carries the
+            // real 0.45-0.58, so "1 − factor" is 0 smoothness on a shark that should read wet.
+            //
+            // _Glossiness is still "smoothness when the map is white", so it stays 1 − roughnessFactor
+            // and the multiply below puts the map back in. Same texture, same sampler, same maths as
+            // glTFast's PBR shader ⇒ a swimming animal and a static wreck shade identically.
+            fixed4 mr = tex2D(_MetalRoughMap, IN.uv_MainTex);
+            o.Metallic   = _Metallic * mr.b;
+            o.Smoothness = 1.0 - (1.0 - _Glossiness) * mr.g;
             o.Alpha      = c.a;
         }
         ENDCG
