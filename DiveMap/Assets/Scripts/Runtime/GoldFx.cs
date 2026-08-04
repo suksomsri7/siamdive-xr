@@ -11,11 +11,27 @@ namespace DiveMap.Runtime
     /// model's own material, no per-frame tick at all. Porting the removed version would be
     /// porting a decision that was already reversed.
     ///
-    /// <b>Beard sway</b> (<c>_fxBeard</c> :1476). Vertex displacement through the shader, so no
-    /// rig is needed: a hump-shaped mask over the model's height makes the beard and the robe
-    /// drift while the crown and the plinth stay still. The web injects GLSL into three.js's
-    /// shader; Unity's GLB materials cannot be patched the same way, so this moves the object's
-    /// lower CHILDREN instead — the same visual rule, expressed with transforms.
+    /// <b>Beard sway — REMOVED, and it should never have been ported.</b> <c>_fxBeard</c> still
+    /// exists in builder.html:1476, and that is the trap: it is DEAD CODE there. An effect only
+    /// runs on the web if its catalog row carries an <c>fx:</c> field, and exactly ONE row in the
+    /// whole catalog does — <c>sw:golden_trident</c>, <c>fx:'gold'</c> (builder.html:1227).
+    /// <c>sw:stone_king</c>'s row says so out loud: "รูปปั้นกษัตริย์ static (ยกเลิกเคราพริ้วตาม
+    /// user 2026-07-04)" (builder.html:1228). The user had already asked for this to stop, on the
+    /// web, a month before it was ported here.
+    ///
+    /// 🔴 This file's own remark about the gold sparkles — "porting the removed version would be
+    /// porting a decision that was already reversed" — was the right rule applied to the wrong
+    /// half. The beard was the removed version.
+    ///
+    /// And the port was louder than the original: the web displaced VERTICES inside one mesh
+    /// through a shader, whereas <c>BeardSway</c> moved whole child TRANSFORMS, matched by the
+    /// substring <c>poseidon</c>/<c>stone_king</c> against the asset id with no kind gate at all.
+    /// So <c>sw:stone_king</c>, <c>cc0:poseidon</c> and <c>stat:verdant_poseidon</c> — three
+    /// SPECIAL statues — visibly shifted their own parts every frame, in edit mode too, since
+    /// nothing froze it. Build 261: "รูปปั้น/สิ่งก่อสร้างบางชิ้นขยับได้เอง".
+    ///
+    /// The gold glow below is untouched: it is a material property with no per-frame tick, and
+    /// the web really does apply it.
     /// </summary>
     public static class GoldFx
     {
@@ -26,10 +42,6 @@ namespace DiveMap.Runtime
         public static bool IsGolden(string assetId) =>
             !string.IsNullOrEmpty(assetId) &&
             (assetId.Contains("golden") || assetId.Contains("trident") || assetId.Contains("poseidon"));
-
-        public static bool HasBeard(string assetId) =>
-            !string.IsNullOrEmpty(assetId) &&
-            (assetId.Contains("stone_king") || assetId.Contains("poseidon"));
 
         /// <summary>
         /// Make every material on the object glow gold. Materials are CLONED first: they come
@@ -61,85 +73,6 @@ namespace DiveMap.Runtime
                 r.materials = mats;
             }
             Debug.Log($"[Fx] gold on {go.name} materials={touched}");
-        }
-
-        /// <summary>Attach the sway. Does nothing if the object has no separable lower parts.</summary>
-        public static void ApplyBeard(GameObject go)
-        {
-            if (go == null || go.GetComponent<BeardSway>() != null) return;
-            go.AddComponent<BeardSway>().Init();
-        }
-    }
-
-    /// <summary>
-    /// The beard/robe drift. One component per statue, no shader patching.
-    ///
-    /// The mask is the web's: nothing below 12 % of the model's height moves (the plinth),
-    /// nothing above 80 % moves (the head and crown), and the middle sways with a phase that
-    /// runs down the body so it reads as a current flowing through the hair rather than the
-    /// whole statue wobbling.
-    /// </summary>
-    [DisallowMultipleComponent]
-    public sealed class BeardSway : MonoBehaviour
-    {
-        private Transform[] _parts;
-        private Vector3[] _home;
-        private float[] _mask;
-        private float _amp;
-
-        /// <summary>QC: how many child parts ended up in the sway.</summary>
-        public int PartCount => _parts != null ? _parts.Length : 0;
-
-        public void Init()
-        {
-            var bounds = new Bounds(transform.position, Vector3.zero);
-            bool any = false;
-            foreach (Renderer r in GetComponentsInChildren<Renderer>(true))
-            {
-                if (!any) { bounds = r.bounds; any = true; }
-                else bounds.Encapsulate(r.bounds);
-            }
-            if (!any) return;
-
-            float minY = bounds.min.y;
-            float range = Mathf.Max(0.001f, bounds.size.y);
-            _amp = range * 0.014f;   // the web's rng*0.014
-
-            var parts = new System.Collections.Generic.List<Transform>();
-            var mask = new System.Collections.Generic.List<float>();
-            foreach (Transform t in GetComponentsInChildren<Transform>(true))
-            {
-                if (t == transform) continue;
-                float h = (t.position.y - minY) / range;
-                float m = Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(0.12f, 0.36f, h)) *
-                          (1f - Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(0.60f, 0.80f, h)));
-                if (m <= 0.01f) continue;   // plinth and crown stay put
-                parts.Add(t);
-                mask.Add(m);
-            }
-
-            _parts = parts.ToArray();
-            _mask = mask.ToArray();
-            _home = new Vector3[_parts.Length];
-            for (int i = 0; i < _parts.Length; i++) _home[i] = _parts[i].localPosition;
-
-            Debug.Log($"[Fx] beard on {name} parts={_parts.Length} amp={_amp:F3}");
-        }
-
-        private void Update()
-        {
-            if (_parts == null || _parts.Length == 0) return;
-            float t = Time.time;
-
-            for (int i = 0; i < _parts.Length; i++)
-            {
-                if (_parts[i] == null) continue;
-                float h = _mask[i];
-                _parts[i].localPosition = _home[i] + new Vector3(
-                    Mathf.Sin(t * 1.25f + h * 6f) * _amp * h,
-                    0f,
-                    Mathf.Cos(t * 1.0f + h * 5f) * _amp * 0.5f * h);
-            }
         }
     }
 }

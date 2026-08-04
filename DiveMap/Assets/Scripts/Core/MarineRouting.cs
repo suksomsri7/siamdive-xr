@@ -66,22 +66,63 @@ namespace DiveMap.Core
             => Starts(assetId, "school:") || Starts(assetId, "pod:");
 
         /// <summary>
+        /// The id prefix of the hand-made "hero" animals — the ones that load a real GLB and are
+        /// driven by <c>WhaleController</c> straight from <c>SceneBuilder</c>'s first pass rather
+        /// than being picked up by the C6 sweep afterwards.
+        /// </summary>
+        public const string HeroPrefix = "msh:";
+
+        /// <summary>
+        /// Does this placement take the hero path — its own GLB plus a <c>WhaleController</c>,
+        /// decided before the ordinary scenery load?
+        ///
+        /// 🔴 The prefix is NOT sufficient on its own, and believing it was is the bug this
+        /// method exists to end. <c>SceneBuilder</c> asked <c>assetId.StartsWith("msh:")</c> and
+        /// nothing else, one pass BEFORE it ever looked the module up in the manifest — so the
+        /// kind never got a vote. <c>msh:wreck_ship</c> ("เรือจม (สมจริง)", kind <c>WRECK</c>) is
+        /// a sunken ship that happens to share the prefix with twenty-eight animals, and it was
+        /// handed a swimming brain: it roamed the map, fled the diver, and <see cref="SwimStyle"/>
+        /// bent its hull like a carangiform fish because no rule in the style table matches
+        /// "wreck_ship" either. A user testing build 261 reported exactly that — "รูปปั้น/สิ่ง
+        /// ก่อสร้างบางชิ้นขยับได้เอง".
+        ///
+        /// The prefix now only chooses WHICH animal path is taken; whether the thing is an animal
+        /// at all is <see cref="For"/>'s decision, and that is made from the manifest kind.
+        /// </summary>
+        public static bool IsHeroSolo(string assetId, string kind)
+            => Starts(assetId, HeroPrefix) && For(assetId, kind) == MarineRoute.Solo;
+
+        /// <summary>
+        /// Does anything at all animate this placement? The one question a reviewer asks of a
+        /// statue, and the inverse of "is it furniture".
+        /// </summary>
+        public static bool IsAnimated(string assetId, string kind)
+            => For(assetId, kind) != MarineRoute.None;
+
+        /// <summary>
         /// What drives <paramref name="assetId"/>, whose manifest entry says
         /// <paramref name="kind"/>.
         ///
         /// Order matters:
         ///   • a <c>warp:</c> gate is built from primitives and is in no manifest — it must never
         ///     be mistaken for anything, whatever kind is passed alongside it.
-        ///   • the school prefixes win over the kind, because a pod of orcas is SCHOOL-kind AND
-        ///     an animal, and it wants the shoal system rather than eleven separate brains.
+        ///   • THE KIND GATE COMES BEFORE EVERY PREFIX. The web has exactly one test for "does
+        ///     this move" and it is the kind: <c>assignBehavior()</c> returns immediately unless
+        ///     the kind is in <c>SWIMMERS = ['MARINE_LIFE','SCHOOL','TURTLE','FISH']</c>
+        ///     (builder.html:1766, 2019), and every downstream id regex in the file sits BEHIND
+        ///     that return. An id prefix that can promote a non-animal kind to a moving thing is
+        ///     therefore a divergence from the web by construction, whatever the prefix is.
+        ///   • only once the thing is known to be an animal do the school prefixes get to choose
+        ///     WHICH system drives it, because a pod of orcas is SCHOOL-kind AND an animal, and
+        ///     it wants the shoal system rather than eleven separate brains.
         ///   • an unknown kind routes to None. A map that names an asset this build has never
         ///     heard of gets a placeholder, not a swimming brain attached to nothing.
         /// </summary>
         public static MarineRoute For(string assetId, string kind)
         {
             if (Starts(assetId, "warp:")) return MarineRoute.None;
-            if (IsSchoolId(assetId)) return MarineRoute.School;
             if (!IsAnimalKind(kind)) return MarineRoute.None;
+            if (IsSchoolId(assetId)) return MarineRoute.School;
             if (Eq(kind, KindSchool)) return MarineRoute.School;
             return MarineRoute.Solo;
         }

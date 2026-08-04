@@ -59,7 +59,7 @@
 | B5 | god rays + caustics | ไม่มีในเว็บ (เราทำเพิ่ม) | ✅ ดีกว่าเว็บ |
 | B6 | สลับโหมดกลางวัน ☀️ / โหมดน้ำ 💧 เปิด-ปิด | `setEnv()`, `waterModeBtn`, `bright` | ✅ P2b (ปุ่มในเมนู ☰) |
 | B7 | heatmap ความลึก + legend | `setDepthView()` :640, `depthLegend` | ✅ P2a (เบคเป็น texture + legend ตำแหน่งเว็บ) |
-| B8 | FX ทองเรืองแสง + หนวดไหว | `_fxGold()`, `_fxBeard()` | ✅ `Runtime/GoldFx.cs` — `ApplyGold`/`ApplyBeard` เรียกจาก `SceneBuilder` ตาม fxId · `BeardSway` ไหวต่อเนื่อง |
+| B8 | FX ทองเรืองแสง (เคราไหว = **เว็บยกเลิกแล้ว**) | `_fxGold()` · `_fxBeard()` = dead code | ✅ `Runtime/GoldFx.cs` — `ApplyGold` เรียกจาก `SceneBuilder` ตาม fxId · ❌ **ถอด `BeardSway` ออกแล้ว**: ทั้งแคตตาล็อกเว็บมี `fx:` แค่แถวเดียวคือ `sw:golden_trident` (`fx:'gold'`, builder.html:1227) ส่วน `sw:stone_king` เขียนกำกับไว้ว่า "รูปปั้นกษัตริย์ static (ยกเลิกเคราพริ้วตาม user 2026-07-04)" (:1228) — `_fxBeard()` จึงไม่เคยถูกเรียกบนเว็บ การพอร์ตมาคือพอร์ตของที่ user สั่งลบไปแล้ว |
 | B9 | vignette + murk ตอนอยู่ในทัวร์ | `vignette`, `murkUI()` | ✅ P1.2a |
 
 ## C. สัตว์ / AI — 6/6

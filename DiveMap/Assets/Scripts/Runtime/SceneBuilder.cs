@@ -89,16 +89,19 @@ namespace DiveMap.Runtime
             }
         }
 
-        // ── Marine routing (WO-XR-03) ─────────────────────────────────────────────
-        // school:* and pod:* → instanced boid swarm; msh:* → looping big animal.
-        private static bool IsSchoolItem(string assetId)
-            => !string.IsNullOrEmpty(assetId) &&
-               (assetId.StartsWith("school:", StringComparison.OrdinalIgnoreCase) ||
-                assetId.StartsWith("pod:", StringComparison.OrdinalIgnoreCase));
-
-        private static bool IsBigAnimalItem(string assetId)
-            => !string.IsNullOrEmpty(assetId) &&
-               assetId.StartsWith("msh:", StringComparison.OrdinalIgnoreCase);
+        // ── Marine routing ────────────────────────────────────────────────────────
+        //
+        // 🔴 There used to be two private prefix predicates here — IsSchoolItem ("school:"/"pod:")
+        // and IsBigAnimalItem ("msh:") — left over from WO-XR-03, when the prefix WAS the routing.
+        // C6 replaced that with MarineRouting's kind gate, but only for the third path; these two
+        // kept running first, and they ran BEFORE the manifest was ever consulted, so the kind
+        // could not overrule them. msh:wreck_ship is a WRECK that shares its prefix with 28
+        // animals, and it was given a WhaleController: a sunken ship that roamed the reef and
+        // flexed like a fish. Build 261, "รูปปั้น/สิ่งก่อสร้างบางชิ้นขยับได้เอง".
+        //
+        // The predicates are gone rather than fixed in place, because a second table of "what is
+        // an animal" is the bug: there is now exactly one, MarineRouting, and it is the same
+        // single kind gate the web uses (builder.html:2019).
 
         // Mid silver-grey albedo (QC r7). The old near-white (0.86,0.92,0.80) drew each fish as
         // a blazing-white kite with a pitch-black shadow side (max lit/shadow contrast). A mid
@@ -276,7 +279,17 @@ namespace DiveMap.Runtime
                 bounds.Encapsulate(itemGo.transform.localPosition);
 
                 string aid = item.AssetId ?? "";
-                if (IsSchoolItem(aid))
+
+                // 🔴 The manifest lookup happens HERE, before any routing decision, and that
+                // ordering is the fix. Every branch below now asks MarineRouting, and
+                // MarineRouting cannot answer without the kind — so a wreck can no longer be
+                // routed as an animal by a prefix that got to vote first.
+                string url = manifest != null ? manifest.ResolveUrl(aid) : null;
+                AssetManifest.Module module = manifest != null ? manifest.Get(aid) : null;
+                string kind = module?.Kind;
+                MarineRoute route = MarineRouting.For(aid, kind);
+
+                if (route == MarineRoute.School)
                 {
                     FishSchoolSystem.SchoolReg reg =
                         MakeSchoolReg(aid, itemGo.transform.position, itemGo.transform.localScale.x);
@@ -285,7 +298,7 @@ namespace DiveMap.Runtime
                     _loaded++;
                     continue; // no static GLB — the swarm renders itself
                 }
-                if (IsBigAnimalItem(aid))
+                if (MarineRouting.IsHeroSolo(aid, kind))
                 {
                     // WO-XR-03b: a big animal is a REAL GLB (Whale_Shark_xr0.glb, KTX2+Draco)
                     // driven by WhaleController — no more procedural "paper kite" mesh, and no
@@ -294,33 +307,32 @@ namespace DiveMap.Runtime
                     whaleCount++;
                     animals.Add(itemGo.transform);
                     animalIds.Add(aid);
-                    string wurl = manifest != null ? manifest.ResolveUrl(aid) : null;
-                    AssetManifest.Module wmod = manifest != null ? manifest.Get(aid) : null;
-                    if (string.IsNullOrEmpty(wurl))
+                    if (string.IsNullOrEmpty(url))
                     {
                         Debug.LogWarning($"[Marine] whale asset={aid} has no GLB url — placeholder");
-                        SpawnPlaceholder(itemGo.transform, item, wmod);
+                        SpawnPlaceholder(itemGo.transform, item, module);
                         AttachWhale(itemGo.transform, aid, null, false, 0f);
                         _failed++;
                     }
                     else
                     {
                         _loadState.BeginLoad();
-                        LoadBigAnimalAsync(wurl, itemGo.transform, item, wmod, aid);
+                        LoadBigAnimalAsync(url, itemGo.transform, item, module, aid);
                     }
                     continue;
                 }
 
-                string url = manifest != null ? manifest.ResolveUrl(item.AssetId) : null;
-                AssetManifest.Module module = manifest != null ? manifest.Get(item.AssetId) : null;
-                bool swimmer = IsSwimmer(module?.Kind);
+                bool swimmer = IsSwimmer(kind);
 
                 allGos.Add(itemGo);
 
                 // C6 — an animal that is neither a shoal nor an already-handled msh: hero. The
                 // GLB still loads down the ordinary path below; all this does is remember which
                 // of those objects is alive so it can be given a brain once it has arrived.
-                if (MarineRouting.IsSolo(aid, module?.Kind) && !IsBigAnimalItem(aid))
+                // (The hero case already `continue`d above, so this can only be the remainder —
+                // the test is kept explicit anyway, because "which branch took it" is the thing
+                // that went wrong here once already.)
+                if (route == MarineRoute.Solo && !MarineRouting.IsHeroSolo(aid, kind))
                 {
                     soloGos.Add(itemGo);
                     soloIds.Add(aid);
@@ -847,13 +859,17 @@ namespace DiveMap.Runtime
                 // Nothing on a reef is a mirror.
                 if (parent != null) TameMetal(parent.gameObject, item?.AssetId);
 
-                // B8 — the hero statues: gold glow, and the beard/robe drifting in the current.
-                // Applied AFTER the model exists, because both walk its real renderers/bounds.
+                // B8 — the hero statues: gold glow. Applied AFTER the model exists, because it
+                // walks the real renderers.
+                //
+                // 🔴 The beard/robe sway that used to be attached here is gone. It was matched by
+                // substring on the asset id with no kind gate, so three SPECIAL statues moved
+                // their own parts every frame — and the web had already deleted the effect at the
+                // user's request (builder.html:1228). See GoldFx's class remark.
                 if (parent != null)
                 {
                     string fxId = item != null ? (item.AssetId ?? "") : "";
                     if (GoldFx.IsGolden(fxId)) GoldFx.ApplyGold(parent.gameObject);
-                    if (GoldFx.HasBeard(fxId)) GoldFx.ApplyBeard(parent.gameObject);
                 }
                 _loaded++;
             }
@@ -913,7 +929,6 @@ namespace DiveMap.Runtime
                 TameMetal(parent.gameObject, assetId);
                 string fxId = assetId ?? "";
                 if (GoldFx.IsGolden(fxId)) GoldFx.ApplyGold(parent.gameObject);
-                if (GoldFx.HasBeard(fxId)) GoldFx.ApplyBeard(parent.gameObject);
             }
             return gltf;
         }

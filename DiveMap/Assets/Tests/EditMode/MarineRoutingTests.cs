@@ -329,8 +329,12 @@ namespace DiveMap.Tests
                 bool isAnimal = kind == "MARINE_LIFE" || kind == "SCHOOL"
                              || kind == "FISH" || kind == "TURTLE";
 
-                MarineRoute want = isSchoolId ? MarineRoute.School
-                                 : !isAnimal  ? MarineRoute.None
+                // The KIND decides whether it moves at all; only then does the prefix pick which
+                // system drives it. Written in that order deliberately — this expectation used to
+                // read `isSchoolId ? School : ...`, which quietly agreed that a prefix may promote
+                // a non-animal, and that is the shape of the bug SceneBuilder actually shipped.
+                MarineRoute want = !isAnimal ? MarineRoute.None
+                                 : isSchoolId ? MarineRoute.School
                                  : kind == "SCHOOL" ? MarineRoute.School
                                  : MarineRoute.Solo;
 
@@ -373,6 +377,130 @@ namespace DiveMap.Tests
                 Assert.AreEqual(MarineRoute.None, MarineRouting.For(id, kind),
                                 $"{id} is {kind} and must stay furniture");
                 Assert.IsFalse(MarineRouting.IsSolo(id, kind), id);
+            }
+        }
+
+        // ── build 261: "รูปปั้น/สิ่งก่อสร้างบางชิ้นขยับได้เอง" ────────────────────
+
+        /// <summary>
+        /// The whole contract in one assertion, over every id the app actually ships rather than
+        /// over a chosen example: if the manifest does not call it an animal, NOTHING about it
+        /// moves — not the shoal system, not a hero <c>WhaleController</c>, not the C6 sweep.
+        ///
+        /// 🔴 This is the test that was missing. <c>MarineRouting</c> was already right and
+        /// <see cref="NoSceneryEverGetsABrain"/> already proved it; what shipped was a SECOND
+        /// classifier in <c>SceneBuilder</c> — <c>IsBigAnimalItem</c>, an id-prefix check that ran
+        /// before the manifest was read — and no test asked the routing the question in the form
+        /// SceneBuilder asked it. <c>msh:wreck_ship</c> is kind <c>WRECK</c>: the one row in 275
+        /// where the prefix and the kind disagree, and therefore the one object that swam.
+        ///
+        /// The three predicates are asserted together on purpose. A future path that consults
+        /// only one of them is exactly how the last one got in.
+        /// </summary>
+        [Test]
+        public void NothingButAnAnimalIsEverAnimated()
+        {
+            var moving = new List<string>();
+            foreach (string row in Modules)
+            {
+                Split(row, out string id, out string kind);
+                if (kind == "MARINE_LIFE" || kind == "SCHOOL" || kind == "FISH" || kind == "TURTLE")
+                    continue;
+
+                if (MarineRouting.For(id, kind) != MarineRoute.None) moving.Add(id + " (" + kind + "): routed");
+                if (MarineRouting.IsSolo(id, kind))        moving.Add(id + " (" + kind + "): solo brain");
+                if (MarineRouting.IsHeroSolo(id, kind))    moving.Add(id + " (" + kind + "): hero brain");
+                if (MarineRouting.IsAnimated(id, kind))    moving.Add(id + " (" + kind + "): animated");
+            }
+            Assert.IsEmpty(moving,
+                "statues, wrecks, rocks, coral and reef blocks must be furniture:\n"
+                + string.Join("\n", moving));
+        }
+
+        /// <summary>
+        /// The one row in the shipped manifest where the id prefix and the kind disagree, named
+        /// so a reader knows why the rule above is not academic. <c>msh:wreck_ship</c> is
+        /// "เรือจม (สมจริง)" — a sunken ship, sharing its prefix with twenty-eight animals.
+        /// </summary>
+        [Test]
+        public void TheSunkenShipIsNotAWhale()
+        {
+            Assert.AreEqual(MarineRoute.None, MarineRouting.For("msh:wreck_ship", "WRECK"));
+            Assert.IsFalse(MarineRouting.IsSolo("msh:wreck_ship", "WRECK"));
+            Assert.IsFalse(MarineRouting.IsHeroSolo("msh:wreck_ship", "WRECK"), "it took the hero path for a whole release");
+            Assert.IsFalse(MarineRouting.IsAnimated("msh:wreck_ship", "WRECK"));
+
+            // …and the prefix still works for the animals that share it, or the fix has simply
+            // moved the bug to the other end.
+            Assert.IsTrue(MarineRouting.IsHeroSolo("msh:whaleshark", "MARINE_LIFE"));
+            Assert.IsTrue(MarineRouting.IsHeroSolo("msh:humpback_whale", "MARINE_LIFE"));
+        }
+
+        /// <summary>
+        /// Every <c>msh:</c> ANIMAL takes the hero path and nothing else does — the split
+        /// SceneBuilder's first pass depends on, checked against the manifest rather than
+        /// against the prefix it used to trust.
+        /// </summary>
+        [Test]
+        public void TheHeroPathIsAnimalsWithThatPrefixAndNoOneElse()
+        {
+            int heroes = 0;
+            foreach (string row in Modules)
+            {
+                Split(row, out string id, out string kind);
+                bool isAnimal = kind == "MARINE_LIFE" || kind == "SCHOOL"
+                             || kind == "FISH" || kind == "TURTLE";
+                bool wantHero = isAnimal && !MarineRouting.IsSchoolId(id)
+                             && id.StartsWith(MarineRouting.HeroPrefix, StringComparison.OrdinalIgnoreCase);
+
+                Assert.AreEqual(wantHero, MarineRouting.IsHeroSolo(id, kind), id + " (" + kind + ")");
+                if (wantHero) heroes++;
+            }
+            // 29 msh: rows in the manifest, of which msh:wreck_ship is a WRECK.
+            Assert.AreEqual(28, heroes, "hero animals");
+        }
+
+        /// <summary>
+        /// A prefix cannot promote scenery no matter which prefix it is, so the next asset batch
+        /// that reuses a naming convention cannot resurrect this. Hypothetical ids: the point is
+        /// that the kind is the only thing being consulted.
+        /// </summary>
+        [Test]
+        public void NoPrefixCanPromoteSceneryToAnAnimal()
+        {
+            foreach (string id in new[] { "msh:wreck_ship", "msh:statue", "school:rubble",
+                                          "pod:mooring_blocks", "msh:jetty" })
+            {
+                foreach (string kind in new[] { "WRECK", "SPECIAL", "ARTIFICIAL", "ROCK",
+                                                "CORAL", "BOAT", "ANEMONE" })
+                {
+                    Assert.AreEqual(MarineRoute.None, MarineRouting.For(id, kind), id + " as " + kind);
+                    Assert.IsFalse(MarineRouting.IsHeroSolo(id, kind), id + " as " + kind);
+                }
+            }
+        }
+
+        /// <summary>
+        /// The statues the removed beard sway used to move, and the rest of the SPECIAL/WRECK
+        /// props around them. They are covered by <see cref="NothingButAnAnimalIsEverAnimated"/>
+        /// already; they are named here because the bug report named them, and a failure that
+        /// prints "stat:verdant_poseidon" is worth more to the next reader than one that prints
+        /// an index.
+        /// </summary>
+        [Test]
+        public void TheStatuesStandStill()
+        {
+            foreach (string id in new[]
+            {
+                "sw:stone_king", "cc0:poseidon", "stat:verdant_poseidon",
+                "stat:stormbringer", "stat:ascendant_warrior", "sw:golden_trident",
+                "cc0:statue_singha", "cc0:kraken", "losin:lighthouse",
+                "ruin:byzantine_arch", "ruin:grand_byzantine", "nat:tree", "nat:kelp",
+            })
+            {
+                string kind = id.StartsWith("nat:") || id == "cc0:statue_singha"
+                           || id == "losin:lighthouse" ? "WRECK" : "SPECIAL";
+                Assert.IsFalse(MarineRouting.IsAnimated(id, kind), id);
             }
         }
 
