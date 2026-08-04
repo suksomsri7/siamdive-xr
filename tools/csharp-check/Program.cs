@@ -126,6 +126,10 @@ string[] externalPrefixes =
 {
     "System", "UnityEngine", "UnityEditor", "Unity", "NUnit", "Newtonsoft",
     "GLTFast", "Microsoft", "TMPro", "JetBrains",
+    // KTX for Unity (com.unity.cloud.ktx). Its assembly is called Ktx and its namespace is
+    // KtxUnity — the mismatch is the package's, not a typo, so the prefix has to be spelled out
+    // rather than caught by the "Unity" entry above.
+    "KtxUnity",
 };
 
 foreach ((string path, SyntaxTree tree) in trees)

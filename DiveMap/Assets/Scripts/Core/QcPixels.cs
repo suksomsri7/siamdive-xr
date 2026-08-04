@@ -446,6 +446,139 @@ namespace DiveMap.Core
         public static bool SubjectHeld(Shot baseShot, Shot probe, double tolerancePercent = 0.5)
             => System.Math.Abs(baseShot.SubjectPercent - probe.SubjectPercent) <= tolerancePercent;
 
+        // ── relief: is the normal map doing anything at all? ──────────────────────
+
+        /// <summary>
+        /// How much the shading changes between NEIGHBOURING pixels of the model — "does this
+        /// surface have texture in it", in one number.
+        ///
+        /// 🔴 Why a local gradient and not a variance. Variance over the whole subject is
+        /// dominated by the big lit/shadowed halves of the animal, which are there whether or not
+        /// a normal map is bound; it moves when the lighting moves and barely notices a map at
+        /// all. A normal map's contribution is by definition HIGH FREQUENCY — it is the detail
+        /// baked from a 4096² sculpt that the 40k-triangle mesh cannot carry — so the measurement
+        /// that answers the question is the mean absolute luminance step between adjacent pixels.
+        ///
+        /// 🔴 Both pixels of a pair must be subject pixels. A step measured across the silhouette
+        /// edge is the background, and a long thin animal is mostly silhouette; counting those
+        /// would make a model's outline the loudest "detail" in the frame and the score would
+        /// track how much of the screen the animal filled.
+        ///
+        /// Units are luminance levels (0-255) per pixel step. Absolute values mean nothing on
+        /// their own — only the ratio between the same model shot with and without its normal map
+        /// does, which is what <see cref="ReliefVerdict"/> reads.
+        /// </summary>
+        /// <param name="frame">RGB24 frame with the model in it.</param>
+        /// <param name="withoutModel">The same frame with the model switched off.</param>
+        /// <param name="width">Frame width in pixels.</param>
+        /// <param name="height">Frame height in pixels.</param>
+        /// <returns>Mean neighbour-to-neighbour luminance step, or 0 when unmeasurable.</returns>
+        public static double ReliefScore(byte[] frame, byte[] withoutModel, int width, int height,
+                                         byte tolerance = SubjectTolerance)
+        {
+            int n = PixelCount(frame);
+            if (n == 0 || width <= 1 || height <= 1 || n != width * height) return 0.0;
+            if (withoutModel == null || withoutModel.Length != frame.Length) return 0.0;
+
+            var subject = new bool[n];
+            for (int i = 0; i < n; i++)
+            {
+                int p = i * Channels;
+                int dr = frame[p] - withoutModel[p];
+                int dg = frame[p + 1] - withoutModel[p + 1];
+                int db = frame[p + 2] - withoutModel[p + 2];
+                if (dr < 0) dr = -dr;
+                if (dg < 0) dg = -dg;
+                if (db < 0) db = -db;
+                subject[i] = dr > tolerance || dg > tolerance || db > tolerance;
+            }
+
+            double sum = 0.0;
+            long pairs = 0;
+            for (int y = 0; y < height; y++)
+            {
+                for (int x = 0; x < width; x++)
+                {
+                    int i = y * width + x;
+                    if (!subject[i]) continue;
+                    double li = Luminance(frame[i * Channels], frame[i * Channels + 1],
+                                          frame[i * Channels + 2]);
+                    if (x + 1 < width && subject[i + 1])
+                    {
+                        int j = (i + 1) * Channels;
+                        sum += System.Math.Abs(li - Luminance(frame[j], frame[j + 1], frame[j + 2]));
+                        pairs++;
+                    }
+                    if (y + 1 < height && subject[i + width])
+                    {
+                        int j = (i + width) * Channels;
+                        sum += System.Math.Abs(li - Luminance(frame[j], frame[j + 1], frame[j + 2]));
+                        pairs++;
+                    }
+                }
+            }
+
+            return pairs == 0 ? 0.0 : sum / pairs;
+        }
+
+        /// <summary>
+        /// How much more relief the shipped material shows than the same model with its normal map
+        /// taken away, before the map counts as doing its job. Fifteen percent is far above
+        /// llvmpipe's frame-to-frame wobble (the same frame twice lands within ~1%) and far below
+        /// what a real 4096² bake contributes on a photogrammetry model.
+        /// </summary>
+        public const double ReliefLiveRatio = 1.15;
+
+        /// <summary>
+        /// …and the ceiling under which the map is contributing nothing worth the memory. Between
+        /// the two is a real answer too — the map is bound and sampled, but barely moves the
+        /// picture — and it is reported as its own verdict rather than rounded to one side.
+        /// </summary>
+        public const double ReliefDeadRatio = 1.03;
+
+        /// <summary>
+        /// Is the normal map alive?
+        ///
+        /// 🔴 This is the measurement the "flat, not smooth like Meshy" report needed and never
+        /// had. Every earlier normal-map argument in this project was settled by reading formats
+        /// and colour spaces out of code — including the argument that ended with the maps being
+        /// thrown away on every model. Two frames of the same model, differing by whether the
+        /// normal map is bound and by nothing else, cannot be argued with the same way.
+        ///
+        /// A verdict of <c>normal-map-dead</c> on a model that ships a 4096² bake means the map is
+        /// reaching the shader as a flat lie — which is what an sRGB decode of a neutral texel
+        /// produces once the tilt is uniform enough to cancel out. <c>normal-map-live</c> means
+        /// the detail is arriving.
+        /// </summary>
+        /// <returns><c>normal-map-live</c>, <c>normal-map-weak</c>, <c>normal-map-dead</c>,
+        /// <c>no-normal-map</c> (nothing was bound to remove) or <c>probe-failed</c>.</returns>
+        public static string ReliefVerdict(double withMap, double withoutMap,
+                                           Shot baseShot, Shot flatShot, bool hadNormalMap = true)
+        {
+            if (!hadNormalMap) return "no-normal-map";
+            if (withMap <= 0.0 || withoutMap <= 0.0) return "probe-failed";
+            if (baseShot.Pixels == 0 || flatShot.Pixels == 0) return "probe-failed";
+            if (!SubjectHeld(baseShot, flatShot)) return "probe-failed";
+
+            double ratio = withMap / withoutMap;
+            if (ratio >= ReliefLiveRatio) return "normal-map-live";
+            if (ratio <= ReliefDeadRatio) return "normal-map-dead";
+            return "normal-map-weak";
+        }
+
+        /// <summary>One line per model, so the verdict is greppable next to the other probes.</summary>
+        public static string ReliefLine(string name, double withMap, double withoutMap,
+                                        Shot baseShot, Shot flatShot, bool hadNormalMap = true)
+            => "[QCRelief] " + (string.IsNullOrEmpty(name) ? "(unnamed)" : name) +
+               " relief withMap=" + Pct(withMap) +
+               " noNormalMap=" + Pct(withoutMap) +
+               " ratio=" + Pct(withoutMap > 0.0 ? withMap / withoutMap : 0.0) +
+               " | subject base=" + Pct(baseShot.SubjectPercent) +
+               "% flat=" + Pct(flatShot.SubjectPercent) +
+               "% darkOfSubject base=" + Pct(baseShot.DarkOfSubjectPercent) +
+               "% flat=" + Pct(flatShot.DarkOfSubjectPercent) +
+               "% verdict=" + ReliefVerdict(withMap, withoutMap, baseShot, flatShot, hadNormalMap);
+
         /// <summary>
         /// Which input the black followed, in one token. A probe only ACQUITS an input when the
         /// black stays put; the collapse threshold is deliberately generous (a third of the

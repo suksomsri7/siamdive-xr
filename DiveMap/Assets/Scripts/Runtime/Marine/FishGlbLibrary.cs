@@ -95,7 +95,10 @@ namespace DiveMap.Runtime.Marine
         {
             string species = pick.Species;
 
-            var gltf = new GltfImport();
+            // SceneBuilder.NewImport, not `new GltfImport()`: the schooling fish load through this
+            // path and nothing else, and the normal-map add-on has to be registered before the
+            // constructor runs to reach them at all.
+            GltfImport gltf = SceneBuilder.NewImport();
             bool ok = await gltf.Load(pick.Url);
             if (!ok)
             {

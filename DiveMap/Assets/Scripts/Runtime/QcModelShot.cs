@@ -55,6 +55,15 @@ namespace DiveMap.Runtime
             "sw:htms732",
             "msh:barracuda",
             "msh:lionfish",
+
+            // 🔴 Added for the normal-map work order, and for the report behind it: "the animals
+            // are flat and angular, not smooth like Meshy". These two are the models the user
+            // judges that by — the whale shark fills the screen and the manta is one broad curved
+            // surface with nothing but its baked detail on it, which makes it the single most
+            // sensitive subject in the set to a normal map that is or is not arriving. They are
+            // here so the gate pictures show the thing the change is about.
+            "msh:whaleshark",
+            "msh:manta",
         };
 
         /// <summary>
@@ -78,6 +87,13 @@ namespace DiveMap.Runtime
             62.34,   // sw:htms732 — camouflage, legitimately the darkest of the six
             14.57,   // msh:barracuda
             0.86,    // msh:lionfish
+
+            // 🔴 −1 = no baseline recorded, which DarkGate reads as "fall back to the absolute
+            // ceiling". Deliberately not guessed from this run: a baseline is "what it looked like
+            // when a human last approved it", and nobody has approved these two yet. Fill them in
+            // from the run whose pictures the user signs off, not from the first run that is green.
+            -1.0,    // msh:whaleshark
+            -1.0,    // msh:manta
         };
 
         /// <summary>Baseline for <paramref name="assetId"/>, or −1 when none is recorded.</summary>
@@ -302,6 +318,25 @@ namespace DiveMap.Runtime
                 yield return ProbeMipBias(cam, rt, readback, renderers, withoutModel, -10f, s => bias10 = s);
                 Debug.Log(QcPixels.ProbeLine(name, shot, whiteAlbedo, noMetalRough, meshNormals,
                                              whiteGltf, greyAlbedo, bias4, bias10, darkGate));
+
+                // Probe 8 — the normal map, and only the normal map, taken away. Everything else
+                // about the frame is the shipped material. The pair answers a question no format
+                // string can: is the map contributing surface detail, or is it bound and inert?
+                // See QcPixels.ReliefScore.
+                byte[] flatBytes = null;
+                QcPixels.Shot flatShot = default;
+                bool hadNormalMap = false;
+                yield return ProbeNoNormalMap(cam, rt, readback, renderers, withoutModel,
+                                              (bytes, s, had) =>
+                                              {
+                                                  flatBytes = bytes;
+                                                  flatShot = s;
+                                                  hadNormalMap = had;
+                                              });
+                double reliefWith = QcPixels.ReliefScore(withModel, withoutModel, rt.width, rt.height);
+                double reliefFlat = QcPixels.ReliefScore(flatBytes, withoutModel, rt.width, rt.height);
+                Debug.Log(QcPixels.ReliefLine(name, reliefWith, reliefFlat, shot, flatShot,
+                                              hadNormalMap));
             }
             else
             {
@@ -407,6 +442,66 @@ namespace DiveMap.Runtime
                 renderers[i].sharedMaterials = saved[i];
             }
             Object.Destroy(white);
+        }
+
+        /// <summary>Normal-map slots, glTFast's name first then Standard's / DM_FishWaveDetail's.</summary>
+        private static readonly string[] NormalSlots = { "normalTexture", "_BumpMap" };
+
+        /// <summary>
+        /// The relief probe: one frame of the shipped material with its normal map unbound, and
+        /// nothing else touched — not the albedo, not the metallic-roughness, not the shader, not
+        /// the lights, not the camera.
+        ///
+        /// 🔴 Why this and not another dark-pixel count. Every probe above this one asks "what is
+        /// making the model DARK". The report this exists for is different — "ผิวแบน/เหลี่ยม ไม่
+        /// สมูทเหมือน Meshy", a model that has lost its surface — and darkness measures cannot see
+        /// it: a perfectly flat, perfectly evenly lit animal scores beautifully on all of them.
+        /// The pair of frames here is measured by <see cref="QcPixels.ReliefScore"/> instead, which
+        /// looks at pixel-to-pixel shading steps and therefore at exactly the high-frequency detail
+        /// a normal map is for.
+        ///
+        /// The keyword goes down with the slot. Clearing the texture alone leaves Unity's shaders
+        /// sampling their built-in flat "bump" default through the same code path — a control frame
+        /// that still pays for the normal-map branch is not a control.
+        /// </summary>
+        /// <param name="onShot">bytes, measurement, and whether there was a map to remove at all —
+        /// a model that never had one must report <c>no-normal-map</c> rather than a ratio of 1.</param>
+        private static IEnumerator ProbeNoNormalMap(Camera cam, RenderTexture rt, Texture2D readback,
+                                                    List<Renderer> renderers, byte[] withoutModel,
+                                                    System.Action<byte[], QcPixels.Shot, bool> onShot)
+        {
+            var mats = new List<Material>();
+            foreach (Renderer r in renderers)
+            {
+                if (r == null) continue;
+                foreach (Material m in r.materials) if (m != null) mats.Add(m);
+            }
+
+            var saved = new List<Texture>();
+            var savedProp = new List<string>();
+            bool had = false;
+            foreach (Material m in mats)
+            {
+                string p = PropOn(m, NormalSlots);
+                Texture t = p != null ? m.GetTexture(p) : null;
+                savedProp.Add(p);
+                saved.Add(t);
+                if (t == null) continue;
+                had = true;
+                m.SetTexture(p, null);
+                m.DisableKeyword("_NORMALMAP");
+            }
+
+            byte[] bytes = null;
+            yield return Capture(cam, rt, readback, null, b => bytes = b);
+            onShot(bytes, QcPixels.Measure(bytes, withoutModel), had);
+
+            for (int i = 0; i < mats.Count; i++)
+            {
+                if (savedProp[i] == null || saved[i] == null) continue;
+                mats[i].SetTexture(savedProp[i], saved[i]);
+                mats[i].EnableKeyword("_NORMALMAP");
+            }
         }
 
         /// <summary>

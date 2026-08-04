@@ -811,9 +811,25 @@ namespace DiveMap.Runtime
             return task;
         }
 
+        /// <summary>
+        /// Every <see cref="GltfImport"/> in the app, made in one place.
+        ///
+        /// 🔴 The registration has to happen BEFORE the constructor runs, not after: glTFast
+        /// injects the registered add-ons from inside <c>GltfImport</c>'s own constructor
+        /// (<c>GltfImport.cs:323</c>), so an add-on installed a line later is simply absent for
+        /// that file — and absent silently, which is the failure this project has already paid a
+        /// CI round for. <see cref="LinearDataTextures.Register"/> is idempotent; the cost of
+        /// calling it per import is a bool test.
+        /// </summary>
+        public static GltfImport NewImport()
+        {
+            LinearDataTextures.Register();
+            return new GltfImport();
+        }
+
         private async Task<GltfImport> LoadImport(string url)
         {
-            var gltf = new GltfImport();
+            GltfImport gltf = NewImport();
             bool ok = await gltf.Load(await CachedUri(url));
             return ok ? gltf : null;
         }
@@ -884,7 +900,7 @@ namespace DiveMap.Runtime
         /// </summary>
         public static async Task<GltfImport> LoadForQc(string url, string assetId, Transform parent)
         {
-            var gltf = new GltfImport();
+            GltfImport gltf = NewImport();
             try
             {
                 bool ok = await gltf.Load(await CachedUri(url));
@@ -932,7 +948,7 @@ namespace DiveMap.Runtime
             bool ok = false;
             try
             {
-                var gltf = new GltfImport();
+                GltfImport gltf = NewImport();
                 ok = await gltf.Load(await CachedUri(url));
                 if (ok) ok = await gltf.InstantiateMainSceneAsync(parent);
             }
@@ -1136,10 +1152,20 @@ namespace DiveMap.Runtime
         /// doing more damage than no map at all, which is what the QC pass photographed:
         /// blackOfSubject 10.04% on the kraken, 12.46% on the statue.
         ///
-        /// Deliberately conditional on both the colour space AND the texture's own format, so it
-        /// stops doing anything the moment either is fixed properly rather than becoming a
-        /// permanent loss of surface detail. Nothing is lost meanwhile: these are photogrammetry
-        /// bakes with 35-42k triangles and the detail is in the mesh and the base colour.
+        /// 🔴 AND IT SHOULD NOW FIRE ON NOTHING. The comment above describes the state of the app
+        /// before <see cref="LinearDataTextures"/>: the cause has since been fixed at the import,
+        /// where the wrong boolean actually lives, so every KTX2 normal map in the pipeline is now
+        /// opened with <c>linear: true</c> and there is nothing left to decode wrongly. The last
+        /// paragraph of the old reasoning — "nothing is lost meanwhile, the detail is in the mesh"
+        /// — was the part that turned out to be wrong on the device: the user's report on build
+        /// 261 was that the animals read as flat and angular, "ไม่สมูทเหมือน Meshy", and a 40k
+        /// triangle mesh does not carry what a 4096² bake does.
+        ///
+        /// What is left here is the net for the case the add-on could not reach — a file whose
+        /// transcode failed and fell back, so the map really is still misdecoded. Half a right
+        /// angle of lie on every texel is still worse than no map. <c>droppedNormalMap</c> in the
+        /// log line below is therefore expected to read 0 from now on, and a build where it does
+        /// not is a build where the fix did not reach that model.
         /// </summary>
         private static bool DropMisdecodedNormalMap(Material m, string assetId, bool gammaColorSpace)
         {
@@ -1149,7 +1175,8 @@ namespace DiveMap.Runtime
                 Texture tex = m.GetTexture(n);
                 if (tex == null) continue;
 
-                bool drop = GlbShading.NormalMapIsMisdecoded(gammaColorSpace);
+                bool linearData = LinearDataTextures.WasLoadedAsLinearData(tex);
+                bool drop = GlbShading.NormalMapIsMisdecoded(gammaColorSpace, linearData);
                 if (drop)
                 {
                     m.SetTexture(n, null);
@@ -1168,7 +1195,9 @@ namespace DiveMap.Runtime
                 Debug.Log($"[Shading] mat={m.name} asset={assetId} shader={(m.shader != null ? m.shader.name : "(none)")} " +
                           $"normalTex={tex.graphicsFormat} {tex.width}x{tex.height} " +
                           $"srgbApi={(tex.graphicsFormat.ToString().EndsWith("SRGB", StringComparison.Ordinal) ? "t" : "f")} " +
-                          $"gamma={(gammaColorSpace ? "t" : "f")} dropped={(drop ? "t" : "f")}");
+                          $"gamma={(gammaColorSpace ? "t" : "f")} linearData={(linearData ? "t" : "f")} " +
+                          $"neutralTiltNow={NormalMapDecode.TiltDegrees(128, 128, 255, !linearData):F1}° " +
+                          $"dropped={(drop ? "t" : "f")}");
                 return drop;
             }
             return false;

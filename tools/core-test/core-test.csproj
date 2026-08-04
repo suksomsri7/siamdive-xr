@@ -47,6 +47,8 @@
     <Compile Include="../../DiveMap/Assets/Scripts/Core/FishMind.cs" />
     <Compile Include="../../DiveMap/Assets/Scripts/Core/QcPixels.cs" />
     <Compile Include="../../DiveMap/Assets/Scripts/Core/GlbShading.cs" />
+    <Compile Include="../../DiveMap/Assets/Scripts/Core/NormalMapDecode.cs" />
+    <Compile Include="../../DiveMap/Assets/Scripts/Core/GltfTextureRoles.cs" />
     <Compile Include="../../DiveMap/Assets/Scripts/Core/LoadProgress.cs" />
   </ItemGroup>
 
@@ -69,6 +71,9 @@
     <Compile Include="../../DiveMap/Assets/Tests/EditMode/TiltedHullTests.cs" />
     <Compile Include="../../DiveMap/Assets/Tests/EditMode/QcPixelsTests.cs" />
     <Compile Include="../../DiveMap/Assets/Tests/EditMode/GlbShadingTests.cs" />
+    <Compile Include="../../DiveMap/Assets/Tests/EditMode/NormalMapDecodeTests.cs" />
+    <Compile Include="../../DiveMap/Assets/Tests/EditMode/GltfTextureRolesTests.cs" />
+    <Compile Include="../../DiveMap/Assets/Tests/EditMode/NormalReliefTests.cs" />
     <Compile Include="../../DiveMap/Assets/Tests/EditMode/LoadProgressTests.cs" />
     <Compile Include="Runner.cs" />
   </ItemGroup>

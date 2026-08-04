@@ -76,7 +76,7 @@ Shader "DiveMap/FishWaveDetail"
         {
             fixed4 c = tex2D(_MainTex, IN.uv_MainTex) * _Color;
             o.Albedo     = c.rgb;
-            o.Normal     = UnpackNormal(tex2D(_BumpMap, IN.uv_MainTex));
+            o.Normal     = DM_UnpackNormalRGB(tex2D(_BumpMap, IN.uv_MainTex));
             o.Emission   = tex2D(_EmissionMap, IN.uv_MainTex).rgb * _EmissionColor.rgb;
             o.Metallic   = _Metallic;
             o.Smoothness = _Glossiness;
