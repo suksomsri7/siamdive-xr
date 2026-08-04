@@ -22,14 +22,15 @@ namespace DiveMap.Runtime
         /// <summary>#ffb733 — the web's emissive gold.</summary>
         public static readonly Color Gold = new Color(1f, 0.718f, 0.200f, 1f);
 
-        /// <summary>Asset ids that get the treatment. The web tags these by hand too.</summary>
-        public static bool IsGolden(string assetId) =>
-            !string.IsNullOrEmpty(assetId) &&
-            (assetId.Contains("golden") || assetId.Contains("trident") || assetId.Contains("poseidon"));
+        /// <summary>
+        /// Asset ids that get the treatment. The list — and the reason it is a list of ids rather
+        /// than a substring test that used to gild two stone statues by accident — is in
+        /// <see cref="DiveMap.Core.FxRules"/>, where a test on this machine can reach it.
+        /// </summary>
+        public static bool IsGolden(string assetId) => DiveMap.Core.FxRules.IsGolden(assetId);
 
-        public static bool HasBeard(string assetId) =>
-            !string.IsNullOrEmpty(assetId) &&
-            (assetId.Contains("stone_king") || assetId.Contains("poseidon"));
+        /// <inheritdoc cref="DiveMap.Core.FxRules.HasBeard"/>
+        public static bool HasBeard(string assetId) => DiveMap.Core.FxRules.HasBeard(assetId);
 
         /// <summary>
         /// Make every material on the object glow gold. Materials are CLONED first: they come
