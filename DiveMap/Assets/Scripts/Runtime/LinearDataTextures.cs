@@ -142,7 +142,28 @@ namespace DiveMap.Runtime
 
         public override bool SupportsGltfExtension(string extensionName) => false;
 
-        public override void Inject(GltfImportBase gltfImport) => _gltf = gltfImport as IGltfReadable;
+        /// <summary>
+        /// 🔴 THE LINE THAT WAS MISSING, and the whole reason CI run 30894246930 came back with
+        /// <c>linearData=f</c> on every model.
+        ///
+        /// <c>Inject</c> is not a notification — it is where an add-on instance ADDS ITSELF to the
+        /// import, and an instance that does not call
+        /// <c>GltfImportBase.AddImportAddonInstance</c> (<c>GltfImport.cs:360-364</c>, the only
+        /// writer of <c>m_Addons</c>) is never in the collection that
+        /// <c>GltfImport.cs:1660</c> queries with
+        /// <c>m_Addons?.SubCollection&lt;ITextureImageLoader&gt;()</c>. That expression returned
+        /// null, the loader was never asked about a single texture, and the null-conditional meant
+        /// it did so in complete silence — no exception, no warning, and the
+        /// "claimed=" line below never printed at all.
+        ///
+        /// glTFast's own documentation sample does exactly this and nothing else:
+        /// <c>DocExamples/PngTextureAddon.cs:21</c> — <c>gltfImport.AddImportAddonInstance(this);</c>
+        /// </summary>
+        public override void Inject(GltfImportBase gltfImport)
+        {
+            _gltf = gltfImport as IGltfReadable;
+            gltfImport.AddImportAddonInstance(this);
+        }
 
         public override void Inject(IInstantiator instantiator) { }
 

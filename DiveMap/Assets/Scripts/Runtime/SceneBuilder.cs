@@ -1237,7 +1237,8 @@ namespace DiveMap.Runtime
                 if (tex == null) continue;
 
                 bool linearData = LinearDataTextures.WasLoadedAsLinearData(tex);
-                bool drop = GlbShading.NormalMapIsMisdecoded(gammaColorSpace, linearData);
+                NormalMapProbe.Result probe = NormalMapProbe.Measure(tex);
+                bool drop = GlbShading.NormalMapIsMisdecoded(probe.Verdict, gammaColorSpace, linearData);
                 if (drop)
                 {
                     m.SetTexture(n, null);
@@ -1249,16 +1250,25 @@ namespace DiveMap.Runtime
                 // 🔴 One line per material, always — including when nothing is dropped. The
                 // previous attempt at this fix shipped, changed nothing, and the log could not say
                 // whether it had run, been skipped, or never reached a material at all; a whole CI
-                // round (35 min) bought no information. `srgbApi` is recorded precisely because it
-                // is the check that did NOT work: for a KtxUnity external texture the managed
-                // GraphicsFormat is re-derived from the colour space, so this reads false while the
-                // GL object underneath is sRGB. It is here as evidence, not as a condition.
+                // round (35 min) bought no information.
+                //
+                // `srgbApi` is recorded precisely because it is the check that did NOT work: the
+                // managed GraphicsFormat of a transcoded KTX2 is re-derived from the colour space,
+                // so it reads UNorm for a texture the sampler may be decoding as sRGB. Run
+                // 30894246930 printed `RGB_ETC2_UNorm` here — a value KTX for Unity's own format
+                // table (TranscodeFormatHelper.cs:100-215) CANNOT select: its two RGB rows are
+                // RGB_ETC2_SRGB and, for the linear feature, RGB_ETC_UNorm. `RGB_ETC2_UNorm`
+                // appears only in the reverse lookup at line 355. It is a re-derivation, not a
+                // report, which is exactly why this field is evidence and never a condition.
+                //
+                // 🔴 `probe` is the one field here that is a MEASUREMENT. The thing it replaced
+                // (`neutralTiltNow`) was a constant — the tilt a neutral texel would have IF it
+                // were decoded — and it printed 38.8° on a healthy map and a ruined one alike.
                 Debug.Log($"[Shading] mat={m.name} asset={assetId} shader={(m.shader != null ? m.shader.name : "(none)")} " +
                           $"normalTex={tex.graphicsFormat} {tex.width}x{tex.height} " +
                           $"srgbApi={(tex.graphicsFormat.ToString().EndsWith("SRGB", StringComparison.Ordinal) ? "t" : "f")} " +
                           $"gamma={(gammaColorSpace ? "t" : "f")} linearData={(linearData ? "t" : "f")} " +
-                          $"neutralTiltNow={NormalMapDecode.TiltDegrees(128, 128, 255, !linearData):F1}° " +
-                          $"dropped={(drop ? "t" : "f")}");
+                          $"{probe} dropped={(drop ? "t" : "f")}");
                 return drop;
             }
             return false;

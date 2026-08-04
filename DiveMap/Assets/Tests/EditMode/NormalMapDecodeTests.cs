@@ -126,6 +126,95 @@ namespace DiveMap.Tests
             Assert.AreEqual(0.0, NormalMapDecode.MeanLengthError(null, srgbDecoded: true), 1e-9);
         }
 
+        [Test]
+        public void TheProbeTellsTheTwoReadingsApart()
+        {
+            // 🔴 The measurement that CI run 30894246930 proved the code needed. What arrives here
+            // is a GPU readback: whatever the sampler handed back, quantised to 8 bits. If the
+            // texture was linear the bytes ARE the stored map; if it was sRGB-typed the sampler
+            // decoded it first. Nothing else about the pipeline is knowable — but a tangent-space
+            // map stores unit vectors, so whichever reading yields unit vectors is the one that
+            // happened.
+            byte[] asStored = SyntheticNormalMap();
+            byte[] asDecoded = SimulateSrgbDecode(asStored);
+
+            Assert.AreEqual(NormalReadVerdict.UnitNormals, NormalMapDecode.Verdict(asStored));
+            Assert.AreEqual(NormalReadVerdict.SrgbDecoded, NormalMapDecode.Verdict(asDecoded));
+
+            // And the fractions behind the verdict are not marginal — this has to be a clear
+            // separation or it is another coin toss dressed as evidence.
+            //
+            // 🔴 The criterion is the GAP between the two readings, not an absolute floor on the
+            // wrong one. The first version of this test asserted "the wrong reading scores under
+            // 0.30" and it measured 0.309: on a bake with real slopes a minority of texels land
+            // near unit length under either interpretation by coincidence, and no threshold picked
+            // by eye is going to be stable across maps. What IS stable, and what the verdict
+            // actually rests on, is that the right reading wins by a mile.
+            double storedRight = NormalMapDecode.UnitFraction(asStored, undoSrgb: false);
+            double storedWrong = NormalMapDecode.UnitFraction(asStored, undoSrgb: true);
+            double decodedRight = NormalMapDecode.UnitFraction(asDecoded, undoSrgb: true);
+            double decodedWrong = NormalMapDecode.UnitFraction(asDecoded, undoSrgb: false);
+
+            Assert.Greater(storedRight, 0.95, "a healthy map read correctly");
+            Assert.Greater(decodedRight, 0.90, "a decoded map, decode undone");
+            Assert.Greater(storedRight - storedWrong, 0.5, "gap on the healthy map");
+            Assert.Greater(decodedRight - decodedWrong, 0.5, "gap on the decoded map");
+
+            // …and the losing reading is always below the bar that lets a verdict be named at all,
+            // so it can never win by default when the winner is weak.
+            Assert.Less(storedWrong, NormalMapDecode.MinUnitFraction);
+            Assert.Less(decodedWrong, NormalMapDecode.MinUnitFraction);
+        }
+
+        [Test]
+        public void TheProbeRefusesToGuess()
+        {
+            // No sample at all.
+            Assert.AreEqual(NormalReadVerdict.Unknown, NormalMapDecode.Verdict(null));
+            Assert.AreEqual(NormalReadVerdict.Unknown, NormalMapDecode.Verdict(new byte[0]));
+            Assert.AreEqual(-1.0, NormalMapDecode.UnitFraction(null, false), 1e-9);
+
+            // 🔴 A window that landed entirely in the atlas gutter. Pure black unpacks to
+            // (−1,−1,−1) — length 1.73 — so counting those texels would report a perfectly healthy
+            // map as broken in proportion to how much empty space its UV layout happens to have.
+            // With every texel skipped there is nothing to measure, and the answer is Unknown, NOT
+            // "broken": the previous version of this decision condemned a map on less than this.
+            Assert.AreEqual(-1.0, NormalMapDecode.UnitFraction(new byte[300], false), 1e-9);
+            Assert.AreEqual(NormalReadVerdict.Unknown, NormalMapDecode.Verdict(new byte[300]));
+
+            // Noise that is not a normal map under EITHER reading gets no verdict either.
+            var noise = new byte[64 * 3];
+            for (int i = 0; i < noise.Length; i++) noise[i] = (byte)(40 + (i * 37) % 60);
+            Assert.AreEqual(NormalReadVerdict.Unknown, NormalMapDecode.Verdict(noise));
+        }
+
+        [Test]
+        public void GutterDoesNotDragAHealthyMapDown()
+        {
+            // Three quarters gutter, one quarter real bake — roughly what the kraken's atlas
+            // measured. The verdict must still be UnitNormals.
+            byte[] bake = SyntheticNormalMap();
+            var mixed = new byte[bake.Length * 4];
+            System.Array.Copy(bake, 0, mixed, bake.Length * 3, bake.Length);   // rest stays 0
+            Assert.AreEqual(NormalReadVerdict.UnitNormals, NormalMapDecode.Verdict(mixed));
+        }
+
+        /// <summary>
+        /// What the GPU would return if the sampler applied an sRGB decode: each stored channel
+        /// converted to linear, then re-quantised to 8 bits on the way into the readback buffer.
+        /// The quantisation is part of the fixture on purpose — the recovery has to survive it.
+        /// </summary>
+        private static byte[] SimulateSrgbDecode(byte[] stored)
+        {
+            var decoded = new byte[stored.Length];
+            for (int i = 0; i < stored.Length; i++)
+            {
+                double linear = NormalMapDecode.SrgbToLinear(stored[i] / 255.0);
+                decoded[i] = (byte)System.Math.Round(linear * 255.0);
+            }
+            return decoded;
+        }
+
         /// <summary>
         /// A stand-in for a real bake: unit tangent-space normals encoded the way glTF stores them
         /// (x→R, y→G, z→B, each mapped from [−1,1] to [0,255]). Mostly near-flat with a spread of
