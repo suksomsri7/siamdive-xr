@@ -98,6 +98,13 @@ namespace DiveMap.Runtime
         //   thin deck band the sun grazes caught any light. Sand is diffuse, so ambient
         //   lit it fine — hence bright sand + black wreck in the same shot.
         //
+        // 🔴 HISTORY, NOT INSTRUCTIONS — the first bullet below was undone twice over and the
+        // reflection cube it justifies is now BLACK at intensity 0. WO-E5m already writes the
+        // wreck's metallicFactor to 0 (SceneBuilder.TameMetal → GlbShading.MappedMetalFactor), so
+        // the hull has full diffuse and the premise "a metal surface has ~zero diffuse albedo"
+        // no longer describes anything in this app; and WO-L measured what the cube was actually
+        // doing to everything else. See the reflection block further down before touching it.
+        //
         // Fix is decoupled by shading path (no GLB/SceneBuilder edits, no shader-property
         // guesswork):
         //   • WRECK (specular)  ← a bright custom reflection cubemap. Metals reflect a lit
@@ -149,14 +156,51 @@ namespace DiveMap.Runtime
             RenderSettings.fogStartDistance = 500f;
             RenderSettings.fogEndDistance = 9000f;
 
-            // Custom reflection so the metallic wreck reflects a lit underwater environment
-            // instead of black. Uniform bright blue-white cubemap; a metal surface's spec
-            // colour is its own base colour (olive), so the hull reads bright green-olive.
-            // Diffuse sand is unaffected — reflection only feeds specular. (built-in RP:
-            // feeds unity_SpecCube0 globally via DefaultReflectionMode.Custom.)
+            // ── WO-L (4 ส.ค.): NO ENVIRONMENT SPECULAR. It is off, and it must stay off. ────────
+            //
+            // The web has no envmap at all. builder.html hands three.js three lights and nothing
+            // else, so every specular highlight on that page is a highlight from a light. This
+            // scene used to hand every shader a 4×4 uniform blue-white cubemap at
+            // reflectionIntensity 1 — the single largest departure from the page we are trying to
+            // match, and the one the "the animals look flat and washed out" report is about.
+            //
+            // 🔴 IT IS AN ADDITIVE WASH, and the arithmetic says how much. A uniform cube carries
+            // no direction, so what it delivers is the same number on every texel of a smooth
+            // surface. Built-in RP, gamma colour space, a marine dielectric (metallic ≈ 0,
+            // smoothness ≈ 0.71):
+            //
+            //     surfaceReduction   1 − 0.28·roughness·perceptualRoughness  = 0.993
+            //     cube luminance     (0.60 + 0.72 + 0.82) / 3                = 0.713
+            //     FresnelLerp mean   0.04 + (0.75 − 0.04)·⟨(1−N·V)⁵⟩         = 0.074
+            //       (⟨(1−N·V)⁵⟩ = 2·B(2,6) = 0.0476, the area mean over a sphere silhouette)
+            //     ───────────────────────────────────────────────────────────────────────────
+            //     0.993 × 0.713 × 0.074 = 0.052   →   +13.3 of 255, on every lit pixel
+            //
+            // Measured against WO-K's offline render of the whale shark's own shipped GLB at this
+            // exact camera, the Unity frame was +21.9 levels brighter (115.06 vs 93.11) with the
+            // pattern amplitude INTACT (hpRms 26.10 vs 27.21, ratio 0.96). The cube is 13.3 of
+            // that 21.9. Simulating its removal on that frame moves contrast retention 0.835 →
+            // 0.966 and hpRms retention 0.959 → 0.984. <see cref="DiveMap.Core.QcFidelity"/> is
+            // that measurement, wired into the model QC pass so the next build reports it.
+            //
+            // 🔴 THE REASON IT WAS ADDED IS GONE — check this before ever putting it back. The
+            // cube was hired to stop the metallic wreck reflecting black (the long remark above),
+            // and since WO-E5m every material that ships a metallic-roughness map has had its
+            // metallicFactor written to 0 by SceneBuilder.TameMetal → GlbShading.MappedMetalFactor.
+            // The wreck is one of those. After TameMetal the whole app contains exactly one
+            // material above 0.06 metal: the whitetip shark at 0.224 (GlbShading's measured table),
+            // and it keeps 74.5% of its diffuse albedo plus both lights' direct specular — which is
+            // precisely, and only, what the web gives it.
+            //
+            // ⚠️ 3 ส.ค. left a note saying "ห้ามลด intensity เดี่ยวๆ วัดแล้วแย่ลง". That verdict
+            // came from darkOfSubject on a studio rig, which measures how much of a model is dark
+            // and therefore scores any wash as an improvement. It cannot see this bug. Superseded.
+            //
+            // Custom mode with a black cube rather than no cube: unity_SpecCube0 stays bound and
+            // defined for every shader variant, and the intensity is a second, independent zero.
             RenderSettings.defaultReflectionMode  = UnityEngine.Rendering.DefaultReflectionMode.Custom;
-            RenderSettings.customReflectionTexture = AmbientReflectionCube(new Color(0.60f, 0.72f, 0.82f));
-            RenderSettings.reflectionIntensity     = 1f;
+            RenderSettings.customReflectionTexture = AmbientReflectionCube(Color.black);
+            RenderSettings.reflectionIntensity     = 0f;
 
             // Key light (sun): reuse the scene's directional if there is one, else make it.
             Light sun = null;
@@ -213,9 +257,13 @@ namespace DiveMap.Runtime
             // costs nothing and it does hold the Windows/desktop build together.
         }
 
-        // A tiny uniform-colour cubemap used as the scene's custom reflection. Built-in RP
-        // has no reflection probe in Main.unity, so metallic surfaces (the wreck) would
-        // otherwise reflect black. Cached so Retry/rebuild doesn't leak a new cubemap.
+        // A tiny uniform-colour cubemap used as the scene's custom reflection. Cached so
+        // Retry/rebuild doesn't leak a new cubemap.
+        //
+        // 🔴 Called with Color.black, on purpose — see the reflection block in SetupLighting.
+        // The cache is keyed on nothing but existence, so this has exactly one caller by
+        // construction: a second caller with a different colour would silently get the first
+        // one's cubemap. If a probe ever needs its own, give it its own field.
         private static Cubemap _reflectionCube;
         private static Cubemap AmbientReflectionCube(Color c)
         {

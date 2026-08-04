@@ -441,11 +441,11 @@ jobs:
           BIN=$(find . -path '*/build/*' -name 'DiveMap' -type f | head -1)
           echo "BIN=$BIN"; chmod +x "$BIN"
           # 300 → 480 s. The same run now also does the MODEL pass (AppBoot.QcShot →
-          # QcModelShot): six real GLBs pulled off the CDN (~12.6 MB), instantiated one at a
-          # time through the app's own loader, and photographed close up — the models that
-          # every previous QC screenshot has been unable to contain, because this scene builds
-          # all but four of its objects out of generated geometry. The pass has its own 170 s
-          # internal budget and quits itself, so this ceiling is the outer fuse, not the plan.
+          # QcModelShot): real GLBs pulled off the CDN, instantiated one at a time through the
+          # app's own loader, and photographed close up — the models that every previous QC
+          # screenshot has been unable to contain, because this scene builds all but four of its
+          # objects out of generated geometry. The pass has its own internal budget and quits
+          # itself, so this ceiling is the outer fuse, not the plan.
           #
           # 480 → 1120 s for the MAP pass (AppBoot.QcShot → QcMapShot), which runs behind the
           # model pass and photographs all SEVEN maps from the diver's-eye pose. It fetches each
@@ -460,7 +460,13 @@ jobs:
           # downloaded, played and measured, no picture taken. Its own budget is 30 s per model
           # plus 6 frames — ~100 s worst case — and the fuse moves with it, because a timeout kill
           # truncates Player.log and the log is the only evidence this pass produces.
-          timeout 1220 xvfb-run -a -s "-screen 0 1280x720x24" \
+          #
+          # 1220 → 1350 s for WO-L, which took the model pass from eight models to twelve and its
+          # internal budget from 170 to 300 s. The fuse tracks the sum of the three passes' own
+          # budgets (300 + 600 + 100) plus the same ~350 s of slack it has always carried, so it
+          # still sits BEHIND them: a slow CDN produces a report rather than a killed process.
+          # 1350 s is 22.5 min against this job's 150 min ceiling, so there is no interaction.
+          timeout 1350 xvfb-run -a -s "-screen 0 1280x720x24" \
             "$BIN" -qcshot "$PWD/qc_screenshot.png" -screen-width 1280 -screen-height 720 -force-glcore || true
           ls -la qc_screenshot.png || echo "::warning::no screenshot produced"
           ls -la qc_model_*.png || echo "::warning::no per-model QC shots — see [QCModel] lines in qc_player.log"
@@ -475,6 +481,11 @@ jobs:
           # no model in it is logged FAIL by the harness (QcPixels.Passes), not quietly passed.
           grep -h '\[QCModel\]' qc_player.log 2>/dev/null || \
             echo "::warning::no [QCModel] lines — the model QC pass did not run"
+          # WO-L — one [QCFidelity] line per model: did the renderer keep the pattern the texture
+          # file has? Read meanL first (the additive-wash detector), then hpRms (the pattern
+          # amplitude, which a lighting change must NOT move). See Core/QcFidelity.cs.
+          grep -h '\[QCFidelity\]' qc_player.log 2>/dev/null || \
+            echo "::warning::no [QCFidelity] lines — the fidelity probe did not run"
           # …and the same for the maps. One [QCMap] line per map carries the verdict and the
           # numbers behind it (dark%, subject%, waterLum, fogWork, backdropSpan), so a regression
           # is readable in the step log without downloading the pictures; [QCBlack] carries the

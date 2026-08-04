@@ -751,7 +751,7 @@ namespace DiveMap.Core
         // เลย ผมถามคุณ QC ยังไงครับ คุณไม่ได้ถ่ายรูปแคปเจอร์หน้าจอมาดูเองด้วยหรอ".
         //
         // They are right, and the gap is structural rather than careless. Every QC pass in this
-        // project photographs either NINE MODELS ALONE against a gradient (QcModelShot) or ONE map,
+        // project photographs either TWELVE MODELS ALONE against a gradient (QcModelShot) or ONE map,
         // HTMS Chang, from an orbit pose (QcShot angle 1/2). Atlantis, Posidon, Hanuman, Harddeep,
         // T-13 and Tu-1 — the maps the complaints are actually about — have never been in a CI
         // frame, and neither has the diver's-eye pose the player spends the whole game in. So the

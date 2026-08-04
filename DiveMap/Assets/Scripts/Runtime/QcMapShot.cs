@@ -16,7 +16,7 @@ namespace DiveMap.Runtime
     /// They are right, and the hole is structural rather than careless. CI has two kinds of
     /// evidence and neither of them is the game:
     ///
-    ///   • <see cref="QcModelShot"/> photographs NINE MODELS, one at a time, alone, against a
+    ///   • <see cref="QcModelShot"/> photographs TWELVE MODELS, one at a time, alone, against a
     ///     gradient, 4,000 units to the side of everything. A model that is beautiful in that
     ///     studio and black in a map full of other models scores a clean pass.
     ///   • <c>AppBoot.QcShot</c>'s two wide angles photograph ONE map — HTMS Chang — from an orbit

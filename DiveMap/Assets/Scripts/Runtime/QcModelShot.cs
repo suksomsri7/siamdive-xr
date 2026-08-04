@@ -18,7 +18,7 @@ namespace DiveMap.Runtime
     /// modules we ship, no CI screenshot has ever contained the thing being tested. Green shots,
     /// zero evidence. The user's phrasing: หลักฐานจากเว็บไม่นับ ต้องเป็นตัว Unity.
     ///
-    /// So: six representatives are downloaded through the app's OWN loader — manifest → CDN →
+    /// So: twelve representatives are downloaded through the app's OWN loader — manifest → CDN →
     /// <see cref="AssetCacheStore"/> → glTFast → the same TameMetal/GoldFx post-pass a map item
     /// gets — placed one at a time, framed to fill the shot, and photographed. Going through the
     /// cache is deliberate: it means this pass also exercises the generation gate, which is the
@@ -32,8 +32,10 @@ namespace DiveMap.Runtime
     ///
     /// 🔎 No lights are added. The models are staged far out to the side of the map, at the same
     /// depth as its content, and lit by exactly what the app lights the map with — the sun, fill
-    /// and Trilight ambient from <c>AppBoot.SetupLighting</c>, the reflection cube, the fog, and
-    /// the <see cref="UnderwaterShading"/> floor. A QC rig with its own flattering key light would
+    /// and Trilight ambient from <c>AppBoot.SetupLighting</c>, the fog, and the
+    /// <see cref="UnderwaterShading"/> floor. (There is no reflection cube any more; WO-L took the
+    /// environment specular out, and the whole point of this staging is that when the app's light
+    /// changes, these photographs change with it.) A QC rig with its own flattering key light would
     /// hide the very bug it is looking for. The capture is taken at END OF FRAME for the same
     /// reason: UnderwaterShading raises the ambient in LateUpdate and hands it back at the top of
     /// the next frame, so a mid-frame capture would photograph the model in light the app never
@@ -42,28 +44,42 @@ namespace DiveMap.Runtime
     public static class QcModelShot
     {
         /// <summary>
-        /// The six the work order names — chosen as one of each way a model goes wrong: two
-        /// scanned CC0 props, a statue that also runs the gold FX path, two wrecks (one of them
-        /// the metallic hull the whole reflection-cube story is about), and two marine models,
-        /// including the barracuda that has just been re-exported at 2048².
+        /// What gets photographed, in the order it gets photographed.
+        ///
+        /// 🔴 THE ORDER IS THE POINT, and it is not alphabetical or historical. The pass has a
+        /// budget (<see cref="BudgetSeconds"/>) and a model that runs past it is logged
+        /// <c>budget-exhausted</c> with no picture — so whatever sits at the END of this list is
+        /// what a slow CDN silently takes away. The seven marine models the user judges this round
+        /// of work by therefore go FIRST, and the props that have carried the photometric
+        /// baselines go behind them. If something has to be lost it must not be the evidence.
+        ///
+        /// The first seven: the animal set the user named for the lighting work — the whale shark
+        /// (spots that either read or do not, and the model every fidelity number in
+        /// <see cref="DiveMap.Core.QcFidelity"/> is measured on), the manta (one broad curved
+        /// surface with nothing but baked detail on it, the most sensitive subject in the
+        /// catalogue to a normal map that is or is not arriving), four more sharks across three
+        /// id namespaces, and the barracuda.
+        ///
+        /// The last five are the original set, kept because they are the only models in CI with
+        /// baselines a human has actually looked at: two scanned CC0 props, a statue that also
+        /// runs the gold FX path, and two wrecks — one of them the hull the whole reflection-cube
+        /// story was about, and which no longer needs it (see AppBoot.SetupLighting).
         /// </summary>
         public static readonly string[] AssetIds =
         {
+            "msh:whaleshark",
+            "msh:manta",
+            "msh:thresher_shark",
+            "msh:tiger_shark",
+            "mdl:great_white_shark",
+            "losin:hammerhead_shark",
+            "msh:barracuda",
+
             "cc0:kraken",
             "stat:verdant_poseidon",
             "cc0:wreck_hardeep",
             "sw:htms732",
-            "msh:barracuda",
             "msh:lionfish",
-
-            // 🔴 Added for the normal-map work order, and for the report behind it: "the animals
-            // are flat and angular, not smooth like Meshy". These two are the models the user
-            // judges that by — the whale shark fills the screen and the manta is one broad curved
-            // surface with nothing but its baked detail on it, which makes it the single most
-            // sensitive subject in the set to a normal map that is or is not arriving. They are
-            // here so the gate pictures show the thing the change is about.
-            "msh:whaleshark",
-            "msh:manta",
         };
 
         /// <summary>
@@ -78,22 +94,37 @@ namespace DiveMap.Runtime
         /// record them (all of them, from one run, after looking at the pictures) whenever the
         /// lighting or the material pipeline changes on purpose; a stale baseline is worth more
         /// than no baseline, but a baseline nobody has looked at is worth less than none.
+        ///
+        /// 🔴 EVERY NUMBER BELOW IS STALE AS OF WO-L, and knowingly so. They were recorded with
+        /// the environment reflection cube on, which added ~13 of 255 to every lit pixel; with it
+        /// off (AppBoot.SetupLighting) the same models are legitimately darker and their
+        /// darkOfSubject will read higher. Expect these to trip and log FAIL — that is the gate
+        /// doing its job on a lighting change that was made on purpose, not a regression, and no
+        /// CI step turns a [QCModel] FAIL red. They are NOT pre-adjusted here: a baseline is "what
+        /// it looked like when a human last approved it", and guessing one forward would delete the
+        /// only fixed point this pass has. Re-record all of them, from one run, after the user has
+        /// looked at that run's pictures.
         /// </summary>
         private static readonly double[] DarkBaselines =
         {
+            // 🔴 −1 = no baseline recorded, which DarkGate reads as "fall back to the absolute
+            // ceiling" — a loose "something is catastrophically wrong" line, not a quality bar.
+            // All seven marine models are here because nobody has signed off a picture of them
+            // yet. Fill them in from the run whose pictures the user approves, not from the first
+            // run that is green.
+            -1.0,    // msh:whaleshark
+            -1.0,    // msh:manta
+            -1.0,    // msh:thresher_shark
+            -1.0,    // msh:tiger_shark
+            -1.0,    // mdl:great_white_shark
+            -1.0,    // losin:hammerhead_shark
+            14.57,   // msh:barracuda
+
             2.33,    // cc0:kraken
             31.47,   // stat:verdant_poseidon — dark green stone
             36.86,   // cc0:wreck_hardeep
-            62.34,   // sw:htms732 — camouflage, legitimately the darkest of the six
-            14.57,   // msh:barracuda
+            62.34,   // sw:htms732 — camouflage, legitimately the darkest of the set
             0.86,    // msh:lionfish
-
-            // 🔴 −1 = no baseline recorded, which DarkGate reads as "fall back to the absolute
-            // ceiling". Deliberately not guessed from this run: a baseline is "what it looked like
-            // when a human last approved it", and nobody has approved these two yet. Fill them in
-            // from the run whose pictures the user signs off, not from the first run that is green.
-            -1.0,    // msh:whaleshark
-            -1.0,    // msh:manta
         };
 
         /// <summary>Baseline for <paramref name="assetId"/>, or −1 when none is recorded.</summary>
@@ -114,12 +145,23 @@ namespace DiveMap.Runtime
         private const float PerModelSeconds = 45f;
 
         /// <summary>
-        /// Whole-pass budget. llvmpipe renders at 135-300 ms a frame and the six GLBs are ~12.6 MB
-        /// together; the pass measures well under this, and the ceiling is here so that a CDN going
-        /// slow costs us the remaining models' log lines rather than the entire step — including
-        /// the two screenshots already written and the artifact upload behind it.
+        /// Whole-pass budget. llvmpipe renders at 135-300 ms a frame; the ceiling is here so that a
+        /// CDN going slow costs us the remaining models' log lines rather than the entire step —
+        /// including the screenshots already written and the artifact upload behind it.
+        ///
+        /// 🔴 170 → 300 s for WO-L, which took the list from eight models to twelve. Sized, not
+        /// guessed: each model is one download (the marine GLBs run 1.0-1.6 MB) plus ten captures —
+        /// the shot, its model-off twin, seven A/B probes and the no-normal-map probe — and the
+        /// four-probe era measured ~7 s of capture across the whole pass. Twelve models at 25 s
+        /// each is roughly double what the pass has ever used, which is the right shape for a
+        /// ceiling that exists to be missed.
+        ///
+        /// ⚠️ It has to stay UNDER the step's outer fuse, which is a hard `timeout` kill and
+        /// truncates Player.log — the log being half of what this pass produces. That fuse sits
+        /// behind the sum of all three passes' budgets (model + map 600 s + anim ~100 s) and moved
+        /// 1220 → 1350 s in build.yml with this change. Raise them together or not at all.
         /// </summary>
-        private const float BudgetSeconds = 170f;
+        private const float BudgetSeconds = 300f;
 
         /// <summary>Settle time after the model lands, before the pair of frames.</summary>
         private const float SettleSeconds = 0.4f;
@@ -295,6 +337,13 @@ namespace DiveMap.Runtime
 
                 shot = QcPixels.Measure(withModel, withoutModel);
 
+                // WO-L — the pattern the texture file has, versus the pattern that reached the
+                // frame. Costs one pass over two buffers already in hand: no render, no download.
+                // meanL is the line to read (the additive-wash detector); see QcFidelity.
+                Debug.Log(QcFidelity.Line(
+                    name, assetId,
+                    QcFidelity.Measure(withModel, withoutModel, rt.width, rt.height)));
+
                 Debug.Log($"[QCModel] {name} framed radius={radius:F2} dist={dist:F2} " +
                           $"scale={scale:F2} camY={cam.transform.position.y:F1} " +
                           $"load={loadSecs:F1}s url={url}");
@@ -377,7 +426,7 @@ namespace DiveMap.Runtime
         /// glide, cruise, burst, turn, patrol, accent — so a run in which msh:barracuda reports
         /// clips=0 is a measurement of the pipeline, not of this code.
         ///
-        /// It reports whatever the QC list happens to contain: none of those nine models is a
+        /// It reports whatever the QC list happens to contain: none of those twelve models is a
         /// turtle today, and swapping one in would move a photometric baseline that a human
         /// already signed off on. This is deliberately the cheap half of the evidence.
         /// </summary>
