@@ -394,10 +394,11 @@ jobs:
     name: QC screenshot
     needs: test
     runs-on: ubuntu-latest
-    # 90 ไม่ใช่ 60: shader ใหม่ (เช่น DM_FishWaveDetail) ทำ Library cache แตก → คอมไพล์ variant
-    # ~5k ตัวกิน ~60 นาทีพอดีเพดานเดิม โดนตัดตอน 3956/5120 มาแล้ว 4 run ติด และการโดนตัด
-    # ก่อน cache ถูกเซฟ = รอบถัดไปก็แตกอีก วนไม่รู้จบ
-    timeout-minutes: 90
+    # 150 ไม่ใช่ 90: (ประวัติ: 90 ไม่ใช่ 60 เพราะ shader ใหม่ทำ Library cache แตก → คอมไพล์ variant
+    # ~5k ตัวกิน ~60 นาที) — 4 ส.ค. แก้ DM_FishWaveDetail อีกรอบ + QC โตขึ้น (7 แมพ + โมเดลเพิ่ม
+    # ฉลามวาฬ/แมนตา + QcAnimShot + ดาวน์โหลด CDN ใหม่หลัง dilation ทั้งคลัง) → 90 โดนตัดที่
+    # นาทีสุดท้ายพอดี (run 30887364898) และการโดนตัดก่อน cache เซฟ = รอบถัดไปแตกซ้ำ วนไม่จบ
+    timeout-minutes: 150
     steps:
       - name: Free disk space
         uses: jlumbroso/free-disk-space@main
