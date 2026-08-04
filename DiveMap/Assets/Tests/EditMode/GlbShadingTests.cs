@@ -56,26 +56,56 @@ namespace DiveMap.Tests
         [Test]
         public void TheWorkaroundSwitchesItselfOffWhenTheImportIsFixed()
         {
+            // ── with no measurement, the old deduction still applies ──────────────
+            const NormalReadVerdict none = NormalReadVerdict.Unknown;
+
             // The case the app WAS in: gamma colour space and no import add-on, so glTFast never
             // marks a glTF texture as data and every KTX2 transcodes to an sRGB target.
             Assert.IsTrue(GlbShading.NormalMapIsMisdecoded(
-                gammaColorSpace: true, loadedAsLinearData: false));
+                none, gammaColorSpace: true, loadedAsLinearData: false));
 
             // The case the app is in NOW: still gamma — that is the user's decision and it stands —
             // but the add-on re-opened this texture with linear:true, so there is nothing left to
             // decode wrongly and the map must be kept. This is the line that gives the models
             // their surface back.
             Assert.IsFalse(GlbShading.NormalMapIsMisdecoded(
-                gammaColorSpace: true, loadedAsLinearData: true));
+                none, gammaColorSpace: true, loadedAsLinearData: true));
 
             // Linear colour space: glTFast tags the map as data itself and KtxUnity transcodes it
             // unsigned-normalised whether or not the add-on is installed. Nothing to fix, and
             // throwing the map away would be pure loss — this is what stops the workaround
             // becoming permanent.
             Assert.IsFalse(GlbShading.NormalMapIsMisdecoded(
-                gammaColorSpace: false, loadedAsLinearData: false));
+                none, gammaColorSpace: false, loadedAsLinearData: false));
             Assert.IsFalse(GlbShading.NormalMapIsMisdecoded(
-                gammaColorSpace: false, loadedAsLinearData: true));
+                none, gammaColorSpace: false, loadedAsLinearData: true));
+        }
+
+        [Test]
+        public void AMeasurementBeatsTheDeductionInBothDirections()
+        {
+            // 🔴 The lesson of CI run 30894246930, as a test. That build dropped the normal map on
+            // every model in the app because the deduction said gamma ⇒ misdecoded, and the
+            // add-on that was supposed to make the deduction false had silently never run. Nothing
+            // in the code could notice, because nothing in the code was looking at a pixel.
+
+            // Measured intact ⇒ KEEP, even in gamma, even with no add-on. This is the case the old
+            // rule got wrong for two builds, and the case that gives the surface back.
+            Assert.IsFalse(GlbShading.NormalMapIsMisdecoded(
+                NormalReadVerdict.UnitNormals, gammaColorSpace: true, loadedAsLinearData: false));
+
+            // Measured decoded ⇒ DROP, even though the add-on says it handled this texture. "We
+            // fixed it" is a claim; the texels are the evidence, and the evidence wins. This is
+            // what stops the fix from re-enabling a map that is genuinely still broken.
+            Assert.IsTrue(GlbShading.NormalMapIsMisdecoded(
+                NormalReadVerdict.SrgbDecoded, gammaColorSpace: true, loadedAsLinearData: true));
+
+            // …and in linear colour space too: the verdict is about this texture, not about the
+            // project.
+            Assert.IsTrue(GlbShading.NormalMapIsMisdecoded(
+                NormalReadVerdict.SrgbDecoded, gammaColorSpace: false, loadedAsLinearData: true));
+            Assert.IsFalse(GlbShading.NormalMapIsMisdecoded(
+                NormalReadVerdict.UnitNormals, gammaColorSpace: true, loadedAsLinearData: true));
         }
 
         [Test]
@@ -94,9 +124,14 @@ namespace DiveMap.Tests
             var parameters = typeof(GlbShading)
                 .GetMethod(nameof(GlbShading.NormalMapIsMisdecoded))
                 .GetParameters();
-            Assert.AreEqual(2, parameters.Length);
-            Assert.AreEqual("gammaColorSpace", parameters[0].Name);
-            Assert.AreEqual("loadedAsLinearData", parameters[1].Name);
+            Assert.AreEqual(3, parameters.Length);
+            Assert.AreEqual("verdict", parameters[0].Name);
+            Assert.AreEqual("gammaColorSpace", parameters[1].Name);
+            Assert.AreEqual("loadedAsLinearData", parameters[2].Name);
+
+            // 🔴 And the first parameter is the one that has to come from a MEASUREMENT. The other
+            // two are deductions; they are kept only for the case where no measurement exists.
+            Assert.AreEqual(typeof(NormalReadVerdict), parameters[0].ParameterType);
         }
 
         [Test]

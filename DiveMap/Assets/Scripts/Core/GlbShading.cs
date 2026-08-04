@@ -133,11 +133,40 @@ namespace DiveMap.Core
         /// question this asks has moved from "is the project in gamma" — which was always going to
         /// be true — to "did this particular texture actually come through the fix".
         /// </summary>
+        /// 🔴 AND IT IS NOW DECIDED BY MEASUREMENT. CI run 30894246930 is why. That build shipped
+        /// the colour-space rule with the add-on beside it, the add-on silently never ran, and the
+        /// rule did what it was told: <c>dropped=t</c> on every model, on the strength of a
+        /// deduction from package source that nothing had ever checked against a pixel. The log
+        /// line even printed a CONSTANT (<c>neutralTiltNow=38.8°</c> — what a neutral texel WOULD
+        /// read if it were decoded) in the place where evidence should have been.
+        ///
+        /// <c>NormalMapProbe</c> now samples the real texture through the real sampler and
+        /// <see cref="NormalMapDecode.Verdict"/> asks the texels which reading makes them unit
+        /// vectors. A measured verdict overrides the deduction in BOTH directions — it can save a
+        /// map the old rule would have deleted, and it can condemn one the add-on believed it had
+        /// fixed. The colour-space rule survives only for the case where there is no measurement
+        /// at all.
+        /// </summary>
+        /// <param name="verdict">What the GPU probe saw, or
+        /// <see cref="NormalReadVerdict.Unknown"/> when it could not run.</param>
         /// <param name="gammaColorSpace">QualitySettings.activeColorSpace == Gamma.</param>
         /// <param name="loadedAsLinearData">Did the import add-on load this very texture with
         /// <c>linear: true</c>? Ask the texture, not the pipeline.</param>
-        public static bool NormalMapIsMisdecoded(bool gammaColorSpace, bool loadedAsLinearData)
-            => gammaColorSpace && !loadedAsLinearData;
+        public static bool NormalMapIsMisdecoded(NormalReadVerdict verdict,
+                                                 bool gammaColorSpace,
+                                                 bool loadedAsLinearData)
+        {
+            // Measured intact. Keep it whatever the colour space says — this is the branch that
+            // gives the models their surface back, and the branch the old rule could not express.
+            if (verdict == NormalReadVerdict.UnitNormals) return false;
+
+            // Measured decoded. Drop it whatever the add-on believed — this is the branch that
+            // stops "we fixed it" from being taken on trust.
+            if (verdict == NormalReadVerdict.SrgbDecoded) return true;
+
+            // No usable measurement: fall back to the deduction, which is still the best guess.
+            return gammaColorSpace && !loadedAsLinearData;
+        }
 
         /// <summary>
         /// What <c>metallicFactor</c> should become. Unchanged rule, moved here so it is covered:

@@ -1,6 +1,24 @@
 namespace DiveMap.Core
 {
     /// <summary>
+    /// What a GPU readback of a normal map turned out to say. Produced by
+    /// <see cref="NormalMapDecode.Verdict"/> from pixels the sampler actually returned — not from
+    /// the colour space, not from the graphics format, not from a comment.
+    /// </summary>
+    public enum NormalReadVerdict
+    {
+        /// <summary>Could not tell: the probe did not run, or the sample was unusable.</summary>
+        Unknown = 0,
+
+        /// <summary>The texels came back as unit vectors. The map is reaching the shader intact.</summary>
+        UnitNormals = 1,
+
+        /// <summary>They only become unit vectors after undoing an sRGB decode. The sampler is
+        /// decoding a texture that stores data.</summary>
+        SrgbDecoded = 2,
+    }
+
+    /// <summary>
     /// What a tangent-space normal map texel becomes by the time the shader sees it, written as
     /// arithmetic so the claim "the map is being decoded wrongly" is a number and not an opinion.
     ///
@@ -193,5 +211,94 @@ namespace DiveMap.Core
         /// </summary>
         public static bool ReadsAsUnitNormals(byte[] rgb, bool srgbDecoded)
             => MeanLengthError(rgb, srgbDecoded) <= MaxLengthError;
+
+        // ── the runtime verdict: ask the pixels, not the pipeline ─────────────────
+
+        /// <summary>
+        /// Tolerance for the GPU probe specifically, which is looser than
+        /// <see cref="MaxLengthError"/> on purpose. Those texels have been through a compressed
+        /// transcode, a point-sampled blit and an 8-bit readback; a bake that is unit-length on
+        /// disk is not going to come back unit-length to four decimal places, and a threshold that
+        /// demands it would report every healthy map as broken.
+        /// </summary>
+        public const double ProbeLengthTolerance = 0.08;
+
+        /// <summary>
+        /// How much of the map has to agree before the probe will name a verdict. Real atlases
+        /// carry gutter, seams and the odd degenerate texel, so unanimity is not available and
+        /// asking for it would mean never answering.
+        /// </summary>
+        public const double MinUnitFraction = 0.6;
+
+        /// <summary>
+        /// Fraction of usable texels that unpack to unit length.
+        ///
+        /// 🔴 A FRACTION AND NOT A MEAN. The mean is what the first version of these tests used and
+        /// it lied: stretched and shrunk texels cancel, and a thoroughly broken map averaged 1.032.
+        /// A count of how many texels are individually right cannot cancel.
+        ///
+        /// Pure black texels are skipped. An atlas is roughly a quarter dead gutter, and (0,0,0)
+        /// unpacks to (−1,−1,−1) — length 1.73 — so counting them would drag any map, healthy or
+        /// not, toward "broken" in proportion to how much empty space its UV layout happens to
+        /// have. That is a measurement of the atlas, not of the sampler.
+        /// </summary>
+        /// <param name="rgb">RGB24 pixels as the GPU returned them.</param>
+        /// <param name="undoSrgb">Re-encode each channel with <see cref="LinearToSrgb"/> first,
+        /// i.e. test the hypothesis "the sampler applied an sRGB decode to this".</param>
+        /// <returns>0..1, or −1 when there was nothing usable to measure.</returns>
+        public static double UnitFraction(byte[] rgb, bool undoSrgb)
+        {
+            if (rgb == null || rgb.Length < 3) return -1.0;
+            int n = rgb.Length / 3;
+            int usable = 0, unit = 0;
+            for (int i = 0; i < n; i++)
+            {
+                byte r = rgb[i * 3], g = rgb[i * 3 + 1], b = rgb[i * 3 + 2];
+                if (r == 0 && g == 0 && b == 0) continue;      // dead gutter
+                usable++;
+
+                double x = Component(r, undoSrgb);
+                double y = Component(g, undoSrgb);
+                double z = Component(b, undoSrgb);
+                double len = System.Math.Sqrt(x * x + y * y + z * z);
+                if (System.Math.Abs(len - 1.0) <= ProbeLengthTolerance) unit++;
+            }
+            return usable == 0 ? -1.0 : (double)unit / usable;
+        }
+
+        private static double Component(byte v, bool undoSrgb)
+        {
+            double c = v / 255.0;
+            if (undoSrgb) c = LinearToSrgb(c);
+            return c * 2.0 - 1.0;
+        }
+
+        /// <summary>
+        /// Which reading explains this map — the honest question, asked of the data.
+        ///
+        /// 🔴 THIS REPLACES A GUESS. The rule it supersedes was "the project is in gamma, therefore
+        /// every KTX2 normal map is misdecoded, therefore throw them all away". That inference was
+        /// built out of package source and it was reasonable, but it was still an inference, and it
+        /// deleted the surface detail from every model in the app for two builds. The texels are
+        /// available at runtime and they settle it: a tangent-space map stores unit vectors, so
+        /// whichever interpretation returns unit vectors is the interpretation the sampler used.
+        /// No ground truth needed and no dependency on this project's settings.
+        ///
+        /// Deliberately conservative in the middle: when neither reading has a clear majority, or
+        /// when both do, the answer is <see cref="NormalReadVerdict.Unknown"/> and the caller falls
+        /// back to its previous rule rather than acting on a coin toss.
+        /// </summary>
+        public static NormalReadVerdict Verdict(byte[] rgb)
+        {
+            double asIs = UnitFraction(rgb, undoSrgb: false);
+            double undone = UnitFraction(rgb, undoSrgb: true);
+            if (asIs < 0.0 || undone < 0.0) return NormalReadVerdict.Unknown;
+
+            bool asIsWins = asIs >= MinUnitFraction && asIs > undone;
+            bool undoneWins = undone >= MinUnitFraction && undone > asIs;
+            if (asIsWins) return NormalReadVerdict.UnitNormals;
+            if (undoneWins) return NormalReadVerdict.SrgbDecoded;
+            return NormalReadVerdict.Unknown;
+        }
     }
 }
