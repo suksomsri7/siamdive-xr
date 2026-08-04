@@ -56,29 +56,47 @@ namespace DiveMap.Tests
         [Test]
         public void TheWorkaroundSwitchesItselfOffWhenTheImportIsFixed()
         {
-            // The case the app is in today: gamma colour space, so glTFast never marks a glTF
-            // texture as data and every KTX2 transcodes to an sRGB target.
-            Assert.IsTrue(GlbShading.NormalMapIsMisdecoded(gammaColorSpace: true));
+            // The case the app WAS in: gamma colour space and no import add-on, so glTFast never
+            // marks a glTF texture as data and every KTX2 transcodes to an sRGB target.
+            Assert.IsTrue(GlbShading.NormalMapIsMisdecoded(
+                gammaColorSpace: true, loadedAsLinearData: false));
 
-            // Linear colour space: glTFast tags the map as data and KtxUnity transcodes it
-            // unsigned-normalised. Nothing to fix, and throwing the map away would be pure loss —
-            // this is what stops the workaround becoming permanent.
-            Assert.IsFalse(GlbShading.NormalMapIsMisdecoded(gammaColorSpace: false));
+            // The case the app is in NOW: still gamma — that is the user's decision and it stands —
+            // but the add-on re-opened this texture with linear:true, so there is nothing left to
+            // decode wrongly and the map must be kept. This is the line that gives the models
+            // their surface back.
+            Assert.IsFalse(GlbShading.NormalMapIsMisdecoded(
+                gammaColorSpace: true, loadedAsLinearData: true));
+
+            // Linear colour space: glTFast tags the map as data itself and KtxUnity transcodes it
+            // unsigned-normalised whether or not the add-on is installed. Nothing to fix, and
+            // throwing the map away would be pure loss — this is what stops the workaround
+            // becoming permanent.
+            Assert.IsFalse(GlbShading.NormalMapIsMisdecoded(
+                gammaColorSpace: false, loadedAsLinearData: false));
+            Assert.IsFalse(GlbShading.NormalMapIsMisdecoded(
+                gammaColorSpace: false, loadedAsLinearData: true));
         }
 
         [Test]
-        public void TheDecisionDoesNotDependOnAskingTheTexture()
+        public void TheDecisionStillDoesNotDependOnAskingTheTexturesFormat()
         {
-            // 🔴 Regression guard for CI run 30747457729. That build gated the drop on the
-            // texture's own GraphicsFormat being sRGB, dropped nothing, and cost a full round:
-            // KtxUnity textures arrive through Texture2D.CreateExternalTexture, so the managed
-            // GraphicsFormat is re-derived from the project colour space and reports UNorm for a
-            // GL object the hardware decodes as sRGB. The colour space is the only input that is
-            // both knowable from C# and actually causal — if a second parameter ever reappears
-            // here, this test is the argument against it.
-            Assert.AreEqual(1, typeof(GlbShading)
+            // 🔴 Regression guard for CI run 30747457729, restated. That build gated the drop on
+            // the texture's own GraphicsFormat being sRGB, dropped nothing, and cost a full round:
+            // a KtxUnity texture's managed GraphicsFormat is re-derived rather than reported, so
+            // it says UNorm for something the sampler may well be decoding as sRGB. That input is
+            // still banned.
+            //
+            // The second parameter this method now takes is NOT that. "Did MY loader open this
+            // texture with linear:true" is a fact this app wrote down itself when it happened —
+            // no inference, no re-derivation, no asking the graphics API to describe an object it
+            // only wraps. If a third parameter ever appears here, it has to clear the same bar.
+            var parameters = typeof(GlbShading)
                 .GetMethod(nameof(GlbShading.NormalMapIsMisdecoded))
-                .GetParameters().Length);
+                .GetParameters();
+            Assert.AreEqual(2, parameters.Length);
+            Assert.AreEqual("gammaColorSpace", parameters[0].Name);
+            Assert.AreEqual("loadedAsLinearData", parameters[1].Name);
         }
 
         [Test]

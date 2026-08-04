@@ -128,4 +128,30 @@ void DM_FishBend(inout float4 vertex, inout float3 normal)
     normal = DM_TipNormal(normal, fwd, dir, theta);
 }
 
+// ── Normal-map unpack ─────────────────────────────────────────────────────────
+//
+// 🔴 NOT UnpackNormal(). Unity's built-in helper is two different functions behind
+// UNITY_NO_DXT5nm: on platforms where it is defined it reads .rgb, and everywhere else it
+// reads .ag and REBUILDS z, because Unity's own importer swizzles normal maps into DXT5's
+// alpha channel to get more precision out of the compressor.
+//
+// Nothing in this project's normal maps has ever been through that importer. They arrive as
+// KTX2 from tools/optimize_xr.mjs, glTFast hands them to the material untouched, and glTF
+// specifies plain RGB — x in red, y in green, z in blue, all three present. Reading .ag from
+// one of those samples the y channel as x and the ALPHA (opaque, 1.0) as y, which is not a
+// small error: it is a normal pointing hard along +y on every texel.
+//
+// So the unpack is written out. It is correct on every platform for the maps this project
+// actually ships, it matches what glTFast's own shader does for the static props, and — the
+// point of putting it here rather than inline — the built-in "bump" default texture is
+// (0.5, 0.5, 1) in RGB too, so a GLB with no normal map still unpacks to a flat (0,0,1).
+//
+// It does not normalise. The map stores unit vectors and the surface shader normalises what
+// it is given; a normalize() here would only hide a map that had stopped being unit-length,
+// which is exactly the symptom NormalMapDecode.MeanLength exists to catch.
+inline half3 DM_UnpackNormalRGB(half4 packed)
+{
+    return packed.rgb * 2.0h - 1.0h;
+}
+
 #endif // DM_FISHWAVE_INCLUDED

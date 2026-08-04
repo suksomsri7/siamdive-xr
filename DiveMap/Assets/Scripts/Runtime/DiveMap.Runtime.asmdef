@@ -4,6 +4,7 @@
     "references": [
         "DiveMap.Core",
         "glTFast",
+        "Ktx",
         "UnityEngine.UI",
         "Unity.Burst",
         "Unity.Collections",

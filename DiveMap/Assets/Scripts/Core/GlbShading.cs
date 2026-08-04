@@ -117,9 +117,27 @@ namespace DiveMap.Core
         /// correctly and is now having a good map thrown away. None exist in the XR pipeline today,
         /// and half a right angle of error on every texel of every model that does is the thing
         /// worth avoiding.
+        ///
+        /// 🔴 THIS IS NOW A SAFETY NET, NOT THE POLICY, and it should almost never fire. The cause
+        /// has been fixed where it lives: a glTFast import add-on
+        /// (<c>DiveMap.Runtime.LinearDataTextures</c>) claims the textures a material uses as a
+        /// normal map and re-opens them with <c>linear: true</c> — the same value glTFast passes
+        /// itself in a linear project — so the transcode picks the UNorm twin of the format and
+        /// there is nothing left to decode wrongly. Every step of that chain is cited in
+        /// <see cref="NormalMapDecode"/>, read out of the package sources this project ships.
+        ///
+        /// What remains here is the case the add-on could not reach: a normal map that is not a
+        /// KTX2 goes through Unity's own image conversion and is fine; a map whose file the
+        /// add-on failed on falls back to glTFast's original load and IS still misdecoded, and
+        /// throwing it away is still better than half a right angle of lie on every texel. So the
+        /// question this asks has moved from "is the project in gamma" — which was always going to
+        /// be true — to "did this particular texture actually come through the fix".
         /// </summary>
         /// <param name="gammaColorSpace">QualitySettings.activeColorSpace == Gamma.</param>
-        public static bool NormalMapIsMisdecoded(bool gammaColorSpace) => gammaColorSpace;
+        /// <param name="loadedAsLinearData">Did the import add-on load this very texture with
+        /// <c>linear: true</c>? Ask the texture, not the pipeline.</param>
+        public static bool NormalMapIsMisdecoded(bool gammaColorSpace, bool loadedAsLinearData)
+            => gammaColorSpace && !loadedAsLinearData;
 
         /// <summary>
         /// What <c>metallicFactor</c> should become. Unchanged rule, moved here so it is covered:
