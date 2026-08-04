@@ -1420,10 +1420,11 @@ namespace DiveMap.Runtime
             float scaleX = env != null ? (float)env.AreaScaleX : 1f;
             float scaleZ = env != null ? (float)env.AreaScaleZ : 1f;
             float slopeX = env != null ? (float)env.AreaSlopeX : 0f;
-            // 🔴 Into THIS app's frame, not the web's: the floor is built on Unity's z, which
-            // runs the other way (SculptCoord.SlopeZ). Read the web's number raw and the map
-            // tilts towards the wrong end of itself.
-            float slopeZ = env != null ? (float)SculptCoord.SlopeZ(env.AreaSlopeZ) : 0f;
+            // 🟡 Read raw, on purpose. On paper this wants its sign flipped (the floor is built
+            // on Unity's z while items are placed at Unity z = −web z — see the remark on
+            // SculptCoord), but no picture of the sand has been taken that shows it, so the
+            // seabed's shape is left exactly as it shipped until one has.
+            float slopeZ = env != null ? (float)env.AreaSlopeZ : 0f;
             float waterLevel = env != null ? (float)env.WaterLevel : 4f;
             _waterLevel = waterLevel;
 

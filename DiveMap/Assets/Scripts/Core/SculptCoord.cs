@@ -1,72 +1,60 @@
 namespace DiveMap.Core
 {
     /// <summary>
-    /// The sculpted seabed, across the same right-handed/left-handed border as
-    /// <see cref="WebCoord"/> — and it is a border, because the two sides number the floor's
-    /// vertices differently as well as mirroring it.
+    /// The sculpted seabed heights, across the boundary between the web's array and this app's.
     ///
     /// ── The web's array (builder.html:537-551, :3263-3265) ────────────────────────────
     ///   length  = 1 + rings·seg          ("SB_TOPN")
     ///   index 0 = the centre vertex
     ///   ring r (1..rings), segment s → <c>1 + (r-1)·seg + s</c>
-    ///   that vertex sits at WEB local (cos a·bd, 0, sin a·bd), a = 2π·s/seg
     ///
     /// ── This app's array (SceneBuilder.HeightAt, SeabedView.SculptAt, SculptBrush.SampleXZ) ──
     ///   length  = rings·seg              (no centre slot)
     ///   ring r, segment j → <c>(r-1)·seg + j</c>
-    ///   that vertex sits at UNITY local (cos a·bd, 0, sin a·bd), a = 2π·j/seg
     ///
-    /// Unity z = −web z, so the Unity vertex at angle a is the WEB vertex at angle −a: the
-    /// segment index has to be reflected, <c>j → (seg − j) mod seg</c>. Feeding the web's
-    /// array straight in — which is what shipped — laid the sculpt on the floor mirrored
-    /// front-to-back AND shifted one segment across (the web's centre value pushed everything
-    /// along by one), so on Atlantis a 97-unit trench sat on the opposite side of the map from
-    /// the ruins that were placed around it.
+    /// The two are offset by exactly one slot, and the arithmetic says so without anyone having
+    /// to render a picture: Atlantis ships <c>env.sculpt</c> with 2689 values for a 28×96 grid,
+    /// and 28·96 = 2688. The app read that array as though its first value were ring 1
+    /// segment 0, when the web had written the CENTRE of the floor there — so every dune and
+    /// trench came out one segment (3.75°) around from where it was dug.
     ///
-    /// Fixed HERE, at the boundary, rather than inside the mesh builder: the brush, the depth
-    /// bake and the mesh all already agree with each other in Unity space, and the one thing
-    /// that disagreed was the JSON.
+    /// 🟡 KNOWN, DELIBERATELY NOT FIXED HERE — the angular direction. This app builds its polar
+    /// grid on UNITY's z (SceneBuilder.BuildPolarGrid: <c>bz = sin(ang)</c>) while items are
+    /// placed at Unity z = −web z (WebCoord.PositionToUnity), which on paper means the app's
+    /// segment j holds the web's segment (seg − j), and that <c>env.areaSlopeZ</c> would need
+    /// its sign flipped too. Reading both files says so — but no independent picture of the SAND
+    /// has been taken that shows it, and a seabed is not something to reshape on an argument
+    /// alone. What would settle it: a render (or a depth ray) of the app's floor against the
+    /// web's on a map with a deep sculpt — Atlantis has a 97-unit trench and is the map for it.
+    /// Until then this converter changes the NUMBERING only, never the geometry.
     /// </summary>
     public static class SculptCoord
     {
-        /// <summary>The web segment index that holds the Unity segment <paramref name="j"/>.</summary>
-        public static int MirrorSegment(int j, int seg)
-        {
-            if (seg <= 0) return 0;
-            int m = (seg - (j % seg)) % seg;
-            return m < 0 ? m + seg : m;
-        }
-
         /// <summary>Length of the array the web writes for this grid.</summary>
         public static int WebLength(int rings, int seg) => 1 + rings * seg;
 
         /// <summary>Length of the array this app works in.</summary>
         public static int AppLength(int rings, int seg) => rings * seg;
 
+        /// <summary>True when this array carries the web's leading centre slot.</summary>
+        public static bool IsWebLayout(float[] a, int rings, int seg)
+            => a != null && rings > 0 && seg > 0 && a.Length >= WebLength(rings, seg);
+
         /// <summary>
         /// <c>env.sculpt</c> → the app's own grid. Returns null for null.
         ///
         /// An array too short to be the web's is passed through unchanged: the only thing that
-        /// ever wrote one is an older build of THIS app (SeabedSculptor.Commit before the fix),
+        /// ever wrote one is an older build of THIS app (SeabedSculptor.Commit before this fix),
         /// and a map sculpted in the app should keep looking the way its owner left it rather
-        /// than being mirrored on first open.
+        /// than shifting a slot on first open.
         /// </summary>
         public static float[] WebToApp(float[] web, int rings, int seg)
         {
             if (web == null || rings <= 0 || seg <= 0) return web;
 
             var app = new float[AppLength(rings, seg)];
-            if (web.Length < WebLength(rings, seg))
-            {
-                for (int i = 0; i < app.Length && i < web.Length; i++) app[i] = web[i];
-                return app;
-            }
-
-            for (int r = 1; r <= rings; r++)
-            {
-                for (int j = 0; j < seg; j++)
-                    app[(r - 1) * seg + j] = web[1 + (r - 1) * seg + MirrorSegment(j, seg)];
-            }
+            int from = IsWebLayout(web, rings, seg) ? 1 : 0;   // skip the web's centre slot
+            for (int i = 0; i < app.Length && i + from < web.Length; i++) app[i] = web[i + from];
             return app;
         }
 
@@ -82,23 +70,8 @@ namespace DiveMap.Core
 
             var web = new float[WebLength(rings, seg)];
             web[0] = app.Length > 0 ? app[0] : 0f;
-
-            for (int r = 1; r <= rings; r++)
-            {
-                for (int j = 0; j < seg; j++)
-                {
-                    int src = (r - 1) * seg + MirrorSegment(j, seg);
-                    web[1 + (r - 1) * seg + j] = src < app.Length ? app[src] : 0f;
-                }
-            }
+            for (int i = 0; i < app.Length && i + 1 < web.Length; i++) web[i + 1] = app[i];
             return web;
         }
-
-        /// <summary>
-        /// <c>env.areaSlopeZ</c> into the app's frame. The web tilts its floor by
-        /// <c>z_web · slopeZ</c>, and z_web = −z_unity, so the same tilt is −slopeZ here.
-        /// Its own inverse, like the Z flip it comes from.
-        /// </summary>
-        public static double SlopeZ(double slopeZ) => -slopeZ;
     }
 }

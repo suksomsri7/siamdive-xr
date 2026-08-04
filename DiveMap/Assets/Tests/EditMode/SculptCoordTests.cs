@@ -5,42 +5,43 @@ using NUnit.Framework;
 namespace DiveMap.Tests
 {
     /// <summary>
-    /// The seabed the user stands on, in the terms they see it: "the trench I dug on the north
-    /// side of the wreck has to still be north of the wreck when the app draws it".
+    /// The sculpted floor, in the terms a user sees it: "the trench I dug beside the wreck has
+    /// to still be beside the wreck when the app draws it."
+    ///
+    /// Scope note: these tests cover the NUMBERING only. The suspected angular mirror
+    /// (app segment j vs web segment seg−j, and the sign of areaSlopeZ) is documented on
+    /// SculptCoord and deliberately NOT implemented — no independent picture of the sand has
+    /// been taken that shows it, and a floor is not reshaped on an argument alone.
     /// </summary>
     public class SculptCoordTests
     {
         private const int Rings = 28, Seg = 96;      // the web's grid (builder.html:537)
 
-        /// <summary>Index of one web vertex.</summary>
         private static int Web(int ring, int seg) => 1 + (ring - 1) * Seg + seg;
-
-        /// <summary>Index of one app vertex.</summary>
         private static int App(int ring, int j) => (ring - 1) * Seg + j;
 
-        /// <summary>Unity local x/z of an app sample, the way SculptBrush.SampleXZ places it.</summary>
-        private static void AppXZ(int ring, int j, out double x, out double z)
+        /// <summary>
+        /// The arithmetic that proves the off-by-one without rendering anything: the real
+        /// Atlantis map ships env.sculpt with 2689 values for a 28×96 grid, and 28·96 = 2688.
+        /// The extra one is the web's centre vertex, sitting in front of everything else.
+        /// </summary>
+        [Test]
+        public void TheWebArrayIsOneLongerThanTheAppsGrid_ThatOneIsTheCentre()
         {
-            double a = 2.0 * Math.PI * j / Seg;
-            double r = (double)ring / Rings;
-            x = Math.Cos(a) * r; z = Math.Sin(a) * r;
-        }
+            Assert.AreEqual(2689, SculptCoord.WebLength(Rings, Seg), "builder.html SB_TOPN");
+            Assert.AreEqual(2688, SculptCoord.AppLength(Rings, Seg), "rings × seg");
+            Assert.AreEqual(1, SculptCoord.WebLength(Rings, Seg) - SculptCoord.AppLength(Rings, Seg));
 
-        /// <summary>Web local x/z of a web sample (builder.html:548).</summary>
-        private static void WebXZ(int ring, int s, out double x, out double z)
-        {
-            double a = 2.0 * Math.PI * s / Seg;
-            double r = (double)ring / Rings;
-            x = Math.Cos(a) * r; z = Math.Sin(a) * r;
+            Assert.IsTrue(SculptCoord.IsWebLayout(new float[2689], Rings, Seg), "Atlantis' own array");
+            Assert.IsFalse(SculptCoord.IsWebLayout(new float[2688], Rings, Seg));
         }
 
         /// <summary>
-        /// THE test. A pit dug at one spot on the web floor has to end up at the SAME spot on
-        /// the app's floor — same place on the map, allowing for Unity's z running backwards.
-        /// Checked all the way round the compass, not just at the four cardinal points.
+        /// A pit keeps its ring AND its segment — it must not slide around the compass, and it
+        /// must not move in or out from the middle of the map.
         /// </summary>
         [Test]
-        public void APitKeepsItsPlaceOnTheMap()
+        public void APitKeepsItsRingAndSegment()
         {
             foreach (int ring in new[] { 1, 7, 14, 27, 28 })
             {
@@ -51,7 +52,6 @@ namespace DiveMap.Tests
 
                     float[] app = SculptCoord.WebToApp(web, Rings, Seg);
 
-                    // find where the app put it
                     int found = -1;
                     for (int i = 0; i < app.Length; i++)
                     {
@@ -61,42 +61,32 @@ namespace DiveMap.Tests
                     }
                     Assert.AreNotEqual(-1, found, $"the pit at web ring {ring} seg {s} vanished");
                     Assert.AreEqual(-97f, app[found], 1e-6f);
-
-                    int foundRing = found / Seg + 1, foundJ = found % Seg;
-                    Assert.AreEqual(ring, foundRing, "a pit must not change how far out it is");
-
-                    WebXZ(ring, s, out double wx, out double wz);
-                    AppXZ(foundRing, foundJ, out double ax, out double az);
-
-                    // same point of the map: Unity x is the web's x, Unity z is its negative.
-                    Assert.AreEqual(wx, ax, 1e-9, $"east/west moved (web ring {ring} seg {s})");
-                    Assert.AreEqual(-wz, az, 1e-9, $"north/south moved (web ring {ring} seg {s})");
+                    Assert.AreEqual(App(ring, s), found,
+                        $"web ring {ring} seg {s} must land on the app's ring {ring} seg {s}");
                 }
             }
         }
 
         /// <summary>
-        /// The build-261 behaviour, pinned: read raw, a pit on the map's north side was drawn on
-        /// its south side and one segment over.
+        /// The shipped behaviour, pinned: handed straight to HeightAt, the web's CENTRE height
+        /// was read as ring 1 segment 0 and every sample after it was one segment out.
         /// </summary>
         [Test]
-        public void ReadingTheWebArrayRaw_PutsThePitOnTheWrongSide()
+        public void ReadingTheWebArrayRaw_IsOneSegmentOut()
         {
-            const int ring = Rings, s = Seg / 4;            // due web +Z ("north" on the builder)
             var web = new float[SculptCoord.WebLength(Rings, Seg)];
-            web[Web(ring, s)] = -97f;
+            web[0] = -50f;                    // the centre of the floor
+            web[Web(1, 0)] = -97f;            // ring 1, segment 0
 
-            // what shipped: env.sculpt handed straight to HeightAt, index (r-1)*seg + j
-            int rawIndex = Web(ring, s);
-            int rawRing = rawIndex / Seg + 1, rawJ = rawIndex % Seg;
-            AppXZ(rawRing, rawJ, out _, out double rawZ);
+            // raw: the app's index 0 (ring 1, seg 0) picked up the CENTRE's height
+            Assert.AreEqual(-50f, web[App(1, 0)], 1e-6f, "raw read hands ring1/seg0 the centre value");
 
-            WebXZ(ring, s, out _, out double wantWebZ);
-            AppXZ(ring, SculptCoord.MirrorSegment(s, Seg), out _, out double fixedZ);
+            // fixed: it picks up ring 1 segment 0, as it should
+            float[] app = SculptCoord.WebToApp(web, Rings, Seg);
+            Assert.AreEqual(-97f, app[App(1, 0)], 1e-6f);
 
-            Assert.Greater(wantWebZ, 0.5, "sanity: the pit is on the web's +Z side");
-            Assert.Less(fixedZ, -0.5, "the fix puts it on Unity's -Z side, which is the same place");
-            Assert.Greater(rawZ, 0.5, "and the shipped code put it on the opposite side of the map");
+            // and the shift is exactly one slot, all the way along
+            for (int i = 0; i < 200; i++) Assert.AreEqual(web[i + 1], app[i], 1e-6f, "sample " + i);
         }
 
         [Test]
@@ -111,43 +101,26 @@ namespace DiveMap.Tests
             for (int i = 0; i < app.Length; i++) Assert.AreEqual(app[i], back[i], 1e-6f, "sample " + i);
         }
 
+        /// <summary>A save from this app must be the length the web expects to read.</summary>
         [Test]
-        public void MirrorSegment_IsItsOwnInverse_AndKeepsSegmentZero()
+        public void AppToWeb_WritesTheWebsOwnLength()
         {
-            Assert.AreEqual(0, SculptCoord.MirrorSegment(0, Seg), "angle 0 is on the mirror line");
-            Assert.AreEqual(Seg / 2, SculptCoord.MirrorSegment(Seg / 2, Seg), "so is 180°");
-            for (int j = 0; j < Seg; j++)
-            {
-                int m = SculptCoord.MirrorSegment(j, Seg);
-                Assert.GreaterOrEqual(m, 0);
-                Assert.Less(m, Seg);
-                Assert.AreEqual(j, SculptCoord.MirrorSegment(m, Seg));
-            }
-        }
-
-        /// <summary>A floor tilted towards the web's +Z must be tilted towards Unity's −Z.</summary>
-        [Test]
-        public void SlopeZ_Flips_AndIsItsOwnInverse()
-        {
-            Assert.AreEqual(-0.35, SculptCoord.SlopeZ(0.35), 1e-12);
-            Assert.AreEqual(0.35, SculptCoord.SlopeZ(SculptCoord.SlopeZ(0.35)), 1e-12);
-            Assert.AreEqual(0.0, SculptCoord.SlopeZ(0.0), 1e-12);
-
-            // the deep end stays the deep end: web height at (0,0,+1) == app height at (0,0,-1)
-            const double slopeZ = 0.35;
-            double webDeep = 1.0 * slopeZ;
-            double appDeep = -1.0 * SculptCoord.SlopeZ(slopeZ);
-            Assert.AreEqual(webDeep, appDeep, 1e-12);
+            var app = new float[SculptCoord.AppLength(Rings, Seg)];
+            app[0] = -12f;
+            float[] web = SculptCoord.AppToWeb(app, Rings, Seg);
+            Assert.AreEqual(2689, web.Length);
+            Assert.AreEqual(-12f, web[0], 1e-6f, "the centre is filled from the innermost ring");
+            Assert.AreEqual(-12f, web[Web(1, 0)], 1e-6f);
         }
 
         [Test]
-        public void ShortLegacyArrays_ArePassedThrough_NotMirrored()
+        public void ShortLegacyArrays_ArePassedThroughUnshifted()
         {
             var legacy = new float[SculptCoord.AppLength(Rings, Seg)];   // an older app's save
             legacy[App(3, 5)] = 12f;
 
             float[] app = SculptCoord.WebToApp(legacy, Rings, Seg);
-            Assert.AreEqual(12f, app[App(3, 5)], 1e-6f);
+            Assert.AreEqual(12f, app[App(3, 5)], 1e-6f, "a map sculpted in the app must not move");
         }
 
         [Test]
