@@ -51,7 +51,7 @@ namespace DiveMap.Core
         /// web's triangle count, animals given skeletons, 143 textures dilated, some albedo lifted.
         /// A device holding generation-2 bytes would pair this app with a mixture of files from
         /// both sides of the day, which is a state nobody has ever looked at.
-        public const int Generation = 7;
+        public const int Generation = 8;
 
         /// <summary>
         /// Is a cached file's generation still good enough to serve?
