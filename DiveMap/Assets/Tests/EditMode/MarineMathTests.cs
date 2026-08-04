@@ -301,5 +301,222 @@ namespace DiveMap.Tests
             Assert.Greater(s.WebCount, 0);
             Assert.Greater(s.FishLenLocal, 0.0);
         }
+
+        // ── "ห้ามว่ายถอยหลัง" — the no-reversing invariant (user, build 261) ──────────
+
+        [Test]
+        public void HeadingDot_IsTheAlignmentOfNoseAndTravel()
+        {
+            var fwd = new Vec3(0, 0, 1);
+
+            Assert.AreEqual(1.0, MarineMath.HeadingDot(fwd, new Vec3(0, 0, 5)), 1e-12);
+            Assert.AreEqual(-1.0, MarineMath.HeadingDot(fwd, new Vec3(0, 0, -5)), 1e-12);
+            Assert.AreEqual(0.0, MarineMath.HeadingDot(fwd, new Vec3(5, 0, 0)), 1e-12);
+
+            // Length must not matter — this is an angle, not a speed.
+            Assert.AreEqual(MarineMath.HeadingDot(fwd, new Vec3(1, 0, 1)),
+                            MarineMath.HeadingDot(fwd, new Vec3(900, 0, 900)), 1e-12);
+        }
+
+        /// <summary>
+        /// 🔴 A hovering animal is NOT swimming backwards. An invariant that fires every time a
+        /// fish stops to look at something is an invariant somebody switches off, and then the
+        /// real bug walks through the hole.
+        /// </summary>
+        [Test]
+        public void AStoppedAnimal_IsNotSwimmingBackwards()
+        {
+            var fwd = new Vec3(0, 0, 1);
+            Assert.AreEqual(1.0, MarineMath.HeadingDot(fwd, new Vec3(0, 0, 0)), 1e-12);
+            Assert.IsTrue(MarineMath.SwimsForward(fwd, new Vec3(0, 0, 0)));
+            Assert.IsTrue(MarineMath.SwimsForward(fwd, new Vec3(1e-12, 0, -1e-12)));
+
+            // …but an animal with no facing at all is a genuine failure and must read as one.
+            Assert.IsFalse(MarineMath.SwimsForward(new Vec3(0, 0, 0),
+                                                   new Vec3(0, 0, 1)));
+        }
+
+        [Test]
+        public void SwimsForward_IsStrictlyPositive()
+        {
+            var fwd = new Vec3(0, 0, 1);
+            Assert.IsTrue(MarineMath.SwimsForward(fwd, new Vec3(3, 0, 1)));
+            Assert.IsFalse(MarineMath.SwimsForward(fwd, new Vec3(0, 0, -1)));
+            // Exactly sideways is not forward: dot = 0 and the rule is > 0. A fish translating
+            // purely across its own nose is the crabbing that reads as a sprite.
+            Assert.IsFalse(MarineMath.SwimsForward(fwd, new Vec3(1, 0, 0)));
+        }
+
+        /// <summary>
+        /// The enforcement primitive. It must remove the reversing component and NOTHING else —
+        /// a version that projected onto the nose axis alone would weld every animal to a rail
+        /// and undo the whole slot-formation port.
+        /// </summary>
+        [Test]
+        public void ForwardOnlyStep_RemovesTheReversal_AndKeepsTheSlip()
+        {
+            var fwd = new Vec3(0, 0, 1);
+
+            // Already forwards: returned untouched, to the bit.
+            var ahead = new Vec3(2, -1, 5);
+            Vec3 keep = MarineMath.ForwardOnlyStep(fwd, ahead);
+            Assert.AreEqual(ahead.X, keep.X, 1e-12);
+            Assert.AreEqual(ahead.Y, keep.Y, 1e-12);
+            Assert.AreEqual(ahead.Z, keep.Z, 1e-12);
+
+            // Reversing: the Z goes, the sideways slip and the climb stay.
+            Vec3 fixedStep = MarineMath.ForwardOnlyStep(fwd, new Vec3(3, 2, -7));
+            Assert.AreEqual(3.0, fixedStep.X, 1e-12, "sideways slip must survive");
+            Assert.AreEqual(2.0, fixedStep.Y, 1e-12, "the climb must survive");
+            Assert.AreEqual(0.0, fixedStep.Z, 1e-12, "the reversal must not");
+
+            // …and the result never reverses, whatever went in.
+            Assert.GreaterOrEqual(MarineMath.HeadingDot(fwd, fixedStep), 0.0);
+        }
+
+        /// <summary>
+        /// The invariant over a whole sweep of directions and facings: after
+        /// <see cref="MarineMath.ForwardOnlyStep"/> nothing may ever point backwards, and the step
+        /// may only ever get SHORTER (an animal must not be accelerated by a safety rule).
+        /// </summary>
+        [Test]
+        public void ForwardOnlyStep_NeverReverses_AndNeverSpeedsAnythingUp()
+        {
+            for (int a = 0; a < 36; a++)
+            {
+                double yaw = a * Math.PI / 18.0;
+                var fwd = new Vec3(Math.Sin(yaw), 0, Math.Cos(yaw));
+                for (int b = 0; b < 36; b++)
+                {
+                    double m = b * Math.PI / 18.0;
+                    var step = new Vec3(Math.Sin(m) * 0.7, 0.2, Math.Cos(m) * 0.7);
+
+                    Vec3 s = MarineMath.ForwardOnlyStep(fwd, step);
+                    Assert.GreaterOrEqual(MarineMath.HeadingDot(fwd, s), -1e-12,
+                                          $"reversed at yaw={yaw:F2} move={m:F2}");
+
+                    double before = Math.Sqrt(step.X * step.X + step.Y * step.Y + step.Z * step.Z);
+                    double after = Math.Sqrt(s.X * s.X + s.Y * s.Y + s.Z * s.Z);
+                    Assert.LessOrEqual(after, before + 1e-12, "the clamp must never add speed");
+                }
+            }
+        }
+
+        /// <summary>
+        /// 🔴 The carve-out that keeps the runtime oracle usable. A crab, a seahorse, a clam and a
+        /// garden eel are drawn by WhaleController's stationary path: fixed yaw, purely vertical
+        /// sway. Their 3-D heading dot is exactly 0 forever. A strict 3-D rule would therefore
+        /// report every stationary animal on the reef as reversing, every frame — and an invariant
+        /// that cries wolf is an invariant somebody switches off before the real bug arrives.
+        /// </summary>
+        [Test]
+        public void ABobbingCrab_IsNotSwimmingBackwards()
+        {
+            var facing = new Vec3(0, 0, 1);          // fixed yaw, level
+            var bobUp = new Vec3(0, 0.4, 0);         // the sway, and nothing else
+            var bobDown = new Vec3(0, -0.4, 0);
+
+            // The 3-D form says "exactly sideways", which is why the oracles do not use it here.
+            Assert.AreEqual(0.0, MarineMath.HeadingDot(facing, bobUp), 1e-12);
+            Assert.IsFalse(MarineMath.SwimsForward(facing, bobUp));
+
+            // The horizontal form — what the oracles DO use — says "not moving, so not reversing".
+            Assert.AreEqual(1.0, MarineMath.HeadingDotXZ(facing, bobUp), 1e-12);
+            Assert.IsTrue(MarineMath.SwimsForwardXZ(facing, bobUp));
+            Assert.IsTrue(MarineMath.SwimsForwardXZ(facing, bobDown));
+            Assert.IsTrue(MarineMath.SwimsForwardXZ(facing, new Vec3(0, 0, 0)));
+        }
+
+        [Test]
+        public void HeadingDotXZ_IgnoresClimbAndStillCatchesAReversal()
+        {
+            var facing = new Vec3(0, 0, 1);
+
+            // A steep climb straight ahead is still straight ahead.
+            Assert.AreEqual(1.0, MarineMath.HeadingDotXZ(facing, new Vec3(0, 9, 2)), 1e-12);
+
+            // 🔴 …and a reversal is still caught, however much vertical is piled on top of it.
+            Assert.AreEqual(-1.0, MarineMath.HeadingDotXZ(facing, new Vec3(0, 9, -2)), 1e-12);
+            Assert.IsFalse(MarineMath.SwimsForwardXZ(facing, new Vec3(0, 9, -2), 0.05));
+
+            // The tolerance is measurement noise, not a licence: it forgives ±0.05, not a reversal.
+            Assert.IsTrue(MarineMath.SwimsForwardXZ(facing, new Vec3(1.0, 0, -0.01), 0.05));
+            Assert.IsFalse(MarineMath.SwimsForwardXZ(facing, new Vec3(1.0, 0, -1.0), 0.05));
+        }
+
+        /// <summary>
+        /// 🔴 The regression test for the actual build-261 bug. The web's calm path
+        /// (builder.html:1592-1593) turns the nose toward the school's heading and moves the body
+        /// toward the slot as two INDEPENDENT quantities, so a barracuda whose slot has drifted
+        /// behind it swims tail-first. <c>school:barracuda</c> is 200 fish in tight formation.
+        /// </summary>
+        [Test]
+        public void CalmStep_NeverCarriesAFishBackwards()
+        {
+            // Nose at +Z, slot directly BEHIND at −Z: the raw web step is a pure reversal.
+            SchoolFormation.ForwardOnlyCalmStep(0.0, Math.PI, 0.5, out double sx, out double sz);
+            var fwd = new Vec3(0, 0, 1);
+            Assert.GreaterOrEqual(MarineMath.HeadingDotXZ(fwd, new Vec3(sx, 0, sz)), -1e-9);
+            Assert.AreEqual(0.0, sz, 1e-12, "the reversing component must be gone");
+
+            // Slot straight ahead: untouched, to the bit.
+            SchoolFormation.ForwardOnlyCalmStep(0.0, 0.0, 0.5, out sx, out sz);
+            Assert.AreEqual(0.0, sx, 1e-12);
+            Assert.AreEqual(0.5, sz, 1e-12);
+
+            // 🔴 Slot exactly abeam: the side-slip MUST survive. A version of this that projected
+            // onto the nose axis would leave the fish unable to move sideways at all, and every
+            // formation the school builds is reached sideways.
+            SchoolFormation.ForwardOnlyCalmStep(0.0, Math.PI / 2, 0.5, out sx, out sz);
+            Assert.AreEqual(0.5, sx, 1e-12, "easing across into a slot is the point of this path");
+            Assert.AreEqual(0.0, sz, 1e-12);
+        }
+
+        [Test]
+        public void CalmStep_NeverReverses_AtAnyHeadingOrSlotBearing()
+        {
+            for (int h = 0; h < 24; h++)
+            {
+                double head = h * Math.PI / 12.0;
+                var fwd = new Vec3(Math.Sin(head), 0, Math.Cos(head));
+                for (int m = 0; m < 24; m++)
+                {
+                    double move = m * Math.PI / 12.0;
+                    SchoolFormation.ForwardOnlyCalmStep(head, move, 0.7, out double sx, out double sz);
+
+                    Assert.GreaterOrEqual(MarineMath.HeadingDotXZ(fwd, new Vec3(sx, 0, sz)), -1e-9,
+                                          $"reversed at head={head:F2} move={move:F2}");
+                    // …and the clamp must never make a fish faster than the web's own step.
+                    Assert.LessOrEqual(Math.Sqrt(sx * sx + sz * sz), 0.7 + 1e-9);
+                }
+            }
+        }
+
+        /// <summary>
+        /// Orientation derived FROM velocity satisfies the invariant by construction — this is why
+        /// the hero animals and the whole <c>_fwdSwim</c> path pay only a dot product. If a future
+        /// edit makes OrientationFromVelocity disagree with its own input, every animal in the map
+        /// starts swimming backwards at once and this is where it is caught.
+        /// </summary>
+        [Test]
+        public void OrientationFromVelocity_AlwaysFacesTheWayItIsGoing()
+        {
+            for (int a = 0; a < 36; a++)
+            {
+                double yaw = a * Math.PI / 18.0;
+                for (int p = -2; p <= 2; p++)
+                {
+                    var vel = new Vec3(Math.Sin(yaw) * 4.0, p * 1.5, Math.Cos(yaw) * 4.0);
+                    MarineMath.Orientation o = MarineMath.OrientationFromVelocity(vel.X, vel.Y, vel.Z);
+
+                    // Unity forward for Euler(pitch, yaw, 0), ZXY order.
+                    double cp = Math.Cos(o.PitchRad), sp = Math.Sin(o.PitchRad);
+                    var fwd = new Vec3(Math.Sin(o.YawRad) * cp, -sp, Math.Cos(o.YawRad) * cp);
+
+                    Assert.IsTrue(MarineMath.SwimsForward(fwd, vel),
+                                  $"yaw={yaw:F2} pitchIdx={p} dot={MarineMath.HeadingDot(fwd, vel):F3}");
+                }
+            }
+        }
     }
 }

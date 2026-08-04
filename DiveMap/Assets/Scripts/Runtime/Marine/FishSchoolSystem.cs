@@ -59,7 +59,51 @@ namespace DiveMap.Runtime.Marine
         private NativeArray<FishState>    _nxt;
         private NativeArray<SchoolParams> _schools;
         private NativeArray<ObstacleBox>  _obstacles;
+        private NativeArray<float3>       _slotPos;
+        private NativeArray<float3>       _slotDir;
         private bool _alloc;
+
+        /// <summary>
+        /// WO-F2 — one school's slot formation: the web's system, which is not boids.
+        ///
+        /// 🔴 Why this replaced the Reynolds path for every <c>school:*</c>. Build 244 on a real
+        /// iPhone: "สัตว์ทะเลก็ยังเคลื่อนไหวขยับห่าง", over a photograph of 160 barracuda strung
+        /// out in a line. The fin rate had already been calibrated AND measured in the app, so the
+        /// remaining fault was the swimming, and it was structural rather than a tuning value:
+        ///
+        ///   • boids ran at <c>speed = MaxSpeed</c> every single frame (BoidsJob :189-192). A fish
+        ///     that cannot slow down cannot hold a formation; with alignment dominating, the flock
+        ///     stretches along its own heading and keeps stretching.
+        ///   • the web has no boids anywhere in its school code. Each fish owns a SLOT in a named
+        ///     shape and swims to it at <c>min(cap, distance × chaseK)</c> — a spring. Arriving
+        ///     costs it its speed, so the school holds together by construction.
+        ///   • in <c>cluster</c> — four of the twelve slots on the mode wheel — every fish takes
+        ///     the SCHOOL's heading, which is what polarisation means and what boids can only
+        ///     approximate.
+        ///
+        /// The maths lives in <see cref="SchoolFormation"/> so that <c>tools/test.sh</c> can pin it
+        /// against builder.html; this struct is only the per-school state it needs.
+        /// </summary>
+        private struct SchoolForm
+        {
+            public bool   Active;      // false = keep the Reynolds path (pods)
+            public bool   IsShoal;     // milling aggregation (scad, batfish) — no named modes
+            public bool   Calm;        // the web's calm branch (school:barracuda)
+            public SchoolFormation.ModeState  Mode;
+            public SchoolFormation.Slot[]     Slots;
+            public double R, Flen, Spin, ModeDurMul, TransDurMul, EaseMul;
+            public float  Heading;     // the SCHOOL's own heading — cluster polarises on it
+            public Vector3 PrevCentre;
+            public System.Random Rng;
+            // Shoal wander targets (builder.html :1729-1736), school-local.
+            public float[] TgtX, TgtY, TgtZ, Tmr;
+            public float  LogAt;
+        }
+        private SchoolForm[] _form = System.Array.Empty<SchoolForm>();
+
+        // Scratch for the cohesion readout. Allocated once at Configure (the largest school), so
+        // the QC line costs no GC even though it runs inside the render loop.
+        private double[] _mPx, _mPy, _mPz, _mSx, _mSy, _mSz, _mH;
 
         private struct SchoolRender
         {
@@ -163,6 +207,15 @@ namespace DiveMap.Runtime.Marine
         public int FishCount => _fishCount;
         private int    _whaleCount;
         private int    _frame;
+
+        /// <summary>
+        /// Measurement slack for the no-reversing oracle — see <see cref="MarineMath.SwimsForwardXZ"/>.
+        /// A real reversal reads −1; a fish easing sideways into its slot reads ±0.01.
+        /// </summary>
+        private const double ReverseTolerance = 0.05;
+
+        /// <summary>Reported once: a reversing school reverses for hundreds of frames.</summary>
+        private bool _reverseLogged;
         private float  _accumMs;
         private int    _accumN;
         private bool   _useInstancing = true;
@@ -331,6 +384,14 @@ namespace DiveMap.Runtime.Marine
             _cur = new NativeArray<FishState>(total, Allocator.Persistent);
             _nxt = new NativeArray<FishState>(total, Allocator.Persistent);
             _schools = new NativeArray<SchoolParams>(schools.Count, Allocator.Persistent);
+            _slotPos = new NativeArray<float3>(total, Allocator.Persistent);
+            _slotDir = new NativeArray<float3>(total, Allocator.Persistent);
+            _form = new SchoolForm[schools.Count];
+            int widest = 1;
+            for (int i = 0; i < schools.Count; i++) widest = Mathf.Max(widest, schools[i].Count);
+            _mPx = new double[widest]; _mPy = new double[widest]; _mPz = new double[widest];
+            _mSx = new double[widest]; _mSy = new double[widest]; _mSz = new double[widest];
+            _mH  = new double[widest];
             _alloc = true;
 
             _fear = new SchoolFear[schools.Count];
@@ -369,6 +430,24 @@ namespace DiveMap.Runtime.Marine
                 float sepR      = fishWorld * (s.IsPod ? 1.0f : 1.5f);
                 float capY      = waterLevel - fishWorld;   // never poke through the surface
 
+                // ── WO-F2: does this school run the web's slot formation? ─────────
+                // Every `school:*` does; a pod keeps the Reynolds path. That split is the web's
+                // own (builder.html :1502 `instanced = !pod`): a pod is a handful of real animals
+                // holding a golden-disc slot with a bob, and it was never the thing the iPhone
+                // photographed. Restricting the change to the schools keeps the blast radius on
+                // the species that is actually wrong.
+                MarineMath.SpeciesSpec spec = MarineMath.SpeciesFor(SwimStyle.BareId(s.Species));
+                bool useForm = !s.IsPod;
+                bool isShoal = spec.Formation == MarineMath.SchoolFormation.Shoal;
+                // Per-frame cap: shoal flen×0.04×swimMul, formation flen×0.065×swimMul (:1738/:1765).
+                // MaxSpeed already carries both plus the item scale, so /60 gets back to the web's
+                // own per-frame arithmetic without re-deriving anything.
+                float capPF   = maxSpeed / (float)MarineMath.SchoolFrameRate;
+                float chaseK  = (float)(isShoal ? SchoolFormation.ShoalChaseK
+                                                : SchoolFormation.ChaseK(spec.EaseMul, 0.0));
+                float safeR   = R * (float)(isShoal ? SchoolFormation.HomeMulShoal
+                                                    : SchoolFormation.HomeMulCluster);
+
                 _schools[si] = new SchoolParams
                 {
                     Anchor    = ToF3(s.Anchor),
@@ -385,7 +464,60 @@ namespace DiveMap.Runtime.Marine
                     Avoid     = 1,
                     Panic     = 0f,
                     DartMul   = 1f,
+
+                    Formation   = (byte)(useForm ? 1 : 0),
+                    Calm        = (byte)(useForm && spec.Calm ? 1 : 0),
+                    ChaseK      = chaseK,
+                    CapPerFrame = capPF,
+                    // The calm path has no cruise floor at all (:1593) — an arrived barracuda
+                    // stops. It also could not use one: flen×0.005 is LARGER than this species'
+                    // whole cap (swimMul 0.06), so a floor here would be the fast branch.
+                    CruiseFloor = spec.Calm ? 0f : fishWorld * (float)SchoolFormation.CruiseFloorPerFrame,
+                    SettleD     = (float)SchoolFormation.SettleDistance(fishWorld, !isShoal),
+                    SafeR       = safeR,
+                    FloorY      = fishWorld,   // one body length of sand clearance (see FloorY)
                 };
+
+                if (useForm)
+                {
+                    var frng = new System.Random(unchecked((int)MindSeed(s.Species, si)));
+                    var slots = new SchoolFormation.Slot[Mathf.Max(0, s.Count)];
+                    // spanY is the web's own asymmetry: a school is a PANCAKE, SR*0.7 for a shoal
+                    // and R*0.55 for a formation (:1523-1524).
+                    double spanY = R * (isShoal ? 0.7 : 0.55);
+                    for (int k = 0; k < slots.Length; k++)
+                        slots[k] = SchoolFormation.SlotFor(k, slots.Length, R, spanY, fishWorld,
+                                                           frng.NextDouble(), frng.NextDouble(),
+                                                           frng.NextDouble(), frng.NextDouble(),
+                                                           frng.NextDouble(), frng.NextDouble(),
+                                                           frng.NextDouble());
+                    _form[si] = new SchoolForm
+                    {
+                        Active      = true,
+                        IsShoal     = isShoal,
+                        Calm        = spec.Calm,
+                        Mode        = SchoolFormation.NewState(MindSeed(s.Species, si),
+                                                               frng.NextDouble() * Mathf.PI * 2f),
+                        Slots       = slots,
+                        R           = R,
+                        Flen        = fishWorld,
+                        // spin = (0.22 + rand*0.22) * spinMul rad/s (:1535). barracuda's 0.1 is
+                        // what turns its ring over once every three minutes instead of every ten
+                        // seconds — "เปลี่ยนช้าๆ นานๆ".
+                        Spin        = (SchoolFormation.SpinBase + frng.NextDouble() * SchoolFormation.SpinRand)
+                                      * spec.SpinMul,
+                        ModeDurMul  = spec.ModeDurMul,
+                        TransDurMul = spec.TransDurMul,
+                        EaseMul     = spec.EaseMul,
+                        Heading     = (float)(frng.NextDouble() * Mathf.PI * 2f),
+                        PrevCentre  = s.Anchor,
+                        Rng         = frng,
+                        TgtX        = new float[slots.Length],
+                        TgtY        = new float[slots.Length],
+                        TgtZ        = new float[slots.Length],
+                        Tmr         = new float[slots.Length],
+                    };
+                }
 
                 // C5 — who this school is, and where it would hide. The web re-scans for cover
                 // every 1.2 s (shelterSense); here the obstacles are static for the life of the
@@ -486,14 +618,52 @@ namespace DiveMap.Runtime.Marine
                                             rng.NextFloat(-vertHalf, vertHalf),
                                             rng.NextFloat(-R, R));
                     float head = rng.NextFloat(0f, math.PI * 2f);
-                    float3 vel = new float3(math.cos(head), 0f, math.sin(head)) * maxSpeed;
+
+                    // …but a slot-formation school starts ON ITS SLOTS, facing the school's own
+                    // heading. Its speed law is a spring capped at a few units a second, so
+                    // scattering it over ±R first would mean a full minute of a visibly wrong
+                    // school every time a map loads.
+                    if (useForm)
+                    {
+                        SchoolFormation.Target g = SchoolFormation.FormTarget(
+                            _form[si].Slots[k], SchoolMode.Cluster, 0.0, _form[si].R,
+                            _form[si].Spin, _form[si].Flen, _form[si].Mode.StreamDir,
+                            _form[si].Heading);
+                        off = new float3((float)g.X, (float)g.Y, (float)g.Z);
+                        head = Mathf.Atan2((float)g.VX, (float)g.VZ);   // web convention: (sin, cos)
+                    }
+
+                    // Two heading conventions meet here and they are not the same: the boids path
+                    // uses dir = (cos h, sin h) → (x, z) and the web's school uses (sin h, cos h).
+                    // FishState.Head is always the web's; Vel is built to match whichever path
+                    // owns this fish.
+                    float3 vel = useForm
+                        ? new float3(math.sin(head), 0f, math.cos(head)) * maxSpeed
+                        : new float3(math.cos(head), 0f, math.sin(head)) * maxSpeed;
                     _cur[cursor] = new FishState
                     {
                         Pos = ToF3(s.Anchor) + off,
                         Vel = vel,
                         School = si,
                         Phase = rng.NextFloat(0f, math.PI * 2f),
+                        Head = head,
                     };
+                    // A shoal's wander target starts at the fish's OWN position (the web reads
+                    // `b = fi.tgt || o.position`, :1731). Left at zero the whole aggregation
+                    // would converge on the anchor for its first few seconds — a shoal that
+                    // implodes on load, which is worse than the thing being fixed.
+                    if (useForm && isShoal)
+                    {
+                        _form[si].TgtX[k] = off.x;
+                        _form[si].TgtY[k] = off.y;
+                        _form[si].TgtZ[k] = off.z;
+                        _form[si].Tmr[k]  = 4f + rng.NextFloat(0f, 7f);
+                    }
+
+                    // Seed the slot arrays with where the fish actually is, so the very first
+                    // frame — and any frame the LOD skips — reads something meaningful.
+                    _slotPos[cursor] = ToF3(s.Anchor) + off;
+                    _slotDir[cursor] = float3.zero;
                     sizeMul[k] = rng.NextFloat(sizeMin, sizeMax);
                     cursor++;
                 }
@@ -702,9 +872,16 @@ namespace DiveMap.Runtime.Marine
                 _schools[si] = sp;
             }
 
+            // WO-F2 — where every fish in a slot-formation school should be THIS frame. Main
+            // thread on purpose: the mode wheel, the old→new morph and the flee offset are all
+            // per-school state, and the maths is DiveMap.Core.SchoolFormation, which is the
+            // version tools/test.sh can pin against builder.html.
+            for (int si = 0; si < _form.Length; si++) BuildSlots(si, t, Time.deltaTime);
+
             var job = new BoidsJob
             {
                 Src = _cur, Dst = _nxt, Schools = _schools, Obstacles = _obstacles,
+                SlotPos = _slotPos, SlotDir = _slotDir,
                 Dt = dt, Fs = fs, Time = t,
                 WSep = WSep, WAlign = WAlign, WCoh = WCoh, WAnchor = WAnchor, WWander = WWander,
                 TurnCap = TurnCap,
@@ -772,9 +949,53 @@ namespace DiveMap.Runtime.Marine
                     FishState f = _cur[sr.Start + k];
                     Vector3 pos = ToV3(f.Pos);
                     Vector3 vel = ToV3(f.Vel);
-                    Quaternion rot = vel.sqrMagnitude > 1e-6f
-                        ? Quaternion.LookRotation(vel, Vector3.up)
-                        : Quaternion.identity;
+
+                    // 🔴 A slot-formation fish is drawn from its HEAD, and level.
+                    //
+                    // Two separate reasons, both visible in the build-244 screenshot, where the
+                    // barracuda are at every pitch and roll angle at once:
+                    //
+                    //   • LookRotation(vel) pitches the fish by its vertical velocity. The web
+                    //     never does — the school path writes o.rotation.y and nothing else
+                    //     (builder.html :1599 and :1618), so a web fish changing depth stays level
+                    //     and merely rises. Ours could reach 29° of nose-up (vy ≤ 0.55×forward).
+                    //   • at the slot the speed is very nearly zero by design, and atan2 of a
+                    //     near-zero velocity is noise. Head is the state; velocity is a readout.
+                    Quaternion rot;
+                    if (_schools[si].Formation != 0)
+                    {
+                        // Web convention: forward = (sin Head, 0, cos Head), which is exactly
+                        // what Euler-Y of Head produces.
+                        rot = Quaternion.Euler(0f, f.Head * Mathf.Rad2Deg, 0f);
+
+                        // 🔴 "ห้ามว่ายถอยหลัง" oracle. Head is the drawn facing; Vel is now the
+                        // REAL step on every formation path including the calm one (BoidsJob used
+                        // to synthesise Vel from Head there, which made this check impossible —
+                        // it would have compared a number against itself and always passed).
+                        //
+                        // Sampled, not exhaustive: this loop runs over ~1,100 fish every frame and
+                        // an invariant that costs a dot product per fish per frame is an invariant
+                        // that gets deleted for being slow. One fish per school per frame walks the
+                        // whole shoal in a couple of seconds, and a reversal lasts far longer.
+                        if (!_reverseLogged && sr.Count > 0 && k == (_frame % sr.Count))
+                        {
+                            var fw = new Vec3(Mathf.Sin(f.Head), 0f, Mathf.Cos(f.Head));
+                            var vv = new Vec3(vel.x, vel.y, vel.z);
+                            if (!MarineMath.SwimsForwardXZ(fw, vv, ReverseTolerance))
+                            {
+                                _reverseLogged = true;
+                                Debug.LogWarning($"[SwimBack] school={sr.Species} fish={k} " +
+                                                 $"dotXZ={MarineMath.HeadingDotXZ(fw, vv):F3} " +
+                                                 $"speed={vel.magnitude:F2}u/s — a school fish swam backwards");
+                            }
+                        }
+                    }
+                    else
+                    {
+                        rot = vel.sqrMagnitude > 1e-6f
+                            ? Quaternion.LookRotation(vel, Vector3.up)
+                            : Quaternion.identity;
+                    }
 
                     // ── Lean into the turn ────────────────────────────────────────
                     // A fish does not pivot flat. Rolling into the corner is one of the three
@@ -826,8 +1047,14 @@ namespace DiveMap.Runtime.Marine
                 {
                     var rp = new RenderParams(sr.Mat)
                     {
+                        // 🔴 Sized off SafeR, not HomeR. A slot formation legitimately reaches
+                        // R×3.2 (BoidsJob.SchoolParams.SafeR) where HomeR is only R×1.2, and a
+                        // too-small worldBounds does not clip a fish — it drops the WHOLE
+                        // instanced batch the moment the camera looks past the box.
                         worldBounds = new Bounds(ToV3(_schools[si].Anchor),
-                                                 Vector3.one * (_schools[si].HomeR * 2.5f + _schools[si].FishLen * 8f)),
+                                                 Vector3.one * (Mathf.Max(_schools[si].HomeR * 2.5f,
+                                                                          _schools[si].SafeR * 2.2f)
+                                                                + _schools[si].FishLen * 8f)),
                         shadowCastingMode = ShadowCastingMode.Off,
                         receiveShadows = false,
                     };
@@ -864,6 +1091,9 @@ namespace DiveMap.Runtime.Marine
                 Debug.Log($"[Marine] schools={_render.Count} fish={_fishCount} whale={_whaleCount} avgFrameMs={avg:F1}");
                 _accumMs = 0f; _accumN = 0;
 
+                // WO-F2 — is it a school or a smear? One line, per school, four numbers.
+                for (int si = 0; si < _form.Length; si++) LogCohesion(si);
+
                 // Heartbeat. The per-decision lines above go quiet for half a minute at a time when
                 // a school is on a long dwell, and "quiet" must never be indistinguishable from
                 // "the brain is not running" (HANDOFF §4 rule 14). One line, every school, no alloc
@@ -879,6 +1109,183 @@ namespace DiveMap.Runtime.Marine
                     Debug.Log(sb.ToString());
                 }
             }
+        }
+
+        /// <summary>
+        /// WO-F2 — turn school <paramref name="si"/>'s formation into one world-space slot per
+        /// fish. builder.html <c>schoolStep</c> (:1745-1763) and the shoal branch (:1727-1742).
+        ///
+        /// Three things happen here and only the first is obvious:
+        ///
+        ///   1. the mode wheel turns (7-16 s × modeDurMul, or straight to a bait ball on fear),
+        ///   2. while a morph is running, each fish's slot is BLENDED from the old shape to the
+        ///      new one on its own staggered smoothstep — so the school swims into the new shape
+        ///      instead of the whole cloud teleporting,
+        ///   3. fear is applied as an OFFSET to the slot, which is exactly how the web does it
+        ///      (<c>etx = tx + flp.ox</c>, :1759). Steering the fish instead would fight the
+        ///      formation; offsetting the target makes the shape itself burst outward and reform.
+        /// </summary>
+        private void BuildSlots(int si, float t, float wallDt)
+        {
+            SchoolForm fm = _form[si];
+            if (!fm.Active || fm.Slots == null) return;
+
+            SchoolParams sp = _schools[si];
+            // LOD: a far school re-thinks every 6th frame (MarineMath.StepEveryForDistance). Its
+            // slots move by centimetres in that time, so reusing the last set is free — and it is
+            // SAFE rather than merely cheap, because Configure seeds every entry.
+            if (sp.Think == 0) return;
+            Vector3 anchor = ToV3(sp.Anchor);
+
+            // The SCHOOL's own heading: where its centre is actually going. FishMind moves the
+            // centre (eased, capped at the fish's own cruise speed), so this is the direction the
+            // whole shoal is travelling — and in `cluster` every fish faces exactly it, which is
+            // what polarisation is. Smoothed so a school that pauses does not spin on the spot.
+            Vector3 drift = anchor - fm.PrevCentre;
+            if (drift.x * drift.x + drift.z * drift.z > 1e-8f)
+                fm.Heading = Mathf.LerpAngle(fm.Heading * Mathf.Rad2Deg,
+                                             Mathf.Atan2(drift.z, drift.x) * Mathf.Rad2Deg,
+                                             0.05f) * Mathf.Deg2Rad;
+            fm.PrevCentre = anchor;
+
+            int start = sp.Start, n = Mathf.Min(sp.Count, fm.Slots.Length);
+
+            if (fm.IsShoal)
+            {
+                // ── A loose milling aggregation (scad, batfish) — builder.html :1727-1742.
+                // No named shapes at all: every fish drifts to a nearby point and picks another
+                // one every 4-11 s. Small steps, so the shoal STAYS somewhere instead of touring.
+                float SR = (float)fm.R, fl = (float)fm.Flen;
+                for (int k = 0; k < n; k++)
+                {
+                    fm.Tmr[k] -= wallDt;   // the web decrements a flat 0.016 here; wall time is
+                                           // what it meant, and is what makes this frame-rate free
+                    if (fm.Tmr[k] <= 0f)
+                    {
+                        fm.Tmr[k] = 4f + (float)fm.Rng.NextDouble() * 7f;
+                        fm.TgtX[k] = Mathf.Clamp(fm.TgtX[k] + ((float)fm.Rng.NextDouble() - 0.5f) * fl * 2.4f, -SR, SR);
+                        fm.TgtY[k] = Mathf.Clamp(fm.TgtY[k] + ((float)fm.Rng.NextDouble() - 0.5f) * fl * 1.2f,
+                                                 -SR * 0.4f, SR * 0.4f);
+                        fm.TgtZ[k] = Mathf.Clamp(fm.TgtZ[k] + ((float)fm.Rng.NextDouble() - 0.5f) * fl * 2.4f, -SR, SR);
+                    }
+                    float3 slot = new float3(anchor.x + fm.TgtX[k],
+                                             anchor.y + fm.TgtY[k],
+                                             anchor.z + fm.TgtZ[k]);
+                    ApplyFlee(si, start + k, ref slot, sp);
+                    _slotPos[start + k] = slot;
+                    _slotDir[start + k] = float3.zero;   // a shoal has no formation heading (:1741)
+                }
+                _form[si] = fm;
+                return;
+            }
+
+            // ── A named formation: the mode wheel + the morph ─────────────────────
+            SchoolFormation.Step(ref fm.Mode, t, sp.Panic, false, fm.ModeDurMul, fm.TransDurMul);
+            if (SchoolFormation.MorphFinished(fm.Mode, t)) fm.Mode.HasPrev = false;
+
+            double gh = fm.Heading;
+            for (int k = 0; k < n; k++)
+            {
+                SchoolFormation.Target g = SchoolFormation.FormTarget(
+                    fm.Slots[k], fm.Mode.Mode, t, fm.R, fm.Spin, fm.Flen, fm.Mode.StreamDir, gh);
+
+                if (fm.Mode.HasPrev)
+                {
+                    double e = SchoolFormation.MorphBlend(fm.Mode, t, fm.Slots[k].TrJit);
+                    if (e < 1.0)
+                    {
+                        SchoolFormation.Target pv = SchoolFormation.FormTarget(
+                            fm.Slots[k], fm.Mode.PrevMode, t, fm.R, fm.Spin, fm.Flen,
+                            fm.Mode.PrevStreamDir, gh);
+                        g.X = pv.X + (g.X - pv.X) * e;
+                        g.Y = pv.Y + (g.Y - pv.Y) * e;
+                        g.Z = pv.Z + (g.Z - pv.Z) * e;
+                        g.VX = pv.VX + (g.VX - pv.VX) * e;
+                        g.VZ = pv.VZ + (g.VZ - pv.VZ) * e;
+                    }
+                }
+
+                float3 slotW = new float3(anchor.x + (float)g.X,
+                                          anchor.y + (float)g.Y,
+                                          anchor.z + (float)g.Z);
+                ApplyFlee(si, start + k, ref slotW, sp);
+                _slotPos[start + k] = slotW;
+                _slotDir[start + k] = new float3((float)g.VX, 0f, (float)g.VZ);
+            }
+
+            _form[si] = fm;
+        }
+
+        /// <summary>
+        /// WO-F2 — the QC oracle for "is this a school".
+        ///
+        /// 🔴 Build 244 shipped with a beat rate that had been logged, measured and confirmed
+        /// correct, and a school that was visibly wrong, because NOTHING in the log described the
+        /// shape of a school. A screenshot cannot answer it either — the eye cannot integrate 160
+        /// positions, and the CI's own shot is taken at ~3 fps where nothing has moved yet.
+        ///
+        /// Four numbers, from <see cref="SchoolFormation.Measure"/>:
+        ///
+        ///   slotRms  RMS distance from each fish to its OWN slot, in body lengths. Formed ⇒ well
+        ///            under 1. This is the direct readout of whether the speed law is working.
+        ///   inR      fraction inside the formation radius. The web scatters cluster slots across
+        ///            a BOX of half-side R, whose corners are R√2 out, so a healthy cluster reads
+        ///            ~0.75-0.85 rather than 1.00; a smear reads under 0.3.
+        ///   nn       mean nearest-neighbour distance in body lengths. It is the SPACING the eye
+        ///            reads as "ขยับห่าง", and for these formations it should sit near 1.
+        ///   pol      |mean heading|. 1 = every fish pointing the same way. cluster and stream are
+        ///            polarised BY CONSTRUCTION, so a healthy barracuda school reads ≥0.95 while
+        ///            it holds one of them; Reynolds boids never reliably did.
+        /// </summary>
+        private void LogCohesion(int si)
+        {
+            if (si >= _form.Length || !_form[si].Active || _form[si].Slots == null) return;
+            SchoolParams sp = _schools[si];
+            int n = Mathf.Min(sp.Count, _mPx.Length);
+            if (n <= 0) return;
+
+            for (int k = 0; k < n; k++)
+            {
+                FishState f = _cur[sp.Start + k];
+                _mPx[k] = f.Pos.x; _mPy[k] = f.Pos.y; _mPz[k] = f.Pos.z;
+                float3 sl = _slotPos[sp.Start + k];
+                _mSx[k] = sl.x; _mSy[k] = sl.y; _mSz[k] = sl.z;
+                _mH[k] = f.Head;
+            }
+
+            // The neighbour pass is O(n²); at 160 fish that is 25 k distance tests once every
+            // 200 frames, but the stride keeps it flat if a map ever places a 500-fish shoal.
+            int stride = Mathf.Max(1, n / 64);
+            SchoolFormation.Cohesion c = SchoolFormation.Measure(
+                _mPx, _mPy, _mPz, _mSx, _mSy, _mSz, _mH, n,
+                sp.Anchor.x, sp.Anchor.y, sp.Anchor.z, sp.HomeR, sp.FishLen, stride);
+
+            string species = si < _render.Count ? _render[si].Species : "?";
+            Debug.Log($"[School] school={si} species={species} " +
+                      $"mode={(_form[si].IsShoal ? "shoal" : SchoolFormation.Label(_form[si].Mode.Mode))}" +
+                      $"{(_form[si].Mode.HasPrev ? "←" + SchoolFormation.Label(_form[si].Mode.PrevMode) : "")} " +
+                      $"calm={_form[si].Calm} n={n} " +
+                      $"slotRms={c.SlotRmsFlen:F2}L inR={c.InsideFrac:P0} " +
+                      $"nn={c.NeighbourFlen:F2}L pol={c.Polarisation:F2} " +
+                      $"R={sp.HomeR:F0} flen={sp.FishLen:F1} panic={sp.Panic:F2}");
+        }
+
+        /// <summary>
+        /// builder.html <c>schoolFlee</c> (:1628-1633): push this fish's TARGET radially away from
+        /// whatever frightened it, by <c>panic × (spreadR×0.18 + flen×1.6)</c>. Deliberately a
+        /// short push — "แตกออกใกล้ๆ ไม่พุ่งหนีไกล" (user, 2026-07-09) — so the school bursts and
+        /// closes again instead of evacuating the map.
+        /// </summary>
+        private void ApplyFlee(int si, int fishIndex, ref float3 slot, in SchoolParams sp)
+        {
+            if (sp.Panic <= 0.001f) return;
+            float3 p = _cur[fishIndex].Pos;
+            float dx = p.x - sp.Threat.x, dz = p.z - sp.Threat.z;
+            float d = Mathf.Sqrt(dx * dx + dz * dz);
+            if (d < 1e-4f) return;
+            float push = (float)FleeMath.FleePush(sp.Panic, _fear[si].HomeR0, sp.FishLen);
+            slot.x += dx / d * push;
+            slot.z += dz / d * push;
         }
 
         /// <summary>
@@ -939,6 +1346,12 @@ namespace DiveMap.Runtime.Marine
             sp.Panic   = panic;
             sp.FleeW   = (float)FleeMath.FleeSteerWeight(panic, fx.HomeR0, sp.FishLen);
             sp.DartMul = (float)FleeMath.DartSpeedScale(panic);
+
+            // WO-F2 — a frightened school also chases its (already displaced) slot harder: the
+            // web adds flp.L to easeL before the ×2.2 (:1760). Without it the bait ball forms at
+            // cruise pace, which is a school strolling away from a shark.
+            if (si < _form.Length && _form[si].Active && !_form[si].IsShoal)
+                sp.ChaseK = (float)SchoolFormation.ChaseK(_form[si].EaseMul, FleeMath.FleeEase(panic));
 
             // Bait ball: held for a couple of seconds past the scare so the shoal does not
             // snap back open the instant the diver slows down (web :1697 modeUntil).
@@ -1116,6 +1529,8 @@ namespace DiveMap.Runtime.Marine
             if (_nxt.IsCreated) _nxt.Dispose();
             if (_schools.IsCreated) _schools.Dispose();
             if (_obstacles.IsCreated) _obstacles.Dispose();
+            if (_slotPos.IsCreated) _slotPos.Dispose();
+            if (_slotDir.IsCreated) _slotDir.Dispose();
             _alloc = false;
         }
 

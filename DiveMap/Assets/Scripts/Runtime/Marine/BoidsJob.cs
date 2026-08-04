@@ -12,6 +12,17 @@ namespace DiveMap.Runtime.Marine
         public float3 Vel;
         public int    School;   // index into the schools array
         public float  Phase;    // per-instance wiggle / wander phase (0..2π)
+        /// <summary>
+        /// Where the fish is POINTING, in the web's own convention: motion is
+        /// <c>(sin Head, cos Head)</c> in (x, z), i.e. <c>Head = atan2(x, z)</c>
+        /// (builder.html <c>_fwdSwim</c>, :1585-1620).
+        ///
+        /// 🔴 Kept separately from <see cref="Vel"/> and not derived from it. On the web's school
+        /// path a fish that has reached its slot has a speed of very nearly zero, and
+        /// <c>atan2</c> of a near-zero vector is noise — the heading would jitter exactly when the
+        /// school is at its calmest, which is the one place the eye is looking.
+        /// </summary>
+        public float  Head;
     }
 
     /// <summary>
@@ -41,6 +52,43 @@ namespace DiveMap.Runtime.Marine
         public float3 Threat;     // world position of whatever is frightening them
         public float  FleeW;      // steering weight straight away from Threat
         public float  DartMul;    // speed multiplier while fleeing (1 = cruise)
+
+        // ── WO-F2: the web's SLOT FORMATION (Core/SchoolFormation.cs) ──────────────
+        // The web runs no boids on a school at all. Every fish owns a slot, recomputed on the
+        // main thread into SlotPos/SlotDir, and swims to it at min(cap, distance × chaseK) — so a
+        // fish that has arrived SLOWS DOWN. Boids at a constant MaxSpeed cannot, which is why 160
+        // barracuda came back from a real iPhone stretched into a line.
+        /// <summary>1 = slot formation (every <c>school:*</c>), 0 = the Reynolds path (pods).</summary>
+        public byte   Formation;
+        /// <summary>1 = the web's CALM path (builder.html :1591-1600) — <c>school:barracuda</c>.</summary>
+        public byte   Calm;
+        /// <summary>Slot-chase gain per frame, <c>easeL × 2.2</c> plus the flee ease (:1761).</summary>
+        public float  ChaseK;
+        /// <summary>Cruise cap per FRAME (= MaxSpeed / 60), so the web's arithmetic transcribes 1:1.</summary>
+        public float  CapPerFrame;
+        /// <summary>Cruise floor per frame, <c>flen × 0.005</c> (:1610). Zero on the calm path.</summary>
+        public float  CruiseFloor;
+        /// <summary>Settle band: past it steer at the slot, inside it take the formation's heading (:1601).</summary>
+        public float  SettleD;
+        /// <summary>
+        /// The web's safety wall — R×3.2 for a formation, SR×2.6 for a shoal (:1597, :1611).
+        ///
+        /// 🔴 NOT <see cref="HomeR"/>, which is R×1.2. The slots themselves reach past that: a
+        /// cluster's corner sits at R√2 and a stream strings fish out to 2R along its heading.
+        /// Clamping a formation to 1.2R would squash the very shape it is trying to hold.
+        /// </summary>
+        public float  SafeR;
+        /// <summary>
+        /// Hard floor for a formation fish, the flat stand-in for the web's <c>_fishFloor</c>
+        /// (builder.html :1676, which samples the real seabed height per fish).
+        ///
+        /// 🔴 Needed because the slot formation is not a pancake. The boids path clamped every
+        /// fish to ±VertHalf (= R×0.275) of the anchor; a <c>ball</c> reaches 0.47 R below it and
+        /// a <c>tornado</c> 1.8 R above, so the old clamp would have flattened the shapes and
+        /// removing it lets a ball dip into the sand. Same datum the school's own mind already
+        /// uses for its domain floor (FishMind.SchoolDomain, minY = VertHalf + FishLen).
+        /// </summary>
+        public float  FloorY;
     }
 
     /// <summary>One solid obstacle as a world-space AABB (the wreck/decor fish steer around).</summary>
@@ -67,6 +115,20 @@ namespace DiveMap.Runtime.Marine
         [ReadOnly] public NativeArray<ObstacleBox>  Obstacles;
         [WriteOnly] public NativeArray<FishState>   Dst;
 
+        /// <summary>
+        /// WO-F2 — this fish's slot this frame, in WORLD units, and the heading the FORMATION
+        /// wants it on (xz; (0,0) = "no opinion", which is what a milling shoal has).
+        ///
+        /// Filled on the main thread by <c>FishSchoolSystem.BuildSlots</c> from
+        /// <see cref="DiveMap.Core.SchoolFormation"/> rather than inside the job: the slot is
+        /// ~8 trig calls per fish per frame (≈0.3 ms for the whole reef), the mode wheel and the
+        /// old→new morph are per-SCHOOL state that would have to be marshalled in anyway, and
+        /// keeping the formation maths in Core is what lets <c>tools/test.sh</c> pin it against
+        /// builder.html in two seconds instead of a 35-minute CI round.
+        /// </summary>
+        [ReadOnly] public NativeArray<float3> SlotPos;
+        [ReadOnly] public NativeArray<float3> SlotDir;
+
         public float Dt;          // 0.016 · FS  (seconds this step, real-delta scaled)
         public float Fs;          // FS scale (for the per-frame turn-rate cap)
         public float Time;        // wall-clock time (wander/wiggle phase)
@@ -82,6 +144,14 @@ namespace DiveMap.Runtime.Marine
         {
             FishState f = Src[i];
             SchoolParams s = Schools[f.School];
+
+            // ── WO-F2: the web's school. Not boids — a slot and a spring. ──────────
+            if (s.Formation != 0)
+            {
+                FormationStep(i, ref f, s);
+                Dst[i] = f;
+                return;
+            }
 
             // ── LOD dead-reckoning: skip the neighbour scan, glide along velocity ──
             if (s.Think == 0)
@@ -205,6 +275,150 @@ namespace DiveMap.Runtime.Marine
             f.Vel = nv;
             Dst[i] = f;
         }
+
+        // ── WO-F2: builder.html `_fwdSwim` (:1585-1620), transcribed ──────────────
+        //
+        // 🔴 Mirrored in float rather than calling DiveMap.Core.SchoolFormation, for the same
+        // reason the rest of this job mirrors MarineMath: Burst compiles this method and the Core
+        // one is double-precision managed C#. The Core version is the one a test can reach, so
+        // every constant below is named there (SchoolFormation.TurnCapPerFrame, .CalmChasePerFrame,
+        // …) and quoted here — if the two ever disagree, the Core file and its tests are right.
+        //
+        // Everything is PER FRAME × Fs, exactly as the web writes it, so the numbers can be read
+        // straight off builder.html. Fs is the real-delta scale (dt / 16.667 ms, clamped to
+        // [0.5, 2.5]), which is what makes the motion track the wall clock on a phone that is
+        // not holding 60 fps.
+        private void FormationStep(int i, ref FishState f, in SchoolParams s)
+        {
+            float3 slot = SlotPos[i];
+            float3 dir  = SlotDir[i];
+
+            float ddx = slot.x - f.Pos.x, ddz = slot.z - f.Pos.z;
+            float dh  = math.sqrt(ddx * ddx + ddz * ddz);
+
+            // "Polarised" = the formation has an opinion about which way to face (cluster and
+            // stream: the SAME way for every fish). A milling shoal does not, and passes (0,0).
+            bool  polar = (dir.x * dir.x + dir.z * dir.z) > 1e-6f;
+            float onDir = polar ? math.atan2(dir.x, dir.z) : f.Head;
+
+            // The web treats "there is any panic at all" as fleeing (schoolFlee returns null at
+            // panic 0, :1629); the flee OFFSET itself is already folded into the slot.
+            bool flee = s.Panic > 0.001f;
+
+            float cap = s.CapPerFrame;
+            float sp;   // this frame's forward step, world units
+
+            if (s.Calm != 0 && polar && !flee)
+            {
+                // ── CALM POLARISED (builder.html :1591-1600) ──────────────────────
+                // Hold the school's heading and ease into the slot. No forward-only skid and no
+                // cruise floor: a barracuda that has arrived stops dead relative to the school.
+                f.Head += math.clamp(DeltaAngle(onDir, f.Head), -0.05f, 0.05f) * Fs;
+
+                float mv = math.min(cap * 1.8f, dh * 0.05f) * Fs;
+                float mA = dh > 0.001f ? math.atan2(ddx, ddz) : f.Head;
+                float stepX = math.sin(mA) * mv, stepZ = math.cos(mA) * mv;
+
+                // 🔴 "ห้ามว่ายถอยหลัง" (user, build 261). THIS is the path that could, and it is
+                // the most visible school on the map: `calm` is barracuda, 200 fish in one shoal.
+                //
+                // The web moves along mA — the direction to the SLOT — while the nose holds the
+                // school's heading (:1592-1593). Those are independent, so a fish whose slot has
+                // drifted behind it swims backwards, nose first, for as long as it takes to catch
+                // up. On the web that is a handful of frames inside a milling cluster and easy to
+                // miss; here it is what a user with an iPhone reported seeing.
+                //
+                // The reversing COMPONENT is removed and nothing else. Sideways survives, because
+                // easing across into a slot is the whole character of this path and a fish that
+                // may only travel along its nose would have to swim a circle to move a metre
+                // sideways. forward is unit length, so the projection is just the dot product.
+                float fx = math.sin(f.Head), fz = math.cos(f.Head);
+                float into = fx * stepX + fz * stepZ;
+                if (into < 0f) { stepX -= fx * into; stepZ -= fz * into; }
+
+                f.Pos.x += stepX;
+                f.Pos.z += stepZ;
+
+                ClampSafe(ref f.Pos, s);
+
+                float dyc = slot.y - f.Pos.y;
+                f.Pos.y += math.clamp(dyc * 0.06f, -mv * 0.6f, mv * 0.6f);
+                if (f.Pos.y > s.CapY) f.Pos.y = s.CapY;
+                if (f.Pos.y < s.FloorY) f.Pos.y = s.FloorY;
+
+                // 🔴 The velocity READOUT must be the motion that actually happened, not the one
+                // the nose implies. Every other path sets Vel from Head, which on this path would
+                // have reported a confident forward cruise while the fish slid backwards — an
+                // oracle that cannot see the bug it exists to catch. So this branch reports its
+                // own step, and only the direction agrees with the nose by construction now.
+                float calmPerSec = 1f / math.max(Dt, 1e-4f);
+                f.Vel.x = stepX * calmPerSec;
+                f.Vel.z = stepZ * calmPerSec;
+                f.Vel.y = 0f;
+                return;
+            }
+            else
+            {
+                // ── FORWARD-ONLY chase (builder.html :1600-1616) ──────────────────
+                // Far from the slot, steer AT it; inside the settle band, take the formation's
+                // heading instead — so a fish in position stops chasing its own bobbing slot and
+                // the school's heads line up. Then move along the nose and nowhere else.
+                float des = dh > s.SettleD ? math.atan2(ddx, ddz) : onDir;
+                float dA  = DeltaAngle(des, f.Head);
+                f.Head += math.clamp(dA, -0.045f, 0.045f) * (flee ? 1.6f : 1f) * Fs;
+
+                // 🔴 The speed law. min(cap, distance × chaseK) — arriving costs speed.
+                sp = (math.min(cap * (flee ? 1.5f : 1f), dh * s.ChaseK) + s.CruiseFloor) * Fs;
+
+                // Move along the nose and nowhere else — no reverse, no side-slip.
+                //
+                // 🔴 And NO solid avoidance on this path, which is the web's own decision rather
+                // than an omission: builder.html's `ejectFromSolids` opens with a bare `return;`
+                // and the comment "ยกเลิกการชนสัตว์↔สิ่งกีดขวาง (ตาม user) → ปลาว่ายทะลุเรือ/
+                // รูปปั้นได้อิสระ" (:1656). A school fish there swims straight through the wreck.
+                // Steering it instead would fight the slot it is trying to reach, and the two
+                // together are exactly how the web's earlier attempt piled a shoal against a hull
+                // ("ไม่กองเป็นกำแพง", :1611). The pods keep the avoidance — they are single big
+                // animals, and it was written for them.
+                f.Pos.x += math.sin(f.Head) * sp;
+                f.Pos.z += math.cos(f.Head) * sp;
+
+                ClampSafe(ref f.Pos, s);
+
+                float dy = slot.y - f.Pos.y, vc = sp * 0.55f;   // diagonal only, never a lift
+                f.Pos.y += math.clamp(dy * 0.08f, -vc, vc);
+                if (f.Pos.y > s.CapY) f.Pos.y = s.CapY;
+                if (f.Pos.y < s.FloorY) f.Pos.y = s.FloorY;
+            }
+
+            // Velocity is a READOUT here, not the state: Head is the state (see FishState.Head).
+            // Kept in units/second like every other velocity in the sim, so anything that reads it
+            // (the QC line, the drone bubble) gets the same units it always did.
+            float perSec = sp / math.max(Dt, 1e-4f);
+            f.Vel.x = math.sin(f.Head) * perSec;
+            f.Vel.z = math.cos(f.Head) * perSec;
+            f.Vel.y = 0f;
+        }
+
+        /// <summary>
+        /// The web's own safety wall for a school fish (:1597, :1611): squeeze it back inside
+        /// <see cref="SchoolParams.SafeR"/> of the anchor. Wide on purpose — it exists to stop a
+        /// fish leaving the map, not to hold the formation, which the slots already do.
+        /// </summary>
+        private static void ClampSafe(ref float3 p, in SchoolParams s)
+        {
+            if (s.SafeR <= 1e-4f) return;
+            float dx = p.x - s.Anchor.x, dz = p.z - s.Anchor.z;
+            float rr = math.sqrt(dx * dx + dz * dz);
+            if (rr <= s.SafeR || rr < 1e-4f) return;
+            float k = s.SafeR / rr;
+            p.x = s.Anchor.x + dx * k;
+            p.z = s.Anchor.z + dz * k;
+        }
+
+        /// <summary>Shortest signed angle <paramref name="from"/> → <paramref name="to"/>, i.e. the web's <c>atan2(sin Δ, cos Δ)</c>.</summary>
+        private static float DeltaAngle(float to, float from)
+            => math.atan2(math.sin(to - from), math.cos(to - from));
 
         // ── helpers (mirror MarineMath) ───────────────────────────────────────────
 

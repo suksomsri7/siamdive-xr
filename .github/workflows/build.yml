@@ -506,6 +506,16 @@ jobs:
           # and per hero animal, carrying worldLen and beatHz; the targets are in SwimStyleTests.
           grep -h '\[Swim\]' qc_player.log 2>/dev/null || \
             echo "::warning::no [Swim] lines — no animal resolved a swim style"
+          # 🔴 The no-reversing invariant ("ห้ามว่ายถอยหลัง", user on build 261). Unlike every
+          # other line here, NO OUTPUT IS THE PASS: [SwimBack] is only ever logged when an animal's
+          # nose pointed against the way it actually moved. It carries dotXZ (−1 = straight
+          # backwards) and which school or asset did it. Reported once per animal/school, because
+          # a reversing animal reverses for hundreds of frames.
+          if grep -h '\[SwimBack\]' qc_player.log 2>/dev/null; then
+            echo "::error::an animal swam backwards — see the [SwimBack] lines above"
+          else
+            echo "no [SwimBack] lines — nothing swam backwards (this is the pass)"
+          fi
 
       # Second, SEPARATE run for the UI shots (WO-XR-05). It must not share a process
       # with -qcshot: that mode ends in Application.Quit(0) inside AppBoot.QcShot, so

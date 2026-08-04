@@ -775,6 +775,28 @@ namespace DiveMap.Runtime.Marine
                 Debug.Log($"[Marine] whale heading dot(forward,vel)={Vector3.Dot(transform.forward, vel.normalized):F3} " +
                           "(expect ≈ +1.0)");
             }
+
+            // 🔴 …and the INVARIANT, which the line above is not. That one fires once, proves the
+            // GLB's forward axis, and compares the facing against the very velocity the rotation
+            // was just built from — so it cannot fail unless the model is mis-authored. "ห้าม
+            // ว่ายถอยหลัง" is a claim about every frame of every animal, so it is checked on every
+            // frame and reported the FIRST time it breaks (once per animal — a reversing animal
+            // reverses for many frames in a row and a log line per frame is a log nobody reads).
+            //
+            // Measured on the real displacement, in the horizontal plane: see
+            // MarineMath.HeadingDotXZ for why a crab bobbing on the sand is not a violation.
+            if (!_reverseLogged && _primed && _t > 0.5f)
+            {
+                var f = new Vec3(transform.forward.x, transform.forward.y, transform.forward.z);
+                var v = new Vec3(vel.x, vel.y, vel.z);
+                if (!MarineMath.SwimsForwardXZ(f, v, ReverseTolerance))
+                {
+                    _reverseLogged = true;
+                    Debug.LogWarning($"[SwimBack] solo asset={_assetId} " +
+                                     $"dotXZ={MarineMath.HeadingDotXZ(f, v):F3} " +
+                                     $"speed={vel.magnitude:F2}u/s t={_t:F1}s — an animal swam backwards");
+                }
+            }
         }
 
         // ── C6: registry lifecycle + the [Solo] oracle ───────────────────────────
@@ -887,5 +909,15 @@ namespace DiveMap.Runtime.Marine
 
         private bool _headingLogged;
         private int  _legLogged;
+
+        /// <summary>
+        /// Measurement slack for the no-reversing oracle, NOT slack in the rule — see
+        /// <see cref="MarineMath.SwimsForwardXZ"/>. A real reversal reads −1; float noise on a
+        /// one-frame displacement reads ±0.01.
+        /// </summary>
+        private const double ReverseTolerance = 0.05;
+
+        /// <summary>Reported once per animal: a reversing animal reverses for many frames.</summary>
+        private bool _reverseLogged;
     }
 }

@@ -165,8 +165,141 @@ namespace DiveMap.Tests
             Assert.Less(barra.Amp, scad.Amp, "thunniform bodies barely bend");
 
             SwimWave trevally = SwimStyle.For("pod:yellowtail", 5.0);
-            Assert.AreEqual(SwimStyle.For("school:barracuda", 5.0).Amp, trevally.Amp, Eps,
+            Assert.AreEqual(SwimStyle.For("msh:barracuda", 5.0).Amp, trevally.Amp, Eps,
                             "a yellowtail IS a trevally — same stiff-bodied cruiser");
+
+            // 🔴 …and the SHOAL barracuda is deliberately NOT the same number any more. A pod is a
+            // handful of real animals and stays on the thunniform row; school:barracuda is an
+            // instanced shoal and takes the web's own wiggle literal (0.06 × 0.65 = 3.96 %), which
+            // is a little over half what the size table was giving it. See SchoolWiggle.
+            Assert.Less(SwimStyle.For("school:barracuda", 5.0).Amp, trevally.Amp,
+                        "a shoal uses the web's literal, not the size table");
+        }
+
+        // ── The rest of the web's shoal wiggle (WO-F2, 2026-08-03) ───────────────
+
+        /// <summary>
+        /// 🔴 THE test this round exists for, and the reason there is a round at all.
+        ///
+        /// Build 244 shipped with the shoal BEAT RATE calibrated and independently measured in the
+        /// real app (CI 30790730885 logged barracuda 0.80 Hz, scad 1.11 Hz — both exactly the
+        /// web's wRate/2π), and the iPhone still came back with "ครีบเร็วมากๆ". A rate that
+        /// matches and an eye that does not means the rate was one term out of four, and it was:
+        /// `wAmp`, `wWave` and `wStiff` were still coming from the solo-animal size table.
+        ///
+        /// What the eye actually reads is TIP SPEED, amplitude × 2πf. At an identical rate, the
+        /// old 7.5 % amplitude against the web's 3.96 % is a tail moving 1.92× as fast — which is
+        /// "เร็วมาก" exactly, and which no Hz reading can show.
+        /// </summary>
+        [Test]
+        public void ShoalWave_IsTheWebsWiggleLine_NotTheSizeTable()
+        {
+            // builder.html :1506 defaults and the :1098 barracuda override, verbatim.
+            Assert.AreEqual(0.18, SwimStyle.SchoolWiggleAmpDefault, Eps);
+            Assert.AreEqual(2.5,  SwimStyle.SchoolWiggleWaveDefault, Eps);
+            Assert.AreEqual(0.5,  SwimStyle.SchoolWiggleStiffDefault, Eps);
+            Assert.AreEqual(0.06, SwimStyle.SchoolWiggleAmpBarracuda, Eps);
+            Assert.AreEqual(0.9,  SwimStyle.SchoolWiggleWaveBarracuda, Eps);
+            Assert.AreEqual(0.15, SwimStyle.SchoolWiggleStiffBarracuda, Eps);
+
+            SwimWave barra = SwimStyle.For("school:barracuda", BarracudaLen);
+            SwimWave scad  = SwimStyle.For("school:scad", ScadLen);
+
+            // AMPLITUDE = wAmp × (wStiff + 0.5), the value of the web's clamped tail envelope at
+            // the tail (position.z ≈ −flen/2 — both school GLBs are modelled centred).
+            Assert.AreEqual(0.06 * 0.65, barra.Amp, 1e-12);   // 3.96 % — was 7.5 %, i.e. 1.92× fast
+            Assert.AreEqual(0.18 * 1.00, scad.Amp,  1e-12);   // 18 %
+
+            // WAVELENGTHS. `position.z * wWave` is radians per MODEL UNIT: the tail envelope beside
+            // it divides by flen, this term does not. Over a 1.8624 u barracuda that is 0.267
+            // wavelengths — a plank flicking a tail. The size table was giving it 0.85, i.e. 3.19×
+            // as many bends in the body, which reads as vibration rather than swimming.
+            Assert.AreEqual(1.862 * 0.9 / (2 * Math.PI), barra.Cycles, 1e-3);
+            Assert.AreEqual(1.911 * 2.5 / (2 * Math.PI), scad.Cycles,  1e-3);
+            Assert.Less(barra.Cycles, 0.3, "ตัวแข็งสะบัดหาง — a stiff body, not a snake");
+            Assert.Less(barra.Cycles, scad.Cycles, "a barracuda bends less than a scad");
+
+            // The web has NO gust and NO recoil: uAmp is written once at build time and the tail
+            // envelope is clamped at 0, so the nose never swings back.
+            foreach (SwimWave w in new[] { barra, scad })
+            {
+                Assert.AreEqual(0.0, w.Gust, Eps);
+                Assert.AreEqual(0.0, w.Recoil, Eps);
+                Assert.AreEqual(SwimGait.Body, w.Gait);
+            }
+        }
+
+        /// <summary>
+        /// 🔴 The web NEVER rolls a school fish. The instanced school path writes
+        /// <c>o.rotation.y</c> and nothing else — on the calm branch (builder.html :1599) and on
+        /// the forward-only one (:1618). Banking is a POD thing (:1721), because a pod is a
+        /// handful of real animals rather than an instanced shoal.
+        ///
+        /// The iPhone screenshot shows barracuda at every roll angle at once, which is a large
+        /// part of why it reads as a disorganised scatter rather than a school.
+        /// </summary>
+        [Test]
+        public void Schools_NeverBank_ButPodsAndSoloAnimalsDo()
+        {
+            foreach (string id in new[] { "school:barracuda", "school:scad", "school:batfish",
+                                          "school:parrotfish_prismatic", "Item_7_school:scad" })
+                Assert.AreEqual(0.0, SwimStyle.For(id, 12.0).MaxBankRad, Eps, id);
+
+            Assert.Greater(SwimStyle.For("pod:yellowtail", 5.8).MaxBankRad, 0.0);
+            Assert.Greater(SwimStyle.For("pod:humpback", 24.0).MaxBankRad, 0.0);
+            Assert.Greater(SwimStyle.For("msh:whaleshark", WhaleSharkLen).MaxBankRad, 0.0);
+        }
+
+        /// <summary>
+        /// A shoal's wave is a set of FRACTIONS, so drawing it bigger changes nothing about it —
+        /// the same reason its beat rate does not fall with size. This also guards the one thing
+        /// the conversion could plausibly get wrong: <see cref="SwimStyle.SchoolCycles"/> takes
+        /// the GLB's LOCAL length (1.86 u), never the drawn world length (17 u), and confusing the
+        /// two would give a barracuda 2.45 wavelengths of body wave.
+        /// </summary>
+        [Test]
+        public void ShoalWave_DoesNotDependOnDrawSize()
+        {
+            foreach (string id in new[] { "school:barracuda", "school:scad" })
+            {
+                SwimWave small = SwimStyle.For(id, 2.0);
+                SwimWave big   = SwimStyle.For(id, 200.0);
+                Assert.AreEqual(small.Amp,    big.Amp,    Eps, id);
+                Assert.AreEqual(small.Cycles, big.Cycles, Eps, id);
+                Assert.AreEqual(small.BeatHz, big.BeatHz, Eps, id);
+                Assert.Less(big.Cycles, 1.0, $"{id}: cycles came from the world length");
+            }
+
+            // A pod is not a shoal and must still track its size (builder.html :1502 — only the
+            // instanced branch gets the vertex wiggle at all).
+            Assert.IsFalse(SwimStyle.SchoolWiggle("pod:dolphin", out _, out _, out _));
+            Assert.IsFalse(SwimStyle.SchoolWiggle("msh:whaleshark", out _, out _, out _));
+            Assert.IsTrue(SwimStyle.SchoolWiggle("Item_2_school:scad", out double a, out _, out _));
+            Assert.AreEqual(0.18, a, Eps, "the scene-item prefix must not hide the shoal");
+        }
+
+        /// <summary>
+        /// The eye's own yardstick: peak tail-tip SPEED, amplitude × 2πf, in body lengths per
+        /// second. This is what "ครีบเร็วมาก" is a statement about, and it is what the beat-rate
+        /// calibration alone could not fix.
+        /// </summary>
+        [Test]
+        public void ShoalTipSpeed_MatchesTheWeb()
+        {
+            // Web: flen·wAmp·(wStiff+0.5) metres of travel at wRate rad/s ⇒ tip speed in body
+            // lengths per second is simply wAmp·(wStiff+0.5)·wRate.
+            double webBarra = 0.06 * 0.65 * 5.0;   // 0.195 L/s
+            double webScad  = 0.18 * 1.00 * 7.0;   // 1.260 L/s
+
+            SwimWave barra = SwimStyle.For("school:barracuda", BarracudaLen);
+            SwimWave scad  = SwimStyle.For("school:scad", ScadLen);
+
+            Assert.AreEqual(webBarra, barra.Amp * 2 * Math.PI * barra.BeatHz, 1e-9);
+            Assert.AreEqual(webScad,  scad.Amp  * 2 * Math.PI * scad.BeatHz,  1e-9);
+
+            // …and the old table's barracuda, for the record: 0.075 at the same rate = 1.92× fast.
+            Assert.AreEqual(0.075 / (0.06 * 0.65), (0.075 * 5.0) / webBarra, 1e-9);
+            Assert.AreEqual(1.923, (0.075 * 5.0) / webBarra, 0.001);
         }
 
         // ── Tempo tracks size ─────────────────────────────────────────────────────
@@ -437,10 +570,12 @@ namespace DiveMap.Tests
             double sharkWorld = shark.Amp * WhaleSharkLen;
             Assert.Greater(sharkWorld, scadWorld * 5, "a big animal moves its tail further");
 
-            // …and neither one folds in half. Real fish reach 8-18 % of body length to one side.
+            // …and nothing folds in half. Real fish reach 8-18 % of body length to one side; the
+            // web's own stiff-bodied barracuda sits below that band ON PURPOSE (0.06 × 0.65 =
+            // 3.96 %, builder.html :1098 — "ตัวแข็งสะบัดหาง"), so the floor is 3 % rather than 5 %.
             foreach (string id in new[] { "school:scad", "school:barracuda", "msh:whaleshark",
                                           "msh:humpback_whale", "msh:moray" })
-                Assert.That(SwimStyle.For(id, 20.0).Amp, Is.InRange(0.05, 0.20), id);
+                Assert.That(SwimStyle.For(id, 20.0).Amp, Is.InRange(0.03, 0.20), id);
         }
 
         // ── Beat phase: integrable, so the rate can change ────────────────────────
@@ -511,7 +646,10 @@ namespace DiveMap.Tests
         [Test]
         public void Bank_LeansIntoTheTurn_AndSaturates()
         {
-            double max = SwimStyle.For("school:scad", ScadLen).MaxBankRad;
+            // 🔴 A SOLO reef fish, not a shoal: the web never rolls an instanced school fish
+            // (builder.html :1599/:1618 write rotation.y and nothing else), so school:* now
+            // reports a zero bank — see SchoolsNeverBank below.
+            double max = SwimStyle.For("losin:moorish_idol", 11.5).MaxBankRad;
             Assert.Greater(max, 0.0);
 
             Assert.AreEqual(0.0, SwimStyle.BankRad(0.0, max), Eps, "straight and level");
@@ -536,7 +674,7 @@ namespace DiveMap.Tests
         [Test]
         public void Bank_CannotAccumulate()
         {
-            double max = SwimStyle.For("school:scad", ScadLen).MaxBankRad;
+            double max = SwimStyle.For("losin:moorish_idol", 11.5).MaxBankRad;
 
             double once = SwimStyle.BankRad(2.0, max);
             for (int i = 0; i < 10000; i++)
@@ -552,7 +690,7 @@ namespace DiveMap.Tests
         {
             // A fast, agile reef fish throws itself into a corner; a whale does not, and a crab
             // on the sand does not lean at all to speak of.
-            double reef  = SwimStyle.For("school:scad", ScadLen).MaxBankRad;
+            double reef  = SwimStyle.For("losin:moorish_idol", 11.5).MaxBankRad;
             double whale = SwimStyle.For("msh:humpback_whale", 120.0).MaxBankRad;
             double crab  = SwimStyle.For("msh:crab", 3.0).MaxBankRad;
 

@@ -115,6 +115,105 @@ namespace DiveMap.Core
         /// </summary>
         public const double SchoolBeatHzBarracuda = 5.0 / (2.0 * Math.PI);   // 0.796 Hz
 
+        // ── The rest of the web's shoal wiggle (builder.html :1506-1507, :1098) ────
+        //
+        // 🔴 2026-08-03, build 244 on a real iPhone: "สัตว์ทะเลก็ยังเคลื่อนไหว…ครีบเร็วมากๆ" —
+        // AFTER the beat rate had been calibrated and MEASURED to match the web exactly
+        // (CI 30790730885: barracuda 0.80 Hz, scad 1.11 Hz, both = wRate/2π). A rate that matches
+        // and an eye that disagrees means the rate was never the whole story, and it was not:
+        // `wRate` is one of FOUR numbers on the web's shader line, and only that one had been
+        // transcribed. The other three were still coming out of the solo-animal size table.
+        //
+        // The web's line, in full:
+        //
+        //     _tail = clamp(wStiff − position.z/flen, 0, 1)
+        //     transformed.x += sin(uTime*wRate + aPhase + position.z*wWave) * (flen*wAmp) * _tail
+        //
+        // What that means, term by term, against what this file was handing the same fish:
+        //
+        //   • AMPLITUDE. Peak deflection is `flen*wAmp*(wStiff+0.5)` — the mesh is centred, so
+        //     the tail sits at position.z ≈ −flen/2 and the clamp evaluates to wStiff+0.5 there.
+        //     For school:barracuda that is 0.06 × 0.65 = 3.96 % of body length. The thunniform
+        //     row was giving it 7.5 %. Tail-tip SPEED is amplitude × 2πf, so at an identical beat
+        //     rate the Unity barracuda's tail was travelling 1.92× as fast as the web's — which
+        //     is precisely "ครีบเร็วมาก" with a mechanism, and precisely the kind of thing a Hz
+        //     reading cannot show.
+        //
+        //   • WAVELENGTHS. `position.z*wWave` is radians per MODEL UNIT, not per body (the tail
+        //     envelope right next to it normalises by flen; this term does not). Across a
+        //     1.8624 u barracuda that is 1.8624 × 0.9 = 1.68 rad = 0.267 wavelengths — a stiff
+        //     plank flicking a tail, "ตัวแข็งสะบัดหาง", exactly what the user asked for on
+        //     2026-07-09. This file was using 0.85 wavelengths: 3.19× as many bends in the body,
+        //     which reads as a fish vibrating rather than swimming.
+        //
+        //   • GUST and RECOIL. The web has neither. `uAmp` is written once at build time and the
+        //     envelope is clamped at 0, so the nose never swings back and the amplitude never
+        //     drifts.
+        //
+        //   • BANK. The web NEVER rolls a school fish: the instanced path only ever writes
+        //     `o.rotation.y` (builder.html :1618, and again on the calm path :1599). Rolling is a
+        //     pod thing (:1721). 30° of independent roll per fish is a large part of why the
+        //     iPhone screenshot reads as a disorganised scatter rather than a school.
+        //
+        /// <summary>Web shoal default <c>wiggleAmp</c> — builder.html :1506.</summary>
+        public const double SchoolWiggleAmpDefault   = 0.18;
+        /// <summary>Web shoal default <c>wiggleWave</c>, RADIANS PER MODEL UNIT — builder.html :1506.</summary>
+        public const double SchoolWiggleWaveDefault  = 2.5;
+        /// <summary>Web shoal default <c>wiggleStiff</c> (head-rigid fraction) — builder.html :1506.</summary>
+        public const double SchoolWiggleStiffDefault = 0.5;
+
+        /// <summary>…and the hand-tuned barracuda row — builder.html :1098.</summary>
+        public const double SchoolWiggleAmpBarracuda   = 0.06;
+        public const double SchoolWiggleWaveBarracuda  = 0.9;
+        public const double SchoolWiggleStiffBarracuda = 0.15;
+
+        /// <summary>
+        /// The web's three wiggle numbers for this shoal. False when the id is not a
+        /// <c>school:</c> — same rule and same reason as <see cref="SchoolBeatHz"/> (a pod is
+        /// never instanced and never gets the vertex wiggle at all, builder.html :1502).
+        /// </summary>
+        public static bool SchoolWiggle(string assetId, out double wAmp, out double wWave, out double wStiff)
+        {
+            string id = Bare(assetId);
+            if (!id.StartsWith("school:", StringComparison.OrdinalIgnoreCase))
+            {
+                wAmp = 0.0; wWave = 0.0; wStiff = 0.0;
+                return false;
+            }
+            if (id.StartsWith("school:barracuda", StringComparison.OrdinalIgnoreCase))
+            {
+                wAmp = SchoolWiggleAmpBarracuda;
+                wWave = SchoolWiggleWaveBarracuda;
+                wStiff = SchoolWiggleStiffBarracuda;
+            }
+            else
+            {
+                wAmp = SchoolWiggleAmpDefault;
+                wWave = SchoolWiggleWaveDefault;
+                wStiff = SchoolWiggleStiffDefault;
+            }
+            return true;
+        }
+
+        /// <summary>
+        /// Peak tail deflection as a fraction of body length: <c>wAmp × clamp(wStiff + 0.5, 0, 1)</c>.
+        ///
+        /// The 0.5 is the tail's own <c>position.z/flen</c>. Both school GLBs are modelled centred
+        /// on their long axis to within 1 % (barracuda_school.glb z ∈ [−0.9486, +0.9138] over a
+        /// 1.8624 u length; scad_school.glb z ∈ [−0.9537, +0.9569] over 1.9105), so the exact
+        /// half is the right transcription and not a rounding.
+        /// </summary>
+        public static double SchoolAmp(double wAmp, double wStiff)
+            => wAmp * Clamp(wStiff + 0.5, 0.0, 1.0);
+
+        /// <summary>
+        /// <c>wWave</c> (radians per model unit) → wavelengths along the body, which is what
+        /// <c>_WaveCycles</c> means. See the block comment above: the web's own term is NOT
+        /// normalised by body length, so the conversion needs the GLB's local length.
+        /// </summary>
+        public static double SchoolCycles(double flenLocal, double wWave)
+            => (flenLocal > 0.0 ? flenLocal : 1.0) * wWave / (2.0 * Math.PI);
+
         /// <summary>
         /// What <see cref="SpeciesFlag.SlowAnim"/> is worth as a beat-rate multiplier.
         ///
@@ -314,6 +413,28 @@ namespace DiveMap.Core
             if (IsStill(id))
                 return new SwimWave(SwimGait.Body, Rate(id, 0.8 / root, 0.15, 1.2),
                                     0.012, 1.0, 0.0, 0.5, Deg(6));
+
+            // 🔴 A SHOAL leaves the size law entirely — every number, not just the rate.
+            //
+            // Its whole wave is a literal compiled into the web's shader, so a size law cannot
+            // reproduce it any more than it could reproduce the constant beat rate (see the
+            // SchoolWiggle* block). This branch is the fix for "ครีบยังเร็วมาก" on build 244,
+            // where the rate already matched the web and the amplitude was still 1.9× and the
+            // wavelength 3.2×. Recoil and gust are zero because the web has neither, and the bank
+            // is zero because the web's instanced schools only ever write rotation.y.
+            //
+            // worldLen is deliberately unused here: the web's numbers are fractions of the body,
+            // so a school scaled up beats and bends by the same fractions — which is what
+            // ShoalWave_DoesNotDependOnDrawSize pins.
+            if (SchoolWiggle(id, out double wAmp, out double wWave, out double wStiff))
+                return new SwimWave(
+                    SwimGait.Body,
+                    SchoolBeatHz(id),
+                    SchoolAmp(wAmp, wStiff),
+                    SchoolCycles(MarineMath.SpeciesFor(Bare(id)).FishLenLocal, wWave),
+                    0.0,    // recoil — the web's envelope is clamped at 0; the nose never swings back
+                    0.0,    // gust   — uAmp is written once at build time and never drifts
+                    0.0);   // bank   — builder.html :1599/:1618 write rotation.y and nothing else
 
             SwimGait gait = GaitFor(id);
 
