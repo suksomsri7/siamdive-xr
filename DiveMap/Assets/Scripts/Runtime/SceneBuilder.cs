@@ -839,6 +839,25 @@ namespace DiveMap.Runtime
 
             if (ok)
             {
+                // 🔴 FIRST, before anything else looks at this object. com.unity.modules.animation
+                // is in the manifest now, so glTFast hands every GLB that ships a clip an
+                // Animation component with playAutomatically already true — see
+                // ClipPlay.MayAnimate. A statue or a wreck that picked up a stray take during rig
+                // transfer would otherwise start moving on its own, which is the regression the
+                // temple statues were just rescued from. Solo animals come down this path too and
+                // they KEEP their rig: WhaleController.ApplyBodyMotion binds it a moment later.
+                if (parent != null)
+                {
+                    string gid = item != null ? (item.AssetId ?? "") : "";
+                    if (!ClipPlay.MayAnimate(gid, module?.Kind))
+                    {
+                        int stripped = BodyClips.Strip(parent.gameObject);
+                        if (stripped > 0)
+                            Debug.Log($"[AnimGate] stripped={stripped} asset={gid} " +
+                                      $"kind={module?.Kind} reason={ClipPlay.GateReason(gid, module?.Kind)}");
+                    }
+                }
+
                 // Match the web builder's bakeStatic(): recentre the model on X/Z and drop
                 // its base to the pivot (localPosition Y=0) so it rests ON the seabed instead
                 // of the GLB's own (often centred) pivot half-sinking into the sand.
@@ -882,7 +901,14 @@ namespace DiveMap.Runtime
         /// each model is disposed the moment its picture is taken so six 2048² models are never
         /// resident at once.
         /// </summary>
-        public static async Task<GltfImport> LoadForQc(string url, string assetId, Transform parent)
+        /// <param name="keepAnimation">
+        /// 🔴 QcAnimShot, and only QcAnimShot, passes true. Every other QC shot is a STILL of a
+        /// model on a stage, and a model that plays a clip while the shutter is open produces a
+        /// picture that differs run to run — which would turn the pixel baselines into noise. The
+        /// default therefore matches the map path: strip the rig unless someone is measuring it.
+        /// </param>
+        public static async Task<GltfImport> LoadForQc(string url, string assetId, Transform parent,
+                                                       bool keepAnimation = false)
         {
             var gltf = new GltfImport();
             try
@@ -907,6 +933,9 @@ namespace DiveMap.Runtime
 
             if (parent != null)
             {
+                // See the keepAnimation remark: a still photograph must not be of a moving model.
+                if (!keepAnimation) BodyClips.Strip(parent.gameObject);
+
                 // Centred, not grounded: the QC camera frames the model about its own middle, and
                 // there is no seabed under the staging area to stand it on.
                 CenterToPivot(parent);
