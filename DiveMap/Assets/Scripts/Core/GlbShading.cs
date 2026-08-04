@@ -137,6 +137,66 @@ namespace DiveMap.Core
             return TamedMetal;
         }
 
+        // ── WO-E5m: the half TameMetal was missing, found by measuring instead of reasoning ──
+        //
+        // 🔴 THE MEASUREMENT, not a theory. A probe set `metallicFactor = 0` on the loaded materials
+        // and changed NOTHING else — same shader, same albedo, same textures, same keywords — and
+        // photographed the same models from the same camera:
+        //
+        //                       darkOfSubject          blackOfSubject
+        //     kraken            65.39% → 8.42%          0.64% → 0.01%
+        //     singha            74.71% → 31.26%         3.47% → 0.00%
+        //     domed_temple      84.76% → 54.61%        33.40% → 8.94%
+        //     ancient_byzantine 87.17% → 49.41%        26.31% → 11.41%
+        //     hardeep           69.88% → 37.00%         1.81% → 0.45%
+        //     poseidon          95.22% → 62.04%         1.37% → 0.00%
+        //
+        // Seven models, one float, and the roughness twin of the same probe moved almost nothing
+        // (65→63, 85→77). This is the metal factor and it is not close.
+        //
+        // 🔎 The route was NOT established and the fix does not depend on it. `metal = tex.b ×
+        // metallicFactor` is only as good as `tex.b`, and tex.b arrives through an ETC1S transcode
+        // that compresses R, G and B together — with roughness sitting at ~0.66 in G, there is a
+        // channel right next to the metal one carrying two thirds of full scale. Whether that is
+        // what happens on the device is a guess; the frames are the evidence.
+        //
+        // 🔎 WHY 1.0 IS THERE AT ALL, and why zeroing it is not a loss. 1.0 is glTF's DEFAULT
+        // metallicFactor — a file that never writes the field gets it. Every one of these files
+        // pairs it with a metallic-roughness texture whose blue channel measures 0-1 out of 255.
+        // The authored intent is therefore "the metal comes from the map, and the map says none".
+        // Setting the factor to 0 delivers exactly that intent, and it delivers it even when the
+        // map's blue channel does not survive the trip to the device.
+
+        /// <summary>
+        /// What <c>metallicFactor</c> should become on a material that ships a metallic-roughness
+        /// TEXTURE — the case <see cref="TamedMetalFactor"/> deliberately leaves alone.
+        ///
+        /// 🔴 The two rules are complements, and the split is the same one either way: a factor is
+        /// only meaningful if something authored it. <see cref="TamedMetalFactor"/> handles "a high
+        /// factor and NO map" — a scanner's leftover. This handles "a high factor and a map", where
+        /// the map is the authored value and the factor is glTF's default sitting on top of it.
+        /// Neither rule touches a material the other one does; a test pins that.
+        ///
+        /// The golden trident is outside both by the same property that has always protected it: it
+        /// sets <c>metallicFactor = 1</c> with NO metallic-roughness texture, so it is a deliberate
+        /// metal and stays a mirror.
+        /// </summary>
+        /// <returns>The factor to write, or a negative number for "leave it alone".</returns>
+        public static float MappedMetalFactor(float metallicFactor, bool hasMetalTexture)
+        {
+            if (!hasMetalTexture) return -1f;                           // TamedMetalFactor's case
+            if (metallicFactor < DefaultMetalFactorFloor) return -1f;   // somebody chose this number
+            return 0f;
+        }
+
+        /// <summary>
+        /// At or above this, a <c>metallicFactor</c> sitting on top of a metallic-roughness map is
+        /// glTF's default rather than a decision. 0.9 rather than exactly 1.0 so that an exporter
+        /// writing 0.99, or a float that has been through a quantise, is still recognised — and far
+        /// enough above the 0.4 a scanner leaves behind that a genuine mid-metal is never caught.
+        /// </summary>
+        public const float DefaultMetalFactorFloor = 0.9f;
+
         /// <summary>
         /// What <c>_Metallic</c> should become when a glTF material is COPIED onto a shader that
         /// cannot read glTF's packed metallic-roughness texture — the swim-wave material the big

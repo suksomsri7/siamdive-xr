@@ -1044,7 +1044,7 @@ namespace DiveMap.Runtime
         private static void TameMetal(GameObject root, string assetId)
         {
             if (root == null) return;
-            int fixedCount = 0, droppedNormals = 0, materials = 0;
+            int fixedCount = 0, droppedNormals = 0, materials = 0, mappedMetal = 0;
             bool gamma = QualitySettings.activeColorSpace == ColorSpace.Gamma;
             foreach (Renderer r in root.GetComponentsInChildren<Renderer>(true))
             {
@@ -1056,10 +1056,34 @@ namespace DiveMap.Runtime
                     foreach (string factor in MetalFactorNames)
                     {
                         if (!m.HasProperty(factor)) continue;
-                        float tamed = GlbShading.TamedMetalFactor(m.GetFloat(factor), HasMetalMap(m));
-                        if (tamed < 0f) continue;          // authored, or already harmless
-                        m.SetFloat(factor, tamed);
-                        fixedCount++;
+                        bool hasMap = HasMetalMap(m);
+                        float before = m.GetFloat(factor);
+                        float tamed = GlbShading.TamedMetalFactor(before, hasMap);
+                        if (tamed >= 0f)                   // else: authored, or already harmless
+                        {
+                            m.SetFloat(factor, tamed);
+                            fixedCount++;
+                        }
+
+                        // 🔴 WO-E5m — the other half, and the only rendering change in this build.
+                        // Setting metallicFactor to 0 and changing NOTHING else took darkOfSubject
+                        // from 65% to 8% on the kraken, 75% to 31% on the Singha and 85% to 55% on
+                        // the domed temple, while the roughness twin of the same probe barely moved.
+                        // See GlbShading.MappedMetalFactor.
+                        //
+                        // The rule above cannot reach these: its case is "a high factor and NO map",
+                        // and these all ship a map. Theirs is "a high factor ON TOP of a map" — 1.0
+                        // is glTF's DEFAULT metallicFactor, so a file that never wrote the field
+                        // gets it, and the map beside it measures 0-1 out of 255. The authored
+                        // intent is "the metal comes from the map, and the map says none"; writing 0
+                        // delivers exactly that, and delivers it even if the map's blue channel does
+                        // not survive the transcode to the device.
+                        float mapped = GlbShading.MappedMetalFactor(before, hasMap);
+                        if (mapped >= 0f)
+                        {
+                            m.SetFloat(factor, mapped);
+                            mappedMetal++;
+                        }
                     }
                     if (DropMisdecodedNormalMap(m, assetId, gamma)) droppedNormals++;
                 }
@@ -1071,6 +1095,7 @@ namespace DiveMap.Runtime
             // between "the pass is clean", "the pass skipped everything" and "the pass was never
             // called on this model" — three different bugs that cost a CI round each to tell apart.
             Debug.Log($"[Shading] {assetId}: materials={materials} tamedMetal={fixedCount} " +
+                      $"mappedMetal={mappedMetal} " +
                       $"droppedNormalMap={droppedNormals} gamma={(gamma ? "t" : "f")} " +
                       $"tilt={GlbShading.NeutralTiltDegrees():F0}°");
         }
