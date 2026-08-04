@@ -5,10 +5,27 @@ using System.Threading.Tasks;
 using DiveMap.Core;
 using GLTFast;
 using GLTFast.Addons;
-using GLTFast.Schema;
-using KtxUnity;
 using Unity.Collections;
 using UnityEngine;
+
+// 🔴 NO `using GLTFast.Schema;` AND NO `using KtxUnity;`. This file is the one place in the
+// project that has to speak to both packages plus UnityEngine at once, and their type names
+// collide head-on:
+//
+//     TextureBase   → KtxUnity.TextureBase        vs GLTFast.Schema.TextureBase
+//     Texture       → UnityEngine.Texture         vs GLTFast.Schema.Texture
+//     Material      → UnityEngine.Material        vs GLTFast.Schema.Material
+//     Mesh, Camera, Animation                     → UnityEngine vs GLTFast.Schema
+//     Buffer, Type, Path                          → System      vs GLTFast.Schema
+//     ManagedNativeArray                          → KtxUnity    vs GLTFast
+//
+// The first two of those cost a red CI compile (run 30883230215) — and the TextureBase clash
+// cost it twice over, because an ambiguous parameter type also means the interface member is
+// not implemented (CS0535 on ITextureImageLoader.IsAbleToLoad). The remaining five are live
+// landmines for the next edit, so the imports are gone rather than the two names fixed:
+// aliases would have to be maintained, and `using` lines that are simply absent cannot rot.
+//
+// Everything from those two namespaces is spelled out in full below. It is verbose on purpose.
 
 namespace DiveMap.Runtime
 {
@@ -87,7 +104,7 @@ namespace DiveMap.Runtime
         }
 
         /// <summary>Did this texture come through the add-on above?</summary>
-        public static bool WasLoadedAsLinearData(Texture texture)
+        public static bool WasLoadedAsLinearData(UnityEngine.Texture texture)
             => texture != null && Linearised.Contains(texture.GetInstanceID());
 
         /// <summary>How many textures have been loaded as data so far. For the log line.</summary>
@@ -152,7 +169,7 @@ namespace DiveMap.Runtime
         public bool IsAbleToLoad(ReadOnlySpan<byte> data) => false;
 
         /// <inheritdoc />
-        public bool IsAbleToLoad(TextureBase texture, out int imageIndex)
+        public bool IsAbleToLoad(GLTFast.Schema.TextureBase texture, out int imageIndex)
         {
             imageIndex = texture != null ? texture.GetImageIndex() : -1;
             if (texture == null || imageIndex < 0) return false;
@@ -171,7 +188,8 @@ namespace DiveMap.Runtime
         /// <summary>
         /// Work out which images are data. Deliberately lazy: <see cref="Inject(GltfImportBase)"/>
         /// runs from the <c>GltfImport</c> CONSTRUCTOR, long before any JSON has been parsed, so
-        /// there is nothing to read then. The first <see cref="IsAbleToLoad(TextureBase,out int)"/>
+        /// there is nothing to read then. The first
+        /// <see cref="IsAbleToLoad(GLTFast.Schema.TextureBase,out int)"/>
         /// call happens after the parse (<c>GltfImport.cs:1662</c>), which is the earliest the
         /// materials exist.
         /// </summary>
@@ -189,13 +207,13 @@ namespace DiveMap.Runtime
                 var materials = new List<GltfMaterialTextures>();
                 for (int i = 0; i < _gltf.MaterialCount; i++)
                 {
-                    MaterialBase m = _gltf.GetSourceMaterial(i);
+                    GLTFast.Schema.MaterialBase m = _gltf.GetSourceMaterial(i);
                     if (m == null) continue;
                     GltfMaterialTextures t = GltfMaterialTextures.None;
                     t.Normal = IndexOf(m.NormalTexture);
                     t.Occlusion = IndexOf(m.OcclusionTexture);
                     t.Emissive = IndexOf(m.EmissiveTexture);
-                    PbrMetallicRoughnessBase pbr = m.PbrMetallicRoughness;
+                    GLTFast.Schema.PbrMetallicRoughnessBase pbr = m.PbrMetallicRoughness;
                     if (pbr != null)
                     {
                         t.BaseColour = IndexOf(pbr.BaseColorTexture);
@@ -208,7 +226,7 @@ namespace DiveMap.Runtime
                 int imageCount = 0;
                 for (int i = 0; i < textureCount; i++)
                 {
-                    TextureBase txt = _gltf.GetSourceTexture(i);
+                    GLTFast.Schema.TextureBase txt = _gltf.GetSourceTexture(i);
                     int img = txt != null ? txt.GetImageIndex() : -1;
                     imageOfTexture[i] = img;
                     if (img + 1 > imageCount) imageCount = img + 1;
@@ -227,7 +245,8 @@ namespace DiveMap.Runtime
             }
         }
 
-        private static int IndexOf(TextureInfoBase info) => info != null ? info.index : -1;
+        private static int IndexOf(GLTFast.Schema.TextureInfoBase info)
+            => info != null ? info.index : -1;
 
         /// <inheritdoc />
         public async Task<ImageResult> LoadImage(
@@ -256,14 +275,20 @@ namespace DiveMap.Runtime
         private static async Task<ImageResult> Load(
             NativeArray<byte>.ReadOnly data, bool linear, bool readable)
         {
-            var ktx = new KtxTexture();
+            var ktx = new KtxUnity.KtxTexture();
             try
             {
-                if (ktx.Open(data) != ErrorCode.Success) return ImageResult.Null;
-                TextureResult result = await ktx.LoadTexture2D(linear, readable);
-                if (result == null || result.errorCode != ErrorCode.Success || result.texture == null)
+                if (ktx.Open(data) != KtxUnity.ErrorCode.Success) return ImageResult.Null;
+                KtxUnity.TextureResult result = await ktx.LoadTexture2D(linear, readable);
+                if (result == null || result.errorCode != KtxUnity.ErrorCode.Success
+                    || result.texture == null)
                     return ImageResult.Null;
-                return new ImageResult(result.texture, result.orientation.IsYFlipped());
+                // Extension method called as a plain static: `IsYFlipped` lives on
+                // KtxUnity.TextureOrientationExtension and extension syntax would need the
+                // `using KtxUnity` this file deliberately does not have.
+                return new ImageResult(
+                    result.texture,
+                    KtxUnity.TextureOrientationExtension.IsYFlipped(result.orientation));
             }
             catch (Exception e)
             {
