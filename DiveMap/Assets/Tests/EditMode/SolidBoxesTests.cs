@@ -344,6 +344,43 @@ namespace DiveMap.Tests
             }
         }
 
+        /// <summary>
+        /// A hull is fitted to the model as it is ACTUALLY STANDING in the map, and since
+        /// SceneBuilder.FixImportedAxes turns every scenery model into the web's Z mirror (the
+        /// same mirror WebCoord.PositionToUnity puts its item transform in), a hull that is
+        /// still in glTFast's raw X mirror is a hull for the model's reflection: solid where the
+        /// wreck has a doorway and open where it has a wall.
+        ///
+        /// So the default must follow the placement, and these two must move together. If the
+        /// day comes that FixImportedAxes goes away, this is the test that says so out loud.
+        /// </summary>
+        [Test]
+        public void TheDefaultMirror_IsTheOneAPlacedModelIsActuallyIn()
+        {
+            Assert.IsFalse(SolidBoxes.Mirror.Placed.X, "a placed scenery model is not X-mirrored");
+            Assert.IsTrue(SolidBoxes.Mirror.Placed.Z, "it is Z-mirrored, like its item transform");
+            Assert.IsFalse(SolidBoxes.Mirror.Placed.Y);
+
+            // WebCoord agrees: the placement flips Z and only Z.
+            Vec3 u = WebCoord.PositionToUnity(new Vec3(1, 2, 3));
+            Assert.AreEqual(1, u.X, Eps);
+            Assert.AreEqual(2, u.Y, Eps);
+            Assert.AreEqual(-3, u.Z, Eps);
+
+            // ...and the no-argument ToFrame is that one, not the raw importer mirror.
+            SolidBoxes.Model m = SolidBoxes.Parse(
+                "{\"v\":1,\"bbox\":{\"min\":[-1,-1,-1],\"max\":[1,1,1]}," +
+                "\"boxes\":[[0,0,0.2, 0.25,1,1]]}");
+            SolidBoxes.Box[] byDefault = SolidBoxes.ToFrame(m, Unit(), new Vec3(1, 1, 1));
+            SolidBoxes.Box[] placed = SolidBoxes.ToFrame(m, Unit(), new Vec3(1, 1, 1),
+                                                          SolidBoxes.Mirror.Placed);
+            SolidBoxes.Box[] importer = SolidBoxes.ToFrame(m, Unit(), new Vec3(1, 1, 1),
+                                                            SolidBoxes.Mirror.Importer);
+            Assert.IsTrue(Same(byDefault[0], placed[0], 1e-9), "the default must be Mirror.Placed");
+            Assert.IsFalse(Same(placed[0], importer[0], 1e-9),
+                           "sanity: this fixture can tell the two mirrors apart");
+        }
+
         private static bool Same(SolidBoxes.Box x, SolidBoxes.Box y, double tol)
             => System.Math.Abs(x.Min.X - y.Min.X) < tol && System.Math.Abs(x.Max.X - y.Max.X) < tol
             && System.Math.Abs(x.Min.Y - y.Min.Y) < tol && System.Math.Abs(x.Max.Y - y.Max.Y) < tol
