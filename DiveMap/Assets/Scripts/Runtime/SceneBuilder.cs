@@ -821,6 +821,9 @@ namespace DiveMap.Runtime
         private async void LoadItemAsync(string url, Transform parent, SceneItem item, AssetManifest.Module module, bool ground)
         {
             bool ok = false;
+            // Counted BEFORE the await: everything glTFast adds sits past this index, and the
+            // pivot may already own a label or a placeholder that must not be turned.
+            int firstImported = parent != null ? parent.childCount : 0;
             try
             {
                 GltfImport gltf = await ImportFor(url);
@@ -839,6 +842,20 @@ namespace DiveMap.Runtime
 
             if (ok)
             {
+                // 🔴 FIRST, before anything measures this model: undo the half turn glTFast's
+                // X-mirror leaves it in, so it is Z-mirrored like its own item transform (and
+                // like the web). Without this the model is drawn front-for-back and its body
+                // swings to the far side of its pivot — the build-261 report. The derivation,
+                // with the glTFast source lines it was verified against, is above
+                // WebCoord.ImportedAxisFix; the parity is pinned by
+                // WebCoordTests.PlacedModel_MatchesTheWeb_PointForPoint.
+                //
+                // `ground` is the scenery test (it is set from !swimmer at the call site): a
+                // swimmer's orientation comes from its controller, not from the map, and those
+                // controllers read the model's forward off the mesh as glTFast delivers it.
+                // Turning those here would send every fish backwards. See the class remark.
+                if (ground && parent != null) FixImportedAxes(parent, firstImported);
+
                 // Match the web builder's bakeStatic(): recentre the model on X/Z and drop
                 // its base to the pivot (localPosition Y=0) so it rests ON the seabed instead
                 // of the GLB's own (often centred) pivot half-sinking into the sand.
@@ -1186,6 +1203,32 @@ namespace DiveMap.Runtime
             return false;
         }
 
+        /// <summary>
+        /// Turn a freshly imported hierarchy the half turn that reconciles glTFast's X-mirror
+        /// with the Z-mirror this app places items on. Applied to the roots glTFast just added
+        /// (index <paramref name="firstImported"/> onwards), which is the whole model: the fix
+        /// is a rotation of the model about its own pivot, so it never has to walk the mesh.
+        ///
+        /// Both quantities are read from <see cref="WebCoord"/> rather than written out as
+        /// <c>Euler(0,180,0)</c>, because the reason it is 180° lives there with its proof.
+        /// </summary>
+        private static void FixImportedAxes(Transform pivot, int firstImported)
+        {
+            if (pivot == null) return;
+
+            Quat f = WebCoord.ImportedAxisFix;
+            var turn = new Quaternion((float)f.X, (float)f.Y, (float)f.Z, (float)f.W);
+
+            for (int i = Mathf.Max(0, firstImported); i < pivot.childCount; i++)
+            {
+                Transform c = pivot.GetChild(i);
+                Vec3 p = WebCoord.FixImportedPoint(
+                    new Vec3(c.localPosition.x, c.localPosition.y, c.localPosition.z));
+                c.localPosition = new Vector3((float)p.X, (float)p.Y, (float)p.Z);
+                c.localRotation = turn * c.localRotation;
+            }
+        }
+
         private static void GroundToBase(Transform pivot)
         {
             if (!TryLocalBounds(pivot, out Bounds local)) return;
@@ -1377,7 +1420,10 @@ namespace DiveMap.Runtime
             float scaleX = env != null ? (float)env.AreaScaleX : 1f;
             float scaleZ = env != null ? (float)env.AreaScaleZ : 1f;
             float slopeX = env != null ? (float)env.AreaSlopeX : 0f;
-            float slopeZ = env != null ? (float)env.AreaSlopeZ : 0f;
+            // 🔴 Into THIS app's frame, not the web's: the floor is built on Unity's z, which
+            // runs the other way (SculptCoord.SlopeZ). Read the web's number raw and the map
+            // tilts towards the wrong end of itself.
+            float slopeZ = env != null ? (float)SculptCoord.SlopeZ(env.AreaSlopeZ) : 0f;
             float waterLevel = env != null ? (float)env.WaterLevel : 4f;
             _waterLevel = waterLevel;
 
@@ -1431,7 +1477,7 @@ namespace DiveMap.Runtime
             // null. Allocating the grid ANYWAY (all zeros — the same flat floor) is what makes
             // the brush able to work at all: the QC run showed samples=0 and every stroke was a
             // no-op on an array with nothing in it.
-            float[] sculpt = ReadSculpt(env);
+            float[] sculpt = SculptCoord.WebToApp(ReadSculpt(env), rings, seg);
             if (sculpt == null || sculpt.Length < rings * seg) sculpt = new float[rings * seg];
 
             var seabed = new GameObject("Seabed");

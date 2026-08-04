@@ -92,8 +92,13 @@ namespace DiveMap.Runtime
                     env = new JObject();
                     scene.Root["env"] = env;
                 }
+                // Back into the WEB's numbering before it is saved — mirrored segment order and
+                // its centre slot (SculptCoord.AppToWeb). The array in Heights is this app's
+                // own Unity-space grid; writing it raw is what used to hand the web builder a
+                // floor that was a mirror image of the one the user had just sculpted.
+                float[] web = SculptCoord.AppToWeb(Heights, Rings, Segments);
                 var arr = new JArray();
-                for (int i = 0; i < Heights.Length; i++) arr.Add(Heights[i]);
+                for (int i = 0; i < web.Length; i++) arr.Add(web[i]);
                 env["sculpt"] = arr;
                 env["sculptDim"] = new JArray(Rings, Segments);
             }

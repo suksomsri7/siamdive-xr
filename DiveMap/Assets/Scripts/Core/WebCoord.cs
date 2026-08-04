@@ -27,6 +27,28 @@ namespace DiveMap.Core
 
         public double Dot(Quat o) => X * o.X + Y * o.Y + Z * o.Z + W * o.W;
 
+        /// <summary>Hamilton product, component-for-component identical to
+        /// <c>UnityEngine.Quaternion.operator *</c> and <c>THREE.Quaternion.multiplyQuaternions</c>.
+        /// <c>a * b</c> means "apply b, then a" — the same reading as Unity's.</summary>
+        public static Quat operator *(Quat a, Quat b) => new Quat(
+            a.W * b.X + a.X * b.W + a.Y * b.Z - a.Z * b.Y,
+            a.W * b.Y + a.Y * b.W + a.Z * b.X - a.X * b.Z,
+            a.W * b.Z + a.Z * b.W + a.X * b.Y - a.Y * b.X,
+            a.W * b.W - a.X * b.X - a.Y * b.Y - a.Z * b.Z);
+
+        /// <summary>Rotate a vector by this quaternion (v' = q·v·q⁻¹).</summary>
+        public Vec3 Rotate(Vec3 v)
+        {
+            // t = 2·(q_vec × v);  v' = v + w·t + q_vec × t
+            double tx = 2.0 * (Y * v.Z - Z * v.Y);
+            double ty = 2.0 * (Z * v.X - X * v.Z);
+            double tz = 2.0 * (X * v.Y - Y * v.X);
+            return new Vec3(
+                v.X + W * tx + (Y * tz - Z * ty),
+                v.Y + W * ty + (Z * tx - X * tz),
+                v.Z + W * tz + (X * ty - Y * tx));
+        }
+
         public Quat Normalized()
         {
             double n = Math.Sqrt(X * X + Y * Y + Z * Z + W * W);
@@ -123,6 +145,79 @@ namespace DiveMap.Core
 
         /// <summary>Z-reflection involution mapping rotations RH↔LH: (x,y,z,w)→(-x,-y,z,w).</summary>
         public static Quat MirrorZ(Quat q) => new Quat(-q.X, -q.Y, q.Z, q.W);
+
+        // ── Imported geometry: glTFast's X-mirror → this app's Z-mirror ──────────
+        //
+        // 🔴 THE BUG THIS FIXES (user report, build 261: "หน้า-หลังสลับ และตำแหน่งการวาง
+        //    ไม่ตรง"). Both handedness maps below are individually valid; using ONE for the
+        //    mesh and the OTHER for the transform is not.
+        //
+        //   • glTFast negates X on its way in — verified in the pinned package source,
+        //     com.unity.cloud.gltfast 6.19.0: Runtime/Scripts/Jobs.cs:771 and :887
+        //     (`tmp.x *= -1` on every POSITION/NORMAL), Runtime/Scripts/NodeExtension.cs:63-76
+        //     (node translation `-t[0]`, node rotation `(x,-y,-z,w)`), plus the flipped
+        //     triangle winding that compensates for the reflection.
+        //   • The web (three.js) and therefore every saved item transform is Y-up
+        //     RIGHT-handed, so PositionToUnity/RotationToUnity above negate Z.
+        //
+        //   Composing the two:  diag(1,1,-1) · diag(-1,1,1) = diag(-1,1,-1) = Ry(180°).
+        //   So an imported model sat in the scene rotated a HALF TURN about its own vertical
+        //   axis — front for back — and the further its geometry reaches from its pivot the
+        //   further that half turn throws it (Atlantis' domed temple is placed at scale 402:
+        //   its façade landed 804 units from where the web draws it).
+        //
+        //   The correction is exactly that half turn, applied to the imported hierarchy so
+        //   the mesh ends up Z-mirrored like everything else:
+        //       Ry(180°) · diag(-1,1,1) = diag(1,1,-1)  ✔
+        //   It is a proper rotation (det +1), so glTFast's winding fix and its normals stay
+        //   valid — this is a re-orientation, not a second reflection.
+
+        /// <summary>Half turn about +Y: converts glTFast's X-mirrored import into the
+        /// Z-mirrored convention the rest of this app (and the web) uses.</summary>
+        public static readonly Quat ImportedAxisFix = new Quat(0, 1, 0, 0);
+
+        /// <summary>The fix applied to a point of the imported hierarchy.</summary>
+        public static Vec3 FixImportedPoint(Vec3 v) => new Vec3(-v.X, v.Y, -v.Z);
+
+        /// <summary>The fix applied to an orientation of the imported hierarchy.</summary>
+        public static Quat FixImportedRotation(Quat q) => ImportedAxisFix * q;
+
+        // ── The whole placement pipeline, as one testable pair of functions ───────
+        //
+        // These exist so "does the app put this model where the web puts it" can be ASKED,
+        // in the units a player sees, instead of being argued from trigonometry. See
+        // WebCoordTests.PlacedModel_MatchesTheWeb_PointForPoint.
+
+        /// <summary>
+        /// Where a point of the model — <paramref name="modelPoint"/>, in the GLB's own authored
+        /// space — is drawn by the WEB builder for an item saved with this position/rotation/scale.
+        /// (builder.html:3281-3291 assigns p/r/s straight onto the loaded group.)
+        /// </summary>
+        public static Vec3 WebWorldPoint(Vec3 webPos, Vec3 webEulerXYZ, Vec3 scale, Vec3 modelPoint)
+        {
+            Quat rot = EulerXYZToQuat(webEulerXYZ.X, webEulerXYZ.Y, webEulerXYZ.Z);
+            Vec3 scaled = new Vec3(modelPoint.X * scale.X, modelPoint.Y * scale.Y, modelPoint.Z * scale.Z);
+            Vec3 turned = rot.Rotate(scaled);
+            return new Vec3(webPos.X + turned.X, webPos.Y + turned.Y, webPos.Z + turned.Z);
+        }
+
+        /// <summary>
+        /// Where this app draws that same model point: glTFast's X-mirror, then (when
+        /// <paramref name="axisFix"/>) the half turn above, then the item transform.
+        /// Pass <c>false</c> to reproduce the build-261 behaviour.
+        /// </summary>
+        public static Vec3 UnityWorldPoint(Vec3 webPos, Vec3 webEulerXYZ, Vec3 scale, Vec3 modelPoint,
+                                           bool axisFix = true)
+        {
+            // What glTFast hands Unity for that vertex.
+            Vec3 imported = new Vec3(-modelPoint.X, modelPoint.Y, modelPoint.Z);
+            if (axisFix) imported = FixImportedPoint(imported);
+
+            Vec3 scaled = new Vec3(imported.X * scale.X, imported.Y * scale.Y, imported.Z * scale.Z);
+            Vec3 turned = RotationToUnity(webEulerXYZ).Rotate(scaled);
+            Vec3 pivot = PositionToUnity(webPos);
+            return new Vec3(pivot.X + turned.X, pivot.Y + turned.Y, pivot.Z + turned.Z);
+        }
 
         // ── three.js Euler(XYZ) ⟷ Quaternion (exact port of THREE.js math) ───────
 

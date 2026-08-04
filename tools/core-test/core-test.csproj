@@ -32,6 +32,7 @@
     <Compile Include="../../DiveMap/Assets/Scripts/Core/ItemPicker.cs" />
     <Compile Include="../../DiveMap/Assets/Scripts/Core/SeabedGeom.cs" />
     <Compile Include="../../DiveMap/Assets/Scripts/Core/WebCoord.cs" />
+    <Compile Include="../../DiveMap/Assets/Scripts/Core/SculptCoord.cs" />
     <Compile Include="../../DiveMap/Assets/Scripts/Core/MarineMath.cs" />
     <Compile Include="../../DiveMap/Assets/Scripts/Core/DroneFlight.cs" />
     <Compile Include="../../DiveMap/Assets/Scripts/Core/WarpSpawn.cs" />
@@ -52,6 +53,7 @@
 
   <ItemGroup Label="EditMode tests for exactly those files">
     <Compile Include="../../DiveMap/Assets/Tests/EditMode/WebCoordTests.cs" />
+    <Compile Include="../../DiveMap/Assets/Tests/EditMode/SculptCoordTests.cs" />
     <Compile Include="../../DiveMap/Assets/Tests/EditMode/MarineMathTests.cs" />
     <Compile Include="../../DiveMap/Assets/Tests/EditMode/FleeMathTests.cs" />
     <Compile Include="../../DiveMap/Assets/Tests/EditMode/SpeciesGenomeTests.cs" />
