@@ -60,9 +60,12 @@ namespace DiveMap.Runtime
 
                 var go = new GameObject("Pin_" + (pin.Id ?? made.ToString()));
                 go.transform.SetParent(parent, false);
-                go.transform.position = new Vector3((float)p[0],
-                                                    (float)(p[1] + PinMedia.MarkerLift),
-                                                    (float)p[2]);
+                // 🔴 pin.P is WEB space — the same space item.P is in, and PinPlacer:143 is
+                // careful to convert back to it when saving. Reading it raw put every pin on
+                // the mirror-image side of the map from the object it was pinned to: a pin
+                // dropped at Unity z = -50 came back at z = +50.
+                Vec3 up = WebCoord.PositionToUnity(new Vec3(p[0], p[1] + PinMedia.MarkerLift, p[2]));
+                go.transform.position = new Vector3((float)up.X, (float)up.Y, (float)up.Z);
 
                 go.AddComponent<MeshFilter>().sharedMesh = Disc();
                 var mr = go.AddComponent<MeshRenderer>();

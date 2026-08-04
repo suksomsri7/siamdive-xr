@@ -84,7 +84,10 @@
 **กติกา XR client:**
 1. field ที่ไม่รู้จัก → **เก็บไว้ ห้าม drop** (save กลับต้องครบ — บทเรียนเดียวกับ PATCH upsert-overwrite)
 2. **แปลงมือ:** Three.js right-handed → Unity left-handed: `z → -z`, Euler แปลงผ่าน quaternion เท่านั้น (ห้ามสลับแกน Euler ตรงๆ) — utility เดียว `CoordJS.ToUnity()/ToWeb()` + unit test round-trip
+   - 🔴 **เมชที่ import มาอยู่คนละแกนกับ transform:** glTFast กลับแกน **X** (ยืนยันจากซอร์ส 6.19.0 — `Jobs.cs:771/:887`, `NodeExtension.cs:63-76`) ส่วนข้อ 2 กลับแกน **Z** ต่างกัน = Ry(180°) พอดี → ต้องหมุนกลับที่ขอบ import (`SceneBuilder.FixImportedAxes`) ไม่งั้นทุกโมเดล "หน้า-หลังสลับ" (บั๊กจริง build 261) · ทาง swimmer ไม่หมุน เพราะ controller อ่านทิศหัวจากเมชดิบ
 3. `sculpt` → สร้าง mesh พื้นด้วย polar grid (rings×seg) เหมือน seabed เว็บ — ระวัง winding order (gotcha เดิมจาก headless test)
+   - 🔴 **การเรียง index คนละแบบ:** เว็บ = `1 + (r-1)·seg + s` (index 0 = จุดกลาง) · แอป = `(r-1)·seg + j` → ต่างกัน 1 ช่อง แปลงที่ขอบ JSON (`SculptCoord`) · พิสูจน์ด้วยเลขคณิต: Atlantis ส่ง 2689 ค่าให้ grid 28×96 = 2688
+   - 🟡 **ยังค้าง (ต้องมีหลักฐานภาพก่อนแก้):** เว็บเรียงตามมุมในพิกัด**เว็บ** แอปเรียงตามมุมในพิกัด**Unity** → น่าจะต้องสะท้อน `j → (seg−j) % seg` และกลับเครื่องหมาย `areaSlopeZ` ด้วย — ดู HANDOFF §12
 4. save จาก XR ใช้ PATCH + `rev` เดิม → conflict = โหลดใหม่ถามผู้ใช้
 
 ### 1.3 Asset / LOD Pipeline

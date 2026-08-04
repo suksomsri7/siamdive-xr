@@ -194,11 +194,17 @@ namespace DiveMap.Core
         /// actually places these meshes — negates X, while three.js/the web builder negate Z, which
         /// is why <see cref="WebCoord"/> flips Z for item positions. They are not interchangeable.
         ///
-        /// 🔴 This machine has no Unity Editor and no glTFast source to read, so <see cref="Importer"/>
-        /// is an ASSUMPTION, held in one place on purpose — the same shape as the one negation in
-        /// <c>GyroMath.ToUnity</c> that could only be settled on a device. If a module's hole turns
-        /// up on the wrong side of the module, this is the line: switch to <see cref="FlipZ"/> (or
-        /// <see cref="None"/>) and nothing else moves. Both mappings are pinned by tests.
+        /// ✅ <see cref="Importer"/> is no longer an assumption: it was verified against the pinned
+        /// package source, com.unity.cloud.gltfast 6.19.0 — Runtime/Scripts/Jobs.cs:771 and :887
+        /// negate X on every POSITION, and Runtime/Scripts/NodeExtension.cs:63-76 negates node
+        /// translation X and node rotation (y, z). glTFast does mirror X.
+        ///
+        /// 🔴 But that is NOT the frame a placed model ends up in any more. SceneBuilder turns
+        /// every imported scenery model a half turn on import (FixImportedAxes → the derivation at
+        /// <c>WebCoord.ImportedAxisFix</c>) so that the mesh and its item transform finally agree,
+        /// and Ry(180°)·mirrorX == mirrorZ. A hull is fitted to that placed model, so a hull must
+        /// use <see cref="Placed"/>. <see cref="Importer"/> is kept as the statement of what the
+        /// importer alone does — it is what a path that does NOT apply the fix (a swimmer) sees.
         ///
         /// It costs nothing on the shape that was actually reported: an open cube frame is
         /// symmetric, so every one of these choices produces the same hull for it.
@@ -210,8 +216,12 @@ namespace DiveMap.Core
             public static Mirror FlipX => new Mirror { X = true };
             public static Mirror FlipZ => new Mirror { Z = true };
 
-            /// <summary>What glTFast is believed to do. See the remarks above before changing it.</summary>
+            /// <summary>What glTFast does on import — verified, see the remarks above.</summary>
             public static Mirror Importer => FlipX;
+
+            /// <summary>What a scenery model is in AFTER SceneBuilder.FixImportedAxes: the web's
+            /// own Z mirror. This is the one a hull is fitted against.</summary>
+            public static Mirror Placed => FlipZ;
         }
 
         // ── Where the file lives ──────────────────────────────────────────────────────
@@ -354,7 +364,7 @@ namespace DiveMap.Core
         /// Null in, null out: a caller with no hull keeps the box it already has.
         /// </summary>
         public static Box[] ToFrame(Model model, Box fit, Vec3 scale)
-            => ToFrame(model, fit, scale, Mirror.Importer);
+            => ToFrame(model, fit, scale, Mirror.Placed);
 
         public static Box[] ToFrame(Model model, Box fit, Vec3 scale, Mirror mirror)
         {
