@@ -121,6 +121,15 @@ namespace DiveMap.Runtime.Marine
                 UnityEngine.Object.Destroy(holder);
                 return null;
             }
+            // 🔴 A school is drawn with RenderMeshInstanced off ONE shared mesh, so there is no
+            // GameObject per fish and a SkinnedMeshRenderer cannot be instanced anyway — the clip
+            // would drive a template nobody renders while its Animation component ticked every
+            // frame for nothing. With com.unity.modules.animation now in the manifest glTFast does
+            // attach one (playAutomatically = true), so it is removed here rather than tolerated.
+            // The shoals keep the DM_FishWaveDetail vertex wiggle, which is what the web does too
+            // (builder.html:1502 — `instanced = !pod`, and only that branch gets the wiggle).
+            BodyClips.Strip(holder);
+
             _keepAlive.Add(gltf); // meshes/textures we draw from — never Dispose
 
             // First renderer wins (these XR fish GLBs are 1 mesh / 1 primitive). Skinned

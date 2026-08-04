@@ -31,11 +31,23 @@ namespace DiveMap.Core
         public const string SpeedNormal = "normal";
         public const string SpeedFast = "fast";
 
-        /// <summary>0.65 × 9 u/s = 0.98 m/s — a fit diver sprinting, and no faster.</summary>
-        public const float CalmSpeedScale = 0.65f;
+        // ⚠️ These are multipliers of DroneFlight.Speed, which went back to the web's 30 u/s on
+        // 2026-08-04 ("โดรนเคลื่อนที่ช้าไป"). A multiplier whose base has tripled does not mean what
+        // it used to, so both are re-derived here rather than left to drift.
 
-        /// <summary>1.45 × 9 u/s = 2.18 m/s — a scooter, for anyone crossing a big site.</summary>
-        public const float FastSpeedScale = 1.45f;
+        /// <summary>
+        /// 0.30 × 30 u/s = 9 u/s = 1.50 m/s — a DPV at full throttle. This is EXACTLY build 261's
+        /// drone: the metric re-scale that the "เร็วไป" round shipped globally now lives here, where
+        /// someone who wants to hang over one coral head can choose it and nobody else pays for it.
+        /// </summary>
+        public const float CalmSpeedScale = 0.30f;
+
+        /// <summary>
+        /// 1.25 × 30 u/s = 37.5 u/s = 6.25 m/s — for crossing a big site. Cut from 1.45 with the
+        /// base restored: 1.45 would now be 43.5 u/s, a speed nothing in the app has ever been
+        /// flown at and well past the web's own ceiling.
+        /// </summary>
+        public const float FastSpeedScale = 1.25f;
 
         /// <summary>
         /// Render-scale used by the "battery saver" preset. 0.75 = 56% of the pixels,

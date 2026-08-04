@@ -4,21 +4,23 @@ namespace DiveMap.Core
 {
     /// <summary>
     /// P1.1 — the drone's flight model, ported constant-for-constant from the web's
-    /// <c>tourUpdate()</c> (builder.html 3725-3749) and kept pure so every rule is unit-tested
-    /// instead of costing a 35-minute CI round to eyeball.
+    /// <c>tourUpdate()</c> (builder.html 3765-3773 + 3809) and kept pure so every rule is
+    /// unit-tested instead of costing a 35-minute CI round to eyeball.
     ///
-    /// The web's numbers — ⚠️ the SPEEDS below are HISTORY as of 2026-08 (see the re-scale note
-    /// further down); the geometry and the sign conventions are still the web's, verbatim:
-    ///   • dead zone 0.12 on every axis (a resting thumb must not creep)
-    ///   • yaw −= lx · 1.1 · dt                      (turn in place, gentle)      → now 0.9, filtered
-    ///   • fwd = −ry, strafe = rx, lift = −ly, SP = 30 u/s   (push UP = forward / ascend) → now 9
-    ///   • vertical speed 0.72 × horizontal                                       → now 0.35 / 0.5
-    ///   • vel += (target − vel) · 0.09  PER FRAME — the drone's inertia. Still 0.09 at 60 Hz,
-    ///     but now compounded over the frame's own length (<see cref="FrameLerp"/>): the web's
-    ///     feel came from the lag, not from being SLOWER on a slower phone, which is what the
-    ///     literal per-frame rule actually delivered
-    ///   • dt = 0.016 × FS, the same real-delta scale the marine system uses
-    ///     (<see cref="MarineMath.RealDeltaScale"/>) so fish and drone agree about time
+    /// The web's numbers, verbatim, with the line each one comes from:
+    ///   • builder.html:3766 <c>dz=v=&gt;Math.abs(v)&lt;0.12?0:v</c>
+    ///       dead zone 0.12 on every axis, and NOTHING else — no curve (a resting thumb must not
+    ///       creep; a thumb at half travel gets half thrust)
+    ///   • builder.html:3766 <c>const dt=0.016*FS</c> — the same real-delta scale the marine
+    ///       system uses (<see cref="MarineMath.RealDeltaScale"/>), so fish and drone agree
+    ///       about time. FS itself is builder.html:3918, clamped 0.5…2.5
+    ///   • builder.html:3768 <c>d.yaw -= lx*1.1*dt</c>       — turn in place, gentle, UNFILTERED
+    ///   • builder.html:3770 <c>fwd=-ry, strafe=rx, lift=-ly, SP=30</c> (push UP = forward/ascend)
+    ///   • builder.html:3771 <c>ty=lift*SP*0.72</c>          — vertical is 0.72 × horizontal,
+    ///       the SAME both ways, and strafe carries no ratio at all (<c>strafe=rx</c>)
+    ///   • builder.html:3772 <c>d.vel.x+=(tx-d.vel.x)*0.09</c> — one inertia for thrust AND coast
+    ///   • builder.html:3773 <c>np.x+=d.vel.x*dt</c>         — velocity is in units per SECOND
+    ///   • builder.html:3809 <c>camera.lookAt(np.x-sin*12, np.y+d.vel.y*0.14, np.z-cos*12)</c>
     ///   • camera radius 3.2, floor = seabed + 3.2 + 1.5, ceiling = waterLevel − 2.5
     ///
     /// AXIS NOTE: the web's yaw=0 faces −Z and Unity's faces +Z, and the two worlds are already
@@ -27,68 +29,64 @@ namespace DiveMap.Core
     /// Pushing the left stick right therefore turns right, which is the only thing a player can
     /// actually feel.
     ///
-    /// ── 2026-08 — "โดรนบินเร็วไป". The web's numbers were a FLYING model, not a diving one ──
+    /// ── 2026-08-04 — "โดรนเคลื่อนที่ช้าไป" (build 261). Back to the web, exactly ──────────────
     ///
-    /// The world's scale is not a guess: <see cref="ItemPicker.UnitsPerMetre"/> = 6, the same
-    /// constant the depth readout divides by (builder.html L600 <c>U_PER_M</c>), so the HUD's
-    /// "54.0 ม." and these speeds are in the same currency. Converted, the ported numbers were:
+    /// A previous round read the web's speed as a metric implausibility (5 m/s is ten times a
+    /// relaxed diver) and re-scaled the whole model down: SP 30→9, yaw 1.1→0.9, lift 0.72→0.35/0.5,
+    /// strafe ×0.7, plus two inventions the web does not have — an EXPO stick curve and a separate
+    /// (softer) coasting Drag. Measured end to end, that shipped a drone
     ///
-    ///   was  30 u/s horizontal = 5.00 m/s   — 10× a relaxed diver, 5× a diver sprinting,
-    ///                                          3.3× a DPV scooter at full tilt
-    ///   was  21.6 u/s vertical = 3.60 m/s   — 216 m/min of ascent; a real ascent is 9-18 m/min
+    ///   at full stick   9 u/s   vs the web's 30      — 3.3× slower
+    ///   at half stick   1.98 u/s vs the web's 15     — 7.6× slower, because expo turns 50 % of
+    ///                                                  travel into 22 % of thrust
     ///
-    /// Now, with 1 unit = 1/6 m throughout:
+    /// and half stick is where a thumb actually lives. That second row is the complaint.
     ///
-    ///   forward   9.0 u/s = 1.50 m/s   a DPV at full throttle, which is what a "drone" is
-    ///   strafe    6.3 u/s = 1.05 m/s   crabbing sideways is never as efficient as swimming ahead
-    ///   ascend    3.15 u/s = 0.53 m/s  (32 m/min — still generous, but no longer a rocket)
-    ///   descend   4.5 u/s = 0.75 m/s   going down is the easy direction, and it always was
-    ///   yaw       0.9 rad/s = 52 °/s   a full turn in 7 s
+    /// The realism argument was not wrong, it was aimed at the wrong control: a map is a place you
+    /// travel across, and the user has spent months tuning that traversal ON THE WEB and calls the
+    /// result "ดีมากๆ". So the web's model is restored verbatim — including linear sticks and a
+    /// single 0.09 inertia — and the diver-paced version is kept where a preference belongs, as
+    /// <see cref="SettingsStore.SpeedCalm"/> (0.30 × 30 = 9 u/s, i.e. build 261's drone exactly).
     ///
-    /// A stick at half deflection lands at 0.33 m/s — a diver finning gently — because the
-    /// response is now EXPO (<see cref="Shape"/>) rather than linear, which is what makes it
-    /// possible to creep up on a nudibranch and still have a top speed worth having.
+    /// For reference, at <see cref="ItemPicker.UnitsPerMetre"/> = 6 (builder.html L600 U_PER_M —
+    /// the constant the depth readout divides by, so the HUD's "54.0 ม." is in this currency):
     ///
-    /// The other half of "คุมไม่อยู่" was the stop: thrust and coast shared one response, so
-    /// releasing the stick braked as hard as pushing it. Water does not brake; it drags.
-    /// <see cref="Inertia"/> is now the THRUST response and <see cref="Drag"/> the (slower)
-    /// coasting one, so letting go glides to a halt over about half a metre.
+    ///   forward / strafe  30 u/s   = 5.00 m/s        ceiling; a thumb rarely holds it
+    ///   ascend / descend  21.6 u/s = 3.60 m/s
+    ///   yaw               1.1 rad/s = 63 °/s — a full turn in 5.7 s
     ///
-    /// ⚠️ <see cref="FleeMath.DiverPanicSpeed"/> — the speed above which a shoal reads the diver
-    /// as a predator — was the web's flat 11 u/s, i.e. 37 % of the old top speed. It is now
-    /// derived from <see cref="Speed"/> so that fraction survives; hard-coding 11 against a 9 u/s
-    /// drone would have meant no fish ever fled again.
+    /// TWO things are deliberately NOT the web, and both are bugs the web cannot have:
+    ///
+    ///   1. <see cref="FrameLerp"/>. The web applies 0.09 once per FRAME with no dt. At 60 Hz that
+    ///      is the tuned feel; at 30 Hz it is literally a different drone (half the acceleration in
+    ///      wall-clock terms), and a phone's frame rate is not a design decision. FrameLerp
+    ///      compounds the same factor over the frame's own length: bit-for-bit identical at 60 Hz
+    ///      (dt = 0.016 ⇒ FS = 1 ⇒ k) and agreeing with it everywhere else. The web runs at a
+    ///      steady 60 on a desktop, so it never had to answer this.
+    ///   2. The solids: hulls in the object's own frame rather than the web's world AABBs. That is
+    ///      a superset — see <see cref="Resolve"/> — and does not touch speed.
+    ///
+    /// ⚠️ <see cref="FleeMath.DiverPanicSpeed"/> — the speed above which a shoal reads the diver as
+    /// a predator — is the web's flat 11 u/s expressed as 11/30 of <see cref="Speed"/>. With Speed
+    /// back at 30 it evaluates to 11.0 again, i.e. the web's number exactly.
     /// </summary>
     public static class DroneFlight
     {
+        /// <summary>builder.html:3766 — <c>dz=v=&gt;Math.abs(v)&lt;0.12?0:v</c>.</summary>
         public const float DeadZone = 0.12f;
 
-        /// <summary>
-        /// Stick curve strength, 0 = linear, 1 = pure cubic. 0.6 is the usual RC-transmitter
-        /// value. Measured through <see cref="Shape"/> — which also takes the dead zone out of the
-        /// range — half a stick gives 22 % thrust (fine control where you are looking at
-        /// something) and the full stick still gives 100 %.
-        /// </summary>
-        public const float Expo = 0.6f;
-
-        public const float YawRate = 0.9f;      // rad/s at full deflection (52 °/s)
-        public const float Speed = 9f;          // u/s = 1.50 m/s — see class remarks (was 30)
-        public const float StrafeRatio = 0.7f;  // sideways is 1.05 m/s
-        public const float AscendRatio = 0.35f; // up is the dangerous direction: 0.53 m/s
-        public const float DescendRatio = 0.5f; // down is the easy one: 0.75 m/s
-        public const float Inertia = 0.09f;     // THRUST response per 60 Hz frame — see remarks
-        public const float Drag = 0.05f;        // coasting response — softer, so a stop glides
-        public const float YawResponse = 0.14f; // turn-rate response per 60 Hz frame
+        public const float YawRate = 1.1f;      // rad/s at full deflection — builder.html:3768
+        public const float Speed = 30f;         // u/s = 5.00 m/s          — builder.html:3770 (SP)
+        public const float StrafeRatio = 1f;    // the web strafes at SP   — builder.html:3770-3771
+        public const float AscendRatio = 0.72f; // builder.html:3771 — ty = lift·SP·0.72
+        public const float DescendRatio = 0.72f;// …the same factor both ways; the web has one term
+        public const float Inertia = 0.09f;     // response per 60 Hz frame — builder.html:3772
         public const float CamRadius = 3.2f;
         public const float FloorClearance = 1.5f;
         public const float CeilingClearance = 2.5f;
-        public const float LookAhead = 12f;     // camera.lookAt distance
-        /// <summary>
-        /// Camera tilt per unit of vertical speed. Raised 0.14 → 0.9 with the speed cut: the tilt
-        /// is a fraction of <see cref="LookAhead"/>, so leaving it at 0.14 against a vertical
-        /// speed seven times smaller would have flattened the climb out of the shot entirely.
-        /// </summary>
-        public const float PitchFromLift = 0.9f;
+        public const float LookAhead = 12f;     // camera.lookAt distance  — builder.html:3809
+        /// <summary>Camera tilt per unit of vertical speed — builder.html:3809 (<c>d.vel.y*0.14</c>).</summary>
+        public const float PitchFromLift = 0.14f;
 
         /// <summary>Handy for logs and tests: world units per second → metres per second.</summary>
         public static float MetresPerSecond(float unitsPerSecond)
@@ -193,22 +191,21 @@ namespace DiveMap.Core
             public float Lx, Ly, Rx, Ry;
         }
 
-        public static float ApplyDeadZone(float v) => Math.Abs(v) < DeadZone ? 0f : v;
-
         /// <summary>
-        /// Dead zone + expo, in one pass. The dead zone is REMOVED from the range rather than
-        /// clipped out of it, so the first millimetre of travel past 0.12 gives a whisper of
-        /// thrust instead of a step to 12 %; then the cubic blend does the rest.
-        /// Full deflection still means full speed — this shapes the middle, not the ends.
+        /// builder.html:3766 — <c>dz=v=&gt;Math.abs(v)&lt;0.12?0:v</c>, and nothing else. Past the dead
+        /// zone the stick is LINEAR: half travel is half thrust, which is the whole reason the web
+        /// feels quick to a thumb that never reaches the edge of the pad.
+        ///
+        /// Over-range input is clamped to ±1 — the web never sees more than ±1 from its own pad,
+        /// but a gamepad or a QC harness can, and 1.4 × SP is not a speed anything here was
+        /// designed around.
         /// </summary>
-        public static float Shape(float v)
+        public static float ApplyDeadZone(float v)
         {
-            float a = Math.Abs(v);
-            if (a < DeadZone) return 0f;
-            if (a > 1f) a = 1f;
-            float t = (a - DeadZone) / (1f - DeadZone);
-            float o = (1f - Expo) * t + Expo * t * t * t;
-            return v < 0f ? -o : o;
+            if (Math.Abs(v) < DeadZone) return 0f;
+            if (v > 1f) return 1f;
+            if (v < -1f) return -1f;
+            return v;
         }
 
         /// <summary>
@@ -247,18 +244,18 @@ namespace DiveMap.Core
         public static State Step(State s, Sticks sticks, float dt, float seabedY, float waterLevel,
                                  Solid[] solids, float scaleX, float scaleZ, float speedScale = 1f)
         {
-            float lx = Shape(sticks.Lx);
-            float ly = Shape(sticks.Ly);
-            float rx = Shape(sticks.Rx);
-            float ry = Shape(sticks.Ry);
+            float lx = ApplyDeadZone(sticks.Lx);
+            float ly = ApplyDeadZone(sticks.Ly);
+            float rx = ApplyDeadZone(sticks.Rx);
+            float ry = ApplyDeadZone(sticks.Ry);
 
             if (speedScale <= 0.01f) speedScale = 1f;
             float speed = Speed * speedScale;
 
-            // Turn in place. Unity yaw grows clockwise seen from above, so +lx turns right.
-            // Through a rate filter, so a flick of the thumb no longer snaps the horizon sideways
-            // and letting go coasts the turn to a stop instead of nailing it.
-            s.YawVel += (lx * YawRate - s.YawVel) * FrameLerp(YawResponse, dt);
+            // Turn in place — builder.html:3768 <c>d.yaw -= lx*1.1*dt</c>, unfiltered. Unity yaw
+            // grows clockwise seen from above, so +lx turns right (the web's sign is mirrored with
+            // its −Z forward; see the AXIS NOTE).
+            s.YawVel = lx * YawRate;
             s.Yaw += s.YawVel * dt;
 
             float sin = (float)Math.Sin(s.Yaw), cos = (float)Math.Cos(s.Yaw);
@@ -274,11 +271,12 @@ namespace DiveMap.Core
             // opposite of a briefing.
             float ty = lift * speed * (lift >= 0f ? AscendRatio : DescendRatio);
 
-            // THRUST accelerates; a released stick only drags. Per axis, so gliding forward while
-            // you stop strafing behaves the way water does.
-            s.Vel.X += (tx - s.Vel.X) * FrameLerp(Math.Abs(tx) > 1e-4f ? Inertia : Drag, dt);
-            s.Vel.Y += (ty - s.Vel.Y) * FrameLerp(Math.Abs(ty) > 1e-4f ? Inertia : Drag, dt);
-            s.Vel.Z += (tz - s.Vel.Z) * FrameLerp(Math.Abs(tz) > 1e-4f ? Inertia : Drag, dt);
+            // builder.html:3772 — one inertia, thrust and coast alike. dt-corrected so 30 fps is
+            // the same drone as 60 (see FrameLerp); at 60 fps this IS the web's line.
+            float lerpK = FrameLerp(Inertia, dt);
+            s.Vel.X += (tx - s.Vel.X) * lerpK;
+            s.Vel.Y += (ty - s.Vel.Y) * lerpK;
+            s.Vel.Z += (tz - s.Vel.Z) * lerpK;
 
             var np = new Vec3(s.Pos.X + s.Vel.X * dt,
                               s.Pos.Y + s.Vel.Y * dt,

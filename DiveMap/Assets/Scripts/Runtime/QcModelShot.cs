@@ -243,6 +243,8 @@ namespace DiveMap.Runtime
             pivot.GetComponentsInChildren(true, renderers);
             int rendererCount = renderers.Count;
 
+            LogClips(assetId, pivot.transform);
+
             double baseline = BaselineFor(assetId);
             double darkGate = QcPixels.DarkGate(baseline);
 
@@ -359,6 +361,53 @@ namespace DiveMap.Runtime
             import?.Dispose();
 
             onDone(pass);
+        }
+
+        // ── WO-F3: does this model actually ship playable clips? ─────────────────
+
+        /// <summary>
+        /// One <c>[Anim]</c> line per QC model. Costs nothing (no render, no extra download) and
+        /// is the only place in CI that can answer the question the whole clip work turns on:
+        /// does the file HAVE animation, and did glTFast hand it over?
+        ///
+        /// 🔴 The two failures it separates look identical on a screenshot and have opposite
+        /// owners. <c>clips=0</c> across every model means the asset pipeline baked the animation
+        /// out of the GLBs (the 3D side's problem); <c>clips=N</c> with a mode of <c>wave</c>
+        /// means the app threw them away (this side's). The turtles on the CDN carry six clips —
+        /// glide, cruise, burst, turn, patrol, accent — so a run in which msh:barracuda reports
+        /// clips=0 is a measurement of the pipeline, not of this code.
+        ///
+        /// It reports whatever the QC list happens to contain: none of those nine models is a
+        /// turtle today, and swapping one in would move a photometric baseline that a human
+        /// already signed off on. This is deliberately the cheap half of the evidence.
+        /// </summary>
+        private static void LogClips(string assetId, Transform pivot)
+        {
+            var names = new List<string>(8);
+            string reason = "-";
+            Animation anim = pivot != null ? pivot.GetComponentInChildren<Animation>(true) : null;
+            if (anim == null)
+            {
+                reason = "no-animation-component";
+            }
+            else
+            {
+                foreach (AnimationState st in anim)
+                    if (st != null && st.clip != null) names.Add(st.name);
+                if (names.Count == 0) reason = "no-clips";
+            }
+
+            string[] arr = names.ToArray();
+            int pick = ClipPlay.IndexOf(arr, ClipRole.Cruise);
+            BodyMotion mode = ClipPlay.Motion(arr.Length, false);
+            if (reason == "-") reason = ClipPlay.MotionReason(arr.Length, false);
+
+            // "shot", not "qc": QcAnimShot's lines are also [Anim] qc, and they carry a verdict
+            // this one cannot (it never plays anything). Two prefixes so a grep can ask for either.
+            Debug.Log($"[Anim] shot asset={assetId} clips={arr.Length} " +
+                      $"names={(arr.Length == 0 ? "-" : string.Join(",", arr))} " +
+                      $"pick={(pick >= 0 ? arr[pick] : "-")} " +
+                      $"mode={(mode == BodyMotion.Clip ? "clip" : "wave")} reason={reason}");
         }
 
         // ── A/B probes ───────────────────────────────────────────────────────────

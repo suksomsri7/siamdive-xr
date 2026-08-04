@@ -167,6 +167,118 @@ namespace DiveMap.Core
         public static Orientation OrientationFromVelocity(double vx, double vy, double vz)
             => OrientationFromVelocity(vx, vy, vz, DefaultMaxPitch);
 
+        // ── The no-reversing invariant (user, build 261: "ห้ามว่ายถอยหลัง") ────────
+        //
+        // 🔴 One rule for the whole reef: an animal's NOSE must never point against the way it is
+        // actually moving. dot(forward, velocity) > 0, everywhere, for schools and shoals and pods
+        // and hero animals alike.
+        //
+        // It is not a style note. Nothing in the sea reverses — a fish that needs to go the other
+        // way turns, and turning takes a radius and takes time. A body sliding backwards while its
+        // head points forwards is the single most reliable way to make an expensive model look
+        // like a sprite, and a still screenshot cannot show it, which is why it survived to a
+        // real device.
+        //
+        // The web enforces this STRUCTURALLY on its shoal/formation path — `_fwdSwim`
+        // (builder.html:1584-1586) keeps a persistent `fi.head`, caps the turn at ±0.045/frame and
+        // then translates along the head and nowhere else, so backwards is unrepresentable.
+        //
+        // Two of the web's OTHER paths do not have that property, and it is worth writing down
+        // which of them this port inherited:
+        //   • the web's pods use `faceVel` (:1627-1630), an unconditional 0.12 lerp toward the
+        //     travel direction, over a position lerp toward a slot — so a pod animal whose slot is
+        //     behind it rotates in place while translating backwards. This port did NOT inherit
+        //     that: BoidsJob's Reynolds path rebuilds velocity from a turn-capped heading and
+        //     advances position along that same velocity, so pods are safe by construction.
+        //   • the CALM polarised path (:1592-1593) turns the nose toward the school's heading and
+        //     moves the body toward the slot as two independent quantities. That one this port DID
+        //     inherit, it is `school:barracuda` — 200 fish in tight formation, the most-looked-at
+        //     shoal on the map — and it is what the build-261 report is describing. It is closed in
+        //     BoidsJob.FormationStep, mirrored for test in SchoolFormation.ForwardOnlyCalmStep.
+
+        /// <summary>
+        /// How well a facing agrees with a motion: <c>dot(forward̂, velocitŷ)</c>, in −1…1.
+        ///
+        /// A stopped animal returns 1, not 0. "Not moving" is not "moving backwards", and an
+        /// invariant that fires on a hovering fish is an invariant that gets switched off.
+        /// </summary>
+        public static double HeadingDot(Vec3 forward, Vec3 vel)
+        {
+            double fl = Math.Sqrt(forward.X * forward.X + forward.Y * forward.Y + forward.Z * forward.Z);
+            double vl = Math.Sqrt(vel.X * vel.X + vel.Y * vel.Y + vel.Z * vel.Z);
+            if (vl < 1e-9) return 1.0;      // hovering — see remarks
+            if (fl < 1e-9) return 0.0;      // no facing at all is a real failure, and reads as one
+            double d = (forward.X * vel.X + forward.Y * vel.Y + forward.Z * vel.Z) / (fl * vl);
+            return d > 1.0 ? 1.0 : (d < -1.0 ? -1.0 : d);
+        }
+
+        /// <summary>The invariant itself. False is a bug, not a mood.</summary>
+        public static bool SwimsForward(Vec3 forward, Vec3 vel) => HeadingDot(forward, vel) > 0.0;
+
+        /// <summary>
+        /// The invariant in the HORIZONTAL plane — and this, not the 3-D form, is what the runtime
+        /// oracles assert.
+        ///
+        /// 🔴 The reason is a real animal on this reef, not tidiness. A crab, a seahorse, a clam
+        /// and a garden eel are drawn by <c>WhaleController</c>'s stationary path: their facing is
+        /// a fixed yaw and their only motion is a vertical sway. Their 3-D <see cref="HeadingDot"/>
+        /// is therefore exactly 0.0 forever, and a strict <c>&gt; 0</c> rule would report every
+        /// stationary animal in the map as swimming backwards, every frame — which is how an
+        /// invariant gets a <c>// TODO: too noisy</c> next to it and stops protecting anything.
+        ///
+        /// Heading is a YAW everywhere in this project; pitch is a decoration on top of it, clamped
+        /// to ±0.5 rad so it can never dominate. So the question "is this animal reversing" is a
+        /// question about x and z, and rising or sinking is not an answer to it.
+        ///
+        /// A fish with no horizontal motion at all returns 1.0, for the same reason a stopped one
+        /// does in <see cref="HeadingDot"/>: hovering is not reversing.
+        /// </summary>
+        public static double HeadingDotXZ(Vec3 forward, Vec3 vel)
+        {
+            double fl = Math.Sqrt(forward.X * forward.X + forward.Z * forward.Z);
+            double vl = Math.Sqrt(vel.X * vel.X + vel.Z * vel.Z);
+            if (vl < 1e-9) return 1.0;      // hovering, or bobbing straight up — see remarks
+            if (fl < 1e-9) return 0.0;
+            double d = (forward.X * vel.X + forward.Z * vel.Z) / (fl * vl);
+            return d > 1.0 ? 1.0 : (d < -1.0 ? -1.0 : d);
+        }
+
+        /// <summary>
+        /// The runtime invariant. <paramref name="tolerance"/> is not slack in the rule, it is slack
+        /// in the MEASUREMENT: a frame's displacement is a difference of two floats over a small
+        /// dt, and a fish easing sideways into its slot produces a dot that hovers around 0 with
+        /// float noise on it. The oracles pass −0.05, so anything genuinely reversing (a real one
+        /// runs to −1) still trips it and a rounding error does not.
+        /// </summary>
+        public static bool SwimsForwardXZ(Vec3 forward, Vec3 vel, double tolerance = 0.0)
+            => HeadingDotXZ(forward, vel) > -Math.Abs(tolerance);
+
+        /// <summary>
+        /// Enforce the invariant on ONE frame's displacement: remove whatever part of
+        /// <paramref name="step"/> points behind <paramref name="forward"/>, and leave the rest.
+        ///
+        /// 🔴 Only the BACKWARDS component goes. Sideways survives on purpose — a real fish does
+        /// slip outward through a hard turn, the web's pods do drift across their slots, and a
+        /// version of this that projected the step onto the nose axis alone would weld every
+        /// animal to a rail and undo the formation work. What is removed is the thing that cannot
+        /// happen in water: the tail leading.
+        ///
+        /// A caller whose facing is derived FROM its velocity (<see cref="OrientationFromVelocity"/>,
+        /// and the whole <c>_fwdSwim</c> path) can never trip this and pays only a dot product.
+        /// It is the pod lerp and anything that chases a target position directly that need it.
+        /// </summary>
+        public static Vec3 ForwardOnlyStep(Vec3 forward, Vec3 step)
+        {
+            double fl2 = forward.X * forward.X + forward.Y * forward.Y + forward.Z * forward.Z;
+            if (fl2 < 1e-18) return step;   // no opinion about facing ⇒ nothing to enforce
+            double d = forward.X * step.X + forward.Y * step.Y + forward.Z * step.Z;
+            if (d >= 0.0) return step;      // already forwards — the overwhelmingly common case
+            double k = d / fl2;             // the offending component, in units of `forward`
+            return new Vec3(step.X - forward.X * k,
+                            step.Y - forward.Y * k,
+                            step.Z - forward.Z * k);
+        }
+
         /// <summary>
         /// The fish's local +X ("right") axis in world space for a given Unity Euler
         /// (ZXY order, matching UnityEngine.Quaternion.Euler). With roll = 0 the Y
@@ -290,9 +402,31 @@ namespace DiveMap.Core
             public readonly double          SizeMin;
             public readonly double          SizeMax;
 
+            // ── The rest of the web catalog row, read by the slot formation (WO-F2) ──
+            // These five were dropped when this table was first transcribed because boids had
+            // nothing to do with them. The web's school does: they are what makes a barracuda
+            // hold one shape for half a minute and turn its ring over at a tenth the usual rate.
+            /// <summary>asset.modeDurMul — how long a shape is held (barracuda 2.2, builder.html :1098).</summary>
+            public readonly double          ModeDurMul;
+            /// <summary>asset.transDurMul — how slowly it morphs into the next one (barracuda 2.5).</summary>
+            public readonly double          TransDurMul;
+            /// <summary>asset.spinMul — ring/column rotation rate (barracuda 0.1, i.e. a tenth).</summary>
+            public readonly double          SpinMul;
+            /// <summary>asset.easeMul — slot-chase gain multiplier (barracuda 0.8).</summary>
+            public readonly double          EaseMul;
+            /// <summary>
+            /// asset.calm — takes the web's CALM path (builder.html :1591-1600): the fish holds the
+            /// school's heading and eases into its slot with no cruise floor, instead of the
+            /// forward-only chase. <c>school:barracuda</c> is the only one, and it is the school in
+            /// the iPhone screenshot.
+            /// </summary>
+            public readonly bool            Calm;
+
             public SpeciesSpec(string assetId, double fishLenLocal, int webCount, int unityCount,
                                SchoolFormation formation, double formR, double swimMul,
-                               double defaultScale, double sizeMin, double sizeMax)
+                               double defaultScale, double sizeMin, double sizeMax,
+                               double modeDurMul = 1.0, double transDurMul = 1.0,
+                               double spinMul = 1.0, double easeMul = 1.0, bool calm = false)
             {
                 AssetId = assetId;
                 FishLenLocal = fishLenLocal;
@@ -304,6 +438,11 @@ namespace DiveMap.Core
                 DefaultScale = defaultScale;
                 SizeMin = sizeMin;
                 SizeMax = sizeMax;
+                ModeDurMul = modeDurMul;
+                TransDurMul = transDurMul;
+                SpinMul = spinMul;
+                EaseMul = easeMul;
+                Calm = calm;
             }
         }
 
@@ -320,7 +459,10 @@ namespace DiveMap.Core
             if (a.StartsWith("school:scad", StringComparison.Ordinal))
                 return new SpeciesSpec(a, 1.911, 500, 120, SchoolFormation.Shoal, 1.0, 1.0, 3.5, 0.85, 1.15);
             if (a.StartsWith("school:barracuda", StringComparison.Ordinal))
-                return new SpeciesSpec(a, 1.862, 200, 160, SchoolFormation.Cluster, 0.6, 0.06, 8.0, 0.85, 1.15);
+                // formR 0.6 · swimMul 0.06 · modeDurMul 2.2 · transDurMul 2.5 · spinMul 0.1 ·
+                // easeMul 0.8 · calm — builder.html :1098, the whole row.
+                return new SpeciesSpec(a, 1.862, 200, 160, SchoolFormation.Cluster, 0.6, 0.06, 8.0, 0.85, 1.15,
+                                       2.2, 2.5, 0.1, 0.8, true);
             if (a.StartsWith("school:batfish", StringComparison.Ordinal))
                 return new SpeciesSpec(a, 1.900, 100, 90, SchoolFormation.Shoal, 1.0, 1.0, 3.0, 0.85, 1.15);
             if (a.StartsWith("pod:yellowtail", StringComparison.Ordinal))
