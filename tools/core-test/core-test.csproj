@@ -47,6 +47,7 @@
     <Compile Include="../../DiveMap/Assets/Scripts/Core/FishMind.cs" />
     <Compile Include="../../DiveMap/Assets/Scripts/Core/QcPixels.cs" />
     <Compile Include="../../DiveMap/Assets/Scripts/Core/GlbShading.cs" />
+    <Compile Include="../../DiveMap/Assets/Scripts/Core/LoadProgress.cs" />
   </ItemGroup>
 
   <ItemGroup Label="EditMode tests for exactly those files">
@@ -68,6 +69,7 @@
     <Compile Include="../../DiveMap/Assets/Tests/EditMode/TiltedHullTests.cs" />
     <Compile Include="../../DiveMap/Assets/Tests/EditMode/QcPixelsTests.cs" />
     <Compile Include="../../DiveMap/Assets/Tests/EditMode/GlbShadingTests.cs" />
+    <Compile Include="../../DiveMap/Assets/Tests/EditMode/LoadProgressTests.cs" />
     <Compile Include="Runner.cs" />
   </ItemGroup>
 </Project>

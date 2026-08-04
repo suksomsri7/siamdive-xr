@@ -221,7 +221,11 @@ namespace DiveMap.Runtime.Ui
                 irt.anchorMin = new Vector2(0.5f, 0.5f);
                 irt.anchorMax = new Vector2(0.5f, 0.5f);
                 irt.pivot = new Vector2(0.5f, 0.5f);
-                irt.sizeDelta = new Vector2(size * 0.46f, size * 0.46f);   // web: 22/48 px
+                // web: 22/48 px for a stroke icon — but the dive-mask ARTWORK is drawn at 27 px in
+                // the same 48 px button (#tourBtn img, builder.html:307), because a filled mark
+                // reads smaller than a stroke glyph at the same box.
+                float iconFrac = icon == "mask" ? 27f / 48f : 0.46f;
+                irt.sizeDelta = new Vector2(size * iconFrac, size * iconFrac);
                 irt.anchoredPosition = Vector2.zero;
             }
             return btn;

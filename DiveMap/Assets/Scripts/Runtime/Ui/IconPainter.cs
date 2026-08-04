@@ -25,9 +25,36 @@ namespace DiveMap.Runtime.Ui
         public static Sprite Get(string name)
         {
             if (Cache.TryGetValue(name, out Sprite s) && s != null) return s;
-            Sprite made = Build(name);
+
+            // 🎭 The dive mask is the one mark the web does NOT draw as a stroke path: #tourBtn
+            // and #viewTour show the ai-mask.png artwork inverted to white
+            // (builder.html:307 — width:27px;height:27px;filter:brightness(0) invert(1)).
+            // We ship that exact file (Resources/ai-mask.png) with its RGB pre-whitened, which is
+            // what brightness(0) invert(1) computes, so tinting it with a UI colour is exact and
+            // no importer setting can bleed a dark halo out of the transparent pixels.
+            Sprite made = null;
+            if (name == "mask") made = MaskArtwork();
+            if (made == null) made = Build(name);
+
             Cache[name] = made;
             return made;
+        }
+
+        /// <summary>
+        /// The real dive-mask logo. Null (→ the drawn <c>case "mask"</c> fallback) if the texture
+        /// is missing from the build, which is the only failure mode: there is no Unity Editor on
+        /// the dev machine, so the import itself first happens in CI.
+        /// </summary>
+        private static Sprite MaskArtwork()
+        {
+            var tex = Resources.Load<Texture2D>("ai-mask");
+            if (tex == null)
+            {
+                Debug.LogWarning("[Icon] Resources/ai-mask.png missing — using the drawn mask outline");
+                return null;
+            }
+            return Sprite.Create(tex, new Rect(0f, 0f, tex.width, tex.height),
+                                 new Vector2(0.5f, 0.5f), 100f);
         }
 
         private static Sprite Build(string name)

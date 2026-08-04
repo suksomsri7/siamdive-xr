@@ -150,6 +150,14 @@ namespace DiveMap.Runtime
         private const float OverallLoadTimeout = 120f;  // whole scene, hard safety
 
         private readonly SceneLoadState _loadState = new SceneLoadState();
+
+        /// <summary>
+        /// Live progress of the build in flight, for the loading screen (Ui.LoadOverlay).
+        /// It lives here because this is the only object that knows how many items a map has
+        /// and how many of them have landed; the overlay is a rendering of it and nothing else.
+        /// Untouched by <c>-qcshot</c> runs — QcMapShot builds maps with no overlay listening.
+        /// </summary>
+        public LoadProgress Progress { get; } = new LoadProgress();
         // WO-XR-04.1: real fish GLB templates. Held in a FIELD, not a local, so the
         // GltfImport instances behind the meshes/textures we instance every frame stay
         // referenced for the lifetime of the scene (a collected/disposed import would pull
@@ -190,6 +198,13 @@ namespace DiveMap.Runtime
         /// <summary>Destroy a build that was abandoned part-way. Safe to call at any time.</summary>
         public void DiscardInFlight()
         {
+            // The loading screen is the other thing a cancelled build leaves behind. A stopped
+            // coroutine never reaches the end of BuildRoutine, so nobody would ever take the
+            // cover down — an opaque screen with a bar frozen at 38%. Same rule as the root
+            // below: the canceller cleans up after the build it killed. Before the early-out,
+            // because a build can be cancelled after it has handed its root over.
+            Progress.Cancel();
+
             if (InFlightRoot == null) return;
             Debug.Log("[Scene] discarding a cancelled build's root — it would have kept drawing");
             Destroy(InFlightRoot);
@@ -218,6 +233,10 @@ namespace DiveMap.Runtime
 
             // ── Items ─────────────────────────────────────────────────────────────
             IReadOnlyList<SceneItem> items = scene?.Items() ?? new List<SceneItem>();
+            // What the progress bar is a fraction OF. Every item below ends up in exactly one of
+            // _loaded or _failed — synchronously (school, warp gate, unknown id) or when its GLB
+            // lands — so loaded+failed can only ever converge on this number.
+            Progress.SetTotal(items.Count);
             var decorGos = new List<GameObject>();   // structure/scenery (for framing box)
             var decorUrls = new List<string>();       // index-aligned with decorGos — where its hull would live
             var allGos = new List<GameObject>();      // fallback when a map is swimmers-only
@@ -386,11 +405,16 @@ namespace DiveMap.Runtime
 
             // Wait for all in-flight GLB loads, with a hard safety timeout.
             float t = 0f;
+            Progress.Report(_loaded, _failed);   // everything that resolved without a download
             while (_loadState.PendingCount > 0 && t < OverallLoadTimeout)
             {
                 t += Time.deltaTime;
+                // This is the only place the app is on screen doing nothing visible, so it is
+                // where the bar earns its keep: one reading per frame as the GLBs land.
+                Progress.Report(_loaded, _failed);
                 yield return null;
             }
+            Progress.Report(_loaded, _failed);
 
             // ── Marine system (WO-XR-03) ──────────────────────────────────────────
             // Obstacles = the loaded static decor (the wreck) as world-space AABBs so

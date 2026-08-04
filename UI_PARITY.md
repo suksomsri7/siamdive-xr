@@ -35,6 +35,7 @@ UiKit.CssFont(px)   สำหรับ Text.fontSize
 | `#actions` | คอลัมน์ปุ่มกลมเหนือ ☰ gap 10px | ✅ pass 2 (รายการแมพ/ทัวร์/ตั้งค่า) |
 | `#compass` | ขวา ล่าง+80px วงกลม 48px เข็มเหนือ `#ff3b30` ใต้ `#e9f2fa` | ✅ pass 3 (อยู่ใน HUD ทัวร์) |
 | `#toast` | **กลางจอ** radius 14 padding 13/22 14px/600 | ✅ pass 1 |
+| `#load` | เต็มจอ `inset:0` bg `#071a2b` z-20 · กลางจอมี spinner `.sp` 46×46 (builder.html:223-225) | ✅ `Ui/LoadOverlay` — canvas sortingOrder 100 (เหนือ shell) · slot 46px ของ spinner = **โลโก้หน้ากาก ai-mask.png** ย้อม `--txt` · ใต้ลงมา label + **แถบ progress 240×6 r3** (track `rgba(255,255,255,.18)` + fill accent — เลขจากวงแหวน v.0668 builder.html:434-449) + % · gap 14 ทุกชั้น · 🔴 ไม่สร้างเลยใน `-qcshot` |
 | `#hint` | บน 72px pill radius 22 | ❌ |
 | `#sheet` | bottom sheet เต็มความกว้าง radius 24 24 0 0 max-height 72vh + grip 42×4 | ✅ pass 5-7 (รายการแมพ/ตั้งค่า/การ์ด) |
 | modal | 86vw max 380 radius 20 padding 20 · หัว 16/600 · เนื้อ 13 muted · ปุ่มแถว gap 10 radius 13 | ✅ pass 6 (กล่อง error) |
@@ -45,6 +46,11 @@ UiKit.CssFont(px)   สำหรับ Text.fontSize
 เว็บใช้ stroke SVG 24×24 (`stroke:#fff; stroke-width:2-2.2; round caps`)
 Unity: `Runtime/Ui/IconPainter.cs` วาดจาก **path data ชุดเดียวกัน** (พิกัด 24 หน่วย) แล้ว rasterise ด้วย distance-to-segment AA → sprite 96×96 cache ต่อไอคอน
 มีแล้ว: `menu close back wave sun lamp sound mute camera play exit list mask gear compass needle`
+ข้อยกเว้น — **`mask` (ปุ่มทัวร์/โดรน + จอโหลด)**: เว็บไม่ได้วาดเป็น stroke path แต่ใช้ไฟล์ภาพ `ai-mask.png` ย้อมขาว
+(`builder.html:307` `#tourBtn` และ `:338` `#viewTour` — `filter:brightness(0) invert(1)`) แอปจึง **ใช้ไฟล์เดียวกัน**
+ที่ `Assets/Resources/ai-mask.png` (RGB ทำเป็นขาวล่วงหน้า = ผลลัพธ์ของ filter นั้น → ย้อมสีได้ตรง + ไม่มีขอบดำจาก
+พิกเซลโปร่งใสไม่ว่า importer ตั้งค่ายังไง) ขนาดในปุ่ม = **27/48** ตามเว็บ ไม่ใช่ 22/48 ของไอคอนเส้น
+ถ้าเท็กซ์เจอร์หายจาก build → `IconPainter` ตกกลับไปวาด path `case "mask"` เหมือนเดิมโดยอัตโนมัติ
 เหตุผลที่ไม่ใช้ฟอนต์ไอคอน: NotoSansThai ไม่มี glyph ☰ (ของเดิมจึงเป็น Image 3 แถบวางมือ) และเครื่องนี้ไม่มี Unity Editor จะ import SVG/bake atlas ไม่ได้
 
 ## 3.5 HUD ทัวร์ (builder.html 231-277) — ตรงครบแล้ว pass 4-6

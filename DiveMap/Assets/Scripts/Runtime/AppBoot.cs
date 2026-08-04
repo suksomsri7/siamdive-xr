@@ -244,6 +244,10 @@ namespace DiveMap.Runtime
             HideError();
             ShowCenter("กำลังโหลดแมพ…");
             SetStatus(UiStrings.Tr("กำลังเชื่อมต่อ…"));
+            // The loading screen (the web's #load cover) goes up here — first open, map switch
+            // and Retry all come through Boot(), so this one line covers all three. It is bound
+            // to the builder's own counters, and it is never created in a -qcshot run.
+            Ui.LoadOverlay.Show(_builder != null ? _builder.Progress : null);
 
             if (_mapRoot != null)
             {
@@ -320,6 +324,9 @@ namespace DiveMap.Runtime
             RopeSystem.Load(scene);   // env.ropes → tubes, once the objects they tie to exist
             HideCenter();
             HideError();
+            // Built and framed = playable. Fill the bar and fade the cover off the map, exactly
+            // where the web drops #load (builder.html:4431 — one line, right after its loop starts).
+            Ui.LoadOverlay.Hide();
 
             string title = string.IsNullOrEmpty(result.MapName) ? mapName : result.MapName;
             SetLoadSummary(title, result.Loaded, result.Failed);
@@ -812,6 +819,9 @@ namespace DiveMap.Runtime
             // a Thai source key, and one missed Tr() is an English UI with a Thai error box.
             s = UiStrings.Tr(s);
             HideCenter();
+            // Whatever failed, the cover must come off NOW: the retry button is under it, and a
+            // loading screen over a dead load is the black-screen bug users report as "แอปค้าง".
+            Ui.LoadOverlay.Cancel();
             if (_errorText != null) _errorText.text = s;
             if (_errorPanel != null) _errorPanel.SetActive(true);
         }
