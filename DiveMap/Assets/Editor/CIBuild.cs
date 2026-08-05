@@ -237,9 +237,11 @@ namespace DiveMap.EditorTools
                                      "have no provisioning profile and cannot be archived unattended.");
                 }
 
-                // iOS 13 is the floor Metal + this Unity version want, and is old enough to cover
-                // any iPhone or iPad still receiving updates.
-                PlayerSettings.iOS.targetOSVersionString = "13.0";
+                // 15.0, not 13.0: App Store Connect warned on build 274 (ITMS-90068) that from
+                // Spring 2027 every upload must declare MinimumOSVersion >= 15.0. Raising it now
+                // silences the per-upload email and costs nothing real — iOS 15 covers iPhone 6s
+                // (2015) upward, older devices than any this app's Metal use could serve anyway.
+                PlayerSettings.iOS.targetOSVersionString = "15.0";
                 PlayerSettings.iOS.requiresFullScreen = true;
 
                 // The camera reason string ALSO lives in PlayerSettings; IosCameraUsage writes it
