@@ -73,20 +73,6 @@ namespace DiveMap.Runtime
             _instance._loggedMetres = float.MinValue;
         }
 
-        /// <summary>
-        /// The depth the floor is working at right now, in world units — so a QC pass can print
-        /// the band it is photographing THROUGH instead of guessing at it from the map's centre.
-        /// Falls back to the surface when there is no camera yet, which is the honest answer.
-        /// </summary>
-        public float CameraDepthUnits
-        {
-            get
-            {
-                Camera c = _cam != null ? _cam : Camera.main;
-                return c != null ? _waterLevel - c.transform.position.y : 0f;
-            }
-        }
-
         /// <summary>Give back whatever we raised, if it is still ours to give back.</summary>
         internal static void ReturnBorrowed()
         {
@@ -140,19 +126,9 @@ namespace DiveMap.Runtime
             _lentEquator = RenderSettings.ambientEquatorColor;
             _lentGround = RenderSettings.ambientGroundColor;
 
-            // 🔴 WO-E4. The water-derived floor above never reached the GROUND band — water ⊙ 0.70
-            // in authored numbers lands below the depth-dimmed band it was meant to catch, so the
-            // one band that was falling under the tone curve's crush point was the one band the
-            // floor could not see. UnderwaterLight.GroundBandAt is that band stated properly (dim
-            // ⊙ seabed bounce ⊙ per-channel floor at BlackFloor × 3.47), and this component is
-            // where it becomes unarguable: order 500 is after every default-order LateUpdate, so
-            // whatever EnvMode, DepthAtmosphere or the headlamps did, this is the last word — and
-            // it only ever raises, so none of them lose anything they were already brighter at.
-            SeabedGeom.Rgb gBand = depth > 0f ? UnderwaterLight.GroundBandAt(depth) : fGround;
-
             _paidSky = Raise(_lentSky, fSky);
             _paidEquator = Raise(_lentEquator, fEquator);
-            _paidGround = Raise(Raise(_lentGround, fGround), gBand);
+            _paidGround = Raise(_lentGround, fGround);
 
             RenderSettings.ambientSkyColor = _paidSky;
             RenderSettings.ambientEquatorColor = _paidEquator;
@@ -196,25 +172,10 @@ namespace DiveMap.Runtime
             float lb = water.B > 1e-6f ? _paidEquator.b * a / water.B : 1f;
             bool raised = _paidEquator != _lentEquator;
 
-            // 🔴 WO-E4 — the two numbers that make one log line enough to answer "is the picture
-            // above the floor or not", so nobody has to re-derive them off a screenshot again:
-            //
-            //   gnd/black  the ground band's channels in ToneMap.BlackFloors. Anything UNDER 1.00
-            //              is byte 0 on every down-facing surface in the scene, whatever the model
-            //              is painted. It read (0.89, 9.70, 22.56) before this change.
-            //   crushAlb   the darkest base colour that can still come off a down-facing surface
-            //              here, as an sRGB byte. It read 72 at this depth; the Singha atlas is
-            //              47.9% darker than 71, which is the whole of the "สิงห์ดำทั้งก้อน" bug.
-            var gnd = new SeabedGeom.Rgb(_paidGround.r, _paidGround.g, _paidGround.b);
-            SeabedGeom.Rgb ratio = UnderwaterLight.BlackFloorRatios(gnd);
-            int crush = SurfaceLight.CrushAlbedoSrgb(depthUnits, SurfaceLight.Facing.Down);
-
             Debug.Log($"[Water] depth={metres:F1}m water=({water.R:F3},{water.G:F3},{water.B:F3}) " +
                       $"ambient sky=({_paidSky.r:F3},{_paidSky.g:F3},{_paidSky.b:F3}) " +
                       $"eq=({_paidEquator.r:F3},{_paidEquator.g:F3},{_paidEquator.b:F3}) " +
                       $"gnd=({_paidGround.r:F3},{_paidGround.g:F3},{_paidGround.b:F3}) " +
-                      $"gnd/black=({ratio.R:F2},{ratio.G:F2},{ratio.B:F2}) crushAlb=sRGB{crush} " +
-                      $"bounce=x{UnderwaterLight.SeabedBounce(depthUnits):F2} " +
                       $"midGrey/water=({lr:F2},{lg:F2},{lb:F2}) floor={(raised ? "lifted" : "not needed")}");
         }
 

@@ -115,14 +115,9 @@ namespace DiveMap.Runtime
 
             try
             {
-                // Linear read-write: the value the sampler produced is what lands in the byte — no
-                // second conversion on the way out to confuse the measurement with the thing being
-                // measured. 🔴 wo-linear: this line is now doing REAL work. In a gamma project it
-                // named the only kind of target there was; in linear, the default read-write would
-                // give an sRGB-typed target and the readback would come back gamma-encoded, which
-                // would make every normal map look sRGB-decoded and the probe would condemn the
-                // lot. Asking for Linear explicitly is what makes the measurement mean the same
-                // thing in both colour spaces — do not "simplify" it away.
+                // Linear read-write: in a gamma project this is a plain untyped target, so the
+                // value the sampler produced is what lands in the byte — no second conversion on
+                // the way out to confuse the measurement with the thing being measured.
                 rt = RenderTexture.GetTemporary(
                     Window, Window, 0, RenderTextureFormat.ARGB32, RenderTextureReadWrite.Linear);
                 readback = new Texture2D(Window, Window, TextureFormat.RGB24, false, true);

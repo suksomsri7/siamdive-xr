@@ -114,35 +114,30 @@ namespace DiveMap.Tests
         [Test]
         public void GradientStop_HitsEveryStopOfTheRamp()
         {
-            // 🔴 The WEB's four stops (builder.html:665), restored by WO-E3.
-            //
-            // These had been replaced by six lighter ones after "the background is still dark" was
-            // reported twice — a true observation of a GAMMA build with no tone mapping, where
-            // #06243a is written to the screen as byte 6/36/58 and reads as a black band. Through
-            // the pipeline the web actually uses (linear light → ACES at 1.05) the same hex lands
-            // at 0/18/42, which is the picture the user is comparing this app against and calling
-            // better. Lifting them was compensation for a missing tone mapper; the tone mapper is
-            // here now, so the compensation goes.
-            AssertRgb(0.8902f, 0.9490f, 0.9725f, SeabedGeom.GradientStop(0f));     // #e3f2f8 ผิวน้ำ
-            AssertRgb(0.6627f, 0.8314f, 0.9098f, SeabedGeom.GradientStop(0.38f));  // #a9d4e8 ตื้น
-            AssertRgb(0.2471f, 0.5765f, 0.7765f, SeabedGeom.GradientStop(0.52f));  // #3f93c6 ฟ้าใส
-            AssertRgb(0.0235f, 0.1412f, 0.2275f, SeabedGeom.GradientStop(1f));     // #06243a ลึกสุด
+            // Six stops now, not the web's four: the user asked for a graded shallow→deep ramp and
+            // the old set jumped hard in the middle then held one dark colour to the bottom.
+            AssertRgb(0.918f, 0.969f, 0.984f, SeabedGeom.GradientStop(0f));      // #eaf7fb ผิวน้ำ
+            AssertRgb(0.749f, 0.902f, 0.949f, SeabedGeom.GradientStop(0.22f));   // #bfe6f2 ตื้น
+            AssertRgb(0.498f, 0.776f, 0.890f, SeabedGeom.GradientStop(0.42f));   // #7fc6e3 ฟ้าใส
+            AssertRgb(0.290f, 0.624f, 0.804f, SeabedGeom.GradientStop(0.62f));   // #4a9fcd เริ่มลึก
+            AssertRgb(0.169f, 0.463f, 0.659f, SeabedGeom.GradientStop(0.80f));   // #2b76a8 ลึก
+            AssertRgb(0.106f, 0.353f, 0.522f, SeabedGeom.GradientStop(1f));      // #1b5a85 ลึกสุด
         }
 
         [Test]
         public void GradientStop_ClampsOutsideZeroToOne()
         {
-            AssertRgb(0.8902f, 0.9490f, 0.9725f, SeabedGeom.GradientStop(-2f));
-            AssertRgb(0.0235f, 0.1412f, 0.2275f, SeabedGeom.GradientStop(9f));
+            AssertRgb(0.918f, 0.969f, 0.984f, SeabedGeom.GradientStop(-2f));
+            AssertRgb(0.106f, 0.353f, 0.522f, SeabedGeom.GradientStop(9f));
         }
 
         [Test]
         public void GradientStop_InterpolatesBetweenStops_AndOnlyDarkensDownwards()
         {
-            SeabedGeom.Rgb mid = SeabedGeom.GradientStop(0.19f); // halfway 0 → 0.38
-            Assert.AreEqual((0.8902f + 0.6627f) * 0.5f, mid.R, 0.002f);
-            Assert.AreEqual((0.9490f + 0.8314f) * 0.5f, mid.G, 0.002f);
-            Assert.AreEqual((0.9725f + 0.9098f) * 0.5f, mid.B, 0.002f);
+            SeabedGeom.Rgb mid = SeabedGeom.GradientStop(0.11f); // halfway 0 → 0.22
+            Assert.AreEqual((0.918f + 0.749f) * 0.5f, mid.R, 0.002f);
+            Assert.AreEqual((0.969f + 0.902f) * 0.5f, mid.G, 0.002f);
+            Assert.AreEqual((0.984f + 0.949f) * 0.5f, mid.B, 0.002f);
 
             float prev = float.MaxValue;   // the top stop is the brightest (lum 2.812)
             for (float v = 0f; v <= 1.0001f; v += 0.05f)

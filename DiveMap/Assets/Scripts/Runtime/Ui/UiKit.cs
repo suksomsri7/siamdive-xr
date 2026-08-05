@@ -25,23 +25,6 @@ namespace DiveMap.Runtime.Ui
         //   --bg #071a2b · --panel rgba(11,26,42,.72) + blur(18) · --accent #39b0e8
         //   --txt #eaf4fb · --mut #9fb6c9 · --line rgba(255,255,255,.1)
         // The app must look like the same product as the web, so these are THE colours.
-        //
-        // 🔴 wo-linear — LEFT EXACTLY AS THEY ARE, ON PURPOSE. These floats are sRGB (hex ÷ 255),
-        // and the obvious worry when the project moves to Linear colour space is that they will be
-        // treated as linear and the whole UI will wash out. Three reasons they are not being
-        // touched here:
-        //   • uGUI is not in the tone map's path at all. The canvas is ScreenSpaceOverlay
-        //     (UiShell:149), and Unity composites overlay canvases AFTER every camera and after
-        //     image effects — so AcesToneMapping cannot reach a single panel or Thai glyph.
-        //   • Unity's own UI path converts Graphic colours for linear space; it is the reason the
-        //     Inspector's colour picker means the same thing in both projects.
-        //   • And the empirical half, which outranks both: build 244 WAS this colour space with
-        //     this tone curve, on the user's own iPhone. The report was "ยังดำปกติ ไม่เห็นเปลี่ยน"
-        //     — a complaint about the WATER, with no mention of the interface. If the UI had
-        //     shifted it would have been the first thing said.
-        // 🔎 So this is a thing to LOOK AT in round B's photographs, not a thing to pre-emptively
-        // rewrite across thirty files on a theory. If the panels do read washed out, the fix is
-        // one pass of `.gamma` here and in the inline literals — not a re-authoring.
         // Teal/TealDim stay as aliases of the accent because 05.x built its screens against
         // them — one rename would touch every screen without changing a pixel of intent.
         public static readonly Color Accent   = new Color(0.224f, 0.690f, 0.910f, 1f); // #39b0e8

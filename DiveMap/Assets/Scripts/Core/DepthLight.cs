@@ -34,19 +34,7 @@ namespace DiveMap.Core
         /// 0.18 was too dark on the phone — the whole scene read as deep navy. The curve still
         /// separates shallow from deep (that is the point), it just does it from a brighter start:
         /// tropical water is bright, and a dive site nobody can see is not realism.
-        ///
-        /// 🔴 WO-E3: 0.35 → 0.25. Both of the earlier numbers were chosen against a pipeline with
-        /// no tone mapping, where the only protection a midtone had was to start high — anything
-        /// that got dark STAYED dark all the way to the byte. ACES has a toe: it lifts and holds
-        /// the bottom of the range instead of letting it slide to black (a linear 0.02 comes out at
-        /// byte 40, not 12). The floor's job is unchanged — the deep must stay readable — but with
-        /// the curve doing that job the floor can go back to attenuating rather than propping, and
-        /// a quarter of surface light at 55 m is much nearer what the water actually does.
-        ///
-        /// Now also multiplies the FOG and the BACKDROP, not just the subject (see
-        /// <see cref="WaterFog"/>), so lowering it dims the whole picture together rather than
-        /// pushing the subject further behind the background.
-        public const float Floor = 0.25f;
+        public const float Floor = 0.35f;
 
         /// <summary>
         /// Multiplier for (r, g, b) at <paramref name="depthUnits"/> below the surface.
@@ -66,47 +54,6 @@ namespace DiveMap.Core
         {
             float v = (float)Math.Exp(-metres / scale);
             return Floor + (1f - Floor) * v;
-        }
-
-        /// <summary>
-        /// 🔴 DEPTH IS NOT THE SAME QUESTION AS PATH, AND ONLY ONE OF THEM IS WHAT A TORCH ANSWERS.
-        ///
-        /// The user's sentence, which is the whole design note: "ถ้าแสงสีแดงหาย ทำให้พื้นดำ แต่ในโลกจริง
-        /// คือเมื่อโดนแสงไฟฉาย สีเดิมจะกลับมา". It is right, and it is right because Beer–Lambert
-        /// absorbs along the DISTANCE THE LIGHT TRAVELS THROUGH WATER, not along the depth of the
-        /// thing being lit:
-        ///
-        ///   • daylight / ambient — surface → object. At 30 m that path IS 30 m, so red is gone
-        ///     (e^-30/5 ≈ 0.002) and <see cref="Attenuation"/> is the correct model for it.
-        ///   • a torch — lamp → object → eye. A diver's torch is held a metre or two from the wall,
-        ///     so its path is a metre or two whatever the depth, red survives almost intact, and
-        ///     the rust comes back orange. That is why divers carry one.
-        ///
-        /// So the depth curve must never be applied to a lamp. This function is the honest model of
-        /// what a lamp's path costs, and it exists to be read as much as to be called — the numbers
-        /// it returns are why <see cref="DiveLightMath"/>'s lamps are NOT attenuated at all:
-        ///
-        ///   path  2 m → R 0.670    path  9 m → R 0.165    path 18 m → R 0.027
-        ///
-        /// The drone aims its lamps <see cref="DiveLightMath.Reach"/> = 54 u = 9 m ahead and the
-        /// camera trails it by about as much again, so a literal round-trip path is ~18 m and a
-        /// literal model would leave 2.7% of the red — i.e. it would delete the feature. The app's
-        /// camera stands ten times further from the subject than a diver's mask does; applying the
-        /// diver's-eye absorption to the app's camera distance would be modelling the wrong
-        /// geometry. Not attenuating the lamp is the closer approximation to what the user is
-        /// describing, and it is deliberate rather than an oversight.
-        ///
-        /// No <see cref="Floor"/> here: the floor is a playability prop for the ambient (the deep
-        /// must stay readable), and a short path does not need propping up.
-        /// </summary>
-        public static void PathTransmittance(float pathUnits, out float r, out float g, out float b)
-        {
-            float m = pathUnits / UnitsPerMetre;
-            if (m <= 0f || float.IsNaN(m)) { r = g = b = 1f; return; }
-
-            r = (float)Math.Exp(-m / RedDepth);
-            g = (float)Math.Exp(-m / GreenDepth);
-            b = (float)Math.Exp(-m / BlueDepth);
         }
 
         /// <summary>

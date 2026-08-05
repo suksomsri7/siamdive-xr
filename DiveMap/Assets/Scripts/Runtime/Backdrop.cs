@@ -55,45 +55,6 @@ namespace DiveMap.Runtime
             return b;
         }
 
-        /// <summary>
-        /// 🔴 WO-E3 — the half of the fix that lives in the picture rather than in RenderSettings.
-        ///
-        /// This gradient is what fills most of the frame, and until now it was baked ONCE at the
-        /// surface and never changed again. <see cref="DepthLight"/> meanwhile dimmed the light on
-        /// every object by up to two thirds. So at 52 m a shark was lit by a third of the light
-        /// while the water behind it was still painted at full surface brightness — the exact
-        /// inversion the user reported ("ฉลามกลายเป็นเงาแบน … ขณะที่ฉากหลัง/หมอกยังสว่าง"). No
-        /// amount of tuning the lights could fix a background that was not in the same
-        /// multiplication.
-        ///
-        /// Now the ramp is re-baked with the SAME attenuation vector the ambient is scaled by, so
-        /// the subject-to-background ratio no longer depends on depth at all. Costs one 8×256
-        /// upload per bucket of depth crossed (see <see cref="DepthEpsilon"/>) — a couple of
-        /// thousand texels, far below the per-frame noise, and nothing at all while the camera
-        /// holds still.
-        /// </summary>
-        /// <param name="depthUnits">Camera depth below the water surface, in world units.</param>
-        public static void SetDepth(float depthUnits)
-        {
-            if (float.IsNaN(depthUnits) || float.IsInfinity(depthUnits)) depthUnits = 0f;
-            if (Mathf.Abs(depthUnits - _bakedDepth) < DepthEpsilon) return;
-            _bakedDepth = depthUnits;
-            Rebake();
-        }
-
-        /// <summary>Surface light, unattenuated — the daylight/above-water case.</summary>
-        public static void ClearDepth() => SetDepth(0f);
-
-        /// <summary>
-        /// How far the camera has to move, in world units, before the texture is re-baked. Six
-        /// units is one metre and a metre cannot move a gradient byte in the shallows, let alone
-        /// where the curve has flattened — so anything finer is work that provably cannot alter a
-        /// pixel.
-        /// </summary>
-        private const float DepthEpsilon = 6f;
-
-        private static float _bakedDepth;
-
         private bool Build(Camera cam)
         {
             _cam = cam;
@@ -119,7 +80,7 @@ namespace DiveMap.Runtime
             _quad = go.transform;
 
             Fit();
-            Debug.Log($"[Scene] backdrop ready via={via} stops=4 tex={TexWidth}x{TexHeight}");
+            Debug.Log($"[Scene] backdrop ready via={via} stops=6 tex={TexWidth}x{TexHeight}");
             return true;
         }
 
@@ -204,49 +165,30 @@ namespace DiveMap.Runtime
         {
             if (_gradTex != null) return _gradTex;
 
-            _gradTex = new Texture2D(TexWidth, TexHeight, TextureFormat.RGBA32, false, false)
+            var tex = new Texture2D(TexWidth, TexHeight, TextureFormat.RGBA32, false, false)
             {
                 name = "BackdropGradient",
                 wrapMode = TextureWrapMode.Clamp,
                 filterMode = FilterMode.Bilinear,
             };
-            Rebake();
-            return _gradTex;
-        }
-
-        /// <summary>
-        /// Write the ramp, as seen from the current depth, into the existing texture.
-        ///
-        /// 🔎 THE COLOUR IS DECIDED IN CORE, NOT HERE. <see cref="WaterFog.BackdropAt"/> is the same
-        /// function the fog and the ambient floor are computed from, so what is written here cannot
-        /// disagree with them — including the fact that the dimming happens in LIGHT rather than in
-        /// the numbers (<see cref="ToneMap.ScaleLight"/>). All this does is turn an authored sRGB
-        /// value into the byte an sRGB texture holds, which is a multiplication by 255.
-        ///
-        /// 🔎 And it is done on the TEXTURE rather than as a colour on the material. A texture byte
-        /// means the same thing in both colour spaces; a Color handed to Material.SetColor at
-        /// runtime does not — whether the engine gamma-decodes it is version- and
-        /// property-dependent, and being wrong about it would silently square the attenuation. Two
-        /// thousand texels every metre or so is a cheap price for not having to be right about that.
-        /// </summary>
-        private static void Rebake()
-        {
-            if (_gradTex == null) return;
             var px = new Color32[TexWidth * TexHeight];
             for (int y = 0; y < TexHeight; y++)
             {
                 // Unity's v=0 is the BOTTOM row, the web's gradient stop 0 is the TOP.
                 float v = 1f - (float)y / (TexHeight - 1);
-                SeabedGeom.Rgb c = WaterFog.BackdropAt(v, _bakedDepth);
-                var c32 = new Color32(Byte255(c.R), Byte255(c.G), Byte255(c.B), 255);
+                SeabedGeom.Rgb c = SeabedGeom.GradientStop(v);
+                var c32 = new Color32(
+                    (byte)Mathf.Clamp(Mathf.RoundToInt(c.R * 255f), 0, 255),
+                    (byte)Mathf.Clamp(Mathf.RoundToInt(c.G * 255f), 0, 255),
+                    (byte)Mathf.Clamp(Mathf.RoundToInt(c.B * 255f), 0, 255),
+                    255);
                 for (int x = 0; x < TexWidth; x++) px[y * TexWidth + x] = c32;
             }
-            _gradTex.SetPixels32(px);
-            _gradTex.Apply(false, false);
+            tex.SetPixels32(px);
+            tex.Apply(false, false);
+            _gradTex = tex;
+            return tex;
         }
-
-        private static byte Byte255(float srgb)
-            => (byte)Mathf.Clamp(Mathf.RoundToInt(srgb * 255f), 0, 255);
 
         /// <summary>
         /// An unlit material carrying <paramref name="tex"/>. DM_GltfUnlit lives in

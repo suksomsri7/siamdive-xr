@@ -69,18 +69,6 @@
     <Compile Include="../../DiveMap/Assets/Scripts/Core/NormalMapDecode.cs" />
     <Compile Include="../../DiveMap/Assets/Scripts/Core/GltfTextureRoles.cs" />
     <Compile Include="../../DiveMap/Assets/Scripts/Core/LoadProgress.cs" />
-    <!-- WO-E3 (wo-linear). The whole lighting/water/tone chain is UnityEngine-free by design, and
-         until now only SeabedGeom and DepthLight of it were checked on this machine — so the one
-         part of the app the user complains about could only be tested by a 35-minute CI round.
-         ToneMap is the ACES curve itself; ColorSpaceTests reads ProjectSettings.asset off disk so a
-         silent revert of the colour space fails here rather than in a screenshot three days later. -->
-    <Compile Include="../../DiveMap/Assets/Scripts/Core/ToneMap.cs" />
-    <Compile Include="../../DiveMap/Assets/Scripts/Core/WaterFog.cs" />
-    <Compile Include="../../DiveMap/Assets/Scripts/Core/UnderwaterLight.cs" />
-    <Compile Include="../../DiveMap/Assets/Scripts/Core/DiveLightMath.cs" />
-    <!-- SurfaceLight is albedo × light × tone curve written down as arithmetic. UnderwaterShading
-         calls it for its crush threshold, so it is not test-only scaffolding. -->
-    <Compile Include="../../DiveMap/Assets/Scripts/Core/SurfaceLight.cs" />
   </ItemGroup>
 
   <ItemGroup Label="EditMode tests for exactly those files">
@@ -111,20 +99,6 @@
     <Compile Include="../../DiveMap/Assets/Tests/EditMode/GltfTextureRolesTests.cs" />
     <Compile Include="../../DiveMap/Assets/Tests/EditMode/NormalReliefTests.cs" />
     <Compile Include="../../DiveMap/Assets/Tests/EditMode/LoadProgressTests.cs" />
-    <!-- WO-E3 (wo-linear) — the tone/light/water chain. RepoFiles is the helper ColorSpaceTests
-         uses to find the repo root from the test binary. -->
-    <Compile Include="../../DiveMap/Assets/Tests/EditMode/RepoFiles.cs" />
-    <Compile Include="../../DiveMap/Assets/Tests/EditMode/ToneMapTests.cs" />
-    <Compile Include="../../DiveMap/Assets/Tests/EditMode/ColorSpaceTests.cs" />
-    <Compile Include="../../DiveMap/Assets/Tests/EditMode/WaterFogTests.cs" />
-    <Compile Include="../../DiveMap/Assets/Tests/EditMode/UnderwaterLightTests.cs" />
-    <Compile Include="../../DiveMap/Assets/Tests/EditMode/AmbientBandTests.cs" />
-    <Compile Include="../../DiveMap/Assets/Tests/EditMode/DepthLightTests.cs" />
-    <Compile Include="../../DiveMap/Assets/Tests/EditMode/DiveLightMathTests.cs" />
-    <Compile Include="../../DiveMap/Assets/Tests/EditMode/SeabedGeomTests.cs" />
-    <!-- WO-E5. The fog range and the fog colour are pure arithmetic, and the bug they fix
-         (the fog started 322 u away on a map 340 u wide) is a calculation, not a screenshot. -->
-    <Compile Include="../../DiveMap/Assets/Tests/EditMode/FogRangeTests.cs" />
     <Compile Include="Runner.cs" />
   </ItemGroup>
 </Project>
