@@ -128,6 +128,12 @@ namespace DiveMap.Runtime.Marine
         private double _animMul = 1.0;
         /// <summary>Big / neverRest / manta — the animals the web lets coast between strokes.</summary>
         private bool   _glider;
+        /// <summary>
+        /// Where this species cruises inside the SlowAnim band — <see cref="ClipPlay.SlowFloorFor"/>.
+        /// Resolved once at spawn alongside the other three, so the per-frame path in
+        /// <see cref="DriveClips"/> stays a table read and a multiply.
+        /// </summary>
+        private double _slowFloor = ClipPlay.SlowRateMin;
 
         private readonly List<Material> _waveMats = new List<Material>();
         private double _wavePhase;
@@ -377,9 +383,10 @@ namespace DiveMap.Runtime.Marine
         /// </summary>
         private void ApplyBodyMotion(string assetId, float worldLen)
         {
-            _slowAnim = ClipPlay.SlowAnimFor(assetId);
-            _animMul  = ClipPlay.AnimMulFor(assetId);
-            _glider   = ClipPlay.IsGlider(assetId);
+            _slowAnim  = ClipPlay.SlowAnimFor(assetId);
+            _animMul   = ClipPlay.AnimMulFor(assetId);
+            _glider    = ClipPlay.IsGlider(assetId);
+            _slowFloor = ClipPlay.SlowFloorFor(assetId);
 
             string reason = _clips.Bind(gameObject);
             // A solo animal is never instanced — the shoals are, and they never reach this class.
@@ -388,7 +395,7 @@ namespace DiveMap.Runtime.Marine
             {
                 _clips.Play(ClipRole.Cruise);
                 _clips.SeedPhase(_seed);
-                _clips.SetSpeed((float)ClipPlay.TimeScale(1.0, _slowAnim, _animMul, false));
+                _clips.SetSpeed((float)ClipPlay.TimeScale(1.0, _slowAnim, _animMul, false, _slowFloor));
             }
             else
             {
@@ -403,8 +410,8 @@ namespace DiveMap.Runtime.Marine
             Debug.Log($"[Anim] asset={assetId} clips={_clips.Count} names={_clips.NamesCsv} " +
                       $"pick={_clips.CurrentName} role={_clips.CurrentRole} " +
                       $"length={_clips.CurrentLength:F2}s " +
-                      $"timeScale={ClipPlay.TimeScale(1.0, _slowAnim, _animMul, false):F2} " +
-                      $"slowAnim={_slowAnim} animMul={_animMul:F2} glider={_glider} " +
+                      $"timeScale={ClipPlay.TimeScale(1.0, _slowAnim, _animMul, false, _slowFloor):F2} " +
+                      $"slowAnim={_slowAnim} slowFloor={_slowFloor:F2} animMul={_animMul:F2} glider={_glider} " +
                       $"mode={(mode == BodyMotion.Clip ? "clip" : "wave")} reason={reason}");
         }
 
@@ -893,7 +900,7 @@ namespace DiveMap.Runtime.Marine
                     : ClipRole.Cruise;
 
             _clips.Play(role);
-            _clips.SetSpeed((float)ClipPlay.TimeScale(effort, _slowAnim, _animMul, gliding));
+            _clips.SetSpeed((float)ClipPlay.TimeScale(effort, _slowAnim, _animMul, gliding, _slowFloor));
         }
 
         /// <summary>

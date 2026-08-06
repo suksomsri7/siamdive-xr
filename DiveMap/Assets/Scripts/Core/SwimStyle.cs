@@ -215,6 +215,135 @@ namespace DiveMap.Core
             => (flenLocal > 0.0 ? flenLocal : 1.0) * wWave / (2.0 * Math.PI);
 
         /// <summary>
+        /// A hand-set override for one SOLO species. Any field left at <see cref="NoOverride"/>
+        /// keeps whatever the size law and the gait row worked out.
+        ///
+        /// 🔴 2026-08-06, build 280 on a real iPhone: *"บาราคูด้าโบกหางเร็วไปมากและแคบไป"*.
+        ///
+        /// The fish in question is <c>msh:barracuda</c> — the SOLO one, a single 14.57 u animal
+        /// with no clip in its GLB, so it is driven by this file's wave and not by ClipPlay. It
+        /// has never been near the web's barracuda numbers, because those live on the SHOAL
+        /// (<c>school:barracuda</c>, builder.html:1098) and only the shoal branch reads them. The
+        /// solo animal fell through to the generic thunniform row: 0.87 Hz, 7.5 % amplitude,
+        /// 0.85 wavelengths.
+        ///
+        /// What the web does with the SAME fish, by both of its own routes:
+        ///
+        ///   • As a shoal (:1098, hand-tuned by the web's author for this species):
+        ///     wiggleRate 5.0 → 0.796 Hz · wiggleAmp 0.06 with wiggleStiff 0.15 → 3.96 % ·
+        ///     wiggleWave 0.9 across a 1.8624 u body → 0.267 wavelengths.
+        ///   • As a solo GLB with no clip, the web does not bend the mesh at all —
+        ///     <c>animateGLB()</c> falls to its <c>dart</c> default (builder.html:3603) and yaws
+        ///     the WHOLE fish: <c>ry += sin(T*1.4)*0.18*a</c> with <c>T = t*sp+ph</c>,
+        ///     <c>sp = 0.6…1.4</c>, <c>a = 0.7…1.3</c>. That is 0.13-0.31 Hz (0.22 at the middle
+        ///     of the random range) of ±10° whole-body swing — very slow, and very WIDE, because
+        ///     the entire body is the lever.
+        ///
+        /// Both of the user's words fall straight out of that comparison. 0.87 Hz against 0.22 Hz
+        /// is "เร็วไปมาก" — literally four times. And 0.85 wavelengths against 0.267 is why it is
+        /// "แคบ": at 0.85 the body carries most of a full S-bend, so the fish ripples in small
+        /// tight arcs that partly cancel along its length, where the web's 0.267 is a stiff plank
+        /// whose whole back half swings one way together. Narrowness here is a WAVELENGTH
+        /// problem before it is an amplitude one, and turning the amplitude up without fixing the
+        /// wavelength would have bought a wider ripple rather than a wider sweep.
+        ///
+        /// Where each of the three numbers comes from:
+        ///
+        ///   • CYCLES ← the web, exactly. <see cref="SoloBarracudaCycles"/> is the same 0.267 the
+        ///     shoal branch computes from builder.html:1098, read through the same conversion.
+        ///     No judgement in it.
+        ///   • BEAT   ← the web's 0.796 Hz for this species, HALVED. The web's own two answers for
+        ///     a barracuda are 0.796 (shoal) and ~0.22 (solo dart); the user is looking at the solo
+        ///     one and says the app is much too fast. Halving the shoal figure lands at 0.398 Hz —
+        ///     between the web's two numbers, and 2.2× slower than build 280.
+        ///   • AMP    ← ours, and the only one of the three that is a judgement call, because BOTH
+        ///     of the web's routes are narrower than what this app already draws and the user is
+        ///     asking for wider. 0.15 is picked so that TAIL-TIP SPEED (amp × 2πf, which is what an
+        ///     eye reads as "fast") comes out at 0.375 body-lengths/s against build 280's 0.408 —
+        ///     very slightly slower, not faster, while the sweep itself is twice as wide. Slower
+        ///     AND wider was the request; widening the sweep without slowing the tip would have
+        ///     answered half of it and undone the other half.
+        ///
+        /// It is a TABLE and not a branch inside <see cref="For"/> on purpose: the next report of
+        /// this kind should be three numbers moving in one place with this reasoning still attached
+        /// to them, not another special case buried in the middle of the size law.
+        /// </summary>
+        public readonly struct SoloTune
+        {
+            /// <summary>True when a row exists at all.</summary>
+            public readonly bool Has;
+            /// <summary>Beats per second, or <see cref="NoOverride"/>.</summary>
+            public readonly double BeatHz;
+            /// <summary>Tail-tip travel as a fraction of body length, or <see cref="NoOverride"/>.</summary>
+            public readonly double Amp;
+            /// <summary>Wavelengths along the body, or <see cref="NoOverride"/>.</summary>
+            public readonly double Cycles;
+
+            public SoloTune(double beatHz, double amp, double cycles)
+            {
+                Has = true; BeatHz = beatHz; Amp = amp; Cycles = cycles;
+            }
+        }
+
+        /// <summary>
+        /// "This field is not overridden". Negative, because no beat rate, amplitude or wavelength
+        /// count ever is — the same sentinel convention, and for the same reason, as
+        /// <see cref="SpeciesBehavior.NoValue"/>.
+        /// </summary>
+        public const double NoOverride = -1.0;
+
+        /// <summary>Beat rate for the solo barracuda: the web's shoal figure for this species, halved.</summary>
+        public const double SoloBarracudaBeatHz = SchoolBeatHzBarracuda * 0.5;   // 0.398 Hz
+
+        /// <summary>
+        /// Tail-tip travel to one side, as a fraction of body length. The one number in
+        /// <see cref="SoloTuneFor"/> that is not a transcription — set by the tail-tip-speed
+        /// identity described on <see cref="SoloTune"/>, not by eye.
+        /// </summary>
+        public const double SoloBarracudaAmp = 0.15;
+
+        /// <summary>
+        /// Wavelengths along the body — the web's own <c>wiggleWave: 0.9</c> for a barracuda
+        /// (builder.html:1098), read through the same <see cref="SchoolCycles"/> conversion the
+        /// shoal branch uses, so the two can never drift apart. ≈ 0.267.
+        ///
+        /// A property rather than a <c>const</c> because it reads <see cref="MarineMath"/>'s
+        /// table: a static field initialiser here would pull another type's static constructor in
+        /// at an order this file does not control, for a number that is wanted once per spawn.
+        /// </summary>
+        public static double SoloBarracudaCycles
+            => SchoolCycles(MarineMath.SpeciesFor("school:barracuda").FishLenLocal,
+                            SchoolWiggleWaveBarracuda);
+
+        /// <summary>
+        /// The hand-set row for this animal, or an all-absent one. Bare-id matched, so the pivot
+        /// name <c>Item_3_msh:barracuda</c> finds it — see <see cref="RxBareId"/>, the same trap
+        /// that would otherwise hand a whale shark an ordinary shark's tempo.
+        /// </summary>
+        public static SoloTune SoloTuneFor(string assetId)
+        {
+            string id = Bare(assetId);
+            if (string.Equals(id, "msh:barracuda", StringComparison.OrdinalIgnoreCase))
+                return new SoloTune(SoloBarracudaBeatHz, SoloBarracudaAmp, SoloBarracudaCycles);
+            return default;
+        }
+
+        /// <summary>
+        /// <paramref name="w"/> with every field the row overrides replaced. Split out from
+        /// <see cref="For"/> so the override rule is testable without going through a species.
+        /// </summary>
+        public static SwimWave Apply(SwimWave w, SoloTune t)
+        {
+            if (!t.Has) return w;
+            return new SwimWave(
+                w.Gait,
+                t.BeatHz >= 0.0 ? t.BeatHz : w.BeatHz,
+                t.Amp    >= 0.0 ? t.Amp    : w.Amp,
+                t.Cycles >= 0.0 ? t.Cycles : w.Cycles,
+                w.Recoil, w.Gust, w.MaxBankRad);
+        }
+
+        /// <summary>
         /// What <see cref="SpeciesFlag.SlowAnim"/> is worth as a beat-rate multiplier.
         ///
         /// The web expresses the same idea as a clip-playback rate: an ordinary animal plays at
@@ -405,6 +534,17 @@ namespace DiveMap.Core
         /// beating four times a second is precisely the buzz being removed.
         /// </summary>
         public static SwimWave For(string assetId, double worldLen)
+            => Apply(FromTables(assetId, worldLen), SoloTuneFor(assetId));
+
+        /// <summary>
+        /// <see cref="For"/> before <see cref="SoloTuneFor"/> gets a say — the size law and the
+        /// gait rows on their own.
+        ///
+        /// Kept reachable so a test can pin what the general rule says about an animal separately
+        /// from what one hand-set row says about one animal, which is the distinction the whole
+        /// <see cref="SoloTune"/> block exists to keep visible.
+        /// </summary>
+        public static SwimWave FromTables(string assetId, double worldLen)
         {
             string id = assetId ?? "";
             double m = Metres(worldLen);

@@ -21,7 +21,33 @@ namespace DiveMap.Runtime
         public float minPitch = 5f;
         public float maxPitch = 85f;
         public float minDistance = 2f;
-        public float maxDistance = 950f; // matches web builder controls.maxDistance (large sites)
+
+        /// <summary>
+        /// How far the player may pull back. A DEFAULT ONLY — <c>AppBoot.ApplyViewRange</c> raises
+        /// it per map from <see cref="DiveMap.Core.CameraRange"/>, the way the web's
+        /// <c>updateViewRange()</c> does (builder.html:709-722).
+        ///
+        /// 🔴 The old comment on this line said "matches web builder controls.maxDistance (large
+        /// sites)". It does not. 950 is what the web writes when it LEAVES AR (builder.html:2955)
+        /// and then forgets to call <c>updateViewRange()</c> — a bug on the web's side, and the one
+        /// number in that file guaranteed to be wrong for a large site. The web's own floor is
+        /// 2,600 and it scales from there. Kept as the field default only so a scene that somehow
+        /// never gets a map still behaves exactly as it did.
+        /// </summary>
+        public float maxDistance = 950f;
+
+        /// <summary>
+        /// The cap on the OPENING SHOT's back-off — deliberately NOT <see cref="maxDistance"/>.
+        ///
+        /// 🔴 These two were the same number until 2026-08-06, and that coupling is a trap: raising
+        /// the zoom-out ceiling for a big map would have silently pushed the opening shot (and the
+        /// tour's exit re-frame, TourController:520) back with it, changing the first thing the
+        /// user sees on every large map while answering a question they asked about the LAST thing.
+        /// The web keeps them separate too and is blunter about it — <c>frameContent()</c> caps at
+        /// a flat 520 (builder.html:3512) no matter what <c>controls.maxDistance</c> says. 950 is
+        /// this app's existing framing cap, kept to the unit so that no map's opening shot moves.
+        /// </summary>
+        public const float FrameDistanceCap = 950f;
 
         public float orbitSpeed = 0.3f;      // deg per pixel
         public float pinchZoomSpeed = 0.02f; // per pixel of pinch delta
@@ -94,7 +120,8 @@ namespace DiveMap.Runtime
             if (r <= 0f) r = 30f;
 
             // web: dist = min(cap, r*1.45 + 40); camera raised by dist*0.32, pushed back by dist.
-            float dist = Mathf.Min(maxDistance, r * 1.45f + 40f);
+            // The cap is FrameDistanceCap and not maxDistance — see the field's comment.
+            float dist = Mathf.Min(FrameDistanceCap, r * 1.45f + 40f);
             float vert = dist * 0.32f;
 
             float aimY = minY + Mathf.Min(sizeY * 0.4f, 45f);
@@ -109,7 +136,11 @@ namespace DiveMap.Runtime
                 TargetZ = centerZ,
                 Yaw = 180f,       // put the camera on the +Z side looking toward -Z (matches web +Z back-off)
                 Pitch = Mathf.Clamp(pitch, 5f, 85f),
-                Distance = Mathf.Clamp(distance, minDistance, maxDistance),
+                // …and the final clamp is capped by BOTH, for the same reason the line above is:
+                // in build 280 maxDistance was always 950, i.e. always FrameDistanceCap, so
+                // min(the two) reproduces every opening shot the app has ever framed to the unit,
+                // whatever ceiling the map is later given.
+                Distance = Mathf.Clamp(distance, minDistance, Mathf.Min(maxDistance, FrameDistanceCap)),
             };
         }
 

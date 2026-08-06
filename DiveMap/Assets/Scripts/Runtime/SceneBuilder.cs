@@ -58,6 +58,20 @@ namespace DiveMap.Runtime
             /// </summary>
             public List<SolidBoxes.Group> Solids;
 
+            /// <summary>
+            /// The sand disc's radius in world units — the web's <c>reach</c>
+            /// (<c>SAND_R × areaScale × max(areaScaleX, areaScaleZ)</c>, builder.html:712).
+            ///
+            /// 🔴 Not the same thing as <see cref="Radius"/>, and the difference matters:
+            /// <see cref="Radius"/> is the half-DIAGONAL of a box that includes the water column,
+            /// so on the demo map it reads ≈504 against a 340 u footprint. That is the right answer
+            /// for "does everything fit in a sphere" and the wrong one for the web's view-range
+            /// formulas, which are calibrated against the flat footprint — feeding them the
+            /// diagonal pushes the fog's start 10 % further out on every map in the app, which is
+            /// exactly the kind of quiet look change the 3 Aug session was reverted for.
+            /// </summary>
+            public float SeabedRadius;
+
             /// <summary>Seabed footprint stretch (areaScale × areaScaleX/Z) — the tour needs it
             /// to keep the drone inside the map.</summary>
             public float SeabedScaleX;
@@ -583,6 +597,7 @@ namespace DiveMap.Runtime
                 WaterLevel = _waterLevel,
                 Obstacles = obstacles,
                 Solids = solids,
+                SeabedRadius = seabedRadius,
                 SeabedScaleX = _seabedScaleX,
                 SeabedScaleZ = _seabedScaleZ,
                 Animals = animals,

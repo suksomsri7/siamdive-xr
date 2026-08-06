@@ -44,6 +44,7 @@
     <Compile Include="../../DiveMap/Assets/Scripts/Core/MarineRouting.cs" />
     <Compile Include="../../DiveMap/Assets/Scripts/Core/AppModes.cs" />
     <Compile Include="../../DiveMap/Assets/Scripts/Core/SwimStyle.cs" />
+    <Compile Include="../../DiveMap/Assets/Scripts/Core/CameraRange.cs" />
     <!-- WO-F2. The web's school system is slot-formation, not boids; the slot formulas, the
          speed law and the mode wheel are pure, so "does a fish that reached its slot slow down"
          is a 2-second answer here instead of a 35-minute CI round and a screenshot. -->
@@ -82,6 +83,7 @@
     <Compile Include="../../DiveMap/Assets/Tests/EditMode/FleeMathTests.cs" />
     <Compile Include="../../DiveMap/Assets/Tests/EditMode/SpeciesGenomeTests.cs" />
     <Compile Include="../../DiveMap/Assets/Tests/EditMode/SpeciesBehaviorTests.cs" />
+    <Compile Include="../../DiveMap/Assets/Tests/EditMode/CameraRangeTests.cs" />
     <Compile Include="../../DiveMap/Assets/Tests/EditMode/SwimStyleTests.cs" />
     <Compile Include="../../DiveMap/Assets/Tests/EditMode/SchoolFormationTests.cs" />
     <Compile Include="../../DiveMap/Assets/Tests/EditMode/ClipPlayTests.cs" />

@@ -165,7 +165,10 @@ namespace DiveMap.Tests
             Assert.Less(barra.Amp, scad.Amp, "thunniform bodies barely bend");
 
             SwimWave trevally = SwimStyle.For("pod:yellowtail", 5.0);
-            Assert.AreEqual(SwimStyle.For("msh:barracuda", 5.0).Amp, trevally.Amp, Eps,
+            // 🔎 FromTables, not For: the two share the thunniform ROW, which is what this line is
+            // about, but msh:barracuda has carried a hand-set override since 2026-08-06 (see
+            // SwimStyle.SoloTune) and For() would be comparing the override against the row.
+            Assert.AreEqual(SwimStyle.FromTables("msh:barracuda", 5.0).Amp, trevally.Amp, Eps,
                             "a yellowtail IS a trevally — same stiff-bodied cruiser");
 
             // 🔴 …and the SHOAL barracuda is deliberately NOT the same number any more. A pod is a
@@ -769,6 +772,191 @@ namespace DiveMap.Tests
             Assert.AreEqual(SwimGait.Wing, SwimStyle.GaitFor("Item_12_msh:manta"));
             Assert.AreEqual(SwimStyle.For("msh:whaleshark", 65.0).Amp,
                             SwimStyle.For("Item_7_msh:whaleshark", 65.0).Amp, Eps);
+        }
+
+        // ── The solo barracuda (2026-08-06, build 280) ────────────────────────────
+        //
+        // user, on a real iPhone: "บาราคูด้าโบกหางเร็วไปมากและแคบไป".
+        // The acceptance test for that sentence is SoloBarracuda_IsSlowerAndWiderThanBuild280 —
+        // the rest of this block says where each of the three numbers came from.
+
+        /// <summary>The generic thunniform row, i.e. what build 280 was drawing.</summary>
+        private const double Build280Amp = 0.075;
+        private const double Build280Cycles = 0.85;
+
+        /// <summary>The size the map draws it at (QcModelShot's own figure).</summary>
+        private const double SoloBarracudaLen = 14.57;
+
+        /// <summary>
+        /// 🔴 The user's sentence, both halves of it, as one inequality each.
+        ///
+        /// "เร็วไปมาก" → the beat comes down. "แคบไป" → the sweep goes up. And a third assertion
+        /// that is not in the sentence but is the reason the first two do not fight: tail-tip
+        /// SPEED (amp × 2πf) must not rise, or a wider sweep would simply have re-introduced the
+        /// speed complaint from the other direction.
+        /// </summary>
+        [Test]
+        public void SoloBarracuda_IsSlowerAndWiderThanBuild280()
+        {
+            SwimWave was = SwimStyle.FromTables("msh:barracuda", SoloBarracudaLen);
+            SwimWave now = SwimStyle.For("msh:barracuda", SoloBarracudaLen);
+
+            Assert.AreEqual(Build280Amp, was.Amp, Eps, "the row build 280 used");
+            Assert.AreEqual(Build280Cycles, was.Cycles, Eps, "…and its wavelength count");
+
+            Assert.Less(now.BeatHz, was.BeatHz * 0.55, "เร็วไปมาก — at least ~2× slower");
+            Assert.Greater(now.Amp, was.Amp * 1.8, "แคบไป — the sweep must be visibly wider");
+
+            double tipWas = was.Amp * 2.0 * Math.PI * was.BeatHz;
+            double tipNow = now.Amp * 2.0 * Math.PI * now.BeatHz;
+            Assert.LessOrEqual(tipNow, tipWas,
+                               "a wider sweep must not buy back the speed the user complained about");
+        }
+
+        /// <summary>
+        /// …and "แคบ" is a WAVELENGTH problem before it is an amplitude one. At 0.85 wavelengths
+        /// the body carries most of a full S-bend and ripples in tight arcs that partly cancel
+        /// along its length; the web's barracuda is a stiff plank whose whole back half swings
+        /// together. This pins that the solo fish now bends the way the web's barracuda bends.
+        /// </summary>
+        [Test]
+        public void SoloBarracuda_BendsLikeTheWebsBarracuda_NotLikeAGenericTunnyfish()
+        {
+            SwimWave solo = SwimStyle.For("msh:barracuda", SoloBarracudaLen);
+            SwimWave shoal = SwimStyle.For("school:barracuda", BarracudaLen);
+
+            Assert.AreEqual(shoal.Cycles, solo.Cycles, Eps,
+                            "same species, same body wave: builder.html:1098 wiggleWave 0.9");
+            Assert.AreEqual(0.267, solo.Cycles, 0.005, "1.8624 u × 0.9 / 2π");
+            Assert.Less(solo.Cycles, Build280Cycles / 3.0, "3.19× fewer bends than build 280");
+        }
+
+        /// <summary>
+        /// The beat is the web's own hand-tuned figure for a barracuda (wiggleRate 5.0 → 0.796 Hz,
+        /// builder.html:1098), halved. Both facts are pinned, because "halved" without saying
+        /// halved-from-what is how a tuned number turns into a magic one three months later.
+        ///
+        /// It also has to land between the web's TWO answers for this fish: 0.796 Hz as a shoal,
+        /// and ~0.22 Hz as a solo GLB with no clip (`animateGLB()`'s `dart` default, :3603,
+        /// <c>ry += sin(T*1.4)</c> with <c>T = t·sp</c> and <c>sp = 0.6…1.4</c>). The user is
+        /// looking at the solo one, so ending up nearer the shoal figure than the dart figure
+        /// would be answering with the wrong reference.
+        /// </summary>
+        [Test]
+        public void SoloBarracuda_BeatIsTheWebsShoalFigureHalved()
+        {
+            double solo = SwimStyle.For("msh:barracuda", SoloBarracudaLen).BeatHz;
+
+            Assert.AreEqual(SwimStyle.SchoolBeatHzBarracuda * 0.5, solo, Eps);
+            Assert.AreEqual(0.398, solo, 0.002, "5.0 rad/s ÷ 2π ÷ 2");
+
+            const double WebSoloDartHz = 1.4 / (2.0 * Math.PI);   // sp = 1.0, the middle of 0.6…1.4
+            Assert.Greater(solo, WebSoloDartHz, "not slower than the web's slowest barracuda");
+            Assert.Less(solo, SwimStyle.SchoolBeatHzBarracuda, "…nor as fast as its fastest");
+        }
+
+        /// <summary>
+        /// The amplitude stays inside the band real fish use, which
+        /// <see cref="Amplitudes_AreInTheRangeRealFishUse"/> polices for everybody else. 15 % is
+        /// the top of the carangiform range and well under an eel's 17-18 %: wide, but still a
+        /// fish that swims rather than one that undulates.
+        /// </summary>
+        [Test]
+        public void SoloBarracuda_AmplitudeStaysInsideTheRealFishBand()
+        {
+            SwimWave w = SwimStyle.For("msh:barracuda", SoloBarracudaLen);
+            Assert.That(w.Amp, Is.InRange(0.03, 0.20));
+            Assert.Less(w.Amp, SwimStyle.For("msh:moray", 12.0).Amp,
+                        "a barracuda is not an eel");
+        }
+
+        /// <summary>
+        /// The override is a fraction of body length, exactly like everything else in this file, so
+        /// scaling the animal up does not change how it swims — only how big the swimming is.
+        /// </summary>
+        [Test]
+        public void SoloTune_DoesNotDependOnDrawSize()
+        {
+            SwimWave small = SwimStyle.For("msh:barracuda", 6.0);
+            SwimWave big = SwimStyle.For("msh:barracuda", 60.0);
+
+            Assert.AreEqual(small.Amp, big.Amp, Eps);
+            Assert.AreEqual(small.Cycles, big.Cycles, Eps);
+            Assert.AreEqual(small.BeatHz, big.BeatHz, Eps,
+                            "a hand-set beat is a hand-set beat — the size law does not get it back");
+        }
+
+        /// <summary>
+        /// 🔴 The blast radius, stated as a test. One species is tuned; every other animal on the
+        /// demo map must come out of <see cref="SwimStyle.For"/> exactly as it did before the table
+        /// existed. A tuning table that quietly moved its neighbours would be the same class of
+        /// mistake as the 5-changes-in-one-build session of 3 Aug.
+        /// </summary>
+        [Test]
+        public void SoloTune_TouchesOnlyTheOneSpeciesItNames()
+        {
+            foreach (string id in new[] { "school:barracuda", "school:scad", "msh:whaleshark",
+                                          "msh:humpback_whale", "msh:oceanic_manta", "msh:turtle",
+                                          "msh:lionfish", "msh:moray", "pod:yellowtail",
+                                          "mdl:bull_shark", "msh:crab" })
+            {
+                SwimWave tuned = SwimStyle.For(id, 20.0);
+                SwimWave raw = SwimStyle.FromTables(id, 20.0);
+                Assert.AreEqual(raw.BeatHz, tuned.BeatHz, Eps, id);
+                Assert.AreEqual(raw.Amp, tuned.Amp, Eps, id);
+                Assert.AreEqual(raw.Cycles, tuned.Cycles, Eps, id);
+            }
+
+            Assert.IsFalse(SwimStyle.SoloTuneFor("school:barracuda").Has,
+                           "the SHOAL barracuda is a web transcription and must stay untouched");
+            Assert.IsTrue(SwimStyle.SoloTuneFor("msh:barracuda").Has);
+        }
+
+        /// <summary>
+        /// …and it survives the pivot prefix, the same trap as
+        /// <see cref="Classification_SurvivesTheSceneItemPrefix"/>. An override that silently
+        /// misses looks exactly like a build where nothing was changed.
+        /// </summary>
+        [Test]
+        public void SoloTune_SurvivesTheSceneItemPrefix()
+        {
+            Assert.IsTrue(SwimStyle.SoloTuneFor("Item_3_msh:barracuda").Has);
+            Assert.AreEqual(SwimStyle.For("msh:barracuda", SoloBarracudaLen).BeatHz,
+                            SwimStyle.For("Item_3_msh:barracuda", SoloBarracudaLen).BeatHz, Eps);
+        }
+
+        /// <summary>Fields left at <see cref="SwimStyle.NoOverride"/> keep the table's answer.</summary>
+        [Test]
+        public void SoloTune_LeavesUnsetFieldsAlone()
+        {
+            SwimWave baseline = SwimStyle.FromTables("msh:barracuda", SoloBarracudaLen);
+
+            SwimWave beatOnly = SwimStyle.Apply(
+                baseline, new SwimStyle.SoloTune(0.2, SwimStyle.NoOverride, SwimStyle.NoOverride));
+            Assert.AreEqual(0.2, beatOnly.BeatHz, Eps);
+            Assert.AreEqual(baseline.Amp, beatOnly.Amp, Eps);
+            Assert.AreEqual(baseline.Cycles, beatOnly.Cycles, Eps);
+
+            Assert.AreEqual(baseline.BeatHz, SwimStyle.Apply(baseline, default).BeatHz, Eps);
+            Assert.AreEqual(baseline.MaxBankRad, SwimStyle.Apply(baseline, default).MaxBankRad, Eps);
+        }
+
+        /// <summary>
+        /// Recoil, gust and bank are NOT overridden, and that is deliberate rather than an
+        /// oversight: the web does bank a solo animal (builder.html:2483 rolls it up to 0.6 rad,
+        /// well past this row's 30°), so there was nothing to correct and the change stays one
+        /// change.
+        /// </summary>
+        [Test]
+        public void SoloTune_LeavesBankAndRecoilToTheGaitRow()
+        {
+            SwimWave was = SwimStyle.FromTables("msh:barracuda", SoloBarracudaLen);
+            SwimWave now = SwimStyle.For("msh:barracuda", SoloBarracudaLen);
+
+            Assert.AreEqual(was.Recoil, now.Recoil, Eps);
+            Assert.AreEqual(was.Gust, now.Gust, Eps);
+            Assert.AreEqual(was.MaxBankRad, now.MaxBankRad, Eps);
+            Assert.AreEqual(was.Gait, now.Gait);
         }
     }
 }

@@ -551,5 +551,131 @@ namespace DiveMap.Tests
                                     ClipPlay.MayAnimate(id, kind),
                                     $"gate disagreed with routing for id='{id}' kind='{kind}'");
         }
+
+        // ── The whale shark's floor inside the SlowAnim band (2026-08-06, build 280) ──
+        //
+        // user, on a real iPhone: "ฉลามวาฬโบกหางน้อยไป".
+        // The mechanism is in the block above ClipPlay.WhalesharkSlowFloor: the animal was pinned
+        // to SlowRateMin and never saw the rest of its own band.
+
+        /// <summary>What build 280 logged: <c>timeScale=0.32 slowAnim=True</c>.</summary>
+        private const double Build280WhalesharkTimeScale = 0.32;
+
+        /// <summary>
+        /// 🔴 The bug, restated as a test so it cannot come back: at cruise the whale shark sat on
+        /// the FLOOR of its band, not somewhere chosen inside it. <see cref="SwimStyle.Effort"/>
+        /// returns 1.0 at cruise and <c>1.0 × 0.30 = 0.30</c> is below 0.32, so the clamp — not a
+        /// tuning decision — picked the number the user was looking at.
+        /// </summary>
+        [Test]
+        public void Build280sWhaleSharkWasPinnedToTheBandFloor()
+        {
+            Assert.AreEqual(Build280WhalesharkTimeScale,
+                            ClipPlay.TimeScale(1.0, true, 1.0, false, ClipPlay.SlowRateMin), 1e-9);
+            Assert.Less(1.0 * ClipPlay.SlowRateK, ClipPlay.SlowRateMin,
+                        "cruise effort lands below the floor — which is why it was pinned");
+
+            // 🔎 The band does open above cruise — it takes effort 1.07 to leave the floor, not the
+            // 3.5 a first reading of `eff*0.30` suggests. What pins this particular animal there is
+            // the OTHER half of its row: msh:whaleshark is Big + NeverRest, so ClipPlay.IsGlider
+            // is true for it, and every time it drops under half cruise speed the glide cut takes
+            // the rate DOWN again. Across everything a patrolling whale shark actually does, the
+            // floor is not a floor it occasionally touches — it is the ceiling of its normal life.
+            Assert.IsTrue(ClipPlay.IsGlider("msh:whaleshark"));
+            foreach (double eff in new[] { 0.35, 0.6, 1.0 })
+            {
+                Assert.LessOrEqual(ClipPlay.TimeScale(eff, true, 1.0, false, ClipPlay.SlowRateMin),
+                                   Build280WhalesharkTimeScale, $"cruising at effort {eff}");
+                Assert.Less(ClipPlay.TimeScale(eff, true, 1.0, true, ClipPlay.SlowRateMin),
+                            Build280WhalesharkTimeScale * 0.6, $"coasting at effort {eff}");
+            }
+        }
+
+        /// <summary>
+        /// The fix, and the size of it: the whale shark now cruises at 0.55 instead of 0.32 —
+        /// 1.72× — while every other animal in the sea is untouched.
+        /// </summary>
+        [Test]
+        public void TheWhaleSharkCruisesFasterAndNobodyElseMoves()
+        {
+            double now = ClipPlay.TimeScale(1.0, true, 1.0, false,
+                                            ClipPlay.SlowFloorFor("msh:whaleshark"));
+            Assert.AreEqual(ClipPlay.WhalesharkSlowFloor, now, 1e-9);
+            Assert.Greater(now, Build280WhalesharkTimeScale * 1.6, "โบกหางน้อยไป — visibly more");
+
+            foreach (string id in new[] { "msh:humpback_whale", "msh:barracuda", "msh:turtle",
+                                          "msh:oceanic_manta", "mdl:bull_shark", "pod:humpback",
+                                          "school:scad", "", null })
+                Assert.AreEqual(ClipPlay.SlowRateMin, ClipPlay.SlowFloorFor(id),
+                                $"'{id}' must keep the ordinary floor");
+        }
+
+        /// <summary>
+        /// The ceiling is still the web's. A per-species floor may say where inside the band an
+        /// animal sits; it may not raise the limit builder.html:2445 put on a slow animal, and a
+        /// nonsense floor must be clamped rather than believed.
+        /// </summary>
+        [Test]
+        public void ThePerSpeciesFloorCannotEscapeTheWebsBand()
+        {
+            foreach (double floor in new[] { -1.0, 0.0, 0.1, 0.55, 0.85, 5.0, double.NaN })
+            {
+                double r = ClipPlay.TimeScale(1.0, true, 1.0, false, floor);
+                Assert.That(r, Is.InRange(ClipPlay.SlowRateMin, ClipPlay.SlowRateMax),
+                            $"floor {floor} escaped [0.32, 0.85]");
+            }
+
+            // Effort still reaches: 0.55 is not the top of the band, so a sprinting whale shark
+            // still plays faster than a cruising one. A knob that killed the effort term would
+            // have replaced one frozen number with another.
+            Assert.Greater(ClipPlay.TimeScale(SwimStyle.EffortMax, true, 1.0, false,
+                                              ClipPlay.WhalesharkSlowFloor),
+                           ClipPlay.TimeScale(1.0, true, 1.0, false, ClipPlay.WhalesharkSlowFloor));
+            Assert.Less(ClipPlay.WhalesharkSlowFloor, ClipPlay.SlowRateMax, "headroom must remain");
+        }
+
+        /// <summary>
+        /// The four-argument overload is exactly the five-argument one at the default floor, so
+        /// every existing caller and every existing test keeps its answer to the last bit.
+        /// </summary>
+        [Test]
+        public void TheOldOverloadIsTheNewOneAtTheDefaultFloor()
+        {
+            foreach (double eff in new[] { 0.0, 0.35, 1.0, 2.0, 3.5 })
+                foreach (bool slow in new[] { true, false })
+                    foreach (bool glide in new[] { true, false })
+                        Assert.AreEqual(ClipPlay.TimeScale(eff, slow, 1.0, glide),
+                                        ClipPlay.TimeScale(eff, slow, 1.0, glide, ClipPlay.SlowRateMin),
+                                        1e-12, $"eff={eff} slow={slow} glide={glide}");
+        }
+
+        /// <summary>
+        /// A coasting whale shark still slows down — the glide cut (builder.html:2448) applies
+        /// after the floor, not instead of it — but it no longer bottoms out on the hard 0.15
+        /// floor, which is what "แช่แข็ง" looks like.
+        /// </summary>
+        [Test]
+        public void GlidingStillCutsTheRate_ButNoLongerToTheFreezeFloor()
+        {
+            double glide = ClipPlay.TimeScale(1.0, true, 1.0, true, ClipPlay.WhalesharkSlowFloor);
+            double cruise = ClipPlay.TimeScale(1.0, true, 1.0, false, ClipPlay.WhalesharkSlowFloor);
+
+            Assert.Less(glide, cruise, "a coasting animal beats slower");
+            Assert.AreEqual(ClipPlay.WhalesharkSlowFloor * ClipPlay.GlideMul, glide, 1e-9);
+            Assert.Greater(glide, ClipPlay.GlideFloor,
+                           "…and is no longer sitting on the freeze floor it used to be clamped to");
+        }
+
+        /// <summary>
+        /// Bare-id matched, like every other table read here. The runtime hands over
+        /// <c>Item_7_msh:whaleshark</c>; an exact-match miss would leave the animal at 0.32 and
+        /// look precisely like the build not containing the change.
+        /// </summary>
+        [Test]
+        public void TheFloorLookupSurvivesTheSceneItemPrefix()
+        {
+            Assert.AreEqual(ClipPlay.WhalesharkSlowFloor, ClipPlay.SlowFloorFor("Item_7_msh:whaleshark"));
+            Assert.AreEqual(ClipPlay.WhalesharkSlowFloor, ClipPlay.SlowFloorFor("MSH:WHALESHARK"));
+        }
     }
 }

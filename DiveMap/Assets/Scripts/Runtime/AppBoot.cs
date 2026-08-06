@@ -379,6 +379,11 @@ namespace DiveMap.Runtime
             string title = string.IsNullOrEmpty(result.MapName) ? mapName : result.MapName;
             SetLoadSummary(title, result.Loaded, result.Failed);
 
+            // The view RANGE: how far back the player may go, and how far the camera and the fog
+            // have to reach for the map to still be there when they get there. Independent of the
+            // framing below by construction — see OrbitCamera.FrameDistanceCap.
+            ApplyViewRange(result);
+
             if (_orbit != null)
                 _orbit.FrameBox(result.FrameCenter, result.FrameSizeX, result.FrameSizeY, result.FrameSizeZ, result.FrameMinY);
 
@@ -862,6 +867,64 @@ namespace DiveMap.Runtime
         public void SetStatusVisible(bool visible)
         {
             if (_statusText != null) _statusText.enabled = visible;
+        }
+
+        /// <summary>
+        /// The web's <c>updateViewRange()</c> (builder.html:709-722), applied to the map that has
+        /// just finished building: zoom-out ceiling, camera far and near planes, and both ends of
+        /// the fog — all four scaled from the map's own content radius.
+        ///
+        /// 🔴 2026-08-06, build 280: *"zoom out ได้มากกว่านี้ตามขนาดแมพ — Atlantis อยากเห็นเต็ม
+        /// แมพ"*. Until now every one of those four was a literal that never looked at the map:
+        /// ceiling 950 (OrbitCamera's field default, which is the web's post-AR BUG value — see the
+        /// comment there), far 9,000 and fog 500…9,000 (set once in SetupLighting). A big map was
+        /// therefore capped at a distance chosen for a small one.
+        ///
+        /// 🔎 Why this cannot change the look of an ordinary map, and it is arithmetic rather than
+        /// a promise: feed <see cref="CameraRange"/> the web's bare sand radius, 340 u, and it
+        /// returns fog 500…9,000 — the exact pair being replaced — and a far plane of 8,040 against
+        /// the old 9,000, which is 950 u of zoom plus 340 u of map with 6.7 km to spare. The
+        /// numbers only move once the map is big enough that they had to.
+        ///
+        /// The radius is the FLAT footprint, matching the web's <c>reach</c> — the sand disc, or
+        /// the scenery's horizontal extent where a map's structures overhang it. Deliberately not
+        /// <c>result.Radius</c>, which is a 3D half-diagonal including the water column and reads
+        /// ≈504 on a 340 u map; see <c>SceneBuilder.BuildResult.SeabedRadius</c>.
+        /// </summary>
+        private void ApplyViewRange(SceneBuilder.BuildResult result)
+        {
+            Camera cam = Camera.main;
+            if (cam == null) return;
+
+            // The web's `foggy` is `!!scene.fog`, and its daylight mode sets scene.fog = null
+            // (builder.html:682) — where you can see much further, hence the higher floor.
+            bool foggy = RenderSettings.fog;
+
+            float reach = Mathf.Max(result.SeabedRadius,
+                                    Mathf.Max(result.FrameSizeX, result.FrameSizeZ) * 0.5f);
+
+            float aspect = cam.aspect > 0.001f ? cam.aspect : (float)Screen.width / Mathf.Max(1, Screen.height);
+            CameraRange.ViewRange v = CameraRange.For(reach, foggy, cam.fieldOfView, aspect);
+
+            if (_orbit != null) _orbit.maxDistance = (float)v.MaxDistance;
+
+            cam.farClipPlane = (float)v.Far;
+            cam.nearClipPlane = (float)v.Near;
+
+            if (RenderSettings.fog)
+            {
+                RenderSettings.fogStartDistance = (float)v.FogNear;
+                RenderSettings.fogEndDistance = (float)v.FogFar;
+            }
+
+            // One line, because "I still can't zoom out" and "I zoomed out and the map vanished"
+            // are different bugs with the same screenshot, and only the ceiling tells them apart.
+            Debug.Log($"[View] reach={reach:F0} (sand={result.SeabedRadius:F0}) " +
+                      $"fov={cam.fieldOfView:F0} aspect={aspect:F2} " +
+                      $"foggy={foggy} maxDist={v.MaxDistance:F0} " +
+                      $"(web={Mathf.Max(foggy ? 2600f : 3600f, reach * (float)CameraRange.MaxDistK):F0} " +
+                      $"fit={CameraRange.FitDistance(reach, cam.fieldOfView, aspect):F0}) " +
+                      $"far={v.Far:F0} near={v.Near:F2} fog={v.FogNear:F0}..{v.FogFar:F0}");
         }
 
         /// <summary>Called by <c>UiShell.ApplyLanguage</c> after a language switch.</summary>

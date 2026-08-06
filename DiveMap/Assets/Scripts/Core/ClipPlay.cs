@@ -71,6 +71,53 @@ namespace DiveMap.Core
         /// <summary>SlowAnim ceiling.</summary>
         public const double SlowRateMax = 0.85;
 
+        // ── Per-species floor inside the SlowAnim band ────────────────────────────
+        //
+        // 🔴 2026-08-06, build 280 on a real iPhone: *"ฉลามวาฬโบกหางน้อยไป"*.
+        //
+        // The whale shark is the one animal in the app wearing the <see cref="SpeciesFlag.SlowAnim"/>
+        // flag (SpeciesBehavior.cs:139, transcribed from builder.html:1779), so it is the one animal
+        // whose clip runs on the `eff*0.30` branch of <see cref="TimeScale"/> instead of `eff*0.45`.
+        // Its log line from build 280 reads `clips=6 pick=cruise timeScale=0.32 slowAnim=True`, and
+        // 0.32 is not a tuned number — it is <see cref="SlowRateMin"/>, the FLOOR. At cruise
+        // <see cref="SwimStyle.Effort"/> returns 1.0, `1.0 × 0.30 = 0.30` falls below the floor, and
+        // the clamp lifts it back to 0.32. It is pinned there: the animal has to work 3.5× harder
+        // than cruise before the band's own arithmetic lets it off the bottom, which a patrolling
+        // whale shark never does. The band [0.32, 0.85] exists and this animal only ever sees the
+        // first number in it.
+        //
+        // What the web does, for the record, is nothing that helps: builder.html:1072 ships
+        // `msh:whaleshark` with no clip at all, so on the web the tail simply does not move and the
+        // GLB falls to `animateGLB()`'s `swim` case (:3599), which bobs the body and rolls it a few
+        // degrees. There is no web number to copy here; the rig, the six clips and the whole clip
+        // path are this app's, and the choice of where inside the web's band to sit is ours to make.
+        //
+        // So: raise the FLOOR for this species and leave the ceiling where the web put it. The
+        // effort term keeps working (0.55 → 0.85 is still live headroom), the animal can never play
+        // faster than the web's own limit for a slow animal, and if the next build comes back with
+        // "ยังน้อยอยู่" or "มากไป" it is one number here that moves.
+
+        /// <summary>
+        /// Where <c>msh:whaleshark</c> cruises inside the <see cref="SlowRateMin"/>…<see cref="SlowRateMax"/>
+        /// band. 1.72× build 280's 0.32.
+        ///
+        /// Derived rather than eyeballed, from this app's OWN answer for the same animal. A whale
+        /// shark is drawn at ≈65 u; <see cref="SwimStyle.For"/> puts a 65 u shark at
+        /// <c>clamp(1.1/√(65/6), 0.25, 2.0) × 0.75 = 0.25 Hz</c> — one tail beat every four
+        /// seconds. A ~2 s cruise clip carrying one beat plays at 0.16 Hz at a time scale of 0.32,
+        /// which is 1.6× slower than the app's own mesh-bending table says the very same species
+        /// should beat; 0.32 × 1.6 ≈ 0.51, taken up to 0.55 to sit clear of the old value while
+        /// still leaving a third of the band above it.
+        ///
+        /// 🔎 What this CANNOT fix, said plainly because the next report will decide it: the swing
+        /// is baked into the clip, so this changes how OFTEN the tail sweeps and not how FAR. If
+        /// "โบกหางน้อยไป" turns out to mean the arc is too small rather than too rare, no value
+        /// here reaches it and the next lever is a procedural bend blended over the clip — which
+        /// the web has no precedent for either (it does no bone or morph work over a clip anywhere
+        /// in builder.html) and which is deliberately NOT part of this change.
+        /// </summary>
+        public const double WhalesharkSlowFloor = 0.55;
+
         /// <summary>A coasting glider's clip runs at 30 % (:2448).</summary>
         public const double GlideMul = 0.3;
         /// <summary>…but never stops dead. A frozen rig is the "แช่แข็ง" complaint (:2448).</summary>
@@ -111,10 +158,23 @@ namespace DiveMap.Core
         /// </param>
         /// <param name="gliding">Coasting between strokes — see <see cref="Gliding"/>.</param>
         public static double TimeScale(double effort, bool slowAnim, double animMul, bool gliding)
+            => TimeScale(effort, slowAnim, animMul, gliding, SlowRateMin);
+
+        /// <summary>
+        /// <see cref="TimeScale(double,bool,double,bool)"/> with the SlowAnim band's floor named
+        /// by the caller — see <see cref="WhalesharkSlowFloor"/> and <see cref="SlowFloorFor"/>.
+        ///
+        /// Only the floor is per-species. The ceiling stays <see cref="SlowRateMax"/> for
+        /// everybody, because that one IS the web's (builder.html:2445) and a species knob has no
+        /// business raising a limit the web set.
+        /// </summary>
+        public static double TimeScale(double effort, bool slowAnim, double animMul, bool gliding,
+                                       double slowFloor)
         {
             double e = effort > 0.0 ? effort : 0.0;
+            double floor = Clamp(slowFloor > 0.0 ? slowFloor : SlowRateMin, SlowRateMin, SlowRateMax);
             double r = slowAnim
-                ? Clamp(e * SlowRateK, SlowRateMin, SlowRateMax)
+                ? Clamp(e * SlowRateK, floor, SlowRateMax)
                 : Clamp(e * RateK, RateMin, RateMax);
 
             // × animMul comes AFTER the clamp, exactly as on the web (:2447): the humpback's 0.72
@@ -154,6 +214,24 @@ namespace DiveMap.Core
         /// <summary>The species' <see cref="SpeciesFlag.SlowAnim"/> flag.</summary>
         public static bool SlowAnimFor(string assetId)
             => SpeciesBehavior.For(Bare(assetId)).SlowAnim;
+
+        /// <summary>
+        /// Where this species sits at the bottom of the SlowAnim band —
+        /// <see cref="WhalesharkSlowFloor"/> for the whale shark, <see cref="SlowRateMin"/> for
+        /// everything else. See the block above <see cref="WhalesharkSlowFloor"/>.
+        ///
+        /// Bare-id matched for the same reason every other table read in this file is: the pivot
+        /// the runtime hands over is called <c>Item_7_msh:whaleshark</c>, and an exact-match lookup
+        /// on that string finds nothing and silently leaves the animal at the old floor — which
+        /// would look exactly like the change not working.
+        /// </summary>
+        public static double SlowFloorFor(string assetId)
+        {
+            string id = Bare(assetId);
+            if (string.Equals(id, "msh:whaleshark", StringComparison.OrdinalIgnoreCase))
+                return WhalesharkSlowFloor;
+            return SlowRateMin;
+        }
 
         // ── Which clip (builder.html:1434-1444) ───────────────────────────────────
 
