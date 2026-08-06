@@ -16,7 +16,7 @@ namespace DiveMap.Runtime
     /// because a map with its JSON and no models opens as a field of grey placeholders, which
     /// reads as a broken map rather than a missing download. The earlier note here said caching
     /// the GLBs was deliberately out of scope on size grounds; that turned out to be solvable
-    /// with the shipped app's own answer (220 MB, least-recently-used first), so it is no longer
+    /// with the shipped app's own answer (a byte budget, least-recently-used first), so it is no longer
     /// true and is corrected rather than left to mislead.
     /// </summary>
     public static class OfflineStore

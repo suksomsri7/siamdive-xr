@@ -141,9 +141,10 @@ namespace DiveMap.Tests
         [Test]
         public void TheDefaultBudgetIsTheShippedAppsBudget()
         {
-            // 220 MB comes from siamdive-rn/src/lib/offline/assets.ts:16 — a number proven on real
-            // phones. Changing it should be a decision, not a drift.
-            Assert.AreEqual(220L * 1024L * 1024L, AssetCache.BudgetBytes);
+            // Raised from 220 MB (siamdive-rn/src/lib/offline/assets.ts:16) to 1 GB on 2026-08-06,
+            // because the ASTC file set makes a model ~16 MB where it was 2-3 MB and the old cap
+            // could not hold one map. Pinned so that changing it stays a decision, not a drift.
+            Assert.AreEqual(1024L * 1024L * 1024L, AssetCache.BudgetBytes);
         }
 
         [Test]

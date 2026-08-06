@@ -73,6 +73,7 @@
          pinning on this machine is negative: on a device with no ASTC (CI's llvmpipe is one)
          it must ask for nothing at all, because a rejected target format loses the texture. -->
     <Compile Include="../../DiveMap/Assets/Scripts/Core/KtxTranscodeTarget.cs" />
+    <Compile Include="../../DiveMap/Assets/Scripts/Core/AstcAssetPick.cs" />
     <Compile Include="../../DiveMap/Assets/Scripts/Core/LoadProgress.cs" />
   </ItemGroup>
 
@@ -104,6 +105,7 @@
     <Compile Include="../../DiveMap/Assets/Tests/EditMode/NormalMapDecodeTests.cs" />
     <Compile Include="../../DiveMap/Assets/Tests/EditMode/GltfTextureRolesTests.cs" />
     <Compile Include="../../DiveMap/Assets/Tests/EditMode/KtxTranscodeTargetTests.cs" />
+    <Compile Include="../../DiveMap/Assets/Tests/EditMode/AstcAssetPickTests.cs" />
     <Compile Include="../../DiveMap/Assets/Tests/EditMode/NormalReliefTests.cs" />
     <Compile Include="../../DiveMap/Assets/Tests/EditMode/LoadProgressTests.cs" />
     <Compile Include="Runner.cs" />

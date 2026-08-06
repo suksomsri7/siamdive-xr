@@ -155,7 +155,7 @@
 | J4 | login รหัส/อีเมล | `openLogin`, `_lgCodeStep` | ✅ อีเมล → OTP 6 หลัก → ตั้งชื่อ + admin passcode · เทส 15 |
 | J5 | โปรไฟล์ | `_profileSheet` | ✅ avatar/ชื่อ/อีเมล/ออกจากระบบ/ลบบัญชี (แตะ 2 ครั้ง) |
 | J6 | ให้สิทธิ์แก้ไขทางอีเมล | `openPermission` :3399 | ✅ ในแผงตั้งค่าแมพ (คั่นด้วยจุลภาค · ตรวจรูปแบบอีเมลก่อนส่ง) |
-| J7 | รายการโปรด + ทัวร์ออฟไลน์ | `_toggleFav` :3082, `cacheOneMap` | ✅ รายการโปรด (server) + `OfflineStore` เก็บ JSON + **`AssetCacheStore` เก็บ GLB** (read-through, 220MB + LRU ตามแอปที่ปล่อยจริง `siamdive-rn/.../assets.ts:16`) · `Core/AssetCache.cs` 18 เทส (กันชื่อชนกัน/path traversal/งบเต็ม) |
+| J7 | รายการโปรด + ทัวร์ออฟไลน์ | `_toggleFav` :3082, `cacheOneMap` | ✅ รายการโปรด (server) + `OfflineStore` เก็บ JSON + **`AssetCacheStore` เก็บ GLB** (read-through, 1GB + LRU · LRU ตามแอปที่ปล่อยจริง `siamdive-rn/.../assets.ts:16` · เพดานขยายจาก 220MB เพราะไฟล์ชุด ASTC) · `Core/AssetCache.cs` 18 เทส (กันชื่อชนกัน/path traversal/งบเต็ม) |
 | J8 | กันออกทั้งที่ยังไม่เซฟ | `leaveModal` | ✅ `UiShell.GuardUnsaved()` ทุกทางออก — แมพที่แก้ไม่ได้บอกว่าเก็บลงเครื่องแทน ไม่เงียบ |
 
 ## K. UI ทั่วไป — 6/6

@@ -10,10 +10,9 @@ namespace DiveMap.Core
     /// honest. But a map whose models are missing opens as a field of grey boxes: the JSON is the
     /// smaller half of "ทัวร์ออฟไลน์". This is the other half — the GLB files themselves.
     ///
-    /// Ported from the shipped app's rule (siamdive-rn/src/lib/offline/assets.ts:16):
-    /// <c>ASSET_BUDGET_BYTES = 220MB</c>, least-recently-used dropped first. The number is not
-    /// arbitrary — it is what that app has been living with on real phones, so it is the one to
-    /// match rather than invent a new one.
+    /// The eviction rule — least-recently-used dropped first — is ported from the shipped app
+    /// (siamdive-rn/src/lib/offline/assets.ts:16). The BUDGET is no longer that app's number; see
+    /// <see cref="BudgetBytes"/>.
     ///
     /// Everything here is pure: naming, budgeting and eviction are exactly the parts that fail
     /// silently (a name collision serves the wrong model; a broken budget fills the phone), and
@@ -21,8 +20,31 @@ namespace DiveMap.Core
     /// </summary>
     public static class AssetCache
     {
-        /// <summary>220 MB, the shipped app's cap.</summary>
-        public const long BudgetBytes = 220L * 1024L * 1024L;
+        /// <summary>
+        /// 1 GB.
+        ///
+        /// 🔴 RAISED FROM 220 MB ON 2026-08-06, and the old number was not wrong — it was measured
+        /// against different files. 220 MB came from siamdive-rn
+        /// (<c>src/lib/offline/assets.ts:16</c>), an app serving the web GLBs, and it stayed
+        /// comfortable through the XR set: the LOD0 files on
+        /// <c>siamdive-cdn.b-cdn.net/models/xr/</c> measure ~1.8 MB on average (12 sampled,
+        /// heaviest 3.7 MB), so the cap held something like 120 models — several maps' worth.
+        ///
+        /// The ASTC file set (<see cref="AstcAssetPick"/>) breaks that arithmetic. ASTC 4x4 is
+        /// 8 bits per pixel of FIXED-RATE data: a 2048² texture is 4 MB, 5.3 MB with its mip chain,
+        /// and it does not compress the way a Basis-Universal intermediate does because there is no
+        /// intermediate left to compress. A model with a base colour, a normal and an ORM map at
+        /// that size lands near 16 MB where its ETC1S twin was 2-3 MB. At 220 MB the cache would
+        /// hold barely a dozen of them — fewer than one map — and LRU would then do exactly what
+        /// LRU does: evict models the user is still looking at, re-download them on the next pan,
+        /// and repeat, on mobile data, on a boat. A cache that thrashes is worse than no cache,
+        /// because it pays the disk writes as well as the bytes.
+        ///
+        /// 1 GB holds a full map of the heavy files with room to keep the previous one warm. It is
+        /// a ceiling and not an allocation — nothing is reserved, and a map of light models still
+        /// occupies what it always did.
+        /// </summary>
+        public const long BudgetBytes = 1024L * 1024L * 1024L;
 
         /// <summary>
         /// 🔴 Bump this when the bytes behind a CDN URL change without the URL changing.

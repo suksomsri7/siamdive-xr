@@ -409,10 +409,30 @@ namespace DiveMap.Runtime
                 LinearDataTextures.AstcUNormSupported);
 
             int index = _loaded++;
-            ImageResult result = await Load(data, plan, readable, generateMipMaps, RoleName, index);
+            (ImageResult result, bool nonBasis) =
+                await Load(data, plan, readable, generateMipMaps, RoleName, index);
             if (result.Texture != null)
             {
+                // Driven by the ROLE plan, never by the one Load() actually used: a normal map out
+                // of an ASTC file is still linear data, and NormalMapProbe reads this set to prove
+                // it (<c>SceneBuilder.cs:1255</c>). PlanForFile drops the flag because the PACKAGE
+                // must not be asked the linear-filtering question, not because the texture changed
+                // meaning.
                 if (plan.Linear) LinearDataTextures.Note(result.Texture);
+                return result;
+            }
+
+            // 🔴 A NON-BASIS FILE GETS NO RETRIES, because there is nothing left to vary. Both
+            // rungs below exist to walk back a transcode target, and a file with no transcode step
+            // ignores the target entirely (<c>KtxTexture.cs:256, :289-300</c>) — every retry would
+            // re-open the same bytes, take the same branch and fail the same way, three warnings
+            // deep. Failure here means the device cannot sample the format the file is IN, which is
+            // the manifest's problem to avoid (see <c>AstcAssetPick</c>) and not a thing a second
+            // attempt can fix.
+            if (nonBasis)
+            {
+                Debug.LogWarning($"[KtxLoad] role={RoleName} tex={index} non-basis KTX2 failed to " +
+                                 "load — the device cannot sample the format this file ships in");
                 return result;
             }
 
@@ -425,7 +445,7 @@ namespace DiveMap.Runtime
                 Debug.LogWarning($"[KtxLoad] role={RoleName} tex={index} forcing {plan.Target} " +
                                  "failed — retrying with the package's own choice");
                 plan.Target = KtxTranscodeTarget.AutoSelect;
-                result = await Load(data, plan, readable, generateMipMaps, RoleName, index);
+                (result, _) = await Load(data, plan, readable, generateMipMaps, RoleName, index);
                 if (result.Texture != null)
                 {
                     if (plan.Linear) LinearDataTextures.Note(result.Texture);
@@ -435,16 +455,22 @@ namespace DiveMap.Runtime
 
             Debug.LogWarning($"[KtxLoad] role={RoleName} tex={index} load failed — retrying the " +
                              "way glTFast would have loaded it");
-            return await Load(
+            (result, _) = await Load(
                 data,
                 new KtxLoadPlan { Target = KtxTranscodeTarget.AutoSelect, Linear = linear },
                 readable,
                 generateMipMaps,
                 RoleName,
                 index);
+            return result;
         }
 
-        private static async Task<ImageResult> Load(
+        /// <summary>
+        /// One open-and-load attempt. Returns the image and whether the file turned out to be a
+        /// non-Basis KTX2 (already in a GPU format), which is what tells the caller a retry would
+        /// be pointless.
+        /// </summary>
+        private static async Task<(ImageResult Result, bool NonBasis)> Load(
             NativeArray<byte>.ReadOnly data,
             KtxLoadPlan plan,
             bool readable,
@@ -453,9 +479,17 @@ namespace DiveMap.Runtime
             int index)
         {
             var ktx = new KtxUnity.KtxTexture();
+            bool nonBasis = false;
             try
             {
-                if (ktx.Open(data) != KtxUnity.ErrorCode.Success) return ImageResult.Null;
+                if (ktx.Open(data) != KtxUnity.ErrorCode.Success) return (ImageResult.Null, false);
+
+                // 🔴 ONLY READABLE AFTER Open — `needsTranscoding` dereferences the native instance
+                // that Open creates (<c>KtxTexture.cs:27</c>, <c>:209-213</c>). Everything the plan
+                // decided before this line was decided from the glTF's material graph, which cannot
+                // see inside the image.
+                nonBasis = !ktx.needsTranscoding;
+                plan = KtxTranscodeTargets.PlanForFile(plan, ktx.needsTranscoding);
 
                 KtxUnity.TextureResult result;
                 if (plan.Target == KtxTranscodeTarget.AutoSelect)
@@ -480,16 +514,22 @@ namespace DiveMap.Runtime
                     if (result != null && result.errorCode != KtxUnity.ErrorCode.Success)
                     {
                         Debug.LogWarning($"[KtxLoad] role={role} tex={index} " +
-                                         $"target={plan.Target} errorCode={result.errorCode}");
+                                         $"target={plan.Target} basis={!nonBasis} " +
+                                         $"errorCode={result.errorCode}");
                     }
-                    return ImageResult.Null;
+                    return (ImageResult.Null, nonBasis);
                 }
 
                 // 🔴 The proof line. `got=` is read off the texture that actually exists, not off
                 // the format that was requested, because the whole reason this change exists is
                 // that the two were not the same.
+                //
+                // `basis=` joins it for the ASTC file set: a file that says false transcoded
+                // nothing, so `got=` is the encoder's own output rather than a runtime choice —
+                // which is the entire point of shipping that file, and the only way to tell from a
+                // log that the right one was downloaded.
                 Debug.Log($"[KtxLoad] role={role} tex={index} target={plan.Target} " +
-                          $"got={result.texture.graphicsFormat} " +
+                          $"basis={!nonBasis} got={result.texture.graphicsFormat} " +
                           $"size={result.texture.width}x{result.texture.height} " +
                           $"mips={result.texture.mipmapCount} linear={plan.Linear} " +
                           $"readable={readable}");
@@ -507,15 +547,16 @@ namespace DiveMap.Runtime
                 // out of the ImageResult (<c>GltfImport.cs:2388-2392</c>) and feeds it to the UV
                 // transform (<c>MaterialGenerator.cs:357</c>). Dropping it used to mis-flip normal
                 // maps; with the colour maps claimed too it would mis-flip the whole model.
-                return new ImageResult(
-                    result.texture,
-                    KtxUnity.TextureOrientationExtension.IsYFlipped(result.orientation));
+                return (new ImageResult(
+                        result.texture,
+                        KtxUnity.TextureOrientationExtension.IsYFlipped(result.orientation)),
+                    nonBasis);
             }
             catch (Exception e)
             {
                 Debug.LogWarning($"[KtxLoad] role={role} tex={index} open/transcode threw: "
                                  + e.Message);
-                return ImageResult.Null;
+                return (ImageResult.Null, nonBasis);
             }
             finally
             {

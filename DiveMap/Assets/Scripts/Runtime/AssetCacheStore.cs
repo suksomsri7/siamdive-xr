@@ -21,9 +21,10 @@ namespace DiveMap.Runtime
     /// the same principle <see cref="OfflineStore"/> uses for the JSON, and the reason neither
     /// needs a button the user has to remember to press before they leave the pier.
     ///
-    /// The 220 MB cap and least-recently-used eviction come from the shipped app
-    /// (siamdive-rn/src/lib/offline/assets.ts:16), so the two products agree on how much of a
-    /// phone this is allowed to take. The decisions themselves live in <see cref="AssetCache"/>
+    /// Least-recently-used eviction comes from the shipped app
+    /// (siamdive-rn/src/lib/offline/assets.ts:16); the cap is this app's own (1 GB — see
+    /// <see cref="AssetCache.BudgetBytes"/>, which explains why it is no longer that app's
+    /// 220 MB). The decisions themselves live in <see cref="AssetCache"/>
     /// where they can be tested; this class only does the I/O.
     /// </summary>
     public static class AssetCacheStore

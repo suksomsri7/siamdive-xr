@@ -698,7 +698,7 @@ namespace DiveMap.Runtime
         /// <summary>
         /// Fetch <c>&lt;model&gt;.solids.json</c> down the same road the GLB takes: the on-device
         /// copy when there is one, otherwise the network, written to the cache on the way past so
-        /// the next dive needs no signal. A few KB, so it rides inside the existing 220 MB budget
+        /// the next dive needs no signal. A few KB, so it rides inside the existing cache budget
         /// without moving it.
         ///
         /// EVERY failure returns null, and null means "this object keeps the single AABB it has

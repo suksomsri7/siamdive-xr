@@ -140,5 +140,55 @@ namespace DiveMap.Core
             if (supported) plan.Target = want;
             return plan;
         }
+
+        /// <summary>
+        /// Adjust a plan once the FILE has been opened and its kind is known.
+        ///
+        /// 🔴 WHY THIS EXISTS — the ASTC file set (<see cref="AstcAssetPick"/>) puts a KTX2 through
+        /// this loader that has nothing to transcode, and <see cref="Plan"/> cannot see that. Plan
+        /// runs on the glTF's texture ROLES, before a single byte of the image is opened; whether
+        /// the payload is a Basis-Universal intermediate or finished ASTC blocks is a property of
+        /// the file, readable only from <c>KtxTexture.needsTranscoding</c> after <c>Open</c>
+        /// (<c>KtxTexture.cs:27</c>).
+        ///
+        /// 🔴 WHAT GOES WRONG WITHOUT IT. Read <c>KtxTexture.LoadTexture2DInternal</c> in order:
+        /// <c>:256</c> branches on <c>needsTranscoding</c>, and for a non-Basis file it takes the
+        /// ELSE at <c>:289-300</c>, where <c>graphicsFormat</c> is read off the file (<c>:291</c>)
+        /// and the <c>targetFormat</c> we asked for is never looked at again — <c>:262</c>, the only
+        /// line that consumes it, is inside the branch not taken. So forcing a target on such a file
+        /// is at best a no-op, and at worst a false negative: the format-forcing overload hard-codes
+        /// <c>linear: true</c> on the way down (<c>KtxTexture.cs:160</c>), and <c>:296</c> then
+        /// tests the FILE's format for <c>GraphicsFormatUsage.Linear</c> — linear FILTERING support,
+        /// not colour space (<c>TranscodeFormatHelper.cs:454-461</c>) — a strictly narrower question
+        /// than the <c>Sample</c> one every other gate in this codebase asks. A device that answers
+        /// yes to Sample and no to Linear loses the texture to <c>FormatUnsupportedBySystem</c>
+        /// (<c>:298</c>) and only gets it back after two more full open-and-load attempts through
+        /// the fallback ladder in <c>LinearDataTextures.LoadImage</c>.
+        ///
+        /// So: no target, and no linear flag either. Neither is a loss. In the non-transcoding
+        /// branch the format comes from the file and <c>linear</c> reaches nothing but that usage
+        /// test — <c>LoadTextureData</c> is handed <c>graphicsFormat</c> and never <c>linear</c>
+        /// (<c>KtxTexture.cs:347-355</c>) — so the texture that gets created is bit-identical either
+        /// way, and asking the narrower question can only cost.
+        ///
+        /// 🔴 THE COROLLARY, and it belongs to whoever encodes the files: an ASTC GLB carries its
+        /// own transfer function, and nothing downstream can override it. A normal map or an ORM
+        /// packed as <c>*_SRGB</c> stays wrong on the device no matter what this loader does. The
+        /// encode must emit UNorm for data images and sRGB for base colour and emissive — the same
+        /// split <see cref="GltfTextureRoles"/> makes at load time for the Basis files.
+        /// </summary>
+        /// <param name="plan">The role-based plan from <see cref="Plan"/>.</param>
+        /// <param name="needsTranscoding"><c>KtxTexture.needsTranscoding</c>, read after a
+        /// successful <c>Open</c>. True for the Basis-Universal files that shipped, false for a
+        /// file whose textures are already in a GPU format.</param>
+        public static KtxLoadPlan PlanForFile(KtxLoadPlan plan, bool needsTranscoding)
+        {
+            if (needsTranscoding) return plan;
+            return new KtxLoadPlan
+            {
+                Target = KtxTranscodeTarget.AutoSelect,
+                Linear = false,
+            };
+        }
     }
 }

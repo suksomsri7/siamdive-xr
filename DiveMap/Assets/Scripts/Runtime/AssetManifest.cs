@@ -41,6 +41,15 @@ namespace DiveMap.Runtime
             public string XrGlbUrl;
             /// <summary>Optional XR LOD1 (lower-poly). Carried in data for later use; not selected yet.</summary>
             public string XrGlbUrlLod1;
+            /// <summary>
+            /// Optional LOD0 whose KTX2 textures are already ASTC 4x4 rather than a
+            /// Basis-Universal intermediate. Taken over <see cref="XrGlbUrl"/> only on a device that
+            /// can sample ASTC — see <see cref="DiveMap.Core.AstcAssetPick"/> for why it is a
+            /// choice and not a replacement.
+            /// </summary>
+            public string XrGlbUrlAstc;
+            /// <summary>ASTC twin of <see cref="XrGlbUrlLod1"/>, picked by the same rule.</summary>
+            public string XrGlbUrlAstcLod1;
             public double DefaultScale = 1;
             public double DefaultY = 0;
             public bool Animated;
@@ -116,6 +125,11 @@ namespace DiveMap.Runtime
                         GlbUrl = (string)o["glbUrl"],
                         XrGlbUrl = (string)o["xrGlbUrl"],
                         XrGlbUrlLod1 = (string)o["xrGlbUrlLod1"],
+                        // Absent from every module the day this shipped, and that is the design:
+                        // a missing key reads as null and the model resolves exactly as before, so
+                        // the ASTC file set can be filled in one model at a time.
+                        XrGlbUrlAstc = (string)o["xrGlbUrlAstc"],
+                        XrGlbUrlAstcLod1 = (string)o["xrGlbUrlAstcLod1"],
                         DefaultScale = o["defaultScale"] != null ? (double)o["defaultScale"] : 1,
                         DefaultY = o["defaultY"] != null ? (double)o["defaultY"] : 0,
                         Animated = o["animated"] != null && (bool)o["animated"],
@@ -151,7 +165,7 @@ namespace DiveMap.Runtime
 
             // XR variant wins when available (real KTX2 textures vs the WebP web GLBs).
             string raw = !string.IsNullOrWhiteSpace(m.XrGlbUrl) ? m.XrGlbUrl : m.GlbUrl;
-            return Normalize(raw);
+            return Normalize(PickAstc(assetId, m.XrGlbUrlAstc, raw, false));
         }
 
         /// <summary>
@@ -162,7 +176,48 @@ namespace DiveMap.Runtime
         public string ResolveLod1Url(string assetId)
         {
             Module m = Get(assetId);
-            return m == null ? null : Normalize(m.XrGlbUrlLod1);
+            if (m == null) return null;
+            return Normalize(PickAstc(assetId, m.XrGlbUrlAstcLod1, m.XrGlbUrlLod1, true));
+        }
+
+        // ── ASTC file set ────────────────────────────────────────────────────────
+
+        /// <summary>
+        /// Test seam. Null means "ask the device"; an EditMode test sets it because CI's GL context
+        /// answers no to ASTC and a test that only ever sees the fallback proves half the rule.
+        /// </summary>
+        internal static bool? AstcSupportOverride;
+
+        /// <summary>
+        /// 🔴 THE SAME QUESTION THE TRANSCODE TARGET ASKS, deliberately the same accessor rather
+        /// than a second <c>SystemInfo</c> call: if these two ever disagreed, the app would download
+        /// an ASTC file and then decline to claim its textures — the one combination in which the
+        /// model loads and looks worse than it did before.
+        /// </summary>
+        private static bool AstcSupported =>
+            AstcSupportOverride ?? LinearDataTextures.AstcSupported;
+
+        /// <summary>
+        /// Logged ids, so the choice is provable without one line per instance of a model — a
+        /// reef with 40 copies of the same coral would otherwise bury the log it exists to write.
+        /// Per-instance rather than static: a reloaded manifest is a new run and deserves new lines.
+        /// </summary>
+        private readonly HashSet<string> _pickLogged = new HashSet<string>(StringComparer.Ordinal);
+
+        private string PickAstc(string assetId, string astcUrl, string fallbackUrl, bool lod1)
+        {
+            DiveMap.Core.AstcAssetPick.Choice choice =
+                DiveMap.Core.AstcAssetPick.Pick(astcUrl, fallbackUrl, AstcSupported);
+
+            // Only models that actually ship an ASTC build are worth a line; for the other 275 the
+            // pick is a no-op and saying so 275 times is noise, not evidence.
+            if (!string.IsNullOrWhiteSpace(astcUrl) &&
+                _pickLogged.Add((lod1 ? "1:" : "0:") + assetId))
+            {
+                Debug.Log(DiveMap.Core.AstcAssetPick.LogLine(assetId, choice, lod1));
+            }
+
+            return choice.Url;
         }
 
         private string Normalize(string url)

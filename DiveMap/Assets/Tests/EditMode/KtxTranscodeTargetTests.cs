@@ -180,5 +180,69 @@ namespace DiveMap.Tests
                     $"isData={isData}: claimed but the plan is a no-op");
             }
         }
+
+        // ── PlanForFile: what the file itself turns out to be ────────────────────
+
+        [Test]
+        public void ABasisFileKeepsTheRolePlanExactly()
+        {
+            // Every GLB that shipped before the ASTC set. This must be a pure pass-through or the
+            // build-276 fix is silently undone.
+            foreach (bool isData in new[] { false, true })
+            {
+                KtxLoadPlan role = Plan(isData);
+                KtxLoadPlan actual = KtxTranscodeTargets.PlanForFile(role, needsTranscoding: true);
+                Assert.AreEqual(role.Target, actual.Target, $"isData={isData}");
+                Assert.AreEqual(role.Linear, actual.Linear, $"isData={isData}");
+            }
+        }
+
+        [Test]
+        public void ANonBasisFileForcesNothing()
+        {
+            // 🔴 The whole point. KtxTexture.cs:256 branches on needsTranscoding and the else at
+            // :289-300 never reads targetFormat — :262 is the only line that does and it is in the
+            // branch not taken. Asking anyway is at best a no-op and at worst a false negative,
+            // because the forcing overload hard-codes linear:true (:160) and :296 then tests the
+            // FILE's format for linear FILTERING support rather than Sample.
+            foreach (bool isData in new[] { false, true })
+            {
+                KtxLoadPlan actual =
+                    KtxTranscodeTargets.PlanForFile(Plan(isData), needsTranscoding: false);
+                Assert.AreEqual(KtxTranscodeTarget.AutoSelect, actual.Target, $"isData={isData}");
+                Assert.IsFalse(actual.Linear, $"isData={isData}: the narrower usage question");
+            }
+        }
+
+        [Test]
+        public void ANonBasisPlanIsTheSameWhateverTheRoleSaid()
+        {
+            // There is nothing left to vary: the format comes out of the file, and `linear` reaches
+            // nothing but a support check (LoadTextureData is handed graphicsFormat and never
+            // linear — KtxTexture.cs:347-355). So all four role plans collapse to one.
+            KtxLoadPlan a = KtxTranscodeTargets.PlanForFile(Plan(true), false);
+            KtxLoadPlan b = KtxTranscodeTargets.PlanForFile(Plan(false), false);
+            KtxLoadPlan c = KtxTranscodeTargets.PlanForFile(
+                Plan(true, gltfLinear: true, readable: true), false);
+            KtxLoadPlan d = KtxTranscodeTargets.PlanForFile(Plan(false, astc: NoAstc), false);
+
+            foreach (KtxLoadPlan p in new[] { a, b, c, d })
+            {
+                Assert.AreEqual(KtxTranscodeTarget.AutoSelect, p.Target);
+                Assert.IsFalse(p.Linear);
+            }
+        }
+
+        [Test]
+        public void ANonBasisFileNeedsNoAstcSupportToBePlanned()
+        {
+            // PlanForFile is not the ASTC gate — AstcAssetPick is, before the bytes are fetched.
+            // If a non-basis file reaches a device with no ASTC anyway (a hard-coded QC url, say),
+            // the plan must still be the harmless one rather than a forced format.
+            KtxLoadPlan p = KtxTranscodeTargets.PlanForFile(
+                Plan(isData: false, astc: NoAstc), needsTranscoding: false);
+            Assert.AreEqual(KtxTranscodeTarget.AutoSelect, p.Target);
+            Assert.IsFalse(p.Linear);
+        }
     }
 }
