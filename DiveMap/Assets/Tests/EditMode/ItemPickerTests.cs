@@ -225,5 +225,31 @@ namespace DiveMap.Tests
                     $"kind {kind} → '{label}' has no English translation");
             }
         }
-    }
+    
+        // ── PickBest: "เล็งใครมากที่สุด" (บั๊ก Chang: แตะบาราคูด้าได้ปลาข้างเหลือง) ──
+
+        [Test]
+        public void PickBest_AimedCentre_BeatsNearerGrazedEdge()
+        {
+            // ฝูง scad ใกล้กล้อง แต่ ray เฉี่ยวขอบมัน · ฝูงบาราคูด้าไกลกว่า แต่ ray ผ่ากลาง
+            var scad = new ItemPicker.Target("Item_1|school:scad",
+                new Vector3(-12f, -12f, 8f), new Vector3(2f, 2f, 22f));      // ขอบเฉียด ray
+            var barra = new ItemPicker.Target("Item_2|school:barracuda",
+                new Vector3(-5f, -5f, 35f), new Vector3(5f, 5f, 45f));       // ศูนย์กลางบน ray
+            string hit = ItemPicker.PickBest(Vector3.zero, new Vector3(0f, 0f, 1f),
+                                             new[] { scad, barra });
+            Assert.That(hit, Is.EqualTo("Item_2|school:barracuda"),
+                "nearest-t เดิมเลือก scad ที่แค่เฉี่ยว — ต้องได้ตัวที่ผู้เล่นเล็งจริง");
+        }
+
+        [Test]
+        public void PickBest_Occlusion_StopsAtTheSand()
+        {
+            var school = new ItemPicker.Target("Item_1|school:barracuda",
+                new Vector3(-5f, -5f, 30f), new Vector3(5f, 5f, 40f));
+            Assert.That(ItemPicker.PickBest(Vector3.zero, new Vector3(0f, 0f, 1f),
+                                            new[] { school }, 20f), Is.Null,
+                "เลยจุดชนพื้น = มองไม่เห็น = คลิกไม่ได้");
+        }
+}
 }

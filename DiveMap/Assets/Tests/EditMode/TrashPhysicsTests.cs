@@ -138,5 +138,30 @@ namespace DiveMap.Tests
             Assert.That(TrashPhysics.PickForTap(V(0, 0, 0), V(0, 0, 10), pieces, 2.5f, 90f),
                         Is.EqualTo(0), "a scaled direction must not scale the range test");
         }
-    }
+    
+        // ── PickBest (ItemPicker): ฉบับ harness — ฉบับ Unity อยู่ใน ItemPickerTests ──
+
+        [Test]
+        public void PickBest_AimedCentre_BeatsNearerGrazedEdge()
+        {
+            var scad = new ItemPicker.Target("s", new UnityEngine.Vector3(-12f, -12f, 8f),
+                                             new UnityEngine.Vector3(2f, 2f, 22f));
+            var barra = new ItemPicker.Target("b", new UnityEngine.Vector3(-5f, -5f, 35f),
+                                              new UnityEngine.Vector3(5f, 5f, 45f));
+            string hit = ItemPicker.PickBest(new UnityEngine.Vector3(0f, 0f, 0f),
+                                             new UnityEngine.Vector3(0f, 0f, 1f),
+                                             new[] { scad, barra });
+            Assert.That(hit, Is.EqualTo("b"));
+        }
+
+        [Test]
+        public void PickBest_Occlusion_StopsAtTheSand()
+        {
+            var school = new ItemPicker.Target("s", new UnityEngine.Vector3(-5f, -5f, 30f),
+                                               new UnityEngine.Vector3(5f, 5f, 40f));
+            Assert.That(ItemPicker.PickBest(new UnityEngine.Vector3(0f, 0f, 0f),
+                                            new UnityEngine.Vector3(0f, 0f, 1f),
+                                            new[] { school }, 20f), Is.Null);
+        }
+}
 }

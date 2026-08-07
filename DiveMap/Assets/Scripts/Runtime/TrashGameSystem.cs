@@ -67,7 +67,7 @@ namespace DiveMap.Runtime
                 { "bottle", "game_trash_bottle_k1.glb" },
                 { "plastic", "game_trash_bag_k1.glb" },
                 { "net", "game_trash_net_k1.glb" },
-                { "coin", "game_coin_gold_k1.glb" },
+                { "coin", "game_coin_gold2_k1.glb" },   // รุ่น mirror หน้า->หลัง (user: หลังเดิมพัง)
                 // "tire" ไม่มีโมเดลจาก user — คง primitive เดิม
             };
 

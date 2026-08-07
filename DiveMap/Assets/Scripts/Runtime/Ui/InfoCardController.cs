@@ -46,6 +46,10 @@ namespace DiveMap.Runtime.Ui
         private Text _depthText;
         private Text _descText;
         private RectTransform _cardRt;
+        private UnityEngine.UI.RawImage _previewImg;
+        private SpeciesPreview _preview;
+        private ScrollRect _descScroll;
+        private string _openAssetId;
         private Button _closeButton;
         private Button _editButton;
         private string _openId;
@@ -115,15 +119,37 @@ namespace DiveMap.Runtime.Ui
             _depthText = UiKit.MakeText(rt, "Depth", "", UiKit.CssFont(12f), TextAnchor.MiddleRight, UiKit.TextMain);
             UiKit.TopRow(_depthText.rectTransform, y, UiKit.RowHeight(UiKit.CssFont(12f)), UiKit.Css(120f), UiKit.Css(44f));
 
-            // Species description (Thai, real facts only — species_info_th.json). Present only
-            // for marine animals, which are the only things that open this card at all now.
-            _descText = UiKit.MakeText(rt, "Desc", "", UiKit.CssFont(12f), TextAnchor.UpperLeft, UiKit.TextMain);
+            // ── ส่วนขยายของสัตว์ (สเปก user 7 ส.ค.): โมเดล 3D หมุนด้วยนิ้ว + ข้อความเลื่อนอ่าน ──
+            // ทั้งสองชิ้นวางใต้บรรทัด meta และโผล่เฉพาะการ์ดกลางจอ (มีข้อมูล)
+            var pv = new GameObject("Preview", typeof(UnityEngine.UI.RawImage));
+            pv.transform.SetParent(rt, false);
+            _previewImg = pv.GetComponent<UnityEngine.UI.RawImage>();
+            var pvrt = _previewImg.rectTransform;
+            pvrt.anchorMin = new Vector2(0f, 1f);
+            pvrt.anchorMax = new Vector2(1f, 1f);
+            pvrt.pivot = new Vector2(0.5f, 1f);
+            _preview = SpeciesPreview.Ensure(_previewImg);
+
+            var scGo = new GameObject("DescScroll", typeof(RectTransform), typeof(ScrollRect),
+                                      typeof(UnityEngine.UI.RectMask2D));
+            scGo.transform.SetParent(rt, false);
+            _descScroll = scGo.GetComponent<ScrollRect>();
+            var scrt = (RectTransform)scGo.transform;
+            scrt.anchorMin = new Vector2(0f, 1f);
+            scrt.anchorMax = new Vector2(1f, 1f);
+            scrt.pivot = new Vector2(0.5f, 1f);
+            _descText = UiKit.MakeText(scrt, "Desc", "", UiKit.CssFont(13f), TextAnchor.UpperLeft, UiKit.TextMain);
             var drt = _descText.rectTransform;
-            drt.anchorMin = new Vector2(0f, 0f);
-            drt.anchorMax = new Vector2(1f, 0f);
-            drt.pivot = new Vector2(0.5f, 0f);
-            drt.offsetMin = new Vector2(pad, UiKit.Css(10f));
-            drt.offsetMax = new Vector2(-pad, UiKit.Css(10f));
+            drt.anchorMin = new Vector2(0f, 1f);
+            drt.anchorMax = new Vector2(1f, 1f);
+            drt.pivot = new Vector2(0.5f, 1f);
+            _descText.horizontalOverflow = HorizontalWrapMode.Wrap;
+            _descText.verticalOverflow = VerticalWrapMode.Overflow;
+            _descScroll.content = drt;
+            _descScroll.horizontal = false;
+            _descScroll.vertical = true;
+            _descScroll.movementType = ScrollRect.MovementType.Clamped;
+            _descScroll.scrollSensitivity = 20f;
 
             // ✕ icon rather than a text button: the web's dismiss affordances are icons, and a
             // "ปิด" label is wider than the pill can spare.
@@ -257,7 +283,7 @@ namespace DiveMap.Runtime.Ui
             // พื้นทราย (collider เดียวในซีน) เป็นตัวบัง: แตะทราย = ทรายชนะทุกทรงกลมกลางน้ำ
             float maxT = float.PositiveInfinity;
             if (Physics.Raycast(ray, out RaycastHit ground, 5000f)) maxT = ground.distance + 0.5f;
-            string key = ItemPicker.Pick(ray.origin, ray.direction, targets, maxT);
+            string key = ItemPicker.PickBest(ray.origin, ray.direction, targets, maxT);
             if (key == null || !byKey.TryGetValue(key, out GameObject hit)) { Hide(); return; }
 
             ShowFor(hit, mapRoot);
@@ -367,6 +393,7 @@ namespace DiveMap.Runtime.Ui
                 return;
             }
             _openDesc = SpeciesInfo.Get(assetId);
+            _openAssetId = assetId;
 
             string label = null;
             if (_labels != null && id != null) _labels.TryGetValue(id, out label);
@@ -434,14 +461,37 @@ namespace DiveMap.Runtime.Ui
             if (_descText != null) _descText.text = _openDesc ?? "";
             if (_cardRt != null)
             {
-                // มีเรื่องเล่า = การ์ดกลางจอ (คำสั่ง user) และสูงพอสำหรับข้อความ · ไม่มี = แผ่น
-                // ล่างแบบเดิม (ชื่อ/ชนิด/ความลึกอย่างเดียว — ไม่มีการแต่งข้อมูลเพิ่มเด็ดขาด)
+                // มีเรื่องเล่า = การ์ดกลางจอ: หัว + โมเดล 3D หมุนได้ + ข้อความเลื่อนอ่าน
+                // ไม่มี = แผ่นล่างชื่อ/ชนิด/ความลึกแบบเดิม (ไม่มีการแต่งข้อมูลเพิ่มเด็ดขาด)
                 bool hasDesc = !string.IsNullOrEmpty(_openDesc);
+                float w = _cardRt.sizeDelta.x;
+                float pvH = hasDesc ? Mathf.Min(w * 0.62f, UiKit.Css(210f)) : 0f;
+                float scH = hasDesc ? UiKit.Css(150f) : 0f;
+                if (_previewImg != null)
+                {
+                    _previewImg.gameObject.SetActive(hasDesc);
+                    var prt = _previewImg.rectTransform;
+                    prt.sizeDelta = new Vector2(0f, pvH);
+                    prt.anchoredPosition = new Vector2(0f, -CardHeight);
+                }
+                if (_descScroll != null)
+                {
+                    _descScroll.gameObject.SetActive(hasDesc);
+                    var srt = (RectTransform)_descScroll.transform;
+                    srt.sizeDelta = new Vector2(-UiKit.Css(28f), scH);
+                    srt.anchoredPosition = new Vector2(0f, -CardHeight - pvH - UiKit.Css(8f));
+                    Canvas.ForceUpdateCanvases();
+                    var drt2 = _descText.rectTransform;
+                    drt2.sizeDelta = new Vector2(0f, Mathf.Max(scH, _descText.preferredHeight + UiKit.Css(8f)));
+                    _descScroll.verticalNormalizedPosition = 1f;
+                }
                 if (hasDesc)
                 {
                     _cardRt.anchorMin = _cardRt.anchorMax = new Vector2(0.5f, 0.5f);
                     _cardRt.pivot = new Vector2(0.5f, 0.5f);
                     _cardRt.anchoredPosition = Vector2.zero;
+                    if (_preview != null && _manifest != null)
+                        _preview.Show(_manifest.ResolveUrl(_openAssetId), _openAssetId);
                 }
                 else
                 {
@@ -449,9 +499,7 @@ namespace DiveMap.Runtime.Ui
                     _cardRt.pivot = new Vector2(0.5f, 0f);
                     _cardRt.anchoredPosition = new Vector2(0f, UiKit.Css(22f));
                 }
-                Canvas.ForceUpdateCanvases();
-                float dh = hasDesc && _descText != null ? _descText.preferredHeight + UiKit.Css(20f) : 0f;
-                _cardRt.sizeDelta = new Vector2(_cardRt.sizeDelta.x, CardHeight + dh);
+                _cardRt.sizeDelta = new Vector2(w, CardHeight + pvH + scH + (hasDesc ? UiKit.Css(24f) : 0f));
             }
             if (_depthText != null)
                 _depthText.text = $"{UiStrings.Tr("ความลึก")} {_openDepth:F1} {UiStrings.Tr("ม.")}";
@@ -465,6 +513,7 @@ namespace DiveMap.Runtime.Ui
 
         public void Hide()
         {
+            _preview?.Clear();
             if (_layer == null) return;
             if (_layer.gameObject.activeSelf) Debug.Log("[UI] card closed");
             _layer.gameObject.SetActive(false);

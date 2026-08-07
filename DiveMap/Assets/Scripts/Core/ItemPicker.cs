@@ -181,6 +181,48 @@ namespace DiveMap.Core
             return best;
         }
 
+        /// <summary>
+        /// เลือกแบบ "เล็งใครมากที่สุด": ในบรรดาเป้าที่ ray ทะลุ (และไม่เลย maxDistance)
+        /// เอาตัวที่ระยะตั้งฉากจาก ray ถึงศูนย์กลาง เทียบกับขนาดตัวมันเอง ต่ำสุด —
+        /// ราก: ฝูงปลาสองฝูงมีทรงกลมทับกัน (Chang: แตะบาราคูด้าได้ปลาข้างเหลือง) เพราะ
+        /// nearest-t ให้รางวัลกับทรงกลมที่ ray เฉี่ยวขอบแต่อยู่ใกล้กล้อง. การหารด้วยรัศมี
+        /// ทำให้ "จิ้มกลางฝูงใหญ่" ชนะ "เฉี่ยวขอบฝูงอื่น" เสมอ. เสมอกัน -> ตัวใกล้กว่า.
+        /// </summary>
+        public static string PickBest(Vector3 rayOrigin, Vector3 rayDir, IEnumerable<Target> targets,
+                                      float maxDistance = float.PositiveInfinity)
+        {
+            if (targets == null) return null;
+            double dl = System.Math.Sqrt((double)rayDir.x * rayDir.x + (double)rayDir.y * rayDir.y
+                                         + (double)rayDir.z * rayDir.z);
+            if (dl < 1e-9) return null;
+            double dx = rayDir.x / dl, dy = rayDir.y / dl, dz = rayDir.z / dl;
+
+            string best = null;
+            double bestScore = double.PositiveInfinity, bestT = double.PositiveInfinity;
+            foreach (Target t in targets)
+            {
+                if (string.IsNullOrEmpty(t.Key)) continue;
+                if (!RayAabb(rayOrigin, rayDir, t.Min, t.Max, out float hit)) continue;
+                if (hit > maxDistance) continue;
+                double cx = (t.Min.x + t.Max.x) * 0.5 - rayOrigin.x;
+                double cy = (t.Min.y + t.Max.y) * 0.5 - rayOrigin.y;
+                double cz = (t.Min.z + t.Max.z) * 0.5 - rayOrigin.z;
+                double along = cx * dx + cy * dy + cz * dz;
+                double px = cx - along * dx, py = cy - along * dy, pz = cz - along * dz;
+                double perp = System.Math.Sqrt(px * px + py * py + pz * pz);
+                double ex = t.Max.x - t.Min.x, ey = t.Max.y - t.Min.y, ez = t.Max.z - t.Min.z;
+                double r = System.Math.Max(0.5, System.Math.Sqrt(ex * ex + ey * ey + ez * ez) * 0.5);
+                double score = perp / r;
+                if (score < bestScore - 1e-4 || (System.Math.Abs(score - bestScore) <= 1e-4 && hit < bestT))
+                {
+                    bestScore = score;
+                    bestT = hit;
+                    best = t.Key;
+                }
+            }
+            return best;
+        }
+
         private static float Axis(Vector3 v, int axis) => axis == 0 ? v.x : (axis == 1 ? v.y : v.z);
 
         // ── kind → Thai label ────────────────────────────────────────────────────
