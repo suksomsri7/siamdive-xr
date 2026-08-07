@@ -44,6 +44,8 @@ namespace DiveMap.Runtime.Ui
         private Text _nameText;
         private Text _kindText;
         private Text _depthText;
+        private Text _descText;
+        private RectTransform _cardRt;
         private Button _closeButton;
         private Button _editButton;
         private string _openId;
@@ -63,6 +65,7 @@ namespace DiveMap.Runtime.Ui
         private string _openKey;
         private string _openName;
         private string _openKindKey;
+        private string _openDesc;
         private double _openDepth;
 
         private bool _tracking;
@@ -90,6 +93,7 @@ namespace DiveMap.Runtime.Ui
             float width = Mathf.Min(Screen.width / UiKit.CanvasScale * 0.86f, UiKit.Css(380f));
             Image card = UiKit.MakeRounded(_layer, "Card", UiKit.Glass, 20f);
             RectTransform rt = card.rectTransform;
+            _cardRt = rt;
             rt.anchorMin = new Vector2(0.5f, 0f);
             rt.anchorMax = new Vector2(0.5f, 0f);
             rt.pivot = new Vector2(0.5f, 0f);
@@ -110,6 +114,16 @@ namespace DiveMap.Runtime.Ui
 
             _depthText = UiKit.MakeText(rt, "Depth", "", UiKit.CssFont(12f), TextAnchor.MiddleRight, UiKit.TextMain);
             UiKit.TopRow(_depthText.rectTransform, y, UiKit.RowHeight(UiKit.CssFont(12f)), UiKit.Css(120f), UiKit.Css(44f));
+
+            // Species description (Thai, real facts only — species_info_th.json). Present only
+            // for marine animals, which are the only things that open this card at all now.
+            _descText = UiKit.MakeText(rt, "Desc", "", UiKit.CssFont(12f), TextAnchor.UpperLeft, UiKit.TextMain);
+            var drt = _descText.rectTransform;
+            drt.anchorMin = new Vector2(0f, 0f);
+            drt.anchorMax = new Vector2(1f, 0f);
+            drt.pivot = new Vector2(0.5f, 0f);
+            drt.offsetMin = new Vector2(pad, UiKit.Css(10f));
+            drt.offsetMax = new Vector2(-pad, UiKit.Css(10f));
 
             // ✕ icon rather than a text button: the web's dismiss affordances are icons, and a
             // "ปิด" label is wider than the pill can spare.
@@ -340,6 +354,17 @@ namespace DiveMap.Runtime.Ui
 
             AssetManifest.Module module = _manifest != null ? _manifest.Get(assetId) : null;
 
+            // 🔴 คำสั่ง user 7 ส.ค.: popup ขึ้นเฉพาะสัตว์ทะเลเท่านั้น — เรือจม รูปปั้น ซุ้ม
+            // ปะการัง หิน แตะแล้วต้องเงียบสนิท. เกณฑ์ = MarineRouting ตัวเดียวกับที่ตัดสินว่า
+            // อะไรได้สมองว่ายน้ำ (หนึ่งแหล่งความจริง — ของที่ว่ายได้คือของที่มีเรื่องให้เล่า).
+            if (DiveMap.Core.MarineRouting.For(assetId, module?.Kind)
+                == DiveMap.Core.MarineRoute.None)
+            {
+                Hide();
+                return;
+            }
+            _openDesc = SpeciesInfo.Get(assetId);
+
             string label = null;
             if (_labels != null && id != null) _labels.TryGetValue(id, out label);
 
@@ -403,6 +428,28 @@ namespace DiveMap.Runtime.Ui
 
             if (_nameText != null) _nameText.text = UiStrings.Tr(_openName);
             if (_kindText != null) _kindText.text = UiStrings.Tr(_openKindKey);
+            if (_descText != null) _descText.text = _openDesc ?? "";
+            if (_cardRt != null)
+            {
+                // มีเรื่องเล่า = การ์ดกลางจอ (คำสั่ง user) และสูงพอสำหรับข้อความ · ไม่มี = แผ่น
+                // ล่างแบบเดิม (ชื่อ/ชนิด/ความลึกอย่างเดียว — ไม่มีการแต่งข้อมูลเพิ่มเด็ดขาด)
+                bool hasDesc = !string.IsNullOrEmpty(_openDesc);
+                if (hasDesc)
+                {
+                    _cardRt.anchorMin = _cardRt.anchorMax = new Vector2(0.5f, 0.5f);
+                    _cardRt.pivot = new Vector2(0.5f, 0.5f);
+                    _cardRt.anchoredPosition = Vector2.zero;
+                }
+                else
+                {
+                    _cardRt.anchorMin = _cardRt.anchorMax = new Vector2(0.5f, 0f);
+                    _cardRt.pivot = new Vector2(0.5f, 0f);
+                    _cardRt.anchoredPosition = new Vector2(0f, UiKit.Css(22f));
+                }
+                Canvas.ForceUpdateCanvases();
+                float dh = hasDesc && _descText != null ? _descText.preferredHeight + UiKit.Css(20f) : 0f;
+                _cardRt.sizeDelta = new Vector2(_cardRt.sizeDelta.x, CardHeight + dh);
+            }
             if (_depthText != null)
                 _depthText.text = $"{UiStrings.Tr("ความลึก")} {_openDepth:F1} {UiStrings.Tr("ม.")}";
 

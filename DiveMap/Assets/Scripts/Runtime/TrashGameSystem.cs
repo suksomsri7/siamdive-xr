@@ -1,4 +1,6 @@
+using System;
 using System.Collections.Generic;
+using GLTFast;
 using DiveMap.Core;
 using DiveMap.Runtime.Ui;
 using UnityEngine;
@@ -54,6 +56,32 @@ namespace DiveMap.Runtime
         // an invisible lid). Handed in by TourController, which already holds them.
         private IReadOnlyList<SolidBoxes.Group> _solids;
 
+        // ── โมเดลจริงจาก user (7 ส.ค.) — game_*_k1.glb บน CDN (mesh ~3k · texture 1K PNG
+        // สูตรไม่บีบ) · โหลดครั้งเดียวเป็นแม่แบบแล้ว clone ต่อชิ้น · โหลดไม่ทัน/ล้มเหลว =
+        // ใช้ primitive เดิม — เกมไม่มีวันค้างรอโมเดล (เรือ/เน็ตห่วยคือเคสปกติของเกมนี้)
+        private const string ModelCdn = "https://siamdive-cdn.b-cdn.net/models/xr/";
+        private static readonly Dictionary<string, string> ModelFiles =
+            new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                { "can", "game_trash_can_k1.glb" },
+                { "bottle", "game_trash_bottle_k1.glb" },
+                { "plastic", "game_trash_bag_k1.glb" },
+                { "net", "game_trash_net_k1.glb" },
+                { "coin", "game_coin_gold_k1.glb" },
+                // "tire" ไม่มีโมเดลจาก user — คง primitive เดิม
+            };
+
+        /// <summary>ขนาดเป้าหมาย (ด้านยาวสุด, world unit) ให้ใกล้เคียง primitive เดิมต่อชนิด.</summary>
+        private static readonly Dictionary<string, float> ModelSize =
+            new Dictionary<string, float>(StringComparer.Ordinal)
+            {
+                { "can", 1.8f }, { "bottle", 2.0f }, { "plastic", 3.0f },
+                { "net", 3.4f }, { "coin", 2.0f },
+            };
+
+        private readonly Dictionary<string, GameObject> _templates =
+            new Dictionary<string, GameObject>(StringComparer.Ordinal);
+
         /// <summary>Coins in the purse. Local for now; the wallet sync is its own step.</summary>
         public static int Coins
         {
@@ -101,6 +129,7 @@ namespace DiveMap.Runtime
             _combo = 0;
             _comboKind = null;
             _running = true;
+            LoadTemplates();
 
             // Seed a few pieces so a fresh dive has something in it. The web's field persists
             // across a session, so its 5 s cadence is enough there; ours starts empty every time
@@ -254,7 +283,8 @@ namespace DiveMap.Runtime
                                   _center.z + Mathf.Sin(a) * bd * _scaleZ);
 
             TrashGame.Kind kind = TrashGame.Pick(Rand());
-            GameObject go = coin ? BuildCoin() : BuildTrash(kind);
+            GameObject go = FromTemplate(coin ? "coin" : kind.Key);
+            if (go == null) go = coin ? BuildCoin() : BuildTrash(kind);
             go.transform.SetParent(_root, false);
             go.transform.position = pos;
             // ♻️ over litter only — a gold coin already reads as "pick me up" on its own, and the
@@ -270,6 +300,47 @@ namespace DiveMap.Runtime
                 FloorY = FloorAt(pos) + TrashGame.LandOffset,
                 Phase = Rand() * 6.283f,
             });
+        }
+
+        /// <summary>โหลดแม่แบบโมเดลจริงเบื้องหลัง — สำเร็จเมื่อไหร่ ชิ้นที่เกิดใหม่ใช้ทันที.</summary>
+        private async void LoadTemplates()
+        {
+            foreach (KeyValuePair<string, string> kv in ModelFiles)
+            {
+                if (_templates.ContainsKey(kv.Key)) continue;
+                var holder = new GameObject($"tpl_{kv.Key}");
+                holder.transform.SetParent(_root, false);
+                holder.SetActive(false);
+                GltfImport import = await SceneBuilder.LoadForQc(
+                    ModelCdn + kv.Value, $"game:{kv.Key}", holder.transform);
+                if (import == null || this == null || holder == null)
+                {
+                    if (holder != null) Destroy(holder);
+                    continue;
+                }
+                // normalize: ด้านยาวสุด = ขนาดเป้าหมายของชนิดนั้น
+                var rends = holder.GetComponentsInChildren<Renderer>(true);
+                if (rends.Length > 0)
+                {
+                    Bounds b = rends[0].bounds;
+                    for (int i = 1; i < rends.Length; i++) b.Encapsulate(rends[i].bounds);
+                    float max = Mathf.Max(b.size.x, b.size.y, b.size.z);
+                    float want = ModelSize.TryGetValue(kv.Key, out float w) ? w : 2f;
+                    if (max > 1e-4f) holder.transform.localScale = Vector3.one * (want / max);
+                }
+                _templates[kv.Key] = holder;
+                Debug.Log($"[Game] template {kv.Key} ready");
+            }
+        }
+
+        /// <summary>ชิ้นจากแม่แบบโมเดลจริง หรือ null เมื่อยังโหลดไม่เสร็จ (ผู้เรียกใช้ primitive).</summary>
+        private GameObject FromTemplate(string key)
+        {
+            if (!_templates.TryGetValue(key, out GameObject tpl) || tpl == null) return null;
+            GameObject go = Instantiate(tpl);
+            go.name = $"piece_{key}";
+            go.SetActive(true);
+            return go;
         }
 
         private void Collect(int index)
