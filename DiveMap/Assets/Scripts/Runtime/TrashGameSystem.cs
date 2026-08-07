@@ -75,8 +75,8 @@ namespace DiveMap.Runtime
         private static readonly Dictionary<string, float> ModelSize =
             new Dictionary<string, float>(StringComparer.Ordinal)
             {
-                { "can", 2.6f }, { "bottle", 2.9f }, { "plastic", 4.2f },   // user 7 ส.ค.: ใหญ่ขึ้นอีก
-                { "net", 4.8f }, { "coin", 3.2f },
+                { "can", 2.6f }, { "bottle", 2.9f }, { "plastic", 5.5f },   // รีวิวรอบ 3: ถุง/อวน/เหรียญใหญ่ขึ้น
+                { "net", 6.2f }, { "coin", 4.2f },
             };
 
         private readonly Dictionary<string, GameObject> _templates =
@@ -314,6 +314,11 @@ namespace DiveMap.Runtime
                                   _center.z + Mathf.Sin(a) * bd * _scaleZ);
 
             TrashGame.Kind kind = TrashGame.Pick(Rand());
+            // ยางรถไม่มีโมเดลจริงจาก user — ข้ามไว้ก่อน ไม่ปล่อยรูปทรงโพลิกอนลงน้ำ
+            // (user รายงานรอบ 3: "บางอันยังเป็นแค่รูปโพลิกอน") · ส่งไฟล์มาเมื่อไหร่ค่อยเปิดคืน
+            for (int guard = 0; kind.Key == "tire" && guard < 8; guard++)
+                kind = TrashGame.Pick(Rand());
+            if (kind.Key == "tire") kind = TrashGame.Kinds[0];   // กันสุ่มค้าง: ใช้กระป๋อง
             GameObject go = FromTemplate(coin ? "coin" : kind.Key);
             if (go == null) go = coin ? BuildCoin() : BuildTrash(kind);
             go.transform.SetParent(_root, false);

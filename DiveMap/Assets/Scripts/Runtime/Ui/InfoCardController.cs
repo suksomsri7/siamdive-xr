@@ -294,8 +294,8 @@ namespace DiveMap.Runtime.Ui
         /// camera-facing TextMeshes whose bounds would swamp small items), and items
         /// with no renderer at all fall back to a sphere.
         /// </summary>
-        private static List<ItemPicker.Target> CollectTargets(GameObject mapRoot,
-                                                              Dictionary<string, GameObject> byKey)
+        private List<ItemPicker.Target> CollectTargets(GameObject mapRoot,
+                                                        Dictionary<string, GameObject> byKey)
         {
             var list = new List<ItemPicker.Target>();
             if (mapRoot == null) return list;
@@ -307,6 +307,15 @@ namespace DiveMap.Runtime.Ui
                 string key = child.name;
                 if (!ItemPicker.IsItemName(key)) continue;
                 if (byKey.ContainsKey(key)) continue;
+
+                // 🔴 การ์ดเปิดเฉพาะสัตว์ (คำสั่ง user) — ดังนั้นของที่ไม่ใช่สัตว์ต้อง "ไม่รับ
+                // คลิก" ตั้งแต่ชั้นเลือกเป้า ไม่ใช่แค่เงียบทีหลัง: กล่องคลิกของเรือ Chang
+                // ใหญ่คลุมทั้งบริเวณ พอปลาว่ายใกล้เรือ ray โดนเรือชนะ -> เงียบ = user มองว่า
+                // "คลิกฝูงไม่ได้" (รายงานรอบ 3). ตัด decor ออก = ปลาไม่มีวันถูกเรือบัง.
+                ItemPicker.ParseItemName(key, out _, out string aidEarly);
+                AssetManifest.Module modEarly = _manifest != null ? _manifest.Get(aidEarly) : null;
+                if (DiveMap.Core.MarineRouting.For(aidEarly, modEarly?.Kind)
+                    == DiveMap.Core.MarineRoute.None) continue;
 
                 bool has = false;
                 Bounds b = default;
