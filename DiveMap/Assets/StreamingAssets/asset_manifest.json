@@ -560,7 +560,7 @@
    "kind": "MARINE_LIFE",
    "name": "ฉลามวาฬ",
    "glbUrl": "models/marine/whaleshark-r6.glb",
-   "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/msh_whaleshark_png.glb",
+   "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/msh_whaleshark_png.glb_k1.glb",
    "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/msh_whaleshark_u1.glb",
    "defaultScale": 3.2,
    "defaultY": 0,
@@ -636,7 +636,7 @@
    "school": null,
    "fx": null,
    "behavior": null,
-   "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/msh_silvertip_shark_xr0.glb",
+   "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/msh_silvertip_shark_k1.glb",
    "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/msh_silvertip_shark_xr1.glb"
   },
   {
@@ -832,7 +832,7 @@
    "school": null,
    "fx": null,
    "behavior": null,
-   "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/msh_oceanic_manta_r0p.glb",
+   "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/msh_oceanic_manta_k1.glb",
    "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/msh_oceanic_manta_xr1.glb"
   },
   {
@@ -1498,7 +1498,7 @@
    "kind": "WRECK",
    "name": "HTMS ช้าง",
    "glbUrl": "models/wreck/chang.glb",
-   "xrGlbUrl": "https://maps.siamdive.com/models/xr/HTMS_Chang_xr0.glb",
+   "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/HTMS_Chang_k1.glb",
    "xrGlbUrlLod1": "https://maps.siamdive.com/models/xr/HTMS_Chang_xr1.glb",
    "defaultScale": 3,
    "defaultY": 0,
@@ -1574,7 +1574,7 @@
    "school": null,
    "fx": null,
    "behavior": null,
-   "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/cc0_poseidon_xr0.glb",
+   "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/cc0_poseidon_k1.glb",
    "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/cc0_poseidon_xr1.glb"
   },
   {
@@ -1924,7 +1924,7 @@
    "school": null,
    "fx": null,
    "behavior": null,
-   "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/losin_devil_ray_r0p.glb",
+   "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/losin_devil_ray_k1.glb",
    "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/losin_devil_ray_xr1.glb"
   },
   {
@@ -2162,7 +2162,7 @@
    "school": null,
    "fx": null,
    "behavior": null,
-   "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/losin_reef_manta_ray_xr0.glb",
+   "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/losin_reef_manta_ray_k1.glb",
    "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/losin_reef_manta_ray_xr1.glb"
   },
   {
@@ -2316,7 +2316,7 @@
    "school": null,
    "fx": null,
    "behavior": null,
-   "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/mdl_bull_shark_xr0.glb",
+   "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/mdl_bull_shark_k1.glb",
    "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/mdl_bull_shark_xr1.glb"
   },
   {
@@ -2596,7 +2596,7 @@
    "school": null,
    "fx": null,
    "behavior": null,
-   "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/ruin_byzantine_arch_xr0.glb",
+   "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/ruin_byzantine_arch_k1.glb",
    "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/ruin_byzantine_arch_xr1.glb"
   },
   {
@@ -2610,7 +2610,7 @@
    "school": null,
    "fx": null,
    "behavior": null,
-   "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/ruin_crystal_arch_xr0.glb",
+   "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/ruin_crystal_arch_k1.glb",
    "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/ruin_crystal_arch_xr1.glb"
   },
   {
@@ -2624,7 +2624,7 @@
    "school": null,
    "fx": null,
    "behavior": null,
-   "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/ruin_grand_byzantine_xr0.glb",
+   "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/ruin_grand_byzantine_k1.glb",
    "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/ruin_grand_byzantine_xr1.glb"
   },
   {
@@ -2638,7 +2638,7 @@
    "school": null,
    "fx": null,
    "behavior": null,
-   "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/ruin_domed_temple_xr0.glb",
+   "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/ruin_domed_temple_k1.glb",
    "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/ruin_domed_temple_xr1.glb"
   },
   {
@@ -2652,7 +2652,7 @@
    "school": null,
    "fx": null,
    "behavior": null,
-   "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/ruin_fantasy_gate_xr0.glb",
+   "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/ruin_fantasy_gate_k1.glb",
    "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/ruin_fantasy_gate_xr1.glb"
   },
   {
@@ -2666,7 +2666,7 @@
    "school": null,
    "fx": null,
    "behavior": null,
-   "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/ruin_stepped_stone_xr0.glb",
+   "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/ruin_stepped_stone_k1.glb",
    "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/ruin_stepped_stone_xr1.glb"
   },
   {
@@ -2680,7 +2680,7 @@
    "school": null,
    "fx": null,
    "behavior": null,
-   "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/ruin_ornate_monument_xr0.glb"
+   "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/ruin_ornate_monument_k1.glb"
   },
   {
    "id": "ruin:broken_pillars",
@@ -2693,7 +2693,7 @@
    "school": null,
    "fx": null,
    "behavior": null,
-   "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/ruin_broken_pillars_xr0.glb",
+   "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/ruin_broken_pillars_k1.glb",
    "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/ruin_broken_pillars_xr1.glb"
   },
   {
@@ -2707,7 +2707,7 @@
    "school": null,
    "fx": null,
    "behavior": null,
-   "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/ruin_long_arch_xr0.glb",
+   "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/ruin_long_arch_k1.glb",
    "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/ruin_long_arch_xr1.glb"
   },
   {
@@ -2721,7 +2721,7 @@
    "school": null,
    "fx": null,
    "behavior": null,
-   "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/ruin_ancient_byzantine_xr0.glb",
+   "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/ruin_ancient_byzantine_k1.glb",
    "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/ruin_ancient_byzantine_xr1.glb"
   },
   {
@@ -2735,7 +2735,7 @@
    "school": null,
    "fx": null,
    "behavior": null,
-   "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/ruin_ancient_ornate_xr0.glb",
+   "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/ruin_ancient_ornate_k1.glb",
    "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/ruin_ancient_ornate_xr1.glb"
   },
   {
@@ -2749,7 +2749,7 @@
    "school": null,
    "fx": null,
    "behavior": null,
-   "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/stat_verdant_poseidon_xr0.glb",
+   "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/stat_verdant_poseidon_k1.glb",
    "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/stat_verdant_poseidon_xr1.glb"
   },
   {
@@ -2763,7 +2763,7 @@
    "school": null,
    "fx": null,
    "behavior": null,
-   "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/stat_stormbringer_xr0.glb",
+   "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/stat_stormbringer_k1.glb",
    "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/stat_stormbringer_xr1.glb"
   },
   {
@@ -2777,7 +2777,7 @@
    "school": null,
    "fx": null,
    "behavior": null,
-   "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/stat_ascendant_warrior_xr0.glb",
+   "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/stat_ascendant_warrior_k1.glb",
    "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/stat_ascendant_warrior_xr1.glb"
   },
   {

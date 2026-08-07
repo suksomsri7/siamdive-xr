@@ -37,9 +37,24 @@ namespace DiveMap.Runtime
         /// <summary>True when the current map came off the disk rather than the network.</summary>
         public bool IsOffline => _offline;
 
+        /// <summary>
+        /// One-shot pin for the 1K experiment (2026-08-07): the user judges texture ladders on
+        /// the real device, and the first thing they should see after installing this build is
+        /// Htms Chang — the map whose whale shark they know byte-for-byte. PlayerPrefs "shortId"
+        /// remembers the last map, so a device that was in Atlantis would boot into Atlantis and
+        /// the comparison would start on the wrong reef. Bump the number to re-pin on a later
+        /// build; leaving it alone makes this a no-op after the first launch.
+        /// </summary>
+        private const string FirstMapPin = "299";
+
         private void Start()
         {
             _shortId = PlayerPrefs.GetString("shortId", "");
+            if (PlayerPrefs.GetString("firstMapPin", "") != FirstMapPin)
+            {
+                PlayerPrefs.SetString("firstMapPin", FirstMapPin);
+                _shortId = "";   // fall through to the default map (Htms Chang) once
+            }
             if (string.IsNullOrEmpty(_shortId)) _shortId = defaultShortId;
 
             SetupCamera();
