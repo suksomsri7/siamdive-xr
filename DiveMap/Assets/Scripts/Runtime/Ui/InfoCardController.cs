@@ -325,6 +325,14 @@ namespace DiveMap.Runtime.Ui
                 else
                 {
                     ItemPicker.ParseItemName(key, out _, out string assetId);
+                    // ฝูงปลา: ใช้กล่องรอบตำแหน่งปลาจริง ณ ตอนนี้ (FishSchoolSystem) ไม่ใช่
+                    // ทรงกลมสูตรรอบ pivot — สามรูปหลักฐานของ user (แตะทรายได้บาราคูด้า /
+                    // แตะบาราคูด้าได้ scad / แตะฉลามวาฬได้ scad) คือทรงกลมใหญ่เกินจริงทั้งนั้น
+                    if (TryLiveSchoolBounds(assetId, child.position, out Bounds live))
+                    {
+                        list.Add(new ItemPicker.Target(key, live.min, live.max));
+                        continue;
+                    }
                     float radius = FallbackRadius(assetId, child.localScale);
                     list.Add(ItemPicker.Target.Sphere(key, child.position, radius));
                 }
@@ -340,6 +348,31 @@ namespace DiveMap.Runtime.Ui
         /// SceneBuilder.MakeSchoolReg feeds to FishSchoolSystem — rather than inventing
         /// a size. Anything else falls back to its item scale.
         /// </summary>
+
+        /// <summary>
+        /// กล่องปลาจริงของฝูงชนิดนี้ที่ "ใกล้ pivot ของ item นี้ที่สุด" — แมพหนึ่งมีฝูงชนิด
+        /// เดียวกันหลายจุด (Chang: scad ×7) เลยจับคู่ด้วยระยะจากบ้านของมัน.
+        /// </summary>
+        private static bool TryLiveSchoolBounds(string assetId, Vector3 pivot, out Bounds live)
+        {
+            live = default;
+            if (string.IsNullOrEmpty(assetId)) return false;
+            string a = assetId.ToLowerInvariant();
+            if (!a.StartsWith("school:") && !a.StartsWith("pod:")) return false;
+            var sys = UnityEngine.Object.FindFirstObjectByType<DiveMap.Runtime.Marine.FishSchoolSystem>();
+            if (sys == null) return false;
+            float bestD = float.PositiveInfinity;
+            bool found = false;
+            for (int i = 0; i < sys.SchoolCount; i++)
+            {
+                if (!sys.TryGetSchoolBounds(i, out string sp, out Bounds b)) continue;
+                if (!string.Equals(sp, assetId, System.StringComparison.OrdinalIgnoreCase)) continue;
+                float d = (b.center - pivot).sqrMagnitude;
+                if (d < bestD) { bestD = d; live = b; found = true; }
+            }
+            return found;
+        }
+
         private static float FallbackRadius(string assetId, Vector3 localScale)
         {
             float scale = Mathf.Max(0.01f, Mathf.Max(localScale.x, Mathf.Max(localScale.y, localScale.z)));

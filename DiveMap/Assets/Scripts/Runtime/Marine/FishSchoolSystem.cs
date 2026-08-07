@@ -143,6 +143,30 @@ namespace DiveMap.Runtime.Marine
         private readonly List<SchoolRender> _render = new List<SchoolRender>();
 
         /// <summary>
+        /// Live, tight world bounds of one school — the box around where the fish ARE this
+        /// frame, not the formation sphere around where they might be. Built for the tap
+        /// picker: the user's three screenshots (tap sand → Barracuda, tap barracuda →
+        /// scad, tap whale shark → scad) are all the same bug — pick targets the size of
+        /// the POSSIBLE swarm instead of the actual one. Never used by the sim.
+        /// </summary>
+        public int SchoolCount => _render.Count;
+
+        public bool TryGetSchoolBounds(int i, out string species, out Bounds bounds)
+        {
+            bounds = default;
+            species = null;
+            if (i < 0 || i >= _render.Count) return false;
+            SchoolRender sr = _render[i];
+            species = sr.Species;
+            if (sr.Matrices == null || sr.Matrices.Length == 0) return false;
+            bounds = new Bounds((Vector3)sr.Matrices[0].GetColumn(3), Vector3.zero);
+            for (int f = 1; f < sr.Matrices.Length; f++)
+                bounds.Encapsulate((Vector3)sr.Matrices[f].GetColumn(3));
+            bounds.Expand(Mathf.Max(1f, sr.DrawScale * 2f));   // เผื่อลำตัวปลา ไม่ใช่แค่จุดกึ่งกลาง
+            return true;
+        }
+
+        /// <summary>
         /// C5 — the fixed facts each school needs in order to be afraid, resolved once at
         /// Configure. Anchor and HomeR live here as the AUTHORED values because the sim's copies
         /// are rewritten every frame (the shoal is dragged toward cover and tightened into a bait
