@@ -587,7 +587,6 @@
    "name": "ฉลามวาฬ",
    "glbUrl": "models/marine/whaleshark-r6.glb",
    "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/msh_whaleshark_png.glb",
-   "xrGlbUrlAstc": "https://siamdive-cdn.b-cdn.net/models/xr/msh_whaleshark_a0.glb",
    "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/msh_whaleshark_u1.glb",
    "defaultScale": 3.2,
    "defaultY": 0,
