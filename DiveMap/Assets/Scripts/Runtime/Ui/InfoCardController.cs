@@ -254,7 +254,10 @@ namespace DiveMap.Runtime.Ui
             if (targets.Count == 0) { Hide(); return; }
 
             Ray ray = cam.ScreenPointToRay(screenPos);
-            string key = ItemPicker.Pick(ray.origin, ray.direction, targets);
+            // พื้นทราย (collider เดียวในซีน) เป็นตัวบัง: แตะทราย = ทรายชนะทุกทรงกลมกลางน้ำ
+            float maxT = float.PositiveInfinity;
+            if (Physics.Raycast(ray, out RaycastHit ground, 5000f)) maxT = ground.distance + 0.5f;
+            string key = ItemPicker.Pick(ray.origin, ray.direction, targets, maxT);
             if (key == null || !byKey.TryGetValue(key, out GameObject hit)) { Hide(); return; }
 
             ShowFor(hit, mapRoot);

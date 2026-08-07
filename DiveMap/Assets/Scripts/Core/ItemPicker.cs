@@ -146,8 +146,18 @@ namespace DiveMap.Core
         public static string Pick(Vector3 rayOrigin, Vector3 rayDir, IEnumerable<Target> targets)
             => Pick(rayOrigin, rayDir, targets, out _);
 
+        /// <summary>
+        /// Pick with an occlusion limit: hits beyond <paramref name="maxDistance"/> are ignored.
+        /// The caller passes the seabed's own ray hit — the user's report was literal: tapping
+        /// SAND popped a fish card, because a school's pick-sphere floats mid-water on the way
+        /// to the sand and nothing ever said "the sand is closer".
+        /// </summary>
         public static string Pick(Vector3 rayOrigin, Vector3 rayDir, IEnumerable<Target> targets,
-                                  out float distance)
+                                  float maxDistance)
+            => Pick(rayOrigin, rayDir, targets, out _, maxDistance);
+
+        public static string Pick(Vector3 rayOrigin, Vector3 rayDir, IEnumerable<Target> targets,
+                                  out float distance, float maxDistance = float.PositiveInfinity)
         {
             distance = 0f;
             if (targets == null) return null;
@@ -159,6 +169,7 @@ namespace DiveMap.Core
             {
                 if (string.IsNullOrEmpty(t.Key)) continue;
                 if (!RayAabb(rayOrigin, rayDir, t.Min, t.Max, out float hit)) continue;
+                if (hit > maxDistance) continue;   // ของที่อยู่เลยพื้น/ฉากบัง = มองไม่เห็น = คลิกไม่ได้
                 if (hit < bestT)
                 {
                     bestT = hit;
