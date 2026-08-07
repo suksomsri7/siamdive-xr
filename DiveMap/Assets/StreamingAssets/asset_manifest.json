@@ -754,7 +754,7 @@
   {
    "id": "msh:trevally",
    "kind": "MARINE_LIFE",
-   "name": "ปลาหางเหลือง",
+   "name": "ปลากะมง (Trevally)",
    "glbUrl": "models/marine/trevally.glb",
    "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/msh_trevally_xr0.glb",
    "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/msh_trevally_xr1.glb",
@@ -764,12 +764,12 @@
    "school": null,
    "fx": null,
    "behavior": null,
-   "xrGlbUrlK1": "https://siamdive-cdn.b-cdn.net/models/xr/msh_trevally_r0p.glb",
-   "xrGlbUrlK2": "https://siamdive-cdn.b-cdn.net/models/xr/msh_trevally_r0p.glb",
-   "xrGlbUrlK4": "https://siamdive-cdn.b-cdn.net/models/xr/msh_trevally_r0p.glb",
-   "xrVramK1": 5592404,
-   "xrVramK2": 5592404,
-   "xrVramK4": 5592404
+   "xrGlbUrlK1": "https://siamdive-cdn.b-cdn.net/models/xr/msh_trevally_v2_k1.glb",
+   "xrGlbUrlK2": "https://siamdive-cdn.b-cdn.net/models/xr/msh_trevally_v2_k2.glb",
+   "xrGlbUrlK4": "https://siamdive-cdn.b-cdn.net/models/xr/msh_trevally_v2_r0p.glb",
+   "xrVramK1": 22369620,
+   "xrVramK2": 89478484,
+   "xrVramK4": 223696212
   },
   {
    "id": "msh:boxfish",
@@ -1244,10 +1244,10 @@
   {
    "id": "pod:yellowtail",
    "kind": "SCHOOL",
-   "name": "ฝูงปลาหางเหลือง",
+   "name": "ฝูงปลากะมง",
    "glbUrl": "models/marine/trevally.glb",
-   "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/pod_yellowtail_xr0.glb",
-   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/pod_yellowtail_xr1.glb",
+   "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/pod_yellowtail_t0.glb",
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/pod_yellowtail_t1.glb",
    "defaultScale": 1.3,
    "defaultY": 0,
    "animated": false,
