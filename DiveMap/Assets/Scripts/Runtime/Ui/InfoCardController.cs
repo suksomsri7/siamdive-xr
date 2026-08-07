@@ -330,11 +330,15 @@ namespace DiveMap.Runtime.Ui
                     // แตะบาราคูด้าได้ scad / แตะฉลามวาฬได้ scad) คือทรงกลมใหญ่เกินจริงทั้งนั้น
                     if (TryLiveSchoolBounds(assetId, child.position, out Bounds live))
                     {
+                        // 🔴 ห้าม continue ตรงนี้ — เคยข้าม byKey[key] ด้านล่าง = Pick เจอ key
+                        // แต่หาวัตถุไม่เจอ = การ์ดเงียบทั้งที่คลิกโดน (บั๊ก "คลิกฝูงไม่ได้เลย")
                         list.Add(new ItemPicker.Target(key, live.min, live.max));
-                        continue;
                     }
-                    float radius = FallbackRadius(assetId, child.localScale);
-                    list.Add(ItemPicker.Target.Sphere(key, child.position, radius));
+                    else
+                    {
+                        float radius = FallbackRadius(assetId, child.localScale);
+                        list.Add(ItemPicker.Target.Sphere(key, child.position, radius));
+                    }
                 }
 
                 byKey[key] = child.gameObject;
@@ -492,6 +496,8 @@ namespace DiveMap.Runtime.Ui
             if (_nameText != null) _nameText.text = UiStrings.Tr(_openName);
             if (_kindText != null) _kindText.text = UiStrings.Tr(_openKindKey);
             if (_descText != null) _descText.text = _openDesc ?? "";
+            // user 7 ส.ค.: เอารูปสัตว์เล็กด้านซ้ายออก — การ์ดมีโมเดล 3D จริงแล้ว รูปนิ่งซ้ำซ้อน
+            if (_thumb != null) _thumb.gameObject.SetActive(false);
             if (_cardRt != null)
             {
                 // มีเรื่องเล่า = การ์ดกลางจอ: หัว + โมเดล 3D หมุนได้ + ข้อความเลื่อนอ่าน

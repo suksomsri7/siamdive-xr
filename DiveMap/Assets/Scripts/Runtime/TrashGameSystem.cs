@@ -75,8 +75,8 @@ namespace DiveMap.Runtime
         private static readonly Dictionary<string, float> ModelSize =
             new Dictionary<string, float>(StringComparer.Ordinal)
             {
-                { "can", 1.8f }, { "bottle", 2.0f }, { "plastic", 3.0f },
-                { "net", 3.4f }, { "coin", 3.2f },   // เหรียญ: user สั่งขยาย (7 ส.ค. รูปเทสจริง)
+                { "can", 2.6f }, { "bottle", 2.9f }, { "plastic", 4.2f },   // user 7 ส.ค.: ใหญ่ขึ้นอีก
+                { "net", 4.8f }, { "coin", 3.2f },
             };
 
         private readonly Dictionary<string, GameObject> _templates =
@@ -245,6 +245,15 @@ namespace DiveMap.Runtime
                     if (p.Go.activeSelf != vis) p.Go.SetActive(vis);
                 }
 
+                // ป้ายรีไซเคิลเขียว = "อยู่ในระยะเก็บ" — โผล่เฉพาะตอนแตะเก็บได้จริง
+                // (เดิมโผล่ตลอด user เลยไม่รู้ระยะ)
+                Transform badge = t.Find("RecycleBadge");
+                if (badge != null)
+                {
+                    bool inRange = Vector3.Distance(eye, t.position) <= TapCollectRange;
+                    if (badge.gameObject.activeSelf != inRange) badge.gameObject.SetActive(inRange);
+                }
+
                 if (Vector3.Distance(eye, t.position) < TrashGame.CollectRadius) Collect(i);
             }
 
@@ -276,7 +285,7 @@ namespace DiveMap.Runtime
             int hit = TrashPhysics.PickForTap(
                 new Vec3(ray.origin.x, ray.origin.y, ray.origin.z),
                 new Vec3(ray.direction.x, ray.direction.y, ray.direction.z),
-                positions, TapPickRadius, DiveLightMath.LampRange);
+                positions, TapPickRadius, TapCollectRange);
             if (hit >= 0) Collect(map[hit]);
         }
 
@@ -285,6 +294,12 @@ namespace DiveMap.Runtime
         /// drifts; a finger is fat. 3 world units ≈ the piece plus a thumb of forgiveness.
         /// </summary>
         private const float TapPickRadius = 3f;
+
+        /// <summary>
+        /// ระยะเก็บด้วยการแตะ — user สั่ง "ไกลกว่าไฟฉายอีกนิด" (LampRange 90 -> 115) และ
+        /// เป็นเส้นเดียวกับที่ป้ายรีไซเคิลโผล่: เห็นป้ายเขียว = แตะเก็บได้แน่นอน.
+        /// </summary>
+        public const float TapCollectRange = 115f;
 
         // ── spawn / collect ──────────────────────────────────────────────────────
 

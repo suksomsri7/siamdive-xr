@@ -30,7 +30,10 @@ namespace DiveMap.Runtime.Ui
         private Transform _stage;      // parent of the loaded model
         private GltfImport _import;
         private string _loadedUrl;
-        private float _yaw;
+        private RawImage _view;
+        private float _yaw, _pitch;
+        private float _baseDist, _zoom = 1f;
+        private float _lastPinch = -1f;
 
         /// <summary>Attach to (or reuse on) the RawImage that should display the preview.</summary>
         public static SpeciesPreview Ensure(RawImage view)
@@ -45,6 +48,7 @@ namespace DiveMap.Runtime.Ui
 
         private void Wire(RawImage view)
         {
+            _view = view;
             if (_rt == null)
             {
                 _rt = new RenderTexture(Rt, Rt, 16, RenderTextureFormat.ARGB32);
@@ -99,18 +103,60 @@ namespace DiveMap.Runtime.Ui
             Bounds b = rends[0].bounds;
             for (int i = 1; i < rends.Length; i++) b.Encapsulate(rends[i].bounds);
             float radius = Mathf.Max(0.5f, b.extents.magnitude);
-            _cam.transform.position = _stage.parent.position + new Vector3(0f, radius * 0.15f, radius * 2.3f);
-            _cam.transform.LookAt(_stage.parent.position);
+            _baseDist = radius * 2.3f;
+            _zoom = 1f;
             _yaw = 0f;
+            _pitch = 0f;
             _stage.localRotation = Quaternion.identity;
+            Reframe();
         }
 
+        /// <summary>วางกล้องตามระยะฐาน×ซูม และซิงก์ aspect กับกรอบแสดงผลจริง (กันโมเดลถูกบีบ).</summary>
+        private void Reframe()
+        {
+            if (_cam == null || _stage == null) return;
+            Rect r = _view != null ? _view.rectTransform.rect : new Rect(0, 0, 1, 1);
+            if (r.height > 1f) _cam.aspect = r.width / r.height;
+            float d = _baseDist / Mathf.Clamp(_zoom, 0.5f, 3f);
+            _cam.transform.position = _stage.parent.position + new Vector3(0f, d * 0.07f, d);
+            _cam.transform.LookAt(_stage.parent.position);
+        }
+
+        /// <summary>นิ้วเดียวลาก = หมุนรอบตัว ซ้ายขวา (yaw) + ขึ้นลง (pitch) — สเปก user.</summary>
         public void OnDrag(PointerEventData e)
         {
             if (_stage == null) return;
+            if (Input.touchCount >= 2) return;   // สองนิ้ว = ซูม (Update จัดการ)
             _yaw -= e.delta.x * DegPerPx;
-            // แนวตั้งเล็กน้อยพอให้ "หมุนดูได้รอบ" โดยไม่หลุดเฟรม
-            _stage.localRotation = Quaternion.Euler(0f, _yaw, 0f);
+            _pitch = Mathf.Clamp(_pitch + e.delta.y * DegPerPx, -85f, 85f);
+            _stage.localRotation = Quaternion.Euler(_pitch, _yaw, 0f);
+        }
+
+        /// <summary>สองนิ้วบีบ/ถ่าง = ย่อ-ขยาย (มือถือ) · scroll = ซูมบนเครื่องมีเมาส์.</summary>
+        private void Update()
+        {
+            if (_stage == null || _view == null || !_view.gameObject.activeInHierarchy) return;
+            if (Input.touchCount >= 2)
+            {
+                Touch a = Input.GetTouch(0), b = Input.GetTouch(1);
+                float pinch = Vector2.Distance(a.position, b.position);
+                if (_lastPinch > 0f && pinch > 1f)
+                {
+                    _zoom = Mathf.Clamp(_zoom * (pinch / _lastPinch), 0.5f, 3f);
+                    Reframe();
+                }
+                _lastPinch = pinch;
+            }
+            else
+            {
+                _lastPinch = -1f;
+                float wheel = Input.mouseScrollDelta.y;
+                if (Mathf.Abs(wheel) > 0.01f)
+                {
+                    _zoom = Mathf.Clamp(_zoom * (1f + wheel * 0.08f), 0.5f, 3f);
+                    Reframe();
+                }
+            }
         }
 
         /// <summary>Drop the current model (called when the card closes or changes subject).</summary>
