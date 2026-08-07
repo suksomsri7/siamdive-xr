@@ -203,7 +203,13 @@
    "animated": true,
    "meta": null,
    "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/glb_turtle_loggerhead_xr0.glb",
-   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/glb_turtle_loggerhead_xr1.glb"
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/glb_turtle_loggerhead_xr1.glb",
+   "xrGlbUrlK1": "https://siamdive-cdn.b-cdn.net/models/xr/glb_turtle_loggerhead_r0p.glb",
+   "xrGlbUrlK2": "https://siamdive-cdn.b-cdn.net/models/xr/glb_turtle_loggerhead_r0p.glb",
+   "xrGlbUrlK4": "https://siamdive-cdn.b-cdn.net/models/xr/glb_turtle_loggerhead_r0p.glb",
+   "xrVramK1": 4194303,
+   "xrVramK2": 4194303,
+   "xrVramK4": 4194303
   },
   {
    "id": "cor:amber_tree",
@@ -217,7 +223,13 @@
    "fx": null,
    "behavior": null,
    "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/cor_amber_tree_xr0.glb",
-   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/cor_amber_tree_xr1.glb"
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/cor_amber_tree_xr1.glb",
+   "xrGlbUrlK1": "https://siamdive-cdn.b-cdn.net/models/xr/cor_amber_tree_k1.glb",
+   "xrGlbUrlK2": "https://siamdive-cdn.b-cdn.net/models/xr/cor_amber_tree_r0p.glb",
+   "xrGlbUrlK4": "https://siamdive-cdn.b-cdn.net/models/xr/cor_amber_tree_r0p.glb",
+   "xrVramK1": 22369620,
+   "xrVramK2": 89478484,
+   "xrVramK4": 89478484
   },
   {
    "id": "cor:cerebral_sphere",
@@ -231,7 +243,13 @@
    "fx": null,
    "behavior": null,
    "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/cor_cerebral_sphere_xr0.glb",
-   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/cor_cerebral_sphere_xr1.glb"
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/cor_cerebral_sphere_xr1.glb",
+   "xrGlbUrlK1": "https://siamdive-cdn.b-cdn.net/models/xr/cor_cerebral_sphere_k1.glb",
+   "xrGlbUrlK2": "https://siamdive-cdn.b-cdn.net/models/xr/cor_cerebral_sphere_k2.glb",
+   "xrGlbUrlK4": "https://siamdive-cdn.b-cdn.net/models/xr/cor_cerebral_sphere_r0p.glb",
+   "xrVramK1": 22369620,
+   "xrVramK2": 89478484,
+   "xrVramK4": 223696212
   },
   {
    "id": "cor:crimson1",
@@ -245,7 +263,13 @@
    "fx": null,
    "behavior": null,
    "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/cor_crimson1_xr0.glb",
-   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/cor_crimson1_xr1.glb"
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/cor_crimson1_xr1.glb",
+   "xrGlbUrlK1": "https://siamdive-cdn.b-cdn.net/models/xr/cor_crimson1_r0p.glb",
+   "xrGlbUrlK2": "https://siamdive-cdn.b-cdn.net/models/xr/cor_crimson1_r0p.glb",
+   "xrGlbUrlK4": "https://siamdive-cdn.b-cdn.net/models/xr/cor_crimson1_r0p.glb",
+   "xrVramK1": 5592404,
+   "xrVramK2": 5592404,
+   "xrVramK4": 5592404
   },
   {
    "id": "cor:crimson2",
@@ -259,7 +283,13 @@
    "fx": null,
    "behavior": null,
    "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/cor_crimson2_xr0.glb",
-   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/cor_crimson2_xr1.glb"
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/cor_crimson2_xr1.glb",
+   "xrGlbUrlK1": "https://siamdive-cdn.b-cdn.net/models/xr/cor_crimson2_r0p.glb",
+   "xrGlbUrlK2": "https://siamdive-cdn.b-cdn.net/models/xr/cor_crimson2_r0p.glb",
+   "xrGlbUrlK4": "https://siamdive-cdn.b-cdn.net/models/xr/cor_crimson2_r0p.glb",
+   "xrVramK1": 5592404,
+   "xrVramK2": 5592404,
+   "xrVramK4": 5592404
   },
   {
    "id": "cor:crimson_fan",
@@ -273,7 +303,13 @@
    "fx": null,
    "behavior": null,
    "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/cor_crimson_fan_xr0.glb",
-   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/cor_crimson_fan_xr1.glb"
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/cor_crimson_fan_xr1.glb",
+   "xrGlbUrlK1": "https://siamdive-cdn.b-cdn.net/models/xr/cor_crimson_fan_k1.glb",
+   "xrGlbUrlK2": "https://siamdive-cdn.b-cdn.net/models/xr/cor_crimson_fan_k2.glb",
+   "xrGlbUrlK4": "https://siamdive-cdn.b-cdn.net/models/xr/cor_crimson_fan_r0p.glb",
+   "xrVramK1": 22369620,
+   "xrVramK2": 89478484,
+   "xrVramK4": 223696212
   },
   {
    "id": "cor:crown_tentacles",
@@ -287,7 +323,13 @@
    "fx": null,
    "behavior": null,
    "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/cor_crown_tentacles_xr0.glb",
-   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/cor_crown_tentacles_xr1.glb"
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/cor_crown_tentacles_xr1.glb",
+   "xrGlbUrlK1": "https://siamdive-cdn.b-cdn.net/models/xr/cor_crown_tentacles_r0p.glb",
+   "xrGlbUrlK2": "https://siamdive-cdn.b-cdn.net/models/xr/cor_crown_tentacles_r0p.glb",
+   "xrGlbUrlK4": "https://siamdive-cdn.b-cdn.net/models/xr/cor_crown_tentacles_r0p.glb",
+   "xrVramK1": 5592404,
+   "xrVramK2": 5592404,
+   "xrVramK4": 5592404
   },
   {
    "id": "cor:golden_chrysanth",
@@ -301,7 +343,13 @@
    "fx": null,
    "behavior": null,
    "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/cor_golden_chrysanth_xr0.glb",
-   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/cor_golden_chrysanth_xr1.glb"
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/cor_golden_chrysanth_xr1.glb",
+   "xrGlbUrlK1": "https://siamdive-cdn.b-cdn.net/models/xr/cor_golden_chrysanth_r0p.glb",
+   "xrGlbUrlK2": "https://siamdive-cdn.b-cdn.net/models/xr/cor_golden_chrysanth_r0p.glb",
+   "xrGlbUrlK4": "https://siamdive-cdn.b-cdn.net/models/xr/cor_golden_chrysanth_r0p.glb",
+   "xrVramK1": 5592404,
+   "xrVramK2": 5592404,
+   "xrVramK4": 5592404
   },
   {
    "id": "cor:golden_sponge",
@@ -315,7 +363,13 @@
    "fx": null,
    "behavior": null,
    "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/cor_golden_sponge_xr0.glb",
-   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/cor_golden_sponge_xr1.glb"
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/cor_golden_sponge_xr1.glb",
+   "xrGlbUrlK1": "https://siamdive-cdn.b-cdn.net/models/xr/cor_golden_sponge_k1.glb",
+   "xrGlbUrlK2": "https://siamdive-cdn.b-cdn.net/models/xr/cor_golden_sponge_k2.glb",
+   "xrGlbUrlK4": "https://siamdive-cdn.b-cdn.net/models/xr/cor_golden_sponge_r0p.glb",
+   "xrVramK1": 22369620,
+   "xrVramK2": 89478484,
+   "xrVramK4": 223696212
   },
   {
    "id": "cor:golden_tree",
@@ -329,7 +383,13 @@
    "fx": null,
    "behavior": null,
    "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/cor_golden_tree_xr0.glb",
-   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/cor_golden_tree_xr1.glb"
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/cor_golden_tree_xr1.glb",
+   "xrGlbUrlK1": "https://siamdive-cdn.b-cdn.net/models/xr/cor_golden_tree_k1.glb",
+   "xrGlbUrlK2": "https://siamdive-cdn.b-cdn.net/models/xr/cor_golden_tree_k2.glb",
+   "xrGlbUrlK4": "https://siamdive-cdn.b-cdn.net/models/xr/cor_golden_tree_r0p.glb",
+   "xrVramK1": 22369620,
+   "xrVramK2": 89478484,
+   "xrVramK4": 223696212
   },
   {
    "id": "cor:hairy_mushroom",
@@ -343,7 +403,13 @@
    "fx": null,
    "behavior": null,
    "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/cor_hairy_mushroom_xr0.glb",
-   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/cor_hairy_mushroom_xr1.glb"
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/cor_hairy_mushroom_xr1.glb",
+   "xrGlbUrlK1": "https://siamdive-cdn.b-cdn.net/models/xr/cor_hairy_mushroom_k1.glb",
+   "xrGlbUrlK2": "https://siamdive-cdn.b-cdn.net/models/xr/cor_hairy_mushroom_k2.glb",
+   "xrGlbUrlK4": "https://siamdive-cdn.b-cdn.net/models/xr/cor_hairy_mushroom_r0p.glb",
+   "xrVramK1": 22369620,
+   "xrVramK2": 89478484,
+   "xrVramK4": 223696212
   },
   {
    "id": "cor:ivory",
@@ -357,7 +423,13 @@
    "fx": null,
    "behavior": null,
    "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/cor_ivory_xr0.glb",
-   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/cor_ivory_xr1.glb"
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/cor_ivory_xr1.glb",
+   "xrGlbUrlK1": "https://siamdive-cdn.b-cdn.net/models/xr/cor_ivory_k1.glb",
+   "xrGlbUrlK2": "https://siamdive-cdn.b-cdn.net/models/xr/cor_ivory_k2.glb",
+   "xrGlbUrlK4": "https://siamdive-cdn.b-cdn.net/models/xr/cor_ivory_r0p.glb",
+   "xrVramK1": 22369620,
+   "xrVramK2": 89478484,
+   "xrVramK4": 223696212
   },
   {
    "id": "cor:ivory_cluster",
@@ -371,7 +443,13 @@
    "fx": null,
    "behavior": null,
    "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/cor_ivory_cluster_xr0.glb",
-   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/cor_ivory_cluster_xr1.glb"
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/cor_ivory_cluster_xr1.glb",
+   "xrGlbUrlK1": "https://siamdive-cdn.b-cdn.net/models/xr/cor_ivory_cluster_k1.glb",
+   "xrGlbUrlK2": "https://siamdive-cdn.b-cdn.net/models/xr/cor_ivory_cluster_k2.glb",
+   "xrGlbUrlK4": "https://siamdive-cdn.b-cdn.net/models/xr/cor_ivory_cluster_r0p.glb",
+   "xrVramK1": 22369620,
+   "xrVramK2": 89478484,
+   "xrVramK4": 223696212
   },
   {
    "id": "cor:ivory_tree",
@@ -385,7 +463,13 @@
    "fx": null,
    "behavior": null,
    "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/cor_ivory_tree_xr0.glb",
-   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/cor_ivory_tree_xr1.glb"
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/cor_ivory_tree_xr1.glb",
+   "xrGlbUrlK1": "https://siamdive-cdn.b-cdn.net/models/xr/cor_ivory_tree_k1.glb",
+   "xrGlbUrlK2": "https://siamdive-cdn.b-cdn.net/models/xr/cor_ivory_tree_k2.glb",
+   "xrGlbUrlK4": "https://siamdive-cdn.b-cdn.net/models/xr/cor_ivory_tree_r0p.glb",
+   "xrVramK1": 22369620,
+   "xrVramK2": 89478484,
+   "xrVramK4": 223696212
   },
   {
    "id": "cor:orange_tree",
@@ -399,7 +483,13 @@
    "fx": null,
    "behavior": null,
    "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/cor_orange_tree_xr0.glb",
-   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/cor_orange_tree_xr1.glb"
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/cor_orange_tree_xr1.glb",
+   "xrGlbUrlK1": "https://siamdive-cdn.b-cdn.net/models/xr/cor_orange_tree_k1.glb",
+   "xrGlbUrlK2": "https://siamdive-cdn.b-cdn.net/models/xr/cor_orange_tree_k2.glb",
+   "xrGlbUrlK4": "https://siamdive-cdn.b-cdn.net/models/xr/cor_orange_tree_r0p.glb",
+   "xrVramK1": 22369620,
+   "xrVramK2": 89478484,
+   "xrVramK4": 223696212
   },
   {
    "id": "cor:peach_cluster",
@@ -413,7 +503,13 @@
    "fx": null,
    "behavior": null,
    "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/cor_peach_cluster_xr0.glb",
-   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/cor_peach_cluster_xr1.glb"
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/cor_peach_cluster_xr1.glb",
+   "xrGlbUrlK1": "https://siamdive-cdn.b-cdn.net/models/xr/cor_peach_cluster_k1.glb",
+   "xrGlbUrlK2": "https://siamdive-cdn.b-cdn.net/models/xr/cor_peach_cluster_k2.glb",
+   "xrGlbUrlK4": "https://siamdive-cdn.b-cdn.net/models/xr/cor_peach_cluster_r0p.glb",
+   "xrVramK1": 22369620,
+   "xrVramK2": 89478484,
+   "xrVramK4": 223696212
   },
   {
    "id": "cor:pink_cloud_tree",
@@ -427,7 +523,13 @@
    "fx": null,
    "behavior": null,
    "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/cor_pink_cloud_tree_xr0.glb",
-   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/cor_pink_cloud_tree_xr1.glb"
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/cor_pink_cloud_tree_xr1.glb",
+   "xrGlbUrlK1": "https://siamdive-cdn.b-cdn.net/models/xr/cor_pink_cloud_tree_k1.glb",
+   "xrGlbUrlK2": "https://siamdive-cdn.b-cdn.net/models/xr/cor_pink_cloud_tree_k2.glb",
+   "xrGlbUrlK4": "https://siamdive-cdn.b-cdn.net/models/xr/cor_pink_cloud_tree_r0p.glb",
+   "xrVramK1": 22369620,
+   "xrVramK2": 89478484,
+   "xrVramK4": 223696212
   },
   {
    "id": "cor:pink_bloom",
@@ -441,7 +543,13 @@
    "fx": null,
    "behavior": null,
    "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/cor_pink_bloom_xr0.glb",
-   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/cor_pink_bloom_xr1.glb"
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/cor_pink_bloom_xr1.glb",
+   "xrGlbUrlK1": "https://siamdive-cdn.b-cdn.net/models/xr/cor_pink_bloom_k1.glb",
+   "xrGlbUrlK2": "https://siamdive-cdn.b-cdn.net/models/xr/cor_pink_bloom_k2.glb",
+   "xrGlbUrlK4": "https://siamdive-cdn.b-cdn.net/models/xr/cor_pink_bloom_r0p.glb",
+   "xrVramK1": 22369620,
+   "xrVramK2": 89478484,
+   "xrVramK4": 223696212
   },
   {
    "id": "cor:pink_bouquet",
@@ -455,7 +563,13 @@
    "fx": null,
    "behavior": null,
    "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/cor_pink_bouquet_xr0.glb",
-   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/cor_pink_bouquet_xr1.glb"
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/cor_pink_bouquet_xr1.glb",
+   "xrGlbUrlK1": "https://siamdive-cdn.b-cdn.net/models/xr/cor_pink_bouquet_k1.glb",
+   "xrGlbUrlK2": "https://siamdive-cdn.b-cdn.net/models/xr/cor_pink_bouquet_k2.glb",
+   "xrGlbUrlK4": "https://siamdive-cdn.b-cdn.net/models/xr/cor_pink_bouquet_r0p.glb",
+   "xrVramK1": 22369620,
+   "xrVramK2": 89478484,
+   "xrVramK4": 223696212
   },
   {
    "id": "cor:rosy_tree",
@@ -469,7 +583,13 @@
    "fx": null,
    "behavior": null,
    "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/cor_rosy_tree_xr0.glb",
-   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/cor_rosy_tree_xr1.glb"
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/cor_rosy_tree_xr1.glb",
+   "xrGlbUrlK1": "https://siamdive-cdn.b-cdn.net/models/xr/cor_rosy_tree_k1.glb",
+   "xrGlbUrlK2": "https://siamdive-cdn.b-cdn.net/models/xr/cor_rosy_tree_k2.glb",
+   "xrGlbUrlK4": "https://siamdive-cdn.b-cdn.net/models/xr/cor_rosy_tree_r0p.glb",
+   "xrVramK1": 22369620,
+   "xrVramK2": 89478484,
+   "xrVramK4": 223696212
   },
   {
    "id": "cor:white_cluster",
@@ -483,7 +603,13 @@
    "fx": null,
    "behavior": null,
    "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/cor_white_cluster_xr0.glb",
-   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/cor_white_cluster_xr1.glb"
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/cor_white_cluster_xr1.glb",
+   "xrGlbUrlK1": "https://siamdive-cdn.b-cdn.net/models/xr/cor_white_cluster_k1.glb",
+   "xrGlbUrlK2": "https://siamdive-cdn.b-cdn.net/models/xr/cor_white_cluster_r0p.glb",
+   "xrGlbUrlK4": "https://siamdive-cdn.b-cdn.net/models/xr/cor_white_cluster_r0p.glb",
+   "xrVramK1": 22369620,
+   "xrVramK2": 89478484,
+   "xrVramK4": 89478484
   },
   {
    "id": "msh:turtle",
@@ -497,7 +623,13 @@
    "fx": null,
    "behavior": null,
    "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/msh_turtle_r0p.glb",
-   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/msh_turtle_xr1.glb"
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/msh_turtle_xr1.glb",
+   "xrGlbUrlK1": "https://siamdive-cdn.b-cdn.net/models/xr/msh_turtle_r0p.glb",
+   "xrGlbUrlK2": "https://siamdive-cdn.b-cdn.net/models/xr/msh_turtle_r0p.glb",
+   "xrGlbUrlK4": "https://siamdive-cdn.b-cdn.net/models/xr/msh_turtle_r0p.glb",
+   "xrVramK1": 1398101,
+   "xrVramK2": 1398101,
+   "xrVramK4": 1398101
   },
   {
    "id": "msh:barracuda",
@@ -511,7 +643,13 @@
    "fx": null,
    "behavior": null,
    "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/msh_barracuda_r0p.glb",
-   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/msh_barracuda_xr1.glb"
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/msh_barracuda_xr1.glb",
+   "xrGlbUrlK1": "https://siamdive-cdn.b-cdn.net/models/xr/msh_barracuda_k1.glb",
+   "xrGlbUrlK2": "https://siamdive-cdn.b-cdn.net/models/xr/msh_barracuda_k2.glb",
+   "xrGlbUrlK4": "https://siamdive-cdn.b-cdn.net/models/xr/msh_barracuda_r0p.glb",
+   "xrVramK1": 22369620,
+   "xrVramK2": 89478484,
+   "xrVramK4": 223696212
   },
   {
    "id": "msh:lionfish",
@@ -525,7 +663,13 @@
    "fx": null,
    "behavior": null,
    "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/msh_lionfish_r0p.glb",
-   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/msh_lionfish_xr1.glb"
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/msh_lionfish_xr1.glb",
+   "xrGlbUrlK1": "https://siamdive-cdn.b-cdn.net/models/xr/msh_lionfish_k1.glb",
+   "xrGlbUrlK2": "https://siamdive-cdn.b-cdn.net/models/xr/msh_lionfish_r0p.glb",
+   "xrGlbUrlK4": "https://siamdive-cdn.b-cdn.net/models/xr/msh_lionfish_r0p.glb",
+   "xrVramK1": 5592405,
+   "xrVramK2": 22369621,
+   "xrVramK4": 22369621
   },
   {
    "id": "msh:crab",
@@ -539,7 +683,13 @@
    "fx": null,
    "behavior": null,
    "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/msh_crab_xr0.glb",
-   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/msh_crab_xr1.glb"
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/msh_crab_xr1.glb",
+   "xrGlbUrlK1": "https://siamdive-cdn.b-cdn.net/models/xr/msh_crab_r0p.glb",
+   "xrGlbUrlK2": "https://siamdive-cdn.b-cdn.net/models/xr/msh_crab_r0p.glb",
+   "xrGlbUrlK4": "https://siamdive-cdn.b-cdn.net/models/xr/msh_crab_r0p.glb",
+   "xrVramK1": 1398101,
+   "xrVramK2": 1398101,
+   "xrVramK4": 1398101
   },
   {
    "id": "msh:seahorse",
@@ -553,7 +703,13 @@
    "fx": null,
    "behavior": null,
    "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/msh_seahorse_xr0.glb",
-   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/msh_seahorse_xr1.glb"
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/msh_seahorse_xr1.glb",
+   "xrGlbUrlK1": "https://siamdive-cdn.b-cdn.net/models/xr/msh_seahorse_r0p.glb",
+   "xrGlbUrlK2": "https://siamdive-cdn.b-cdn.net/models/xr/msh_seahorse_r0p.glb",
+   "xrGlbUrlK4": "https://siamdive-cdn.b-cdn.net/models/xr/msh_seahorse_r0p.glb",
+   "xrVramK1": 1398101,
+   "xrVramK2": 1398101,
+   "xrVramK4": 1398101
   },
   {
    "id": "msh:whaleshark",
@@ -567,7 +723,13 @@
    "animated": false,
    "school": null,
    "fx": null,
-   "behavior": null
+   "behavior": null,
+   "xrGlbUrlK1": "https://siamdive-cdn.b-cdn.net/models/xr/msh_whaleshark_png.glb_k1.glb",
+   "xrGlbUrlK2": "https://siamdive-cdn.b-cdn.net/models/xr/msh_whaleshark_png.glb_k2.glb",
+   "xrGlbUrlK4": "https://siamdive-cdn.b-cdn.net/models/xr/msh_whaleshark_png.glb",
+   "xrVramK1": 22369620,
+   "xrVramK2": 89478484,
+   "xrVramK4": 223696212
   },
   {
    "id": "msh:manta",
@@ -581,7 +743,13 @@
    "fx": null,
    "behavior": null,
    "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/msh_manta_xr0.glb",
-   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/msh_manta_xr1.glb"
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/msh_manta_xr1.glb",
+   "xrGlbUrlK1": "https://siamdive-cdn.b-cdn.net/models/xr/msh_manta_r0p.glb",
+   "xrGlbUrlK2": "https://siamdive-cdn.b-cdn.net/models/xr/msh_manta_r0p.glb",
+   "xrGlbUrlK4": "https://siamdive-cdn.b-cdn.net/models/xr/msh_manta_r0p.glb",
+   "xrVramK1": 5592404,
+   "xrVramK2": 5592404,
+   "xrVramK4": 5592404
   },
   {
    "id": "msh:trevally",
@@ -595,7 +763,13 @@
    "animated": false,
    "school": null,
    "fx": null,
-   "behavior": null
+   "behavior": null,
+   "xrGlbUrlK1": "https://siamdive-cdn.b-cdn.net/models/xr/msh_trevally_r0p.glb",
+   "xrGlbUrlK2": "https://siamdive-cdn.b-cdn.net/models/xr/msh_trevally_r0p.glb",
+   "xrGlbUrlK4": "https://siamdive-cdn.b-cdn.net/models/xr/msh_trevally_r0p.glb",
+   "xrVramK1": 5592404,
+   "xrVramK2": 5592404,
+   "xrVramK4": 5592404
   },
   {
    "id": "msh:boxfish",
@@ -609,7 +783,13 @@
    "fx": null,
    "behavior": null,
    "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/msh_boxfish_xr0.glb",
-   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/msh_boxfish_xr1.glb"
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/msh_boxfish_xr1.glb",
+   "xrGlbUrlK1": "https://siamdive-cdn.b-cdn.net/models/xr/msh_boxfish_r0p.glb",
+   "xrGlbUrlK2": "https://siamdive-cdn.b-cdn.net/models/xr/msh_boxfish_r0p.glb",
+   "xrGlbUrlK4": "https://siamdive-cdn.b-cdn.net/models/xr/msh_boxfish_r0p.glb",
+   "xrVramK1": 5592404,
+   "xrVramK2": 5592404,
+   "xrVramK4": 5592404
   },
   {
    "id": "msh:tiger_shark",
@@ -623,7 +803,13 @@
    "animated": true,
    "school": null,
    "fx": null,
-   "behavior": null
+   "behavior": null,
+   "xrGlbUrlK1": "https://siamdive-cdn.b-cdn.net/models/xr/Tiger_Shark_k1.glb",
+   "xrGlbUrlK2": "https://siamdive-cdn.b-cdn.net/models/xr/Tiger_Shark_k2.glb",
+   "xrGlbUrlK4": "https://siamdive-cdn.b-cdn.net/models/xr/Tiger_Shark_r0p.glb",
+   "xrVramK1": 22369620,
+   "xrVramK2": 89478484,
+   "xrVramK4": 223696212
   },
   {
    "id": "msh:silvertip_shark",
@@ -637,7 +823,13 @@
    "fx": null,
    "behavior": null,
    "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/msh_silvertip_shark_k1.glb",
-   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/msh_silvertip_shark_xr1.glb"
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/msh_silvertip_shark_xr1.glb",
+   "xrGlbUrlK1": "https://siamdive-cdn.b-cdn.net/models/xr/msh_silvertip_shark_k1.glb",
+   "xrGlbUrlK2": "https://siamdive-cdn.b-cdn.net/models/xr/msh_silvertip_shark_k2.glb",
+   "xrGlbUrlK4": "https://siamdive-cdn.b-cdn.net/models/xr/msh_silvertip_shark_r0p.glb",
+   "xrVramK1": 22369620,
+   "xrVramK2": 89478484,
+   "xrVramK4": 223696212
   },
   {
    "id": "msh:leopard_shark",
@@ -651,7 +843,13 @@
    "fx": null,
    "behavior": null,
    "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/msh_leopard_shark_xr0.glb",
-   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/msh_leopard_shark_xr1.glb"
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/msh_leopard_shark_xr1.glb",
+   "xrGlbUrlK1": "https://siamdive-cdn.b-cdn.net/models/xr/msh_leopard_shark_k1.glb",
+   "xrGlbUrlK2": "https://siamdive-cdn.b-cdn.net/models/xr/msh_leopard_shark_k2.glb",
+   "xrGlbUrlK4": "https://siamdive-cdn.b-cdn.net/models/xr/msh_leopard_shark_r0p.glb",
+   "xrVramK1": 22369620,
+   "xrVramK2": 89478484,
+   "xrVramK4": 223696212
   },
   {
    "id": "msh:nurse_shark",
@@ -665,7 +863,13 @@
    "fx": null,
    "behavior": null,
    "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/msh_nurse_shark_xr0.glb",
-   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/msh_nurse_shark_xr1.glb"
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/msh_nurse_shark_xr1.glb",
+   "xrGlbUrlK1": "https://siamdive-cdn.b-cdn.net/models/xr/msh_nurse_shark_k1.glb",
+   "xrGlbUrlK2": "https://siamdive-cdn.b-cdn.net/models/xr/msh_nurse_shark_k2.glb",
+   "xrGlbUrlK4": "https://siamdive-cdn.b-cdn.net/models/xr/msh_nurse_shark_r0p.glb",
+   "xrVramK1": 22369620,
+   "xrVramK2": 89478484,
+   "xrVramK4": 223696212
   },
   {
    "id": "msh:whitetip_reef_shark",
@@ -679,7 +883,13 @@
    "fx": null,
    "behavior": null,
    "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/msh_whitetip_reef_shark_xr0.glb",
-   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/msh_whitetip_reef_shark_xr1.glb"
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/msh_whitetip_reef_shark_xr1.glb",
+   "xrGlbUrlK1": "https://siamdive-cdn.b-cdn.net/models/xr/msh_whitetip_reef_shark_k1.glb",
+   "xrGlbUrlK2": "https://siamdive-cdn.b-cdn.net/models/xr/msh_whitetip_reef_shark_k2.glb",
+   "xrGlbUrlK4": "https://siamdive-cdn.b-cdn.net/models/xr/msh_whitetip_reef_shark_r0p.glb",
+   "xrVramK1": 22369620,
+   "xrVramK2": 89478484,
+   "xrVramK4": 223696212
   },
   {
    "id": "msh:blacktip_reef_shark",
@@ -693,7 +903,13 @@
    "animated": true,
    "school": null,
    "fx": null,
-   "behavior": null
+   "behavior": null,
+   "xrGlbUrlK1": "https://siamdive-cdn.b-cdn.net/models/xr/Blacktip_Reef_Shark_k1.glb",
+   "xrGlbUrlK2": "https://siamdive-cdn.b-cdn.net/models/xr/Blacktip_Reef_Shark_k2.glb",
+   "xrGlbUrlK4": "https://siamdive-cdn.b-cdn.net/models/xr/Blacktip_Reef_Shark_r0p.glb",
+   "xrVramK1": 22369620,
+   "xrVramK2": 89478484,
+   "xrVramK4": 223696212
   },
   {
    "id": "msh:thresher_shark",
@@ -707,7 +923,13 @@
    "fx": null,
    "behavior": null,
    "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/msh_thresher_shark_r0p.glb",
-   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/msh_thresher_shark_xr1.glb"
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/msh_thresher_shark_xr1.glb",
+   "xrGlbUrlK1": "https://siamdive-cdn.b-cdn.net/models/xr/msh_thresher_shark_k1.glb",
+   "xrGlbUrlK2": "https://siamdive-cdn.b-cdn.net/models/xr/msh_thresher_shark_k2.glb",
+   "xrGlbUrlK4": "https://siamdive-cdn.b-cdn.net/models/xr/msh_thresher_shark_r0p.glb",
+   "xrVramK1": 22369620,
+   "xrVramK2": 89478484,
+   "xrVramK4": 223696212
   },
   {
    "id": "msh:bluefin_tuna",
@@ -721,7 +943,13 @@
    "fx": null,
    "behavior": null,
    "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/msh_bluefin_tuna_xr0.glb",
-   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/msh_bluefin_tuna_xr1.glb"
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/msh_bluefin_tuna_xr1.glb",
+   "xrGlbUrlK1": "https://siamdive-cdn.b-cdn.net/models/xr/msh_bluefin_tuna_k1.glb",
+   "xrGlbUrlK2": "https://siamdive-cdn.b-cdn.net/models/xr/msh_bluefin_tuna_k2.glb",
+   "xrGlbUrlK4": "https://siamdive-cdn.b-cdn.net/models/xr/msh_bluefin_tuna_r0p.glb",
+   "xrVramK1": 22369620,
+   "xrVramK2": 89478484,
+   "xrVramK4": 223696212
   },
   {
    "id": "msh:tuna",
@@ -735,7 +963,13 @@
    "fx": null,
    "behavior": null,
    "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/msh_tuna_xr0.glb",
-   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/msh_tuna_xr1.glb"
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/msh_tuna_xr1.glb",
+   "xrGlbUrlK1": "https://siamdive-cdn.b-cdn.net/models/xr/msh_tuna_k1.glb",
+   "xrGlbUrlK2": "https://siamdive-cdn.b-cdn.net/models/xr/msh_tuna_k2.glb",
+   "xrGlbUrlK4": "https://siamdive-cdn.b-cdn.net/models/xr/msh_tuna_r0p.glb",
+   "xrVramK1": 22369620,
+   "xrVramK2": 89478484,
+   "xrVramK4": 223696212
   },
   {
    "id": "msh:sailfish",
@@ -749,7 +983,13 @@
    "fx": null,
    "behavior": null,
    "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/msh_sailfish_xr0.glb",
-   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/msh_sailfish_xr1.glb"
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/msh_sailfish_xr1.glb",
+   "xrGlbUrlK1": "https://siamdive-cdn.b-cdn.net/models/xr/msh_sailfish_k1.glb",
+   "xrGlbUrlK2": "https://siamdive-cdn.b-cdn.net/models/xr/msh_sailfish_k2.glb",
+   "xrGlbUrlK4": "https://siamdive-cdn.b-cdn.net/models/xr/msh_sailfish_r0p.glb",
+   "xrVramK1": 22369620,
+   "xrVramK2": 89478484,
+   "xrVramK4": 223696212
   },
   {
    "id": "msh:sperm_whale",
@@ -763,7 +1003,13 @@
    "fx": null,
    "behavior": null,
    "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/msh_sperm_whale_xr0.glb",
-   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/msh_sperm_whale_xr1.glb"
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/msh_sperm_whale_xr1.glb",
+   "xrGlbUrlK1": "https://siamdive-cdn.b-cdn.net/models/xr/msh_sperm_whale_k1.glb",
+   "xrGlbUrlK2": "https://siamdive-cdn.b-cdn.net/models/xr/msh_sperm_whale_k2.glb",
+   "xrGlbUrlK4": "https://siamdive-cdn.b-cdn.net/models/xr/msh_sperm_whale_r0p.glb",
+   "xrVramK1": 22369620,
+   "xrVramK2": 89478484,
+   "xrVramK4": 223696212
   },
   {
    "id": "msh:beluga_whale",
@@ -777,7 +1023,13 @@
    "fx": null,
    "behavior": null,
    "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/msh_beluga_whale_xr0.glb",
-   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/msh_beluga_whale_xr1.glb"
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/msh_beluga_whale_xr1.glb",
+   "xrGlbUrlK1": "https://siamdive-cdn.b-cdn.net/models/xr/msh_beluga_whale_k1.glb",
+   "xrGlbUrlK2": "https://siamdive-cdn.b-cdn.net/models/xr/msh_beluga_whale_k2.glb",
+   "xrGlbUrlK4": "https://siamdive-cdn.b-cdn.net/models/xr/msh_beluga_whale_r0p.glb",
+   "xrVramK1": 22369620,
+   "xrVramK2": 89478484,
+   "xrVramK4": 223696212
   },
   {
    "id": "msh:orca",
@@ -791,7 +1043,13 @@
    "fx": null,
    "behavior": null,
    "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/msh_orca_xr0.glb",
-   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/msh_orca_xr1.glb"
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/msh_orca_xr1.glb",
+   "xrGlbUrlK1": "https://siamdive-cdn.b-cdn.net/models/xr/msh_orca_k1.glb",
+   "xrGlbUrlK2": "https://siamdive-cdn.b-cdn.net/models/xr/msh_orca_r0p.glb",
+   "xrGlbUrlK4": "https://siamdive-cdn.b-cdn.net/models/xr/msh_orca_r0p.glb",
+   "xrVramK1": 22369620,
+   "xrVramK2": 89478484,
+   "xrVramK4": 89478484
   },
   {
    "id": "msh:dolphin_real",
@@ -805,7 +1063,13 @@
    "animated": true,
    "school": null,
    "fx": null,
-   "behavior": null
+   "behavior": null,
+   "xrGlbUrlK1": "https://siamdive-cdn.b-cdn.net/models/xr/Silver_Dolphin_k1.glb",
+   "xrGlbUrlK2": "https://siamdive-cdn.b-cdn.net/models/xr/Silver_Dolphin_r0p.glb",
+   "xrGlbUrlK4": "https://siamdive-cdn.b-cdn.net/models/xr/Silver_Dolphin_r0p.glb",
+   "xrVramK1": 22369620,
+   "xrVramK2": 89478484,
+   "xrVramK4": 89478484
   },
   {
    "id": "msh:humpback_whale",
@@ -819,7 +1083,13 @@
    "animated": true,
    "school": null,
    "fx": null,
-   "behavior": null
+   "behavior": null,
+   "xrGlbUrlK1": "https://siamdive-cdn.b-cdn.net/models/xr/Humpback_whale_k1.glb",
+   "xrGlbUrlK2": "https://siamdive-cdn.b-cdn.net/models/xr/Humpback_whale_k2.glb",
+   "xrGlbUrlK4": "https://siamdive-cdn.b-cdn.net/models/xr/Humpback_whale_r0p.glb",
+   "xrVramK1": 22369620,
+   "xrVramK2": 89478484,
+   "xrVramK4": 223696212
   },
   {
    "id": "msh:oceanic_manta",
@@ -833,7 +1103,13 @@
    "fx": null,
    "behavior": null,
    "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/msh_oceanic_manta_k1.glb",
-   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/msh_oceanic_manta_xr1.glb"
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/msh_oceanic_manta_xr1.glb",
+   "xrGlbUrlK1": "https://siamdive-cdn.b-cdn.net/models/xr/msh_oceanic_manta_k1.glb",
+   "xrGlbUrlK2": "https://siamdive-cdn.b-cdn.net/models/xr/msh_oceanic_manta_k2.glb",
+   "xrGlbUrlK4": "https://siamdive-cdn.b-cdn.net/models/xr/msh_oceanic_manta_r0p.glb",
+   "xrVramK1": 22369620,
+   "xrVramK2": 89478484,
+   "xrVramK4": 223696212
   },
   {
    "id": "msh:black_manta",
@@ -847,7 +1123,13 @@
    "animated": true,
    "school": null,
    "fx": null,
-   "behavior": null
+   "behavior": null,
+   "xrGlbUrlK1": "https://siamdive-cdn.b-cdn.net/models/xr/Black_Manta_k1.glb",
+   "xrGlbUrlK2": "https://siamdive-cdn.b-cdn.net/models/xr/Black_Manta_k2.glb",
+   "xrGlbUrlK4": "https://siamdive-cdn.b-cdn.net/models/xr/Black_Manta_r0p.glb",
+   "xrVramK1": 22369620,
+   "xrVramK2": 89478484,
+   "xrVramK4": 223696212
   },
   {
    "id": "msh:eagle_ray",
@@ -861,7 +1143,13 @@
    "animated": true,
    "school": null,
    "fx": null,
-   "behavior": null
+   "behavior": null,
+   "xrGlbUrlK1": "https://siamdive-cdn.b-cdn.net/models/xr/Eagle_ray_k1.glb",
+   "xrGlbUrlK2": "https://siamdive-cdn.b-cdn.net/models/xr/Eagle_ray_k2.glb",
+   "xrGlbUrlK4": "https://siamdive-cdn.b-cdn.net/models/xr/Eagle_ray_r0p.glb",
+   "xrVramK1": 22369620,
+   "xrVramK2": 89478484,
+   "xrVramK4": 223696212
   },
   {
    "id": "msh:mola_mola",
@@ -875,7 +1163,13 @@
    "animated": true,
    "school": null,
    "fx": null,
-   "behavior": null
+   "behavior": null,
+   "xrGlbUrlK1": "https://siamdive-cdn.b-cdn.net/models/xr/Molamola_k1.glb",
+   "xrGlbUrlK2": "https://siamdive-cdn.b-cdn.net/models/xr/Molamola_k2.glb",
+   "xrGlbUrlK4": "https://siamdive-cdn.b-cdn.net/models/xr/Molamola_r0p.glb",
+   "xrVramK1": 22369620,
+   "xrVramK2": 89478484,
+   "xrVramK4": 223696212
   },
   {
    "id": "school:barracuda",
@@ -1043,7 +1337,13 @@
    "fx": null,
    "behavior": null,
    "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/boat_dive_xr0.glb",
-   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/boat_dive_xr1.glb"
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/boat_dive_xr1.glb",
+   "xrGlbUrlK1": "https://siamdive-cdn.b-cdn.net/models/xr/boat_dive_r0p.glb",
+   "xrGlbUrlK2": "https://siamdive-cdn.b-cdn.net/models/xr/boat_dive_r0p.glb",
+   "xrGlbUrlK4": "https://siamdive-cdn.b-cdn.net/models/xr/boat_dive_r0p.glb",
+   "xrVramK1": 1365,
+   "xrVramK2": 1365,
+   "xrVramK4": 1365
   },
   {
    "id": "boat:motor",
@@ -1057,7 +1357,13 @@
    "fx": null,
    "behavior": null,
    "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/boat_motor_xr0.glb",
-   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/boat_motor_xr1.glb"
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/boat_motor_xr1.glb",
+   "xrGlbUrlK1": "https://siamdive-cdn.b-cdn.net/models/xr/boat_motor_r0p.glb",
+   "xrGlbUrlK2": "https://siamdive-cdn.b-cdn.net/models/xr/boat_motor_r0p.glb",
+   "xrGlbUrlK4": "https://siamdive-cdn.b-cdn.net/models/xr/boat_motor_r0p.glb",
+   "xrVramK1": 1398101,
+   "xrVramK2": 1398101,
+   "xrVramK4": 1398101
   },
   {
    "id": "boat:tender",
@@ -1071,7 +1377,13 @@
    "fx": null,
    "behavior": null,
    "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/boat_tender_xr0.glb",
-   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/boat_tender_xr1.glb"
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/boat_tender_xr1.glb",
+   "xrGlbUrlK1": "https://siamdive-cdn.b-cdn.net/models/xr/boat_tender_r0p.glb",
+   "xrGlbUrlK2": "https://siamdive-cdn.b-cdn.net/models/xr/boat_tender_r0p.glb",
+   "xrGlbUrlK4": "https://siamdive-cdn.b-cdn.net/models/xr/boat_tender_r0p.glb",
+   "xrVramK1": 349525,
+   "xrVramK2": 349525,
+   "xrVramK4": 349525
   },
   {
    "id": "boat:sail",
@@ -1085,7 +1397,13 @@
    "fx": null,
    "behavior": null,
    "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/boat_sail_xr0.glb",
-   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/boat_sail_xr1.glb"
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/boat_sail_xr1.glb",
+   "xrGlbUrlK1": "https://siamdive-cdn.b-cdn.net/models/xr/boat_sail_r0p.glb",
+   "xrGlbUrlK2": "https://siamdive-cdn.b-cdn.net/models/xr/boat_sail_r0p.glb",
+   "xrGlbUrlK4": "https://siamdive-cdn.b-cdn.net/models/xr/boat_sail_r0p.glb",
+   "xrVramK1": 349525,
+   "xrVramK2": 349525,
+   "xrVramK4": 349525
   },
   {
    "id": "boat:cruise",
@@ -1099,7 +1417,13 @@
    "fx": null,
    "behavior": null,
    "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/boat_cruise_xr0.glb",
-   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/boat_cruise_xr1.glb"
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/boat_cruise_xr1.glb",
+   "xrGlbUrlK1": "https://siamdive-cdn.b-cdn.net/models/xr/boat_cruise_r0p.glb",
+   "xrGlbUrlK2": "https://siamdive-cdn.b-cdn.net/models/xr/boat_cruise_r0p.glb",
+   "xrGlbUrlK4": "https://siamdive-cdn.b-cdn.net/models/xr/boat_cruise_r0p.glb",
+   "xrVramK1": 1398101,
+   "xrVramK2": 1398101,
+   "xrVramK4": 1398101
   },
   {
    "id": "boat:yacht",
@@ -1113,7 +1437,13 @@
    "fx": null,
    "behavior": null,
    "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/boat_yacht_xr0.glb",
-   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/boat_yacht_xr1.glb"
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/boat_yacht_xr1.glb",
+   "xrGlbUrlK1": "https://siamdive-cdn.b-cdn.net/models/xr/boat_yacht_r0p.glb",
+   "xrGlbUrlK2": "https://siamdive-cdn.b-cdn.net/models/xr/boat_yacht_r0p.glb",
+   "xrGlbUrlK4": "https://siamdive-cdn.b-cdn.net/models/xr/boat_yacht_r0p.glb",
+   "xrVramK1": 1398101,
+   "xrVramK2": 1398101,
+   "xrVramK4": 1398101
   },
   {
    "id": "boat:raft",
@@ -1169,7 +1499,13 @@
    "fx": null,
    "behavior": null,
    "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/cc0_rock_b_xr0.glb",
-   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/cc0_rock_b_xr1.glb"
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/cc0_rock_b_xr1.glb",
+   "xrGlbUrlK1": "https://siamdive-cdn.b-cdn.net/models/xr/cc0_rock_b_r0p.glb",
+   "xrGlbUrlK2": "https://siamdive-cdn.b-cdn.net/models/xr/cc0_rock_b_r0p.glb",
+   "xrGlbUrlK4": "https://siamdive-cdn.b-cdn.net/models/xr/cc0_rock_b_r0p.glb",
+   "xrVramK1": 1398101,
+   "xrVramK2": 1398101,
+   "xrVramK4": 1398101
   },
   {
    "id": "cc0:rock_cluster",
@@ -1225,7 +1561,13 @@
    "fx": null,
    "behavior": null,
    "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/cc0_rock_e_xr0.glb",
-   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/cc0_rock_e_xr1.glb"
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/cc0_rock_e_xr1.glb",
+   "xrGlbUrlK1": "https://siamdive-cdn.b-cdn.net/models/xr/cc0_rock_e_r0p.glb",
+   "xrGlbUrlK2": "https://siamdive-cdn.b-cdn.net/models/xr/cc0_rock_e_r0p.glb",
+   "xrGlbUrlK4": "https://siamdive-cdn.b-cdn.net/models/xr/cc0_rock_e_r0p.glb",
+   "xrVramK1": 1398101,
+   "xrVramK2": 1398101,
+   "xrVramK4": 1398101
   },
   {
    "id": "cc0:rock_f",
@@ -1253,7 +1595,13 @@
    "fx": null,
    "behavior": null,
    "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/cc0_rock_large_xr0.glb",
-   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/cc0_rock_large_xr1.glb"
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/cc0_rock_large_xr1.glb",
+   "xrGlbUrlK1": "https://siamdive-cdn.b-cdn.net/models/xr/cc0_rock_large_r0p.glb",
+   "xrGlbUrlK2": "https://siamdive-cdn.b-cdn.net/models/xr/cc0_rock_large_r0p.glb",
+   "xrGlbUrlK4": "https://siamdive-cdn.b-cdn.net/models/xr/cc0_rock_large_r0p.glb",
+   "xrVramK1": 1398101,
+   "xrVramK2": 1398101,
+   "xrVramK4": 1398101
   },
   {
    "id": "cc0:rock_med",
@@ -1267,7 +1615,13 @@
    "fx": null,
    "behavior": null,
    "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/cc0_rock_med_xr0.glb",
-   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/cc0_rock_med_xr1.glb"
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/cc0_rock_med_xr1.glb",
+   "xrGlbUrlK1": "https://siamdive-cdn.b-cdn.net/models/xr/cc0_rock_med_r0p.glb",
+   "xrGlbUrlK2": "https://siamdive-cdn.b-cdn.net/models/xr/cc0_rock_med_r0p.glb",
+   "xrGlbUrlK4": "https://siamdive-cdn.b-cdn.net/models/xr/cc0_rock_med_r0p.glb",
+   "xrVramK1": 1398101,
+   "xrVramK2": 1398101,
+   "xrVramK4": 1398101
   },
   {
    "id": "cc0:rock_small",
@@ -1365,7 +1719,13 @@
    "fx": null,
    "behavior": null,
    "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/cc0_wreck_ship_xr0.glb",
-   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/cc0_wreck_ship_xr1.glb"
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/cc0_wreck_ship_xr1.glb",
+   "xrGlbUrlK1": "https://siamdive-cdn.b-cdn.net/models/xr/cc0_wreck_ship_r0p.glb",
+   "xrGlbUrlK2": "https://siamdive-cdn.b-cdn.net/models/xr/cc0_wreck_ship_r0p.glb",
+   "xrGlbUrlK4": "https://siamdive-cdn.b-cdn.net/models/xr/cc0_wreck_ship_r0p.glb",
+   "xrVramK1": 682,
+   "xrVramK2": 682,
+   "xrVramK4": 682
   },
   {
    "id": "msh:wreck_ship",
@@ -1407,7 +1767,13 @@
    "fx": null,
    "behavior": null,
    "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/cc0_wreck_airplane_xr0.glb",
-   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/cc0_wreck_airplane_xr1.glb"
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/cc0_wreck_airplane_xr1.glb",
+   "xrGlbUrlK1": "https://siamdive-cdn.b-cdn.net/models/xr/cc0_wreck_airplane_r0p.glb",
+   "xrGlbUrlK2": "https://siamdive-cdn.b-cdn.net/models/xr/cc0_wreck_airplane_r0p.glb",
+   "xrGlbUrlK4": "https://siamdive-cdn.b-cdn.net/models/xr/cc0_wreck_airplane_r0p.glb",
+   "xrVramK1": 1398101,
+   "xrVramK2": 1398101,
+   "xrVramK4": 1398101
   },
   {
    "id": "cc0:wreck_moto",
@@ -1421,7 +1787,13 @@
    "fx": null,
    "behavior": null,
    "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/cc0_wreck_moto_xr0.glb",
-   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/cc0_wreck_moto_xr1.glb"
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/cc0_wreck_moto_xr1.glb",
+   "xrGlbUrlK1": "https://siamdive-cdn.b-cdn.net/models/xr/cc0_wreck_moto_r0p.glb",
+   "xrGlbUrlK2": "https://siamdive-cdn.b-cdn.net/models/xr/cc0_wreck_moto_r0p.glb",
+   "xrGlbUrlK4": "https://siamdive-cdn.b-cdn.net/models/xr/cc0_wreck_moto_r0p.glb",
+   "xrVramK1": 349525,
+   "xrVramK2": 349525,
+   "xrVramK4": 349525
   },
   {
    "id": "cc0:wreck_car",
@@ -1435,7 +1807,13 @@
    "fx": null,
    "behavior": null,
    "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/cc0_wreck_car_xr0.glb",
-   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/cc0_wreck_car_xr1.glb"
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/cc0_wreck_car_xr1.glb",
+   "xrGlbUrlK1": "https://siamdive-cdn.b-cdn.net/models/xr/cc0_wreck_car_r0p.glb",
+   "xrGlbUrlK2": "https://siamdive-cdn.b-cdn.net/models/xr/cc0_wreck_car_r0p.glb",
+   "xrGlbUrlK4": "https://siamdive-cdn.b-cdn.net/models/xr/cc0_wreck_car_r0p.glb",
+   "xrVramK1": 349525,
+   "xrVramK2": 349525,
+   "xrVramK4": 349525
   },
   {
    "id": "cc0:wreck_barrel",
@@ -1463,7 +1841,13 @@
    "fx": null,
    "behavior": null,
    "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/cc0_wreck_truck_xr0.glb",
-   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/cc0_wreck_truck_xr1.glb"
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/cc0_wreck_truck_xr1.glb",
+   "xrGlbUrlK1": "https://siamdive-cdn.b-cdn.net/models/xr/cc0_wreck_truck_r0p.glb",
+   "xrGlbUrlK2": "https://siamdive-cdn.b-cdn.net/models/xr/cc0_wreck_truck_r0p.glb",
+   "xrGlbUrlK4": "https://siamdive-cdn.b-cdn.net/models/xr/cc0_wreck_truck_r0p.glb",
+   "xrVramK1": 1398101,
+   "xrVramK2": 1398101,
+   "xrVramK4": 1398101
   },
   {
    "id": "cc0:wreck_tire",
@@ -1477,7 +1861,13 @@
    "fx": null,
    "behavior": null,
    "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/cc0_wreck_tire_xr0.glb",
-   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/cc0_wreck_tire_xr1.glb"
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/cc0_wreck_tire_xr1.glb",
+   "xrGlbUrlK1": "https://siamdive-cdn.b-cdn.net/models/xr/cc0_wreck_tire_r0p.glb",
+   "xrGlbUrlK2": "https://siamdive-cdn.b-cdn.net/models/xr/cc0_wreck_tire_r0p.glb",
+   "xrGlbUrlK4": "https://siamdive-cdn.b-cdn.net/models/xr/cc0_wreck_tire_r0p.glb",
+   "xrVramK1": 349525,
+   "xrVramK2": 349525,
+   "xrVramK4": 349525
   },
   {
    "id": "cc0:wreck_container",
@@ -1491,7 +1881,13 @@
    "fx": null,
    "behavior": null,
    "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/cc0_wreck_container_xr0.glb",
-   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/cc0_wreck_container_xr1.glb"
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/cc0_wreck_container_xr1.glb",
+   "xrGlbUrlK1": "https://siamdive-cdn.b-cdn.net/models/xr/cc0_wreck_container_r0p.glb",
+   "xrGlbUrlK2": "https://siamdive-cdn.b-cdn.net/models/xr/cc0_wreck_container_r0p.glb",
+   "xrGlbUrlK4": "https://siamdive-cdn.b-cdn.net/models/xr/cc0_wreck_container_r0p.glb",
+   "xrVramK1": 682,
+   "xrVramK2": 682,
+   "xrVramK4": 682
   },
   {
    "id": "cc0:wreck_chang",
@@ -1505,7 +1901,13 @@
    "animated": false,
    "school": null,
    "fx": null,
-   "behavior": null
+   "behavior": null,
+   "xrGlbUrlK1": "https://siamdive-cdn.b-cdn.net/models/xr/HTMS_Chang_k1.glb",
+   "xrGlbUrlK2": "https://siamdive-cdn.b-cdn.net/models/xr/HTMS_Chang_k2.glb",
+   "xrGlbUrlK4": "https://siamdive-cdn.b-cdn.net/models/xr/HTMS_Chang_r0p.glb",
+   "xrVramK1": 22369620,
+   "xrVramK2": 89478484,
+   "xrVramK4": 223696212
   },
   {
    "id": "cc0:wreck_prab",
@@ -1519,7 +1921,13 @@
    "fx": null,
    "behavior": null,
    "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/cc0_wreck_prab_xr0.glb",
-   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/cc0_wreck_prab_xr1.glb"
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/cc0_wreck_prab_xr1.glb",
+   "xrGlbUrlK1": "https://siamdive-cdn.b-cdn.net/models/xr/cc0_wreck_prab_k1.glb",
+   "xrGlbUrlK2": "https://siamdive-cdn.b-cdn.net/models/xr/cc0_wreck_prab_r0p.glb",
+   "xrGlbUrlK4": "https://siamdive-cdn.b-cdn.net/models/xr/cc0_wreck_prab_r0p.glb",
+   "xrVramK1": 22369620,
+   "xrVramK2": 89478484,
+   "xrVramK4": 89478484
   },
   {
    "id": "cc0:wreck_hardeep",
@@ -1533,7 +1941,13 @@
    "fx": null,
    "behavior": null,
    "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/cc0_wreck_hardeep_xr0.glb",
-   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/cc0_wreck_hardeep_xr1.glb"
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/cc0_wreck_hardeep_xr1.glb",
+   "xrGlbUrlK1": "https://siamdive-cdn.b-cdn.net/models/xr/cc0_wreck_hardeep_k1.glb",
+   "xrGlbUrlK2": "https://siamdive-cdn.b-cdn.net/models/xr/cc0_wreck_hardeep_k2.glb",
+   "xrGlbUrlK4": "https://siamdive-cdn.b-cdn.net/models/xr/cc0_wreck_hardeep_r0p.glb",
+   "xrVramK1": 22369620,
+   "xrVramK2": 89478484,
+   "xrVramK4": 223696212
   },
   {
    "id": "cc0:statue_singha",
@@ -1547,7 +1961,13 @@
    "animated": false,
    "school": null,
    "fx": null,
-   "behavior": null
+   "behavior": null,
+   "xrGlbUrlK1": "https://siamdive-cdn.b-cdn.net/models/xr/Singha_Statue_Underwater_k1.glb",
+   "xrGlbUrlK2": "https://siamdive-cdn.b-cdn.net/models/xr/Singha_Statue_Underwater_k2.glb",
+   "xrGlbUrlK4": "https://siamdive-cdn.b-cdn.net/models/xr/Singha_Statue_Underwater_r0p.glb",
+   "xrVramK1": 22369620,
+   "xrVramK2": 89478484,
+   "xrVramK4": 223696212
   },
   {
    "id": "cc0:kraken",
@@ -1561,7 +1981,13 @@
    "fx": null,
    "behavior": null,
    "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/cc0_kraken_xr0.glb",
-   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/cc0_kraken_xr1.glb"
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/cc0_kraken_xr1.glb",
+   "xrGlbUrlK1": "https://siamdive-cdn.b-cdn.net/models/xr/cc0_kraken_k1.glb",
+   "xrGlbUrlK2": "https://siamdive-cdn.b-cdn.net/models/xr/cc0_kraken_k2.glb",
+   "xrGlbUrlK4": "https://siamdive-cdn.b-cdn.net/models/xr/cc0_kraken_r0p.glb",
+   "xrVramK1": 22369620,
+   "xrVramK2": 89478484,
+   "xrVramK4": 223696212
   },
   {
    "id": "cc0:poseidon",
@@ -1575,7 +2001,13 @@
    "fx": null,
    "behavior": null,
    "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/cc0_poseidon_k1.glb",
-   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/cc0_poseidon_xr1.glb"
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/cc0_poseidon_xr1.glb",
+   "xrGlbUrlK1": "https://siamdive-cdn.b-cdn.net/models/xr/cc0_poseidon_k1.glb",
+   "xrGlbUrlK2": "https://siamdive-cdn.b-cdn.net/models/xr/cc0_poseidon_k2.glb",
+   "xrGlbUrlK4": "https://siamdive-cdn.b-cdn.net/models/xr/cc0_poseidon_r0p.glb",
+   "xrVramK1": 22369620,
+   "xrVramK2": 89478484,
+   "xrVramK4": 223696212
   },
   {
    "id": "nat:tree",
@@ -1617,7 +2049,13 @@
    "fx": null,
    "behavior": null,
    "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/nat_palm_xr0.glb",
-   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/nat_palm_xr1.glb"
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/nat_palm_xr1.glb",
+   "xrGlbUrlK1": "https://siamdive-cdn.b-cdn.net/models/xr/nat_palm_r0p.glb",
+   "xrGlbUrlK2": "https://siamdive-cdn.b-cdn.net/models/xr/nat_palm_r0p.glb",
+   "xrGlbUrlK4": "https://siamdive-cdn.b-cdn.net/models/xr/nat_palm_r0p.glb",
+   "xrVramK1": 1398101,
+   "xrVramK2": 1398101,
+   "xrVramK4": 1398101
   },
   {
    "id": "nat:palms",
@@ -1631,7 +2069,13 @@
    "fx": null,
    "behavior": null,
    "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/nat_palms_xr0.glb",
-   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/nat_palms_xr1.glb"
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/nat_palms_xr1.glb",
+   "xrGlbUrlK1": "https://siamdive-cdn.b-cdn.net/models/xr/nat_palms_r0p.glb",
+   "xrGlbUrlK2": "https://siamdive-cdn.b-cdn.net/models/xr/nat_palms_r0p.glb",
+   "xrGlbUrlK4": "https://siamdive-cdn.b-cdn.net/models/xr/nat_palms_r0p.glb",
+   "xrVramK1": 2796202,
+   "xrVramK2": 2796202,
+   "xrVramK4": 2796202
   },
   {
    "id": "nat:mountain",
@@ -1659,7 +2103,13 @@
    "fx": null,
    "behavior": null,
    "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/nat_peak_xr0.glb",
-   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/nat_peak_xr1.glb"
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/nat_peak_xr1.glb",
+   "xrGlbUrlK1": "https://siamdive-cdn.b-cdn.net/models/xr/nat_peak_r0p.glb",
+   "xrGlbUrlK2": "https://siamdive-cdn.b-cdn.net/models/xr/nat_peak_r0p.glb",
+   "xrGlbUrlK4": "https://siamdive-cdn.b-cdn.net/models/xr/nat_peak_r0p.glb",
+   "xrVramK1": 1365,
+   "xrVramK2": 1365,
+   "xrVramK4": 1365
   },
   {
    "id": "nat:kelp",
@@ -1673,7 +2123,13 @@
    "fx": null,
    "behavior": null,
    "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/nat_kelp_xr0.glb",
-   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/nat_kelp_xr1.glb"
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/nat_kelp_xr1.glb",
+   "xrGlbUrlK1": "https://siamdive-cdn.b-cdn.net/models/xr/nat_kelp_r0p.glb",
+   "xrGlbUrlK2": "https://siamdive-cdn.b-cdn.net/models/xr/nat_kelp_r0p.glb",
+   "xrGlbUrlK4": "https://siamdive-cdn.b-cdn.net/models/xr/nat_kelp_r0p.glb",
+   "xrVramK1": 1398101,
+   "xrVramK2": 1398101,
+   "xrVramK4": 1398101
   },
   {
    "id": "nat:seaweed",
@@ -1715,7 +2171,13 @@
    "fx": null,
    "behavior": null,
    "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/nat_grass_xr0.glb",
-   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/nat_grass_xr1.glb"
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/nat_grass_xr1.glb",
+   "xrGlbUrlK1": "https://siamdive-cdn.b-cdn.net/models/xr/nat_grass_r0p.glb",
+   "xrGlbUrlK2": "https://siamdive-cdn.b-cdn.net/models/xr/nat_grass_r0p.glb",
+   "xrGlbUrlK4": "https://siamdive-cdn.b-cdn.net/models/xr/nat_grass_r0p.glb",
+   "xrVramK1": 1398101,
+   "xrVramK2": 1398101,
+   "xrVramK4": 1398101
   },
   {
    "id": "nat:tallgrass",
@@ -1729,7 +2191,13 @@
    "fx": null,
    "behavior": null,
    "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/nat_tallgrass_xr0.glb",
-   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/nat_tallgrass_xr1.glb"
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/nat_tallgrass_xr1.glb",
+   "xrGlbUrlK1": "https://siamdive-cdn.b-cdn.net/models/xr/nat_tallgrass_r0p.glb",
+   "xrGlbUrlK2": "https://siamdive-cdn.b-cdn.net/models/xr/nat_tallgrass_r0p.glb",
+   "xrGlbUrlK4": "https://siamdive-cdn.b-cdn.net/models/xr/nat_tallgrass_r0p.glb",
+   "xrVramK1": 1398101,
+   "xrVramK2": 1398101,
+   "xrVramK4": 1398101
   },
   {
    "id": "nat:terrain",
@@ -1757,7 +2225,13 @@
    "fx": null,
    "behavior": null,
    "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/losin_octopus_ringed_xr0.glb",
-   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/losin_octopus_ringed_xr1.glb"
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/losin_octopus_ringed_xr1.glb",
+   "xrGlbUrlK1": "https://siamdive-cdn.b-cdn.net/models/xr/losin_octopus_ringed_k1.glb",
+   "xrGlbUrlK2": "https://siamdive-cdn.b-cdn.net/models/xr/losin_octopus_ringed_k2.glb",
+   "xrGlbUrlK4": "https://siamdive-cdn.b-cdn.net/models/xr/losin_octopus_ringed_r0p.glb",
+   "xrVramK1": 22369620,
+   "xrVramK2": 89478484,
+   "xrVramK4": 223696212
   },
   {
    "id": "losin:azure_stripe",
@@ -1771,7 +2245,13 @@
    "fx": null,
    "behavior": null,
    "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/losin_azure_stripe_xr0.glb",
-   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/losin_azure_stripe_xr1.glb"
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/losin_azure_stripe_xr1.glb",
+   "xrGlbUrlK1": "https://siamdive-cdn.b-cdn.net/models/xr/losin_azure_stripe_k1.glb",
+   "xrGlbUrlK2": "https://siamdive-cdn.b-cdn.net/models/xr/losin_azure_stripe_k2.glb",
+   "xrGlbUrlK4": "https://siamdive-cdn.b-cdn.net/models/xr/losin_azure_stripe_r0p.glb",
+   "xrVramK1": 22369620,
+   "xrVramK2": 89478484,
+   "xrVramK4": 223696212
   },
   {
    "id": "losin:pufferfish_bigeye",
@@ -1785,7 +2265,13 @@
    "fx": null,
    "behavior": null,
    "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/losin_pufferfish_bigeye_r0p.glb",
-   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/losin_pufferfish_bigeye_xr1.glb"
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/losin_pufferfish_bigeye_xr1.glb",
+   "xrGlbUrlK1": "https://siamdive-cdn.b-cdn.net/models/xr/losin_pufferfish_bigeye_k1.glb",
+   "xrGlbUrlK2": "https://siamdive-cdn.b-cdn.net/models/xr/losin_pufferfish_bigeye_k2.glb",
+   "xrGlbUrlK4": "https://siamdive-cdn.b-cdn.net/models/xr/losin_pufferfish_bigeye_r0p.glb",
+   "xrVramK1": 22369620,
+   "xrVramK2": 89478484,
+   "xrVramK4": 223696212
   },
   {
    "id": "losin:banded_fish",
@@ -1799,7 +2285,13 @@
    "fx": null,
    "behavior": null,
    "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/losin_banded_fish_xr0.glb",
-   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/losin_banded_fish_xr1.glb"
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/losin_banded_fish_xr1.glb",
+   "xrGlbUrlK1": "https://siamdive-cdn.b-cdn.net/models/xr/losin_banded_fish_k1.glb",
+   "xrGlbUrlK2": "https://siamdive-cdn.b-cdn.net/models/xr/losin_banded_fish_k2.glb",
+   "xrGlbUrlK4": "https://siamdive-cdn.b-cdn.net/models/xr/losin_banded_fish_r0p.glb",
+   "xrVramK1": 22369620,
+   "xrVramK2": 89478484,
+   "xrVramK4": 223696212
   },
   {
    "id": "losin:blue_spotted_stingray",
@@ -1813,7 +2305,13 @@
    "fx": null,
    "behavior": null,
    "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/losin_blue_spotted_stingray_r0p.glb",
-   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/losin_blue_spotted_stingray_xr1.glb"
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/losin_blue_spotted_stingray_xr1.glb",
+   "xrGlbUrlK1": "https://siamdive-cdn.b-cdn.net/models/xr/losin_blue_spotted_stingray_k1.glb",
+   "xrGlbUrlK2": "https://siamdive-cdn.b-cdn.net/models/xr/losin_blue_spotted_stingray_k2.glb",
+   "xrGlbUrlK4": "https://siamdive-cdn.b-cdn.net/models/xr/losin_blue_spotted_stingray_r0p.glb",
+   "xrVramK1": 22369620,
+   "xrVramK2": 89478484,
+   "xrVramK4": 223696212
   },
   {
    "id": "losin:snapper_blushing",
@@ -1827,7 +2325,13 @@
    "fx": null,
    "behavior": null,
    "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/losin_snapper_blushing_xr0.glb",
-   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/losin_snapper_blushing_xr1.glb"
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/losin_snapper_blushing_xr1.glb",
+   "xrGlbUrlK1": "https://siamdive-cdn.b-cdn.net/models/xr/losin_snapper_blushing_k1.glb",
+   "xrGlbUrlK2": "https://siamdive-cdn.b-cdn.net/models/xr/losin_snapper_blushing_k2.glb",
+   "xrGlbUrlK4": "https://siamdive-cdn.b-cdn.net/models/xr/losin_snapper_blushing_r0p.glb",
+   "xrVramK1": 22369620,
+   "xrVramK2": 89478484,
+   "xrVramK4": 223696212
   },
   {
    "id": "losin:shrimp_acrobat",
@@ -1841,7 +2345,13 @@
    "fx": null,
    "behavior": null,
    "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/losin_shrimp_acrobat_xr0.glb",
-   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/losin_shrimp_acrobat_xr1.glb"
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/losin_shrimp_acrobat_xr1.glb",
+   "xrGlbUrlK1": "https://siamdive-cdn.b-cdn.net/models/xr/losin_shrimp_acrobat_k1.glb",
+   "xrGlbUrlK2": "https://siamdive-cdn.b-cdn.net/models/xr/losin_shrimp_acrobat_k2.glb",
+   "xrGlbUrlK4": "https://siamdive-cdn.b-cdn.net/models/xr/losin_shrimp_acrobat_r0p.glb",
+   "xrVramK1": 22369620,
+   "xrVramK2": 89478484,
+   "xrVramK4": 223696212
   },
   {
    "id": "losin:shrimp_longhorn",
@@ -1855,7 +2365,13 @@
    "fx": null,
    "behavior": null,
    "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/losin_shrimp_longhorn_xr0.glb",
-   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/losin_shrimp_longhorn_xr1.glb"
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/losin_shrimp_longhorn_xr1.glb",
+   "xrGlbUrlK1": "https://siamdive-cdn.b-cdn.net/models/xr/losin_shrimp_longhorn_k1.glb",
+   "xrGlbUrlK2": "https://siamdive-cdn.b-cdn.net/models/xr/losin_shrimp_longhorn_k2.glb",
+   "xrGlbUrlK4": "https://siamdive-cdn.b-cdn.net/models/xr/losin_shrimp_longhorn_r0p.glb",
+   "xrVramK1": 22369620,
+   "xrVramK2": 89478484,
+   "xrVramK4": 223696212
   },
   {
    "id": "losin:parrotfish_mosaic",
@@ -1869,7 +2385,13 @@
    "fx": null,
    "behavior": null,
    "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/losin_parrotfish_mosaic_xr0.glb",
-   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/losin_parrotfish_mosaic_xr1.glb"
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/losin_parrotfish_mosaic_xr1.glb",
+   "xrGlbUrlK1": "https://siamdive-cdn.b-cdn.net/models/xr/losin_parrotfish_mosaic_k1.glb",
+   "xrGlbUrlK2": "https://siamdive-cdn.b-cdn.net/models/xr/losin_parrotfish_mosaic_k2.glb",
+   "xrGlbUrlK4": "https://siamdive-cdn.b-cdn.net/models/xr/losin_parrotfish_mosaic_r0p.glb",
+   "xrVramK1": 22369620,
+   "xrVramK2": 89478484,
+   "xrVramK4": 223696212
   },
   {
    "id": "losin:octopus_crimson",
@@ -1883,7 +2405,13 @@
    "fx": null,
    "behavior": null,
    "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/losin_octopus_crimson_xr0.glb",
-   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/losin_octopus_crimson_xr1.glb"
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/losin_octopus_crimson_xr1.glb",
+   "xrGlbUrlK1": "https://siamdive-cdn.b-cdn.net/models/xr/losin_octopus_crimson_k1.glb",
+   "xrGlbUrlK2": "https://siamdive-cdn.b-cdn.net/models/xr/losin_octopus_crimson_k2.glb",
+   "xrGlbUrlK4": "https://siamdive-cdn.b-cdn.net/models/xr/losin_octopus_crimson_r0p.glb",
+   "xrVramK1": 22369620,
+   "xrVramK2": 89478484,
+   "xrVramK4": 223696212
   },
   {
    "id": "losin:parrotfish_crimson",
@@ -1897,7 +2425,13 @@
    "fx": null,
    "behavior": null,
    "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/losin_parrotfish_crimson_xr0.glb",
-   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/losin_parrotfish_crimson_xr1.glb"
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/losin_parrotfish_crimson_xr1.glb",
+   "xrGlbUrlK1": "https://siamdive-cdn.b-cdn.net/models/xr/losin_parrotfish_crimson_k1.glb",
+   "xrGlbUrlK2": "https://siamdive-cdn.b-cdn.net/models/xr/losin_parrotfish_crimson_k2.glb",
+   "xrGlbUrlK4": "https://siamdive-cdn.b-cdn.net/models/xr/losin_parrotfish_crimson_r0p.glb",
+   "xrVramK1": 22369620,
+   "xrVramK2": 89478484,
+   "xrVramK4": 223696212
   },
   {
    "id": "losin:mantis_shrimp",
@@ -1911,7 +2445,13 @@
    "fx": null,
    "behavior": null,
    "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/losin_mantis_shrimp_xr0.glb",
-   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/losin_mantis_shrimp_xr1.glb"
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/losin_mantis_shrimp_xr1.glb",
+   "xrGlbUrlK1": "https://siamdive-cdn.b-cdn.net/models/xr/losin_mantis_shrimp_k1.glb",
+   "xrGlbUrlK2": "https://siamdive-cdn.b-cdn.net/models/xr/losin_mantis_shrimp_k2.glb",
+   "xrGlbUrlK4": "https://siamdive-cdn.b-cdn.net/models/xr/losin_mantis_shrimp_r0p.glb",
+   "xrVramK1": 22369620,
+   "xrVramK2": 89478484,
+   "xrVramK4": 223696212
   },
   {
    "id": "losin:devil_ray",
@@ -1925,7 +2465,13 @@
    "fx": null,
    "behavior": null,
    "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/losin_devil_ray_k1.glb",
-   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/losin_devil_ray_xr1.glb"
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/losin_devil_ray_xr1.glb",
+   "xrGlbUrlK1": "https://siamdive-cdn.b-cdn.net/models/xr/losin_devil_ray_k1.glb",
+   "xrGlbUrlK2": "https://siamdive-cdn.b-cdn.net/models/xr/losin_devil_ray_r0p.glb",
+   "xrGlbUrlK4": "https://siamdive-cdn.b-cdn.net/models/xr/losin_devil_ray_r0p.glb",
+   "xrVramK1": 22369620,
+   "xrVramK2": 89478484,
+   "xrVramK4": 89478484
   },
   {
    "id": "losin:pufferfish_golden",
@@ -1939,7 +2485,13 @@
    "fx": null,
    "behavior": null,
    "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/losin_pufferfish_golden_r0p.glb",
-   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/losin_pufferfish_golden_xr1.glb"
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/losin_pufferfish_golden_xr1.glb",
+   "xrGlbUrlK1": "https://siamdive-cdn.b-cdn.net/models/xr/losin_pufferfish_golden_k1.glb",
+   "xrGlbUrlK2": "https://siamdive-cdn.b-cdn.net/models/xr/losin_pufferfish_golden_k2.glb",
+   "xrGlbUrlK4": "https://siamdive-cdn.b-cdn.net/models/xr/losin_pufferfish_golden_r0p.glb",
+   "xrVramK1": 22369620,
+   "xrVramK2": 89478484,
+   "xrVramK4": 223696212
   },
   {
    "id": "losin:garden_eel",
@@ -1953,7 +2505,13 @@
    "fx": null,
    "behavior": null,
    "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/losin_garden_eel_xr0.glb",
-   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/losin_garden_eel_xr1.glb"
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/losin_garden_eel_xr1.glb",
+   "xrGlbUrlK1": "https://siamdive-cdn.b-cdn.net/models/xr/losin_garden_eel_k1.glb",
+   "xrGlbUrlK2": "https://siamdive-cdn.b-cdn.net/models/xr/losin_garden_eel_k2.glb",
+   "xrGlbUrlK4": "https://siamdive-cdn.b-cdn.net/models/xr/losin_garden_eel_r0p.glb",
+   "xrVramK1": 22369620,
+   "xrVramK2": 89478484,
+   "xrVramK4": 223696212
   },
   {
    "id": "losin:guitar_shark",
@@ -1967,7 +2525,13 @@
    "fx": null,
    "behavior": null,
    "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/losin_guitar_shark_xr0.glb",
-   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/losin_guitar_shark_xr1.glb"
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/losin_guitar_shark_xr1.glb",
+   "xrGlbUrlK1": "https://siamdive-cdn.b-cdn.net/models/xr/losin_guitar_shark_k1.glb",
+   "xrGlbUrlK2": "https://siamdive-cdn.b-cdn.net/models/xr/losin_guitar_shark_k2.glb",
+   "xrGlbUrlK4": "https://siamdive-cdn.b-cdn.net/models/xr/losin_guitar_shark_r0p.glb",
+   "xrVramK1": 22369620,
+   "xrVramK2": 89478484,
+   "xrVramK4": 223696212
   },
   {
    "id": "losin:hammerhead_shark",
@@ -1981,7 +2545,13 @@
    "fx": null,
    "behavior": null,
    "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/losin_hammerhead_shark_xr0.glb",
-   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/losin_hammerhead_shark_xr1.glb"
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/losin_hammerhead_shark_xr1.glb",
+   "xrGlbUrlK1": "https://siamdive-cdn.b-cdn.net/models/xr/losin_hammerhead_shark_k1.glb",
+   "xrGlbUrlK2": "https://siamdive-cdn.b-cdn.net/models/xr/losin_hammerhead_shark_k2.glb",
+   "xrGlbUrlK4": "https://siamdive-cdn.b-cdn.net/models/xr/losin_hammerhead_shark_r0p.glb",
+   "xrVramK1": 22369620,
+   "xrVramK2": 89478484,
+   "xrVramK4": 223696212
   },
   {
    "id": "losin:parrotfish_honeycomb",
@@ -1995,7 +2565,13 @@
    "fx": null,
    "behavior": null,
    "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/losin_parrotfish_honeycomb_xr0.glb",
-   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/losin_parrotfish_honeycomb_xr1.glb"
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/losin_parrotfish_honeycomb_xr1.glb",
+   "xrGlbUrlK1": "https://siamdive-cdn.b-cdn.net/models/xr/losin_parrotfish_honeycomb_k1.glb",
+   "xrGlbUrlK2": "https://siamdive-cdn.b-cdn.net/models/xr/losin_parrotfish_honeycomb_k2.glb",
+   "xrGlbUrlK4": "https://siamdive-cdn.b-cdn.net/models/xr/losin_parrotfish_honeycomb_r0p.glb",
+   "xrVramK1": 22369620,
+   "xrVramK2": 89478484,
+   "xrVramK4": 223696212
   },
   {
    "id": "losin:indigo_velvet",
@@ -2009,7 +2585,13 @@
    "fx": null,
    "behavior": null,
    "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/losin_indigo_velvet_xr0.glb",
-   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/losin_indigo_velvet_xr1.glb"
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/losin_indigo_velvet_xr1.glb",
+   "xrGlbUrlK1": "https://siamdive-cdn.b-cdn.net/models/xr/losin_indigo_velvet_k1.glb",
+   "xrGlbUrlK2": "https://siamdive-cdn.b-cdn.net/models/xr/losin_indigo_velvet_k2.glb",
+   "xrGlbUrlK4": "https://siamdive-cdn.b-cdn.net/models/xr/losin_indigo_velvet_r0p.glb",
+   "xrVramK1": 22369620,
+   "xrVramK2": 89478484,
+   "xrVramK4": 223696212
   },
   {
    "id": "losin:kaleidoscope_beetle",
@@ -2023,7 +2605,13 @@
    "fx": null,
    "behavior": null,
    "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/losin_kaleidoscope_beetle_xr0.glb",
-   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/losin_kaleidoscope_beetle_xr1.glb"
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/losin_kaleidoscope_beetle_xr1.glb",
+   "xrGlbUrlK1": "https://siamdive-cdn.b-cdn.net/models/xr/losin_kaleidoscope_beetle_k1.glb",
+   "xrGlbUrlK2": "https://siamdive-cdn.b-cdn.net/models/xr/losin_kaleidoscope_beetle_k2.glb",
+   "xrGlbUrlK4": "https://siamdive-cdn.b-cdn.net/models/xr/losin_kaleidoscope_beetle_r0p.glb",
+   "xrVramK1": 22369620,
+   "xrVramK2": 89478484,
+   "xrVramK4": 223696212
   },
   {
    "id": "losin:moray_leopard",
@@ -2037,7 +2625,13 @@
    "fx": null,
    "behavior": null,
    "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/losin_moray_leopard_xr0.glb",
-   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/losin_moray_leopard_xr1.glb"
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/losin_moray_leopard_xr1.glb",
+   "xrGlbUrlK1": "https://siamdive-cdn.b-cdn.net/models/xr/losin_moray_leopard_k1.glb",
+   "xrGlbUrlK2": "https://siamdive-cdn.b-cdn.net/models/xr/losin_moray_leopard_k2.glb",
+   "xrGlbUrlK4": "https://siamdive-cdn.b-cdn.net/models/xr/losin_moray_leopard_r0p.glb",
+   "xrVramK1": 22369620,
+   "xrVramK2": 89478484,
+   "xrVramK4": 223696212
   },
   {
    "id": "losin:leopard_fish",
@@ -2051,7 +2645,13 @@
    "fx": null,
    "behavior": null,
    "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/losin_leopard_fish_xr0.glb",
-   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/losin_leopard_fish_xr1.glb"
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/losin_leopard_fish_xr1.glb",
+   "xrGlbUrlK1": "https://siamdive-cdn.b-cdn.net/models/xr/losin_leopard_fish_k1.glb",
+   "xrGlbUrlK2": "https://siamdive-cdn.b-cdn.net/models/xr/losin_leopard_fish_k2.glb",
+   "xrGlbUrlK4": "https://siamdive-cdn.b-cdn.net/models/xr/losin_leopard_fish_r0p.glb",
+   "xrVramK1": 22369620,
+   "xrVramK2": 89478484,
+   "xrVramK4": 223696212
   },
   {
    "id": "losin:marble_stingray",
@@ -2065,7 +2665,13 @@
    "fx": null,
    "behavior": null,
    "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/losin_marble_stingray_xr0.glb",
-   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/losin_marble_stingray_xr1.glb"
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/losin_marble_stingray_xr1.glb",
+   "xrGlbUrlK1": "https://siamdive-cdn.b-cdn.net/models/xr/losin_marble_stingray_k1.glb",
+   "xrGlbUrlK2": "https://siamdive-cdn.b-cdn.net/models/xr/losin_marble_stingray_r0p.glb",
+   "xrGlbUrlK4": "https://siamdive-cdn.b-cdn.net/models/xr/losin_marble_stingray_r0p.glb",
+   "xrVramK1": 22369620,
+   "xrVramK2": 89478484,
+   "xrVramK4": 89478484
   },
   {
    "id": "losin:moorish_idol",
@@ -2079,7 +2685,13 @@
    "fx": null,
    "behavior": null,
    "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/losin_moorish_idol_r0p.glb",
-   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/losin_moorish_idol_xr1.glb"
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/losin_moorish_idol_xr1.glb",
+   "xrGlbUrlK1": "https://siamdive-cdn.b-cdn.net/models/xr/losin_moorish_idol_k1.glb",
+   "xrGlbUrlK2": "https://siamdive-cdn.b-cdn.net/models/xr/losin_moorish_idol_k2.glb",
+   "xrGlbUrlK4": "https://siamdive-cdn.b-cdn.net/models/xr/losin_moorish_idol_r0p.glb",
+   "xrVramK1": 22369620,
+   "xrVramK2": 89478484,
+   "xrVramK4": 223696212
   },
   {
    "id": "losin:sea_serpent",
@@ -2093,7 +2705,13 @@
    "fx": null,
    "behavior": null,
    "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/losin_sea_serpent_xr0.glb",
-   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/losin_sea_serpent_xr1.glb"
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/losin_sea_serpent_xr1.glb",
+   "xrGlbUrlK1": "https://siamdive-cdn.b-cdn.net/models/xr/losin_sea_serpent_k1.glb",
+   "xrGlbUrlK2": "https://siamdive-cdn.b-cdn.net/models/xr/losin_sea_serpent_k2.glb",
+   "xrGlbUrlK4": "https://siamdive-cdn.b-cdn.net/models/xr/losin_sea_serpent_r0p.glb",
+   "xrVramK1": 22369620,
+   "xrVramK2": 89478484,
+   "xrVramK4": 223696212
   },
   {
    "id": "losin:octopus",
@@ -2107,7 +2725,13 @@
    "fx": null,
    "behavior": null,
    "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/losin_octopus_xr0.glb",
-   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/losin_octopus_xr1.glb"
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/losin_octopus_xr1.glb",
+   "xrGlbUrlK1": "https://siamdive-cdn.b-cdn.net/models/xr/losin_octopus_k1.glb",
+   "xrGlbUrlK2": "https://siamdive-cdn.b-cdn.net/models/xr/losin_octopus_k2.glb",
+   "xrGlbUrlK4": "https://siamdive-cdn.b-cdn.net/models/xr/losin_octopus_r0p.glb",
+   "xrVramK1": 22369620,
+   "xrVramK2": 89478484,
+   "xrVramK4": 223696212
   },
   {
    "id": "losin:butterflyfish",
@@ -2121,7 +2745,13 @@
    "fx": null,
    "behavior": null,
    "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/losin_butterflyfish_xr0.glb",
-   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/losin_butterflyfish_xr1.glb"
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/losin_butterflyfish_xr1.glb",
+   "xrGlbUrlK1": "https://siamdive-cdn.b-cdn.net/models/xr/losin_butterflyfish_k1.glb",
+   "xrGlbUrlK2": "https://siamdive-cdn.b-cdn.net/models/xr/losin_butterflyfish_k2.glb",
+   "xrGlbUrlK4": "https://siamdive-cdn.b-cdn.net/models/xr/losin_butterflyfish_r0p.glb",
+   "xrVramK1": 22369620,
+   "xrVramK2": 89478484,
+   "xrVramK4": 223696212
   },
   {
    "id": "losin:parrotfish_prismatic",
@@ -2135,7 +2765,13 @@
    "fx": null,
    "behavior": null,
    "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/losin_parrotfish_prismatic_xr0.glb",
-   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/losin_parrotfish_prismatic_xr1.glb"
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/losin_parrotfish_prismatic_xr1.glb",
+   "xrGlbUrlK1": "https://siamdive-cdn.b-cdn.net/models/xr/losin_parrotfish_prismatic_k1.glb",
+   "xrGlbUrlK2": "https://siamdive-cdn.b-cdn.net/models/xr/losin_parrotfish_prismatic_k2.glb",
+   "xrGlbUrlK4": "https://siamdive-cdn.b-cdn.net/models/xr/losin_parrotfish_prismatic_r0p.glb",
+   "xrVramK1": 22369620,
+   "xrVramK2": 89478484,
+   "xrVramK4": 223696212
   },
   {
    "id": "losin:prismatic_reef",
@@ -2149,7 +2785,13 @@
    "fx": null,
    "behavior": null,
    "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/losin_prismatic_reef_xr0.glb",
-   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/losin_prismatic_reef_xr1.glb"
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/losin_prismatic_reef_xr1.glb",
+   "xrGlbUrlK1": "https://siamdive-cdn.b-cdn.net/models/xr/losin_prismatic_reef_k1.glb",
+   "xrGlbUrlK2": "https://siamdive-cdn.b-cdn.net/models/xr/losin_prismatic_reef_k2.glb",
+   "xrGlbUrlK4": "https://siamdive-cdn.b-cdn.net/models/xr/losin_prismatic_reef_r0p.glb",
+   "xrVramK1": 22369620,
+   "xrVramK2": 89478484,
+   "xrVramK4": 223696212
   },
   {
    "id": "losin:reef_manta_ray",
@@ -2163,7 +2805,13 @@
    "fx": null,
    "behavior": null,
    "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/losin_reef_manta_ray_k1.glb",
-   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/losin_reef_manta_ray_xr1.glb"
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/losin_reef_manta_ray_xr1.glb",
+   "xrGlbUrlK1": "https://siamdive-cdn.b-cdn.net/models/xr/losin_reef_manta_ray_k1.glb",
+   "xrGlbUrlK2": "https://siamdive-cdn.b-cdn.net/models/xr/losin_reef_manta_ray_k2.glb",
+   "xrGlbUrlK4": "https://siamdive-cdn.b-cdn.net/models/xr/losin_reef_manta_ray_r0p.glb",
+   "xrVramK1": 22369620,
+   "xrVramK2": 89478484,
+   "xrVramK4": 223696212
   },
   {
    "id": "losin:blue_tang",
@@ -2177,7 +2825,13 @@
    "fx": null,
    "behavior": null,
    "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/losin_blue_tang_xr0.glb",
-   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/losin_blue_tang_xr1.glb"
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/losin_blue_tang_xr1.glb",
+   "xrGlbUrlK1": "https://siamdive-cdn.b-cdn.net/models/xr/losin_blue_tang_k1.glb",
+   "xrGlbUrlK2": "https://siamdive-cdn.b-cdn.net/models/xr/losin_blue_tang_k2.glb",
+   "xrGlbUrlK4": "https://siamdive-cdn.b-cdn.net/models/xr/losin_blue_tang_r0p.glb",
+   "xrVramK1": 22369620,
+   "xrVramK2": 89478484,
+   "xrVramK4": 223696212
   },
   {
    "id": "losin:scorpionfish",
@@ -2191,7 +2845,13 @@
    "fx": null,
    "behavior": null,
    "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/losin_scorpionfish_r0p.glb",
-   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/losin_scorpionfish_xr1.glb"
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/losin_scorpionfish_xr1.glb",
+   "xrGlbUrlK1": "https://siamdive-cdn.b-cdn.net/models/xr/losin_scorpionfish_k1.glb",
+   "xrGlbUrlK2": "https://siamdive-cdn.b-cdn.net/models/xr/losin_scorpionfish_r0p.glb",
+   "xrGlbUrlK4": "https://siamdive-cdn.b-cdn.net/models/xr/losin_scorpionfish_r0p.glb",
+   "xrVramK1": 22369620,
+   "xrVramK2": 89478484,
+   "xrVramK4": 89478484
   },
   {
    "id": "losin:lobster_aurora",
@@ -2205,7 +2865,13 @@
    "fx": null,
    "behavior": null,
    "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/losin_lobster_aurora_xr0.glb",
-   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/losin_lobster_aurora_xr1.glb"
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/losin_lobster_aurora_xr1.glb",
+   "xrGlbUrlK1": "https://siamdive-cdn.b-cdn.net/models/xr/losin_lobster_aurora_k1.glb",
+   "xrGlbUrlK2": "https://siamdive-cdn.b-cdn.net/models/xr/losin_lobster_aurora_k2.glb",
+   "xrGlbUrlK4": "https://siamdive-cdn.b-cdn.net/models/xr/losin_lobster_aurora_r0p.glb",
+   "xrVramK1": 22369620,
+   "xrVramK2": 89478484,
+   "xrVramK4": 223696212
   },
   {
    "id": "losin:spotted_harbor",
@@ -2219,7 +2885,13 @@
    "fx": null,
    "behavior": null,
    "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/losin_spotted_harbor_xr0.glb",
-   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/losin_spotted_harbor_xr1.glb"
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/losin_spotted_harbor_xr1.glb",
+   "xrGlbUrlK1": "https://siamdive-cdn.b-cdn.net/models/xr/losin_spotted_harbor_k1.glb",
+   "xrGlbUrlK2": "https://siamdive-cdn.b-cdn.net/models/xr/losin_spotted_harbor_k2.glb",
+   "xrGlbUrlK4": "https://siamdive-cdn.b-cdn.net/models/xr/losin_spotted_harbor_r0p.glb",
+   "xrVramK1": 22369620,
+   "xrVramK2": 89478484,
+   "xrVramK4": 223696212
   },
   {
    "id": "losin:stonefish",
@@ -2233,7 +2905,13 @@
    "fx": null,
    "behavior": null,
    "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/losin_stonefish_xr0.glb",
-   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/losin_stonefish_xr1.glb"
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/losin_stonefish_xr1.glb",
+   "xrGlbUrlK1": "https://siamdive-cdn.b-cdn.net/models/xr/losin_stonefish_k1.glb",
+   "xrGlbUrlK2": "https://siamdive-cdn.b-cdn.net/models/xr/losin_stonefish_k2.glb",
+   "xrGlbUrlK4": "https://siamdive-cdn.b-cdn.net/models/xr/losin_stonefish_r0p.glb",
+   "xrVramK1": 22369620,
+   "xrVramK2": 89478484,
+   "xrVramK4": 223696212
   },
   {
    "id": "losin:clownfish_three_band",
@@ -2247,7 +2925,13 @@
    "fx": null,
    "behavior": null,
    "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/losin_clownfish_three_band_xr0.glb",
-   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/losin_clownfish_three_band_xr1.glb"
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/losin_clownfish_three_band_xr1.glb",
+   "xrGlbUrlK1": "https://siamdive-cdn.b-cdn.net/models/xr/losin_clownfish_three_band_k1.glb",
+   "xrGlbUrlK2": "https://siamdive-cdn.b-cdn.net/models/xr/losin_clownfish_three_band_k2.glb",
+   "xrGlbUrlK4": "https://siamdive-cdn.b-cdn.net/models/xr/losin_clownfish_three_band_r0p.glb",
+   "xrVramK1": 22369620,
+   "xrVramK2": 89478484,
+   "xrVramK4": 223696212
   },
   {
    "id": "losin:clownfish_two_band",
@@ -2261,7 +2945,13 @@
    "fx": null,
    "behavior": null,
    "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/losin_clownfish_two_band_xr0.glb",
-   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/losin_clownfish_two_band_xr1.glb"
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/losin_clownfish_two_band_xr1.glb",
+   "xrGlbUrlK1": "https://siamdive-cdn.b-cdn.net/models/xr/losin_clownfish_two_band_k1.glb",
+   "xrGlbUrlK2": "https://siamdive-cdn.b-cdn.net/models/xr/losin_clownfish_two_band_k2.glb",
+   "xrGlbUrlK4": "https://siamdive-cdn.b-cdn.net/models/xr/losin_clownfish_two_band_r0p.glb",
+   "xrVramK1": 22369620,
+   "xrVramK2": 89478484,
+   "xrVramK4": 223696212
   },
   {
    "id": "losin:bannerfish",
@@ -2275,7 +2965,13 @@
    "fx": null,
    "behavior": null,
    "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/losin_bannerfish_xr0.glb",
-   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/losin_bannerfish_xr1.glb"
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/losin_bannerfish_xr1.glb",
+   "xrGlbUrlK1": "https://siamdive-cdn.b-cdn.net/models/xr/losin_bannerfish_k1.glb",
+   "xrGlbUrlK2": "https://siamdive-cdn.b-cdn.net/models/xr/losin_bannerfish_k2.glb",
+   "xrGlbUrlK4": "https://siamdive-cdn.b-cdn.net/models/xr/losin_bannerfish_r0p.glb",
+   "xrVramK1": 22369620,
+   "xrVramK2": 89478484,
+   "xrVramK4": 223696212
   },
   {
    "id": "losin:parrotfish_yellowface",
@@ -2289,7 +2985,13 @@
    "fx": null,
    "behavior": null,
    "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/losin_parrotfish_yellowface_xr0.glb",
-   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/losin_parrotfish_yellowface_xr1.glb"
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/losin_parrotfish_yellowface_xr1.glb",
+   "xrGlbUrlK1": "https://siamdive-cdn.b-cdn.net/models/xr/losin_parrotfish_yellowface_k1.glb",
+   "xrGlbUrlK2": "https://siamdive-cdn.b-cdn.net/models/xr/losin_parrotfish_yellowface_k2.glb",
+   "xrGlbUrlK4": "https://siamdive-cdn.b-cdn.net/models/xr/losin_parrotfish_yellowface_r0p.glb",
+   "xrVramK1": 22369620,
+   "xrVramK2": 89478484,
+   "xrVramK4": 223696212
   },
   {
    "id": "losin:pygmy_seahorse",
@@ -2303,7 +3005,13 @@
    "fx": null,
    "behavior": null,
    "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/losin_pygmy_seahorse_xr0.glb",
-   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/losin_pygmy_seahorse_xr1.glb"
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/losin_pygmy_seahorse_xr1.glb",
+   "xrGlbUrlK1": "https://siamdive-cdn.b-cdn.net/models/xr/losin_pygmy_seahorse_k1.glb",
+   "xrGlbUrlK2": "https://siamdive-cdn.b-cdn.net/models/xr/losin_pygmy_seahorse_r0p.glb",
+   "xrGlbUrlK4": "https://siamdive-cdn.b-cdn.net/models/xr/losin_pygmy_seahorse_r0p.glb",
+   "xrVramK1": 22369620,
+   "xrVramK2": 89478484,
+   "xrVramK4": 89478484
   },
   {
    "id": "mdl:bull_shark",
@@ -2317,7 +3025,13 @@
    "fx": null,
    "behavior": null,
    "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/mdl_bull_shark_k1.glb",
-   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/mdl_bull_shark_xr1.glb"
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/mdl_bull_shark_xr1.glb",
+   "xrGlbUrlK1": "https://siamdive-cdn.b-cdn.net/models/xr/mdl_bull_shark_k1.glb",
+   "xrGlbUrlK2": "https://siamdive-cdn.b-cdn.net/models/xr/mdl_bull_shark_k2.glb",
+   "xrGlbUrlK4": "https://siamdive-cdn.b-cdn.net/models/xr/mdl_bull_shark_r0p.glb",
+   "xrVramK1": 22369620,
+   "xrVramK2": 89478484,
+   "xrVramK4": 223696212
   },
   {
    "id": "mdl:great_white_shark",
@@ -2331,7 +3045,13 @@
    "fx": null,
    "behavior": null,
    "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/mdl_great_white_shark_r0p.glb",
-   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/mdl_great_white_shark_xr1.glb"
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/mdl_great_white_shark_xr1.glb",
+   "xrGlbUrlK1": "https://siamdive-cdn.b-cdn.net/models/xr/mdl_great_white_shark_k1.glb",
+   "xrGlbUrlK2": "https://siamdive-cdn.b-cdn.net/models/xr/mdl_great_white_shark_k2.glb",
+   "xrGlbUrlK4": "https://siamdive-cdn.b-cdn.net/models/xr/mdl_great_white_shark_r0p.glb",
+   "xrVramK1": 22369620,
+   "xrVramK2": 89478484,
+   "xrVramK4": 223696212
   },
   {
    "id": "mdl:whitetip_shark",
@@ -2345,7 +3065,13 @@
    "fx": null,
    "behavior": null,
    "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/mdl_whitetip_shark_r0p.glb",
-   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/mdl_whitetip_shark_xr1.glb"
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/mdl_whitetip_shark_xr1.glb",
+   "xrGlbUrlK1": "https://siamdive-cdn.b-cdn.net/models/xr/mdl_whitetip_shark_k1.glb",
+   "xrGlbUrlK2": "https://siamdive-cdn.b-cdn.net/models/xr/mdl_whitetip_shark_r0p.glb",
+   "xrGlbUrlK4": "https://siamdive-cdn.b-cdn.net/models/xr/mdl_whitetip_shark_r0p.glb",
+   "xrVramK1": 22369620,
+   "xrVramK2": 89478484,
+   "xrVramK4": 89478484
   },
   {
    "id": "mdl:dorado",
@@ -2359,7 +3085,13 @@
    "fx": null,
    "behavior": null,
    "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/mdl_dorado_xr0.glb",
-   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/mdl_dorado_xr1.glb"
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/mdl_dorado_xr1.glb",
+   "xrGlbUrlK1": "https://siamdive-cdn.b-cdn.net/models/xr/mdl_dorado_k1.glb",
+   "xrGlbUrlK2": "https://siamdive-cdn.b-cdn.net/models/xr/mdl_dorado_k2.glb",
+   "xrGlbUrlK4": "https://siamdive-cdn.b-cdn.net/models/xr/mdl_dorado_r0p.glb",
+   "xrVramK1": 22369620,
+   "xrVramK2": 89478484,
+   "xrVramK4": 223696212
   },
   {
    "id": "mdl:batfish",
@@ -2373,7 +3105,13 @@
    "fx": null,
    "behavior": null,
    "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/mdl_batfish_xr0.glb",
-   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/mdl_batfish_xr1.glb"
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/mdl_batfish_xr1.glb",
+   "xrGlbUrlK1": "https://siamdive-cdn.b-cdn.net/models/xr/mdl_batfish_k1.glb",
+   "xrGlbUrlK2": "https://siamdive-cdn.b-cdn.net/models/xr/mdl_batfish_k2.glb",
+   "xrGlbUrlK4": "https://siamdive-cdn.b-cdn.net/models/xr/mdl_batfish_r0p.glb",
+   "xrVramK1": 22369620,
+   "xrVramK2": 89478484,
+   "xrVramK4": 223696212
   },
   {
    "id": "mdl:batfish_juvenile",
@@ -2387,7 +3125,13 @@
    "fx": null,
    "behavior": null,
    "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/mdl_batfish_juvenile_xr0.glb",
-   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/mdl_batfish_juvenile_xr1.glb"
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/mdl_batfish_juvenile_xr1.glb",
+   "xrGlbUrlK1": "https://siamdive-cdn.b-cdn.net/models/xr/mdl_batfish_juvenile_k1.glb",
+   "xrGlbUrlK2": "https://siamdive-cdn.b-cdn.net/models/xr/mdl_batfish_juvenile_k2.glb",
+   "xrGlbUrlK4": "https://siamdive-cdn.b-cdn.net/models/xr/mdl_batfish_juvenile_r0p.glb",
+   "xrVramK1": 22369620,
+   "xrVramK2": 89478484,
+   "xrVramK4": 223696212
   },
   {
    "id": "mdl:coralfish",
@@ -2401,7 +3145,13 @@
    "fx": null,
    "behavior": null,
    "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/mdl_coralfish_xr0.glb",
-   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/mdl_coralfish_xr1.glb"
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/mdl_coralfish_xr1.glb",
+   "xrGlbUrlK1": "https://siamdive-cdn.b-cdn.net/models/xr/mdl_coralfish_k1.glb",
+   "xrGlbUrlK2": "https://siamdive-cdn.b-cdn.net/models/xr/mdl_coralfish_k2.glb",
+   "xrGlbUrlK4": "https://siamdive-cdn.b-cdn.net/models/xr/mdl_coralfish_r0p.glb",
+   "xrVramK1": 22369620,
+   "xrVramK2": 89478484,
+   "xrVramK4": 223696212
   },
   {
    "id": "mdl:sardine",
@@ -2415,7 +3165,13 @@
    "fx": null,
    "behavior": null,
    "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/mdl_sardine_xr0.glb",
-   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/mdl_sardine_xr1.glb"
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/mdl_sardine_xr1.glb",
+   "xrGlbUrlK1": "https://siamdive-cdn.b-cdn.net/models/xr/mdl_sardine_k1.glb",
+   "xrGlbUrlK2": "https://siamdive-cdn.b-cdn.net/models/xr/mdl_sardine_k2.glb",
+   "xrGlbUrlK4": "https://siamdive-cdn.b-cdn.net/models/xr/mdl_sardine_r0p.glb",
+   "xrVramK1": 22369620,
+   "xrVramK2": 89478484,
+   "xrVramK4": 223696212
   },
   {
    "id": "mdl:seal",
@@ -2429,7 +3185,13 @@
    "fx": null,
    "behavior": null,
    "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/mdl_seal_xr0.glb",
-   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/mdl_seal_xr1.glb"
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/mdl_seal_xr1.glb",
+   "xrGlbUrlK1": "https://siamdive-cdn.b-cdn.net/models/xr/mdl_seal_k1.glb",
+   "xrGlbUrlK2": "https://siamdive-cdn.b-cdn.net/models/xr/mdl_seal_k2.glb",
+   "xrGlbUrlK4": "https://siamdive-cdn.b-cdn.net/models/xr/mdl_seal_r0p.glb",
+   "xrVramK1": 22369620,
+   "xrVramK2": 89478484,
+   "xrVramK4": 223696212
   },
   {
    "id": "mdl:penguin",
@@ -2443,7 +3205,13 @@
    "fx": null,
    "behavior": null,
    "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/mdl_penguin_xr0.glb",
-   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/mdl_penguin_xr1.glb"
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/mdl_penguin_xr1.glb",
+   "xrGlbUrlK1": "https://siamdive-cdn.b-cdn.net/models/xr/mdl_penguin_k1.glb",
+   "xrGlbUrlK2": "https://siamdive-cdn.b-cdn.net/models/xr/mdl_penguin_k2.glb",
+   "xrGlbUrlK4": "https://siamdive-cdn.b-cdn.net/models/xr/mdl_penguin_r0p.glb",
+   "xrVramK1": 22369620,
+   "xrVramK2": 89478484,
+   "xrVramK4": 223696212
   },
   {
    "id": "mdl:penguin_emperor",
@@ -2457,7 +3225,13 @@
    "fx": null,
    "behavior": null,
    "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/mdl_penguin_emperor_xr0.glb",
-   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/mdl_penguin_emperor_xr1.glb"
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/mdl_penguin_emperor_xr1.glb",
+   "xrGlbUrlK1": "https://siamdive-cdn.b-cdn.net/models/xr/mdl_penguin_emperor_k1.glb",
+   "xrGlbUrlK2": "https://siamdive-cdn.b-cdn.net/models/xr/mdl_penguin_emperor_k2.glb",
+   "xrGlbUrlK4": "https://siamdive-cdn.b-cdn.net/models/xr/mdl_penguin_emperor_r0p.glb",
+   "xrVramK1": 22369620,
+   "xrVramK2": 89478484,
+   "xrVramK4": 223696212
   },
   {
    "id": "mdl:leafy_seadragon",
@@ -2471,7 +3245,13 @@
    "fx": null,
    "behavior": null,
    "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/mdl_leafy_seadragon_xr0.glb",
-   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/mdl_leafy_seadragon_xr1.glb"
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/mdl_leafy_seadragon_xr1.glb",
+   "xrGlbUrlK1": "https://siamdive-cdn.b-cdn.net/models/xr/mdl_leafy_seadragon_k1.glb",
+   "xrGlbUrlK2": "https://siamdive-cdn.b-cdn.net/models/xr/mdl_leafy_seadragon_k2.glb",
+   "xrGlbUrlK4": "https://siamdive-cdn.b-cdn.net/models/xr/mdl_leafy_seadragon_r0p.glb",
+   "xrVramK1": 22369620,
+   "xrVramK2": 89478484,
+   "xrVramK4": 223696212
   },
   {
    "id": "mdl:giant_clam",
@@ -2485,7 +3265,13 @@
    "fx": null,
    "behavior": null,
    "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/mdl_giant_clam_xr0.glb",
-   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/mdl_giant_clam_xr1.glb"
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/mdl_giant_clam_xr1.glb",
+   "xrGlbUrlK1": "https://siamdive-cdn.b-cdn.net/models/xr/mdl_giant_clam_k1.glb",
+   "xrGlbUrlK2": "https://siamdive-cdn.b-cdn.net/models/xr/mdl_giant_clam_k2.glb",
+   "xrGlbUrlK4": "https://siamdive-cdn.b-cdn.net/models/xr/mdl_giant_clam_r0p.glb",
+   "xrVramK1": 22369620,
+   "xrVramK2": 89478484,
+   "xrVramK4": 223696212
   },
   {
    "id": "sw:buoy_red",
@@ -2499,7 +3285,13 @@
    "fx": null,
    "behavior": null,
    "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/sw_buoy_red_xr0.glb",
-   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/sw_buoy_red_xr1.glb"
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/sw_buoy_red_xr1.glb",
+   "xrGlbUrlK1": "https://siamdive-cdn.b-cdn.net/models/xr/sw_buoy_red_k1.glb",
+   "xrGlbUrlK2": "https://siamdive-cdn.b-cdn.net/models/xr/sw_buoy_red_k2.glb",
+   "xrGlbUrlK4": "https://siamdive-cdn.b-cdn.net/models/xr/sw_buoy_red_r0p.glb",
+   "xrVramK1": 22369620,
+   "xrVramK2": 89478484,
+   "xrVramK4": 223696212
   },
   {
    "id": "sw:buoy_yellow",
@@ -2513,7 +3305,13 @@
    "fx": null,
    "behavior": null,
    "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/sw_buoy_yellow_xr0.glb",
-   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/sw_buoy_yellow_xr1.glb"
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/sw_buoy_yellow_xr1.glb",
+   "xrGlbUrlK1": "https://siamdive-cdn.b-cdn.net/models/xr/sw_buoy_yellow_k1.glb",
+   "xrGlbUrlK2": "https://siamdive-cdn.b-cdn.net/models/xr/sw_buoy_yellow_k2.glb",
+   "xrGlbUrlK4": "https://siamdive-cdn.b-cdn.net/models/xr/sw_buoy_yellow_r0p.glb",
+   "xrVramK1": 22369620,
+   "xrVramK2": 89478484,
+   "xrVramK4": 223696212
   },
   {
    "id": "sw:boonsung",
@@ -2527,7 +3325,13 @@
    "fx": null,
    "behavior": null,
    "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/sw_boonsung_xr0.glb",
-   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/sw_boonsung_xr1.glb"
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/sw_boonsung_xr1.glb",
+   "xrGlbUrlK1": "https://siamdive-cdn.b-cdn.net/models/xr/sw_boonsung_k1.glb",
+   "xrGlbUrlK2": "https://siamdive-cdn.b-cdn.net/models/xr/sw_boonsung_k2.glb",
+   "xrGlbUrlK4": "https://siamdive-cdn.b-cdn.net/models/xr/sw_boonsung_r0p.glb",
+   "xrVramK1": 22369620,
+   "xrVramK2": 89478484,
+   "xrVramK4": 223696212
   },
   {
    "id": "sw:htms732",
@@ -2569,7 +3373,13 @@
    "animated": false,
    "school": null,
    "fx": "gold",
-   "behavior": null
+   "behavior": null,
+   "xrGlbUrlK1": "https://siamdive-cdn.b-cdn.net/models/xr/Golden_Trident_k1.glb",
+   "xrGlbUrlK2": "https://siamdive-cdn.b-cdn.net/models/xr/Golden_Trident_k2.glb",
+   "xrGlbUrlK4": "https://siamdive-cdn.b-cdn.net/models/xr/Golden_Trident_r0p.glb",
+   "xrVramK1": 22369620,
+   "xrVramK2": 89478484,
+   "xrVramK4": 223696212
   },
   {
    "id": "sw:stone_king",
@@ -2583,7 +3393,13 @@
    "animated": false,
    "school": null,
    "fx": null,
-   "behavior": null
+   "behavior": null,
+   "xrGlbUrlK1": "https://siamdive-cdn.b-cdn.net/models/xr/Stone_King_k1.glb",
+   "xrGlbUrlK2": "https://siamdive-cdn.b-cdn.net/models/xr/Stone_King_k2.glb",
+   "xrGlbUrlK4": "https://siamdive-cdn.b-cdn.net/models/xr/Stone_King_r0p.glb",
+   "xrVramK1": 22369620,
+   "xrVramK2": 89478484,
+   "xrVramK4": 223696212
   },
   {
    "id": "ruin:byzantine_arch",
@@ -2597,7 +3413,13 @@
    "fx": null,
    "behavior": null,
    "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/ruin_byzantine_arch_k1.glb",
-   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/ruin_byzantine_arch_xr1.glb"
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/ruin_byzantine_arch_xr1.glb",
+   "xrGlbUrlK1": "https://siamdive-cdn.b-cdn.net/models/xr/ruin_byzantine_arch_k1.glb",
+   "xrGlbUrlK2": "https://siamdive-cdn.b-cdn.net/models/xr/ruin_byzantine_arch_k2.glb",
+   "xrGlbUrlK4": "https://siamdive-cdn.b-cdn.net/models/xr/ruin_byzantine_arch_r0p.glb",
+   "xrVramK1": 22369620,
+   "xrVramK2": 89478484,
+   "xrVramK4": 223696212
   },
   {
    "id": "ruin:crystal_arch",
@@ -2611,7 +3433,13 @@
    "fx": null,
    "behavior": null,
    "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/ruin_crystal_arch_k1.glb",
-   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/ruin_crystal_arch_xr1.glb"
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/ruin_crystal_arch_xr1.glb",
+   "xrGlbUrlK1": "https://siamdive-cdn.b-cdn.net/models/xr/ruin_crystal_arch_k1.glb",
+   "xrGlbUrlK2": "https://siamdive-cdn.b-cdn.net/models/xr/ruin_crystal_arch_k2.glb",
+   "xrGlbUrlK4": "https://siamdive-cdn.b-cdn.net/models/xr/ruin_crystal_arch_r0p.glb",
+   "xrVramK1": 22369620,
+   "xrVramK2": 89478484,
+   "xrVramK4": 223696212
   },
   {
    "id": "ruin:grand_byzantine",
@@ -2625,7 +3453,13 @@
    "fx": null,
    "behavior": null,
    "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/ruin_grand_byzantine_k1.glb",
-   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/ruin_grand_byzantine_xr1.glb"
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/ruin_grand_byzantine_xr1.glb",
+   "xrGlbUrlK1": "https://siamdive-cdn.b-cdn.net/models/xr/ruin_grand_byzantine_k1.glb",
+   "xrGlbUrlK2": "https://siamdive-cdn.b-cdn.net/models/xr/ruin_grand_byzantine_k2.glb",
+   "xrGlbUrlK4": "https://siamdive-cdn.b-cdn.net/models/xr/ruin_grand_byzantine_r0p.glb",
+   "xrVramK1": 22369620,
+   "xrVramK2": 89478484,
+   "xrVramK4": 223696212
   },
   {
    "id": "ruin:domed_temple",
@@ -2639,7 +3473,13 @@
    "fx": null,
    "behavior": null,
    "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/ruin_domed_temple_k1.glb",
-   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/ruin_domed_temple_xr1.glb"
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/ruin_domed_temple_xr1.glb",
+   "xrGlbUrlK1": "https://siamdive-cdn.b-cdn.net/models/xr/ruin_domed_temple_k1.glb",
+   "xrGlbUrlK2": "https://siamdive-cdn.b-cdn.net/models/xr/ruin_domed_temple_k2.glb",
+   "xrGlbUrlK4": "https://siamdive-cdn.b-cdn.net/models/xr/ruin_domed_temple_r0p.glb",
+   "xrVramK1": 22369620,
+   "xrVramK2": 89478484,
+   "xrVramK4": 223696212
   },
   {
    "id": "ruin:fantasy_gate",
@@ -2653,7 +3493,13 @@
    "fx": null,
    "behavior": null,
    "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/ruin_fantasy_gate_k1.glb",
-   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/ruin_fantasy_gate_xr1.glb"
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/ruin_fantasy_gate_xr1.glb",
+   "xrGlbUrlK1": "https://siamdive-cdn.b-cdn.net/models/xr/ruin_fantasy_gate_k1.glb",
+   "xrGlbUrlK2": "https://siamdive-cdn.b-cdn.net/models/xr/ruin_fantasy_gate_k2.glb",
+   "xrGlbUrlK4": "https://siamdive-cdn.b-cdn.net/models/xr/ruin_fantasy_gate_r0p.glb",
+   "xrVramK1": 22369620,
+   "xrVramK2": 89478484,
+   "xrVramK4": 223696212
   },
   {
    "id": "ruin:stepped_stone",
@@ -2667,7 +3513,13 @@
    "fx": null,
    "behavior": null,
    "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/ruin_stepped_stone_k1.glb",
-   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/ruin_stepped_stone_xr1.glb"
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/ruin_stepped_stone_xr1.glb",
+   "xrGlbUrlK1": "https://siamdive-cdn.b-cdn.net/models/xr/ruin_stepped_stone_k1.glb",
+   "xrGlbUrlK2": "https://siamdive-cdn.b-cdn.net/models/xr/ruin_stepped_stone_k2.glb",
+   "xrGlbUrlK4": "https://siamdive-cdn.b-cdn.net/models/xr/ruin_stepped_stone_r0p.glb",
+   "xrVramK1": 22369620,
+   "xrVramK2": 89478484,
+   "xrVramK4": 223696212
   },
   {
    "id": "ruin:ornate_monument",
@@ -2680,7 +3532,13 @@
    "school": null,
    "fx": null,
    "behavior": null,
-   "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/ruin_ornate_monument_k1.glb"
+   "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/ruin_ornate_monument_k1.glb",
+   "xrGlbUrlK1": "https://siamdive-cdn.b-cdn.net/models/xr/ruin_ornate_monument_k1.glb",
+   "xrGlbUrlK2": "https://siamdive-cdn.b-cdn.net/models/xr/ruin_ornate_monument_k2.glb",
+   "xrGlbUrlK4": "https://siamdive-cdn.b-cdn.net/models/xr/ruin_ornate_monument_r0p.glb",
+   "xrVramK1": 22369620,
+   "xrVramK2": 89478484,
+   "xrVramK4": 223696212
   },
   {
    "id": "ruin:broken_pillars",
@@ -2694,7 +3552,13 @@
    "fx": null,
    "behavior": null,
    "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/ruin_broken_pillars_k1.glb",
-   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/ruin_broken_pillars_xr1.glb"
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/ruin_broken_pillars_xr1.glb",
+   "xrGlbUrlK1": "https://siamdive-cdn.b-cdn.net/models/xr/ruin_broken_pillars_k1.glb",
+   "xrGlbUrlK2": "https://siamdive-cdn.b-cdn.net/models/xr/ruin_broken_pillars_r0p.glb",
+   "xrGlbUrlK4": "https://siamdive-cdn.b-cdn.net/models/xr/ruin_broken_pillars_r0p.glb",
+   "xrVramK1": 22369620,
+   "xrVramK2": 89478484,
+   "xrVramK4": 89478484
   },
   {
    "id": "ruin:long_arch",
@@ -2708,7 +3572,13 @@
    "fx": null,
    "behavior": null,
    "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/ruin_long_arch_k1.glb",
-   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/ruin_long_arch_xr1.glb"
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/ruin_long_arch_xr1.glb",
+   "xrGlbUrlK1": "https://siamdive-cdn.b-cdn.net/models/xr/ruin_long_arch_k1.glb",
+   "xrGlbUrlK2": "https://siamdive-cdn.b-cdn.net/models/xr/ruin_long_arch_k2.glb",
+   "xrGlbUrlK4": "https://siamdive-cdn.b-cdn.net/models/xr/ruin_long_arch_r0p.glb",
+   "xrVramK1": 22369620,
+   "xrVramK2": 89478484,
+   "xrVramK4": 223696212
   },
   {
    "id": "ruin:ancient_byzantine",
@@ -2722,7 +3592,13 @@
    "fx": null,
    "behavior": null,
    "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/ruin_ancient_byzantine_k1.glb",
-   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/ruin_ancient_byzantine_xr1.glb"
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/ruin_ancient_byzantine_xr1.glb",
+   "xrGlbUrlK1": "https://siamdive-cdn.b-cdn.net/models/xr/ruin_ancient_byzantine_k1.glb",
+   "xrGlbUrlK2": "https://siamdive-cdn.b-cdn.net/models/xr/ruin_ancient_byzantine_k2.glb",
+   "xrGlbUrlK4": "https://siamdive-cdn.b-cdn.net/models/xr/ruin_ancient_byzantine_r0p.glb",
+   "xrVramK1": 22369620,
+   "xrVramK2": 89478484,
+   "xrVramK4": 223696212
   },
   {
    "id": "ruin:ancient_ornate",
@@ -2736,7 +3612,13 @@
    "fx": null,
    "behavior": null,
    "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/ruin_ancient_ornate_k1.glb",
-   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/ruin_ancient_ornate_xr1.glb"
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/ruin_ancient_ornate_xr1.glb",
+   "xrGlbUrlK1": "https://siamdive-cdn.b-cdn.net/models/xr/ruin_ancient_ornate_k1.glb",
+   "xrGlbUrlK2": "https://siamdive-cdn.b-cdn.net/models/xr/ruin_ancient_ornate_k2.glb",
+   "xrGlbUrlK4": "https://siamdive-cdn.b-cdn.net/models/xr/ruin_ancient_ornate_r0p.glb",
+   "xrVramK1": 22369620,
+   "xrVramK2": 89478484,
+   "xrVramK4": 223696212
   },
   {
    "id": "stat:verdant_poseidon",
@@ -2750,7 +3632,13 @@
    "fx": null,
    "behavior": null,
    "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/stat_verdant_poseidon_k1.glb",
-   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/stat_verdant_poseidon_xr1.glb"
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/stat_verdant_poseidon_xr1.glb",
+   "xrGlbUrlK1": "https://siamdive-cdn.b-cdn.net/models/xr/stat_verdant_poseidon_k1.glb",
+   "xrGlbUrlK2": "https://siamdive-cdn.b-cdn.net/models/xr/stat_verdant_poseidon_k2.glb",
+   "xrGlbUrlK4": "https://siamdive-cdn.b-cdn.net/models/xr/stat_verdant_poseidon_r0p.glb",
+   "xrVramK1": 22369620,
+   "xrVramK2": 89478484,
+   "xrVramK4": 223696212
   },
   {
    "id": "stat:stormbringer",
@@ -2764,7 +3652,13 @@
    "fx": null,
    "behavior": null,
    "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/stat_stormbringer_k1.glb",
-   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/stat_stormbringer_xr1.glb"
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/stat_stormbringer_xr1.glb",
+   "xrGlbUrlK1": "https://siamdive-cdn.b-cdn.net/models/xr/stat_stormbringer_k1.glb",
+   "xrGlbUrlK2": "https://siamdive-cdn.b-cdn.net/models/xr/stat_stormbringer_k2.glb",
+   "xrGlbUrlK4": "https://siamdive-cdn.b-cdn.net/models/xr/stat_stormbringer_r0p.glb",
+   "xrVramK1": 22369620,
+   "xrVramK2": 89478484,
+   "xrVramK4": 223696212
   },
   {
    "id": "stat:ascendant_warrior",
@@ -2778,7 +3672,13 @@
    "fx": null,
    "behavior": null,
    "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/stat_ascendant_warrior_k1.glb",
-   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/stat_ascendant_warrior_xr1.glb"
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/stat_ascendant_warrior_xr1.glb",
+   "xrGlbUrlK1": "https://siamdive-cdn.b-cdn.net/models/xr/stat_ascendant_warrior_k1.glb",
+   "xrGlbUrlK2": "https://siamdive-cdn.b-cdn.net/models/xr/stat_ascendant_warrior_k2.glb",
+   "xrGlbUrlK4": "https://siamdive-cdn.b-cdn.net/models/xr/stat_ascendant_warrior_r0p.glb",
+   "xrVramK1": 22369620,
+   "xrVramK2": 89478484,
+   "xrVramK4": 223696212
   },
   {
    "id": "losin:lighthouse",
@@ -2792,7 +3692,13 @@
    "fx": null,
    "behavior": null,
    "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/losin_lighthouse_xr0.glb",
-   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/losin_lighthouse_xr1.glb"
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/losin_lighthouse_xr1.glb",
+   "xrGlbUrlK1": "https://siamdive-cdn.b-cdn.net/models/xr/losin_lighthouse_k1.glb",
+   "xrGlbUrlK2": "https://siamdive-cdn.b-cdn.net/models/xr/losin_lighthouse_k2.glb",
+   "xrGlbUrlK4": "https://siamdive-cdn.b-cdn.net/models/xr/losin_lighthouse_r0p.glb",
+   "xrVramK1": 22369620,
+   "xrVramK2": 89478484,
+   "xrVramK4": 223696212
   },
   {
    "id": "art:covered_stone",
@@ -2806,7 +3712,13 @@
    "fx": null,
    "behavior": null,
    "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/art_covered_stone_xr0.glb",
-   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/art_covered_stone_xr1.glb"
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/art_covered_stone_xr1.glb",
+   "xrGlbUrlK1": "https://siamdive-cdn.b-cdn.net/models/xr/art_covered_stone_r0p.glb",
+   "xrGlbUrlK2": "https://siamdive-cdn.b-cdn.net/models/xr/art_covered_stone_r0p.glb",
+   "xrGlbUrlK4": "https://siamdive-cdn.b-cdn.net/models/xr/art_covered_stone_r0p.glb",
+   "xrVramK1": 5592404,
+   "xrVramK2": 5592404,
+   "xrVramK4": 5592404
   },
   {
    "id": "art:lichen_cylinder",
@@ -2820,7 +3732,13 @@
    "fx": null,
    "behavior": null,
    "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/art_lichen_cylinder_xr0.glb",
-   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/art_lichen_cylinder_xr1.glb"
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/art_lichen_cylinder_xr1.glb",
+   "xrGlbUrlK1": "https://siamdive-cdn.b-cdn.net/models/xr/art_lichen_cylinder_r0p.glb",
+   "xrGlbUrlK2": "https://siamdive-cdn.b-cdn.net/models/xr/art_lichen_cylinder_r0p.glb",
+   "xrGlbUrlK4": "https://siamdive-cdn.b-cdn.net/models/xr/art_lichen_cylinder_r0p.glb",
+   "xrVramK1": 5592404,
+   "xrVramK2": 5592404,
+   "xrVramK4": 5592404
   },
   {
    "id": "art:monolith",
@@ -2834,7 +3752,13 @@
    "fx": null,
    "behavior": null,
    "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/art_monolith_xr0.glb",
-   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/art_monolith_xr1.glb"
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/art_monolith_xr1.glb",
+   "xrGlbUrlK1": "https://siamdive-cdn.b-cdn.net/models/xr/art_monolith_k1.glb",
+   "xrGlbUrlK2": "https://siamdive-cdn.b-cdn.net/models/xr/art_monolith_k2.glb",
+   "xrGlbUrlK4": "https://siamdive-cdn.b-cdn.net/models/xr/art_monolith_r0p.glb",
+   "xrVramK1": 22369620,
+   "xrVramK2": 89478484,
+   "xrVramK4": 223696212
   },
   {
    "id": "art:1268",
@@ -2848,7 +3772,13 @@
    "fx": null,
    "behavior": null,
    "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/art_1268_xr0.glb",
-   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/art_1268_xr1.glb"
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/art_1268_xr1.glb",
+   "xrGlbUrlK1": "https://siamdive-cdn.b-cdn.net/models/xr/art_1268_k1.glb",
+   "xrGlbUrlK2": "https://siamdive-cdn.b-cdn.net/models/xr/art_1268_k2.glb",
+   "xrGlbUrlK4": "https://siamdive-cdn.b-cdn.net/models/xr/art_1268_r0p.glb",
+   "xrVramK1": 22369620,
+   "xrVramK2": 89478484,
+   "xrVramK4": 223696212
   },
   {
    "id": "art:1272",
@@ -2862,7 +3792,13 @@
    "fx": null,
    "behavior": null,
    "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/art_1272_xr0.glb",
-   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/art_1272_xr1.glb"
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/art_1272_xr1.glb",
+   "xrGlbUrlK1": "https://siamdive-cdn.b-cdn.net/models/xr/art_1272_k1.glb",
+   "xrGlbUrlK2": "https://siamdive-cdn.b-cdn.net/models/xr/art_1272_k2.glb",
+   "xrGlbUrlK4": "https://siamdive-cdn.b-cdn.net/models/xr/art_1272_r0p.glb",
+   "xrVramK1": 22369620,
+   "xrVramK2": 89478484,
+   "xrVramK4": 223696212
   },
   {
    "id": "art:1273",
@@ -2876,7 +3812,13 @@
    "fx": null,
    "behavior": null,
    "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/art_1273_xr0.glb",
-   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/art_1273_xr1.glb"
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/art_1273_xr1.glb",
+   "xrGlbUrlK1": "https://siamdive-cdn.b-cdn.net/models/xr/art_1273_k1.glb",
+   "xrGlbUrlK2": "https://siamdive-cdn.b-cdn.net/models/xr/art_1273_k2.glb",
+   "xrGlbUrlK4": "https://siamdive-cdn.b-cdn.net/models/xr/art_1273_r0p.glb",
+   "xrVramK1": 22369620,
+   "xrVramK2": 89478484,
+   "xrVramK4": 223696212
   },
   {
    "id": "art:1274",
@@ -2890,7 +3832,13 @@
    "fx": null,
    "behavior": null,
    "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/art_1274_xr0.glb",
-   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/art_1274_xr1.glb"
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/art_1274_xr1.glb",
+   "xrGlbUrlK1": "https://siamdive-cdn.b-cdn.net/models/xr/art_1274_k1.glb",
+   "xrGlbUrlK2": "https://siamdive-cdn.b-cdn.net/models/xr/art_1274_k2.glb",
+   "xrGlbUrlK4": "https://siamdive-cdn.b-cdn.net/models/xr/art_1274_r0p.glb",
+   "xrVramK1": 22369620,
+   "xrVramK2": 89478484,
+   "xrVramK4": 223696212
   },
   {
    "id": "art:1275",
@@ -2904,7 +3852,13 @@
    "fx": null,
    "behavior": null,
    "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/art_1275_xr0.glb",
-   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/art_1275_xr1.glb"
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/art_1275_xr1.glb",
+   "xrGlbUrlK1": "https://siamdive-cdn.b-cdn.net/models/xr/art_1275_k1.glb",
+   "xrGlbUrlK2": "https://siamdive-cdn.b-cdn.net/models/xr/art_1275_k2.glb",
+   "xrGlbUrlK4": "https://siamdive-cdn.b-cdn.net/models/xr/art_1275_r0p.glb",
+   "xrVramK1": 22369620,
+   "xrVramK2": 89478484,
+   "xrVramK4": 223696212
   },
   {
    "id": "art:1276",
@@ -2918,7 +3872,13 @@
    "fx": null,
    "behavior": null,
    "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/art_1276_xr0.glb",
-   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/art_1276_xr1.glb"
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/art_1276_xr1.glb",
+   "xrGlbUrlK1": "https://siamdive-cdn.b-cdn.net/models/xr/art_1276_k1.glb",
+   "xrGlbUrlK2": "https://siamdive-cdn.b-cdn.net/models/xr/art_1276_k2.glb",
+   "xrGlbUrlK4": "https://siamdive-cdn.b-cdn.net/models/xr/art_1276_r0p.glb",
+   "xrVramK1": 22369620,
+   "xrVramK2": 89478484,
+   "xrVramK4": 223696212
   },
   {
    "id": "art:1277",
@@ -2932,7 +3892,13 @@
    "fx": null,
    "behavior": null,
    "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/art_1277_xr0.glb",
-   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/art_1277_xr1.glb"
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/art_1277_xr1.glb",
+   "xrGlbUrlK1": "https://siamdive-cdn.b-cdn.net/models/xr/art_1277_k1.glb",
+   "xrGlbUrlK2": "https://siamdive-cdn.b-cdn.net/models/xr/art_1277_k2.glb",
+   "xrGlbUrlK4": "https://siamdive-cdn.b-cdn.net/models/xr/art_1277_r0p.glb",
+   "xrVramK1": 22369620,
+   "xrVramK2": 89478484,
+   "xrVramK4": 223696212
   },
   {
    "id": "art:1278",
@@ -2946,7 +3912,13 @@
    "fx": null,
    "behavior": null,
    "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/art_1278_xr0.glb",
-   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/art_1278_xr1.glb"
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/art_1278_xr1.glb",
+   "xrGlbUrlK1": "https://siamdive-cdn.b-cdn.net/models/xr/art_1278_k1.glb",
+   "xrGlbUrlK2": "https://siamdive-cdn.b-cdn.net/models/xr/art_1278_k2.glb",
+   "xrGlbUrlK4": "https://siamdive-cdn.b-cdn.net/models/xr/art_1278_r0p.glb",
+   "xrVramK1": 16777215,
+   "xrVramK2": 67108863,
+   "xrVramK4": 201326591
   },
   {
    "id": "art:1279",
@@ -2960,7 +3932,13 @@
    "fx": null,
    "behavior": null,
    "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/art_1279_xr0.glb",
-   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/art_1279_xr1.glb"
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/art_1279_xr1.glb",
+   "xrGlbUrlK1": "https://siamdive-cdn.b-cdn.net/models/xr/art_1279_k1.glb",
+   "xrGlbUrlK2": "https://siamdive-cdn.b-cdn.net/models/xr/art_1279_k2.glb",
+   "xrGlbUrlK4": "https://siamdive-cdn.b-cdn.net/models/xr/art_1279_r0p.glb",
+   "xrVramK1": 16777215,
+   "xrVramK2": 67108863,
+   "xrVramK4": 201326591
   },
   {
    "id": "art:1280",
@@ -2974,7 +3952,13 @@
    "fx": null,
    "behavior": null,
    "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/art_1280_xr0.glb",
-   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/art_1280_xr1.glb"
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/art_1280_xr1.glb",
+   "xrGlbUrlK1": "https://siamdive-cdn.b-cdn.net/models/xr/art_1280_k1.glb",
+   "xrGlbUrlK2": "https://siamdive-cdn.b-cdn.net/models/xr/art_1280_k2.glb",
+   "xrGlbUrlK4": "https://siamdive-cdn.b-cdn.net/models/xr/art_1280_r0p.glb",
+   "xrVramK1": 22369620,
+   "xrVramK2": 89478484,
+   "xrVramK4": 223696212
   },
   {
    "id": "art:1281",
@@ -2988,7 +3972,13 @@
    "fx": null,
    "behavior": null,
    "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/art_1281_xr0.glb",
-   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/art_1281_xr1.glb"
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/art_1281_xr1.glb",
+   "xrGlbUrlK1": "https://siamdive-cdn.b-cdn.net/models/xr/art_1281_k1.glb",
+   "xrGlbUrlK2": "https://siamdive-cdn.b-cdn.net/models/xr/art_1281_k2.glb",
+   "xrGlbUrlK4": "https://siamdive-cdn.b-cdn.net/models/xr/art_1281_r0p.glb",
+   "xrVramK1": 22369620,
+   "xrVramK2": 89478484,
+   "xrVramK4": 223696212
   },
   {
    "id": "art:1282",
@@ -3002,7 +3992,13 @@
    "fx": null,
    "behavior": null,
    "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/art_1282_xr0.glb",
-   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/art_1282_xr1.glb"
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/art_1282_xr1.glb",
+   "xrGlbUrlK1": "https://siamdive-cdn.b-cdn.net/models/xr/art_1282_k1.glb",
+   "xrGlbUrlK2": "https://siamdive-cdn.b-cdn.net/models/xr/art_1282_k2.glb",
+   "xrGlbUrlK4": "https://siamdive-cdn.b-cdn.net/models/xr/art_1282_r0p.glb",
+   "xrVramK1": 22369620,
+   "xrVramK2": 89478484,
+   "xrVramK4": 223696212
   },
   {
    "id": "art:1283",
@@ -3016,7 +4012,13 @@
    "fx": null,
    "behavior": null,
    "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/art_1283_xr0.glb",
-   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/art_1283_xr1.glb"
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/art_1283_xr1.glb",
+   "xrGlbUrlK1": "https://siamdive-cdn.b-cdn.net/models/xr/art_1283_k1.glb",
+   "xrGlbUrlK2": "https://siamdive-cdn.b-cdn.net/models/xr/art_1283_k2.glb",
+   "xrGlbUrlK4": "https://siamdive-cdn.b-cdn.net/models/xr/art_1283_r0p.glb",
+   "xrVramK1": 22369620,
+   "xrVramK2": 89478484,
+   "xrVramK4": 223696212
   },
   {
    "id": "art:1284",
@@ -3030,7 +4032,13 @@
    "fx": null,
    "behavior": null,
    "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/art_1284_xr0.glb",
-   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/art_1284_xr1.glb"
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/art_1284_xr1.glb",
+   "xrGlbUrlK1": "https://siamdive-cdn.b-cdn.net/models/xr/art_1284_k1.glb",
+   "xrGlbUrlK2": "https://siamdive-cdn.b-cdn.net/models/xr/art_1284_k2.glb",
+   "xrGlbUrlK4": "https://siamdive-cdn.b-cdn.net/models/xr/art_1284_r0p.glb",
+   "xrVramK1": 22369620,
+   "xrVramK2": 89478484,
+   "xrVramK4": 223696212
   },
   {
    "id": "art:1285",
@@ -3044,7 +4052,13 @@
    "fx": null,
    "behavior": null,
    "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/art_1285_xr0.glb",
-   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/art_1285_xr1.glb"
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/art_1285_xr1.glb",
+   "xrGlbUrlK1": "https://siamdive-cdn.b-cdn.net/models/xr/art_1285_k1.glb",
+   "xrGlbUrlK2": "https://siamdive-cdn.b-cdn.net/models/xr/art_1285_k2.glb",
+   "xrGlbUrlK4": "https://siamdive-cdn.b-cdn.net/models/xr/art_1285_r0p.glb",
+   "xrVramK1": 22369620,
+   "xrVramK2": 89478484,
+   "xrVramK4": 223696212
   },
   {
    "id": "art:1286",
@@ -3058,7 +4072,13 @@
    "fx": null,
    "behavior": null,
    "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/art_1286_xr0.glb",
-   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/art_1286_xr1.glb"
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/art_1286_xr1.glb",
+   "xrGlbUrlK1": "https://siamdive-cdn.b-cdn.net/models/xr/art_1286_k1.glb",
+   "xrGlbUrlK2": "https://siamdive-cdn.b-cdn.net/models/xr/art_1286_k2.glb",
+   "xrGlbUrlK4": "https://siamdive-cdn.b-cdn.net/models/xr/art_1286_r0p.glb",
+   "xrVramK1": 22369620,
+   "xrVramK2": 89478484,
+   "xrVramK4": 223696212
   },
   {
    "id": "art:1287",
@@ -3072,7 +4092,13 @@
    "fx": null,
    "behavior": null,
    "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/art_1287_xr0.glb",
-   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/art_1287_xr1.glb"
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/art_1287_xr1.glb",
+   "xrGlbUrlK1": "https://siamdive-cdn.b-cdn.net/models/xr/art_1287_k1.glb",
+   "xrGlbUrlK2": "https://siamdive-cdn.b-cdn.net/models/xr/art_1287_k2.glb",
+   "xrGlbUrlK4": "https://siamdive-cdn.b-cdn.net/models/xr/art_1287_r0p.glb",
+   "xrVramK1": 22369620,
+   "xrVramK2": 89478484,
+   "xrVramK4": 223696212
   },
   {
    "id": "art:1288",
@@ -3086,7 +4112,13 @@
    "fx": null,
    "behavior": null,
    "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/art_1288_xr0.glb",
-   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/art_1288_xr1.glb"
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/art_1288_xr1.glb",
+   "xrGlbUrlK1": "https://siamdive-cdn.b-cdn.net/models/xr/art_1288_k1.glb",
+   "xrGlbUrlK2": "https://siamdive-cdn.b-cdn.net/models/xr/art_1288_k2.glb",
+   "xrGlbUrlK4": "https://siamdive-cdn.b-cdn.net/models/xr/art_1288_r0p.glb",
+   "xrVramK1": 22369620,
+   "xrVramK2": 89478484,
+   "xrVramK4": 223696212
   },
   {
    "id": "art:1289",
@@ -3100,7 +4132,13 @@
    "fx": null,
    "behavior": null,
    "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/art_1289_xr0.glb",
-   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/art_1289_xr1.glb"
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/art_1289_xr1.glb",
+   "xrGlbUrlK1": "https://siamdive-cdn.b-cdn.net/models/xr/art_1289_k1.glb",
+   "xrGlbUrlK2": "https://siamdive-cdn.b-cdn.net/models/xr/art_1289_k2.glb",
+   "xrGlbUrlK4": "https://siamdive-cdn.b-cdn.net/models/xr/art_1289_r0p.glb",
+   "xrVramK1": 22369620,
+   "xrVramK2": 89478484,
+   "xrVramK4": 223696212
   },
   {
    "id": "art:1290",
@@ -3114,7 +4152,13 @@
    "fx": null,
    "behavior": null,
    "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/art_1290_xr0.glb",
-   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/art_1290_xr1.glb"
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/art_1290_xr1.glb",
+   "xrGlbUrlK1": "https://siamdive-cdn.b-cdn.net/models/xr/art_1290_k1.glb",
+   "xrGlbUrlK2": "https://siamdive-cdn.b-cdn.net/models/xr/art_1290_k2.glb",
+   "xrGlbUrlK4": "https://siamdive-cdn.b-cdn.net/models/xr/art_1290_r0p.glb",
+   "xrVramK1": 16777215,
+   "xrVramK2": 67108863,
+   "xrVramK4": 201326591
   },
   {
    "id": "art:1291",
@@ -3128,7 +4172,13 @@
    "fx": null,
    "behavior": null,
    "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/art_1291_xr0.glb",
-   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/art_1291_xr1.glb"
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/art_1291_xr1.glb",
+   "xrGlbUrlK1": "https://siamdive-cdn.b-cdn.net/models/xr/art_1291_k1.glb",
+   "xrGlbUrlK2": "https://siamdive-cdn.b-cdn.net/models/xr/art_1291_k2.glb",
+   "xrGlbUrlK4": "https://siamdive-cdn.b-cdn.net/models/xr/art_1291_r0p.glb",
+   "xrVramK1": 22369620,
+   "xrVramK2": 89478484,
+   "xrVramK4": 223696212
   },
   {
    "id": "art:1292",
@@ -3142,7 +4192,13 @@
    "fx": null,
    "behavior": null,
    "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/art_1292_xr0.glb",
-   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/art_1292_xr1.glb"
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/art_1292_xr1.glb",
+   "xrGlbUrlK1": "https://siamdive-cdn.b-cdn.net/models/xr/art_1292_k1.glb",
+   "xrGlbUrlK2": "https://siamdive-cdn.b-cdn.net/models/xr/art_1292_k2.glb",
+   "xrGlbUrlK4": "https://siamdive-cdn.b-cdn.net/models/xr/art_1292_r0p.glb",
+   "xrVramK1": 22369620,
+   "xrVramK2": 89478484,
+   "xrVramK4": 223696212
   },
   {
    "id": "art:1293",
@@ -3156,7 +4212,13 @@
    "fx": null,
    "behavior": null,
    "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/art_1293_xr0.glb",
-   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/art_1293_xr1.glb"
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/art_1293_xr1.glb",
+   "xrGlbUrlK1": "https://siamdive-cdn.b-cdn.net/models/xr/art_1293_k1.glb",
+   "xrGlbUrlK2": "https://siamdive-cdn.b-cdn.net/models/xr/art_1293_k2.glb",
+   "xrGlbUrlK4": "https://siamdive-cdn.b-cdn.net/models/xr/art_1293_r0p.glb",
+   "xrVramK1": 22369620,
+   "xrVramK2": 89478484,
+   "xrVramK4": 223696212
   },
   {
    "id": "art:1294",
@@ -3170,7 +4232,13 @@
    "fx": null,
    "behavior": null,
    "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/art_1294_xr0.glb",
-   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/art_1294_xr1.glb"
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/art_1294_xr1.glb",
+   "xrGlbUrlK1": "https://siamdive-cdn.b-cdn.net/models/xr/art_1294_k1.glb",
+   "xrGlbUrlK2": "https://siamdive-cdn.b-cdn.net/models/xr/art_1294_k2.glb",
+   "xrGlbUrlK4": "https://siamdive-cdn.b-cdn.net/models/xr/art_1294_r0p.glb",
+   "xrVramK1": 22369620,
+   "xrVramK2": 89478484,
+   "xrVramK4": 223696212
   },
   {
    "id": "art:1295",
@@ -3184,7 +4252,13 @@
    "fx": null,
    "behavior": null,
    "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/art_1295_xr0.glb",
-   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/art_1295_xr1.glb"
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/art_1295_xr1.glb",
+   "xrGlbUrlK1": "https://siamdive-cdn.b-cdn.net/models/xr/art_1295_k1.glb",
+   "xrGlbUrlK2": "https://siamdive-cdn.b-cdn.net/models/xr/art_1295_k2.glb",
+   "xrGlbUrlK4": "https://siamdive-cdn.b-cdn.net/models/xr/art_1295_r0p.glb",
+   "xrVramK1": 22369620,
+   "xrVramK2": 89478484,
+   "xrVramK4": 223696212
   },
   {
    "id": "art:1296",
@@ -3198,7 +4272,13 @@
    "fx": null,
    "behavior": null,
    "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/art_1296_xr0.glb",
-   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/art_1296_xr1.glb"
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/art_1296_xr1.glb",
+   "xrGlbUrlK1": "https://siamdive-cdn.b-cdn.net/models/xr/art_1296_k1.glb",
+   "xrGlbUrlK2": "https://siamdive-cdn.b-cdn.net/models/xr/art_1296_k2.glb",
+   "xrGlbUrlK4": "https://siamdive-cdn.b-cdn.net/models/xr/art_1296_r0p.glb",
+   "xrVramK1": 22369620,
+   "xrVramK2": 89478484,
+   "xrVramK4": 223696212
   },
   {
    "id": "art:1297",
@@ -3212,7 +4292,13 @@
    "fx": null,
    "behavior": null,
    "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/art_1297_xr0.glb",
-   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/art_1297_xr1.glb"
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/art_1297_xr1.glb",
+   "xrGlbUrlK1": "https://siamdive-cdn.b-cdn.net/models/xr/art_1297_k1.glb",
+   "xrGlbUrlK2": "https://siamdive-cdn.b-cdn.net/models/xr/art_1297_k2.glb",
+   "xrGlbUrlK4": "https://siamdive-cdn.b-cdn.net/models/xr/art_1297_r0p.glb",
+   "xrVramK1": 22369620,
+   "xrVramK2": 89478484,
+   "xrVramK4": 223696212
   },
   {
    "id": "art:1298",
@@ -3226,7 +4312,13 @@
    "fx": null,
    "behavior": null,
    "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/art_1298_xr0.glb",
-   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/art_1298_xr1.glb"
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/art_1298_xr1.glb",
+   "xrGlbUrlK1": "https://siamdive-cdn.b-cdn.net/models/xr/art_1298_k1.glb",
+   "xrGlbUrlK2": "https://siamdive-cdn.b-cdn.net/models/xr/art_1298_k2.glb",
+   "xrGlbUrlK4": "https://siamdive-cdn.b-cdn.net/models/xr/art_1298_r0p.glb",
+   "xrVramK1": 22369620,
+   "xrVramK2": 89478484,
+   "xrVramK4": 223696212
   },
   {
    "id": "art:1299",
@@ -3240,7 +4332,13 @@
    "fx": null,
    "behavior": null,
    "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/art_1299_xr0.glb",
-   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/art_1299_xr1.glb"
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/art_1299_xr1.glb",
+   "xrGlbUrlK1": "https://siamdive-cdn.b-cdn.net/models/xr/art_1299_k1.glb",
+   "xrGlbUrlK2": "https://siamdive-cdn.b-cdn.net/models/xr/art_1299_k2.glb",
+   "xrGlbUrlK4": "https://siamdive-cdn.b-cdn.net/models/xr/art_1299_r0p.glb",
+   "xrVramK1": 22369620,
+   "xrVramK2": 89478484,
+   "xrVramK4": 223696212
   },
   {
    "id": "art:1300",
@@ -3254,7 +4352,13 @@
    "fx": null,
    "behavior": null,
    "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/art_1300_xr0.glb",
-   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/art_1300_xr1.glb"
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/art_1300_xr1.glb",
+   "xrGlbUrlK1": "https://siamdive-cdn.b-cdn.net/models/xr/art_1300_k1.glb",
+   "xrGlbUrlK2": "https://siamdive-cdn.b-cdn.net/models/xr/art_1300_k2.glb",
+   "xrGlbUrlK4": "https://siamdive-cdn.b-cdn.net/models/xr/art_1300_r0p.glb",
+   "xrVramK1": 22369620,
+   "xrVramK2": 89478484,
+   "xrVramK4": 223696212
   },
   {
    "id": "art:1301",
@@ -3268,7 +4372,13 @@
    "fx": null,
    "behavior": null,
    "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/art_1301_xr0.glb",
-   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/art_1301_xr1.glb"
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/art_1301_xr1.glb",
+   "xrGlbUrlK1": "https://siamdive-cdn.b-cdn.net/models/xr/art_1301_k1.glb",
+   "xrGlbUrlK2": "https://siamdive-cdn.b-cdn.net/models/xr/art_1301_k2.glb",
+   "xrGlbUrlK4": "https://siamdive-cdn.b-cdn.net/models/xr/art_1301_r0p.glb",
+   "xrVramK1": 22369620,
+   "xrVramK2": 89478484,
+   "xrVramK4": 223696212
   },
   {
    "id": "art:1302",
@@ -3282,7 +4392,13 @@
    "fx": null,
    "behavior": null,
    "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/art_1302_xr0.glb",
-   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/art_1302_xr1.glb"
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/art_1302_xr1.glb",
+   "xrGlbUrlK1": "https://siamdive-cdn.b-cdn.net/models/xr/art_1302_k1.glb",
+   "xrGlbUrlK2": "https://siamdive-cdn.b-cdn.net/models/xr/art_1302_k2.glb",
+   "xrGlbUrlK4": "https://siamdive-cdn.b-cdn.net/models/xr/art_1302_r0p.glb",
+   "xrVramK1": 22369620,
+   "xrVramK2": 89478484,
+   "xrVramK4": 223696212
   },
   {
    "id": "art:1303",
@@ -3296,7 +4412,13 @@
    "fx": null,
    "behavior": null,
    "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/art_1303_xr0.glb",
-   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/art_1303_xr1.glb"
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/art_1303_xr1.glb",
+   "xrGlbUrlK1": "https://siamdive-cdn.b-cdn.net/models/xr/art_1303_k1.glb",
+   "xrGlbUrlK2": "https://siamdive-cdn.b-cdn.net/models/xr/art_1303_k2.glb",
+   "xrGlbUrlK4": "https://siamdive-cdn.b-cdn.net/models/xr/art_1303_r0p.glb",
+   "xrVramK1": 22369620,
+   "xrVramK2": 89478484,
+   "xrVramK4": 223696212
   },
   {
    "id": "art:1304",
@@ -3310,7 +4432,13 @@
    "fx": null,
    "behavior": null,
    "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/art_1304_xr0.glb",
-   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/art_1304_xr1.glb"
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/art_1304_xr1.glb",
+   "xrGlbUrlK1": "https://siamdive-cdn.b-cdn.net/models/xr/art_1304_k1.glb",
+   "xrGlbUrlK2": "https://siamdive-cdn.b-cdn.net/models/xr/art_1304_k2.glb",
+   "xrGlbUrlK4": "https://siamdive-cdn.b-cdn.net/models/xr/art_1304_r0p.glb",
+   "xrVramK1": 22369620,
+   "xrVramK2": 89478484,
+   "xrVramK4": 223696212
   },
   {
    "id": "art:1305",
@@ -3324,7 +4452,13 @@
    "fx": null,
    "behavior": null,
    "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/art_1305_xr0.glb",
-   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/art_1305_xr1.glb"
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/art_1305_xr1.glb",
+   "xrGlbUrlK1": "https://siamdive-cdn.b-cdn.net/models/xr/art_1305_k1.glb",
+   "xrGlbUrlK2": "https://siamdive-cdn.b-cdn.net/models/xr/art_1305_k2.glb",
+   "xrGlbUrlK4": "https://siamdive-cdn.b-cdn.net/models/xr/art_1305_r0p.glb",
+   "xrVramK1": 22369620,
+   "xrVramK2": 89478484,
+   "xrVramK4": 223696212
   },
   {
    "id": "art:1306",
@@ -3338,7 +4472,13 @@
    "fx": null,
    "behavior": null,
    "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/art_1306_xr0.glb",
-   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/art_1306_xr1.glb"
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/art_1306_xr1.glb",
+   "xrGlbUrlK1": "https://siamdive-cdn.b-cdn.net/models/xr/art_1306_k1.glb",
+   "xrGlbUrlK2": "https://siamdive-cdn.b-cdn.net/models/xr/art_1306_k2.glb",
+   "xrGlbUrlK4": "https://siamdive-cdn.b-cdn.net/models/xr/art_1306_r0p.glb",
+   "xrVramK1": 22369620,
+   "xrVramK2": 89478484,
+   "xrVramK4": 223696212
   },
   {
    "id": "art:1307",
@@ -3352,7 +4492,13 @@
    "fx": null,
    "behavior": null,
    "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/art_1307_xr0.glb",
-   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/art_1307_xr1.glb"
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/art_1307_xr1.glb",
+   "xrGlbUrlK1": "https://siamdive-cdn.b-cdn.net/models/xr/art_1307_k1.glb",
+   "xrGlbUrlK2": "https://siamdive-cdn.b-cdn.net/models/xr/art_1307_k2.glb",
+   "xrGlbUrlK4": "https://siamdive-cdn.b-cdn.net/models/xr/art_1307_r0p.glb",
+   "xrVramK1": 22369620,
+   "xrVramK2": 89478484,
+   "xrVramK4": 223696212
   },
   {
    "id": "art:1308",
@@ -3366,7 +4512,13 @@
    "fx": null,
    "behavior": null,
    "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/art_1308_xr0.glb",
-   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/art_1308_xr1.glb"
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/art_1308_xr1.glb",
+   "xrGlbUrlK1": "https://siamdive-cdn.b-cdn.net/models/xr/art_1308_k1.glb",
+   "xrGlbUrlK2": "https://siamdive-cdn.b-cdn.net/models/xr/art_1308_k2.glb",
+   "xrGlbUrlK4": "https://siamdive-cdn.b-cdn.net/models/xr/art_1308_r0p.glb",
+   "xrVramK1": 22369620,
+   "xrVramK2": 89478484,
+   "xrVramK4": 223696212
   },
   {
    "id": "art:1309",
@@ -3380,7 +4532,13 @@
    "fx": null,
    "behavior": null,
    "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/art_1309_xr0.glb",
-   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/art_1309_xr1.glb"
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/art_1309_xr1.glb",
+   "xrGlbUrlK1": "https://siamdive-cdn.b-cdn.net/models/xr/art_1309_k1.glb",
+   "xrGlbUrlK2": "https://siamdive-cdn.b-cdn.net/models/xr/art_1309_k2.glb",
+   "xrGlbUrlK4": "https://siamdive-cdn.b-cdn.net/models/xr/art_1309_r0p.glb",
+   "xrVramK1": 22369620,
+   "xrVramK2": 89478484,
+   "xrVramK4": 223696212
   },
   {
    "id": "art:1310",
@@ -3394,7 +4552,13 @@
    "fx": null,
    "behavior": null,
    "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/art_1310_xr0.glb",
-   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/art_1310_xr1.glb"
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/art_1310_xr1.glb",
+   "xrGlbUrlK1": "https://siamdive-cdn.b-cdn.net/models/xr/art_1310_k1.glb",
+   "xrGlbUrlK2": "https://siamdive-cdn.b-cdn.net/models/xr/art_1310_k2.glb",
+   "xrGlbUrlK4": "https://siamdive-cdn.b-cdn.net/models/xr/art_1310_r0p.glb",
+   "xrVramK1": 22369620,
+   "xrVramK2": 89478484,
+   "xrVramK4": 223696212
   },
   {
    "id": "art:1311",
@@ -3408,7 +4572,13 @@
    "fx": null,
    "behavior": null,
    "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/art_1311_xr0.glb",
-   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/art_1311_xr1.glb"
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/art_1311_xr1.glb",
+   "xrGlbUrlK1": "https://siamdive-cdn.b-cdn.net/models/xr/art_1311_k1.glb",
+   "xrGlbUrlK2": "https://siamdive-cdn.b-cdn.net/models/xr/art_1311_k2.glb",
+   "xrGlbUrlK4": "https://siamdive-cdn.b-cdn.net/models/xr/art_1311_r0p.glb",
+   "xrVramK1": 22369620,
+   "xrVramK2": 89478484,
+   "xrVramK4": 223696212
   },
   {
    "id": "art:1312",
@@ -3422,7 +4592,13 @@
    "fx": null,
    "behavior": null,
    "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/art_1312_xr0.glb",
-   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/art_1312_xr1.glb"
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/art_1312_xr1.glb",
+   "xrGlbUrlK1": "https://siamdive-cdn.b-cdn.net/models/xr/art_1312_k1.glb",
+   "xrGlbUrlK2": "https://siamdive-cdn.b-cdn.net/models/xr/art_1312_k2.glb",
+   "xrGlbUrlK4": "https://siamdive-cdn.b-cdn.net/models/xr/art_1312_r0p.glb",
+   "xrVramK1": 22369620,
+   "xrVramK2": 89478484,
+   "xrVramK4": 223696212
   },
   {
    "id": "art:1313",
@@ -3436,7 +4612,13 @@
    "fx": null,
    "behavior": null,
    "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/art_1313_xr0.glb",
-   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/art_1313_xr1.glb"
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/art_1313_xr1.glb",
+   "xrGlbUrlK1": "https://siamdive-cdn.b-cdn.net/models/xr/art_1313_k1.glb",
+   "xrGlbUrlK2": "https://siamdive-cdn.b-cdn.net/models/xr/art_1313_k2.glb",
+   "xrGlbUrlK4": "https://siamdive-cdn.b-cdn.net/models/xr/art_1313_r0p.glb",
+   "xrVramK1": 22369620,
+   "xrVramK2": 89478484,
+   "xrVramK4": 223696212
   },
   {
    "id": "art:1314",
@@ -3450,7 +4632,13 @@
    "fx": null,
    "behavior": null,
    "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/art_1314_xr0.glb",
-   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/art_1314_xr1.glb"
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/art_1314_xr1.glb",
+   "xrGlbUrlK1": "https://siamdive-cdn.b-cdn.net/models/xr/art_1314_k1.glb",
+   "xrGlbUrlK2": "https://siamdive-cdn.b-cdn.net/models/xr/art_1314_k2.glb",
+   "xrGlbUrlK4": "https://siamdive-cdn.b-cdn.net/models/xr/art_1314_r0p.glb",
+   "xrVramK1": 22369620,
+   "xrVramK2": 89478484,
+   "xrVramK4": 223696212
   },
   {
    "id": "art:1315",
@@ -3464,7 +4652,13 @@
    "fx": null,
    "behavior": null,
    "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/art_1315_xr0.glb",
-   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/art_1315_xr1.glb"
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/art_1315_xr1.glb",
+   "xrGlbUrlK1": "https://siamdive-cdn.b-cdn.net/models/xr/art_1315_k1.glb",
+   "xrGlbUrlK2": "https://siamdive-cdn.b-cdn.net/models/xr/art_1315_k2.glb",
+   "xrGlbUrlK4": "https://siamdive-cdn.b-cdn.net/models/xr/art_1315_r0p.glb",
+   "xrVramK1": 22369620,
+   "xrVramK2": 89478484,
+   "xrVramK4": 223696212
   },
   {
    "id": "art:1316",
@@ -3478,7 +4672,13 @@
    "fx": null,
    "behavior": null,
    "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/art_1316_xr0.glb",
-   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/art_1316_xr1.glb"
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/art_1316_xr1.glb",
+   "xrGlbUrlK1": "https://siamdive-cdn.b-cdn.net/models/xr/art_1316_k1.glb",
+   "xrGlbUrlK2": "https://siamdive-cdn.b-cdn.net/models/xr/art_1316_k2.glb",
+   "xrGlbUrlK4": "https://siamdive-cdn.b-cdn.net/models/xr/art_1316_r0p.glb",
+   "xrVramK1": 22369620,
+   "xrVramK2": 89478484,
+   "xrVramK4": 223696212
   },
   {
    "id": "art:1317",
@@ -3492,7 +4692,13 @@
    "fx": null,
    "behavior": null,
    "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/art_1317_xr0.glb",
-   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/art_1317_xr1.glb"
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/art_1317_xr1.glb",
+   "xrGlbUrlK1": "https://siamdive-cdn.b-cdn.net/models/xr/art_1317_k1.glb",
+   "xrGlbUrlK2": "https://siamdive-cdn.b-cdn.net/models/xr/art_1317_k2.glb",
+   "xrGlbUrlK4": "https://siamdive-cdn.b-cdn.net/models/xr/art_1317_r0p.glb",
+   "xrVramK1": 16777215,
+   "xrVramK2": 67108863,
+   "xrVramK4": 201326591
   },
   {
    "id": "art:1318",
@@ -3506,7 +4712,13 @@
    "fx": null,
    "behavior": null,
    "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/art_1318_xr0.glb",
-   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/art_1318_xr1.glb"
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/art_1318_xr1.glb",
+   "xrGlbUrlK1": "https://siamdive-cdn.b-cdn.net/models/xr/art_1318_k1.glb",
+   "xrGlbUrlK2": "https://siamdive-cdn.b-cdn.net/models/xr/art_1318_k2.glb",
+   "xrGlbUrlK4": "https://siamdive-cdn.b-cdn.net/models/xr/art_1318_r0p.glb",
+   "xrVramK1": 22369620,
+   "xrVramK2": 89478484,
+   "xrVramK4": 223696212
   },
   {
    "id": "art:1319",
@@ -3520,7 +4732,13 @@
    "fx": null,
    "behavior": null,
    "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/art_1319_xr0.glb",
-   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/art_1319_xr1.glb"
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/art_1319_xr1.glb",
+   "xrGlbUrlK1": "https://siamdive-cdn.b-cdn.net/models/xr/art_1319_k1.glb",
+   "xrGlbUrlK2": "https://siamdive-cdn.b-cdn.net/models/xr/art_1319_k2.glb",
+   "xrGlbUrlK4": "https://siamdive-cdn.b-cdn.net/models/xr/art_1319_r0p.glb",
+   "xrVramK1": 22369620,
+   "xrVramK2": 89478484,
+   "xrVramK4": 223696212
   },
   {
    "id": "art:1320",
@@ -3534,7 +4752,13 @@
    "fx": null,
    "behavior": null,
    "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/art_1320_xr0.glb",
-   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/art_1320_xr1.glb"
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/art_1320_xr1.glb",
+   "xrGlbUrlK1": "https://siamdive-cdn.b-cdn.net/models/xr/art_1320_k1.glb",
+   "xrGlbUrlK2": "https://siamdive-cdn.b-cdn.net/models/xr/art_1320_k2.glb",
+   "xrGlbUrlK4": "https://siamdive-cdn.b-cdn.net/models/xr/art_1320_r0p.glb",
+   "xrVramK1": 22369620,
+   "xrVramK2": 89478484,
+   "xrVramK4": 223696212
   },
   {
    "id": "art:1321",
@@ -3548,7 +4772,13 @@
    "fx": null,
    "behavior": null,
    "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/art_1321_xr0.glb",
-   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/art_1321_xr1.glb"
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/art_1321_xr1.glb",
+   "xrGlbUrlK1": "https://siamdive-cdn.b-cdn.net/models/xr/art_1321_k1.glb",
+   "xrGlbUrlK2": "https://siamdive-cdn.b-cdn.net/models/xr/art_1321_k2.glb",
+   "xrGlbUrlK4": "https://siamdive-cdn.b-cdn.net/models/xr/art_1321_r0p.glb",
+   "xrVramK1": 22369620,
+   "xrVramK2": 89478484,
+   "xrVramK4": 223696212
   },
   {
    "id": "art:1322",
@@ -3562,7 +4792,13 @@
    "fx": null,
    "behavior": null,
    "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/art_1322_xr0.glb",
-   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/art_1322_xr1.glb"
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/art_1322_xr1.glb",
+   "xrGlbUrlK1": "https://siamdive-cdn.b-cdn.net/models/xr/art_1322_k1.glb",
+   "xrGlbUrlK2": "https://siamdive-cdn.b-cdn.net/models/xr/art_1322_k2.glb",
+   "xrGlbUrlK4": "https://siamdive-cdn.b-cdn.net/models/xr/art_1322_r0p.glb",
+   "xrVramK1": 22369620,
+   "xrVramK2": 89478484,
+   "xrVramK4": 223696212
   },
   {
    "id": "art:1323",
@@ -3576,7 +4812,13 @@
    "fx": null,
    "behavior": null,
    "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/art_1323_xr0.glb",
-   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/art_1323_xr1.glb"
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/art_1323_xr1.glb",
+   "xrGlbUrlK1": "https://siamdive-cdn.b-cdn.net/models/xr/art_1323_k1.glb",
+   "xrGlbUrlK2": "https://siamdive-cdn.b-cdn.net/models/xr/art_1323_k2.glb",
+   "xrGlbUrlK4": "https://siamdive-cdn.b-cdn.net/models/xr/art_1323_r0p.glb",
+   "xrVramK1": 16777215,
+   "xrVramK2": 67108863,
+   "xrVramK4": 201326591
   },
   {
    "id": "art:1324",
@@ -3590,7 +4832,13 @@
    "fx": null,
    "behavior": null,
    "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/art_1324_xr0.glb",
-   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/art_1324_xr1.glb"
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/art_1324_xr1.glb",
+   "xrGlbUrlK1": "https://siamdive-cdn.b-cdn.net/models/xr/art_1324_k1.glb",
+   "xrGlbUrlK2": "https://siamdive-cdn.b-cdn.net/models/xr/art_1324_k2.glb",
+   "xrGlbUrlK4": "https://siamdive-cdn.b-cdn.net/models/xr/art_1324_r0p.glb",
+   "xrVramK1": 22369620,
+   "xrVramK2": 89478484,
+   "xrVramK4": 223696212
   },
   {
    "id": "art:1325",
@@ -3604,7 +4852,13 @@
    "fx": null,
    "behavior": null,
    "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/art_1325_xr0.glb",
-   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/art_1325_xr1.glb"
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/art_1325_xr1.glb",
+   "xrGlbUrlK1": "https://siamdive-cdn.b-cdn.net/models/xr/art_1325_k1.glb",
+   "xrGlbUrlK2": "https://siamdive-cdn.b-cdn.net/models/xr/art_1325_k2.glb",
+   "xrGlbUrlK4": "https://siamdive-cdn.b-cdn.net/models/xr/art_1325_r0p.glb",
+   "xrVramK1": 22369620,
+   "xrVramK2": 89478484,
+   "xrVramK4": 223696212
   },
   {
    "id": "art:1326",
@@ -3618,7 +4872,13 @@
    "fx": null,
    "behavior": null,
    "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/art_1326_xr0.glb",
-   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/art_1326_xr1.glb"
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/art_1326_xr1.glb",
+   "xrGlbUrlK1": "https://siamdive-cdn.b-cdn.net/models/xr/art_1326_k1.glb",
+   "xrGlbUrlK2": "https://siamdive-cdn.b-cdn.net/models/xr/art_1326_k2.glb",
+   "xrGlbUrlK4": "https://siamdive-cdn.b-cdn.net/models/xr/art_1326_r0p.glb",
+   "xrVramK1": 22369620,
+   "xrVramK2": 89478484,
+   "xrVramK4": 223696212
   },
   {
    "id": "art:1327",
@@ -3632,7 +4892,13 @@
    "fx": null,
    "behavior": null,
    "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/art_1327_xr0.glb",
-   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/art_1327_xr1.glb"
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/art_1327_xr1.glb",
+   "xrGlbUrlK1": "https://siamdive-cdn.b-cdn.net/models/xr/art_1327_k1.glb",
+   "xrGlbUrlK2": "https://siamdive-cdn.b-cdn.net/models/xr/art_1327_k2.glb",
+   "xrGlbUrlK4": "https://siamdive-cdn.b-cdn.net/models/xr/art_1327_r0p.glb",
+   "xrVramK1": 22369620,
+   "xrVramK2": 89478484,
+   "xrVramK4": 223696212
   },
   {
    "id": "art:1328",
@@ -3646,7 +4912,13 @@
    "fx": null,
    "behavior": null,
    "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/art_1328_xr0.glb",
-   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/art_1328_xr1.glb"
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/art_1328_xr1.glb",
+   "xrGlbUrlK1": "https://siamdive-cdn.b-cdn.net/models/xr/art_1328_k1.glb",
+   "xrGlbUrlK2": "https://siamdive-cdn.b-cdn.net/models/xr/art_1328_k2.glb",
+   "xrGlbUrlK4": "https://siamdive-cdn.b-cdn.net/models/xr/art_1328_r0p.glb",
+   "xrVramK1": 22369620,
+   "xrVramK2": 89478484,
+   "xrVramK4": 223696212
   },
   {
    "id": "art:1330",
@@ -3660,7 +4932,13 @@
    "fx": null,
    "behavior": null,
    "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/art_1330_xr0.glb",
-   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/art_1330_xr1.glb"
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/art_1330_xr1.glb",
+   "xrGlbUrlK1": "https://siamdive-cdn.b-cdn.net/models/xr/art_1330_k1.glb",
+   "xrGlbUrlK2": "https://siamdive-cdn.b-cdn.net/models/xr/art_1330_k2.glb",
+   "xrGlbUrlK4": "https://siamdive-cdn.b-cdn.net/models/xr/art_1330_r0p.glb",
+   "xrVramK1": 16777215,
+   "xrVramK2": 67108863,
+   "xrVramK4": 201326591
   },
   {
    "id": "art:1331",
@@ -3674,7 +4952,13 @@
    "fx": null,
    "behavior": null,
    "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/art_1331_xr0.glb",
-   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/art_1331_xr1.glb"
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/art_1331_xr1.glb",
+   "xrGlbUrlK1": "https://siamdive-cdn.b-cdn.net/models/xr/art_1331_k1.glb",
+   "xrGlbUrlK2": "https://siamdive-cdn.b-cdn.net/models/xr/art_1331_k2.glb",
+   "xrGlbUrlK4": "https://siamdive-cdn.b-cdn.net/models/xr/art_1331_r0p.glb",
+   "xrVramK1": 22369620,
+   "xrVramK2": 89478484,
+   "xrVramK4": 223696212
   },
   {
    "id": "art:1332",
@@ -3688,7 +4972,13 @@
    "fx": null,
    "behavior": null,
    "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/art_1332_xr0.glb",
-   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/art_1332_xr1.glb"
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/art_1332_xr1.glb",
+   "xrGlbUrlK1": "https://siamdive-cdn.b-cdn.net/models/xr/art_1332_k1.glb",
+   "xrGlbUrlK2": "https://siamdive-cdn.b-cdn.net/models/xr/art_1332_k2.glb",
+   "xrGlbUrlK4": "https://siamdive-cdn.b-cdn.net/models/xr/art_1332_r0p.glb",
+   "xrVramK1": 22369620,
+   "xrVramK2": 89478484,
+   "xrVramK4": 223696212
   },
   {
    "id": "art:1333",
@@ -3702,7 +4992,13 @@
    "fx": null,
    "behavior": null,
    "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/art_1333_xr0.glb",
-   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/art_1333_xr1.glb"
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/art_1333_xr1.glb",
+   "xrGlbUrlK1": "https://siamdive-cdn.b-cdn.net/models/xr/art_1333_k1.glb",
+   "xrGlbUrlK2": "https://siamdive-cdn.b-cdn.net/models/xr/art_1333_k2.glb",
+   "xrGlbUrlK4": "https://siamdive-cdn.b-cdn.net/models/xr/art_1333_r0p.glb",
+   "xrVramK1": 22369620,
+   "xrVramK2": 89478484,
+   "xrVramK4": 223696212
   },
   {
    "id": "art:1334",
@@ -3716,7 +5012,13 @@
    "fx": null,
    "behavior": null,
    "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/art_1334_xr0.glb",
-   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/art_1334_xr1.glb"
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/art_1334_xr1.glb",
+   "xrGlbUrlK1": "https://siamdive-cdn.b-cdn.net/models/xr/art_1334_k1.glb",
+   "xrGlbUrlK2": "https://siamdive-cdn.b-cdn.net/models/xr/art_1334_k2.glb",
+   "xrGlbUrlK4": "https://siamdive-cdn.b-cdn.net/models/xr/art_1334_r0p.glb",
+   "xrVramK1": 22369620,
+   "xrVramK2": 89478484,
+   "xrVramK4": 223696212
   },
   {
    "id": "art:1336",
@@ -3730,7 +5032,13 @@
    "fx": null,
    "behavior": null,
    "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/art_1336_xr0.glb",
-   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/art_1336_xr1.glb"
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/art_1336_xr1.glb",
+   "xrGlbUrlK1": "https://siamdive-cdn.b-cdn.net/models/xr/art_1336_k1.glb",
+   "xrGlbUrlK2": "https://siamdive-cdn.b-cdn.net/models/xr/art_1336_k2.glb",
+   "xrGlbUrlK4": "https://siamdive-cdn.b-cdn.net/models/xr/art_1336_r0p.glb",
+   "xrVramK1": 22369620,
+   "xrVramK2": 89478484,
+   "xrVramK4": 223696212
   },
   {
    "id": "art:1337",
@@ -3744,7 +5052,13 @@
    "fx": null,
    "behavior": null,
    "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/art_1337_xr0.glb",
-   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/art_1337_xr1.glb"
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/art_1337_xr1.glb",
+   "xrGlbUrlK1": "https://siamdive-cdn.b-cdn.net/models/xr/art_1337_k1.glb",
+   "xrGlbUrlK2": "https://siamdive-cdn.b-cdn.net/models/xr/art_1337_k2.glb",
+   "xrGlbUrlK4": "https://siamdive-cdn.b-cdn.net/models/xr/art_1337_r0p.glb",
+   "xrVramK1": 22369620,
+   "xrVramK2": 89478484,
+   "xrVramK4": 223696212
   },
   {
    "id": "art:1338",
@@ -3758,7 +5072,13 @@
    "fx": null,
    "behavior": null,
    "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/art_1338_xr0.glb",
-   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/art_1338_xr1.glb"
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/art_1338_xr1.glb",
+   "xrGlbUrlK1": "https://siamdive-cdn.b-cdn.net/models/xr/art_1338_k1.glb",
+   "xrGlbUrlK2": "https://siamdive-cdn.b-cdn.net/models/xr/art_1338_k2.glb",
+   "xrGlbUrlK4": "https://siamdive-cdn.b-cdn.net/models/xr/art_1338_r0p.glb",
+   "xrVramK1": 22369620,
+   "xrVramK2": 89478484,
+   "xrVramK4": 223696212
   },
   {
    "id": "art:1339",
@@ -3772,7 +5092,13 @@
    "fx": null,
    "behavior": null,
    "xrGlbUrl": "https://siamdive-cdn.b-cdn.net/models/xr/art_1339_xr0.glb",
-   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/art_1339_xr1.glb"
+   "xrGlbUrlLod1": "https://siamdive-cdn.b-cdn.net/models/xr/art_1339_xr1.glb",
+   "xrGlbUrlK1": "https://siamdive-cdn.b-cdn.net/models/xr/art_1339_k1.glb",
+   "xrGlbUrlK2": "https://siamdive-cdn.b-cdn.net/models/xr/art_1339_k2.glb",
+   "xrGlbUrlK4": "https://siamdive-cdn.b-cdn.net/models/xr/art_1339_r0p.glb",
+   "xrVramK1": 22369620,
+   "xrVramK2": 89478484,
+   "xrVramK4": 223696212
   }
  ]
 }

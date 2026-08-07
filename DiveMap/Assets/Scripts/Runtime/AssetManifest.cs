@@ -50,6 +50,24 @@ namespace DiveMap.Runtime
             public string XrGlbUrlAstc;
             /// <summary>ASTC twin of <see cref="XrGlbUrlLod1"/>, picked by the same rule.</summary>
             public string XrGlbUrlAstcLod1;
+            /// <summary>
+            /// Texture-quality ladder (ZERO-COOK PNG, resize-only): ≤1024 / ≤2048 / full-master
+            /// LOD0 GLBs plus their texture VRAM in bytes, written by the manifest patcher with
+            /// aliases already resolved — either all six fields are usable or the model has no
+            /// ladder. Consumed by <see cref="DiveMap.Core.TexTiers"/>; see there for why.
+            /// </summary>
+            public string XrGlbUrlK1;
+            public string XrGlbUrlK2;
+            public string XrGlbUrlK4;
+            public long XrVramK1;
+            public long XrVramK2;
+            public long XrVramK4;
+
+            /// <summary>True when the ladder is complete enough to plan with.</summary>
+            public bool HasTierLadder =>
+                !string.IsNullOrWhiteSpace(XrGlbUrlK1) && !string.IsNullOrWhiteSpace(XrGlbUrlK2)
+                && !string.IsNullOrWhiteSpace(XrGlbUrlK4)
+                && XrVramK1 > 0 && XrVramK2 > 0 && XrVramK4 > 0;
             public double DefaultScale = 1;
             public double DefaultY = 0;
             public bool Animated;
@@ -130,6 +148,14 @@ namespace DiveMap.Runtime
                         // the ASTC file set can be filled in one model at a time.
                         XrGlbUrlAstc = (string)o["xrGlbUrlAstc"],
                         XrGlbUrlAstcLod1 = (string)o["xrGlbUrlAstcLod1"],
+                        // Same additive rule as the ASTC fields: missing keys read as null/0,
+                        // Module.HasTierLadder stays false, and the model resolves as before.
+                        XrGlbUrlK1 = (string)o["xrGlbUrlK1"],
+                        XrGlbUrlK2 = (string)o["xrGlbUrlK2"],
+                        XrGlbUrlK4 = (string)o["xrGlbUrlK4"],
+                        XrVramK1 = o["xrVramK1"] != null ? (long)o["xrVramK1"] : 0,
+                        XrVramK2 = o["xrVramK2"] != null ? (long)o["xrVramK2"] : 0,
+                        XrVramK4 = o["xrVramK4"] != null ? (long)o["xrVramK4"] : 0,
                         DefaultScale = o["defaultScale"] != null ? (double)o["defaultScale"] : 1,
                         DefaultY = o["defaultY"] != null ? (double)o["defaultY"] : 0,
                         Animated = o["animated"] != null && (bool)o["animated"],
@@ -165,6 +191,13 @@ namespace DiveMap.Runtime
 
             // XR variant wins when available (real KTX2 textures vs the WebP web GLBs).
             string raw = !string.IsNullOrWhiteSpace(m.XrGlbUrl) ? m.XrGlbUrl : m.GlbUrl;
+
+            // The per-map tier plan outranks the flat XR url: SceneBuilder computed what this
+            // device can afford for THIS map (see TexTiers) and parked the answer. No plan, or
+            // an asset the plan never saw (no ladder) → fall through unchanged.
+            string tier = DiveMap.Core.TexTiers.UrlFor(assetId);
+            if (!string.IsNullOrWhiteSpace(tier)) raw = tier;
+
             return Normalize(PickAstc(assetId, m.XrGlbUrlAstc, raw, false));
         }
 

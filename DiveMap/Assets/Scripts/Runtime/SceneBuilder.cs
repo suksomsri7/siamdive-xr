@@ -277,6 +277,12 @@ namespace DiveMap.Runtime
             int soloPlacements = 0;
             SoloAnimalRegistry.Clear();   // a new map is a new reef; stale entries must not survive
 
+            // Texture-tier plan for THIS map on THIS device, before any URL is resolved —
+            // ResolveUrl consults it on every lookup below. See TexTiers for the whole story
+            // (builds 282/298/300: the app used to load whatever the manifest named and let
+            // iOS decide whether that was survivable).
+            PlanTextureTiers(items, manifest);
+
             // P0: the "โหมดกราฟิกประหยัด" setting only scaled the render resolution — the reef
             // kept all 1,100 fish, which is the expensive half on a weak phone. Halve the swarm
             // instead (never below 8 per school, or a "school" stops reading as one). Applied
@@ -685,6 +691,52 @@ namespace DiveMap.Runtime
         /// </summary>
         private readonly Dictionary<string, Task<SolidBoxes.Model>> _hulls =
             new Dictionary<string, Task<SolidBoxes.Model>>(StringComparer.Ordinal);
+
+        /// <summary>
+        /// Compute and park the texture-tier plan for this map (see <see cref="TexTiers"/>).
+        /// Distinct assets only — SceneBuilder dedupes GLBs per URL, so VRAM is per asset, not
+        /// per placement (T-13: 494 items, 10 assets). Assets without a ladder are charged a
+        /// flat reservation instead of being invisible to the budget.
+        /// </summary>
+        private static void PlanTextureTiers(IReadOnlyList<SceneItem> items, AssetManifest manifest)
+        {
+            TexTiers.Clear();
+            if (items == null || manifest == null) return;
+
+            var seen = new HashSet<string>(StringComparer.Ordinal);
+            var entries = new List<TexTiers.Entry>();
+            long fixedBytes = 0;
+            foreach (SceneItem item in items)
+            {
+                string aid = item.AssetId ?? "";
+                if (aid.Length == 0 || !seen.Add(aid)) continue;
+                AssetManifest.Module m = manifest.Get(aid);
+                if (m == null) continue;
+                if (m.HasTierLadder)
+                {
+                    entries.Add(new TexTiers.Entry
+                    {
+                        Id = aid,
+                        Urls = new[] { m.XrGlbUrlK1, m.XrGlbUrlK2, m.XrGlbUrlK4 },
+                        Vram = new[] { m.XrVramK1, m.XrVramK2, m.XrVramK4 },
+                    });
+                }
+                else
+                {
+                    fixedBytes += TexTiers.FixedBytesPerAsset;
+                }
+            }
+
+            int sysMB = SystemInfo.systemMemorySize;
+            long budget = TexTiers.BudgetBytes(sysMB);
+            TexTiers.Plan plan = TexTiers.Choose(entries, budget, fixedBytes);
+            TexTiers.SetPlan(plan);
+            Debug.Log($"[TexTiers] sys={sysMB}MB budget={budget / (1024 * 1024)}MB " +
+                      $"assets={seen.Count} laddered={entries.Count} " +
+                      $"base={TexTiers.TierNames[plan.BaseTier]} upgraded={plan.Upgraded} " +
+                      $"total={plan.TotalBytes / (1024 * 1024)}MB over={plan.OverBudget}");
+        }
+
 
         private Task<SolidBoxes.Model> HullFor(string glbUrl)
         {
