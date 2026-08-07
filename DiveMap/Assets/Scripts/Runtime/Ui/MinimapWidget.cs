@@ -26,6 +26,8 @@ namespace DiveMap.Runtime.Ui
         private static readonly Color32 Fish    = new Color32(140, 220, 180, 190);   // schools
         private static readonly Color32 Animal  = new Color32(255, 214, 90, 220);    // big animals
         private static readonly Color32 Self    = new Color32(88, 220, 255, 255);    // the diver
+        private static readonly Color32 Trash   = new Color32(140, 220, 180, 220);   // litter to pick up
+        private static readonly Color32 Coin    = new Color32(255, 214, 90, 255);    // gold coins
 
         private RawImage _image;
         private Texture2D _tex;
@@ -37,6 +39,8 @@ namespace DiveMap.Runtime.Ui
         private readonly List<Vector3> _solids = new List<Vector3>();
         private readonly List<Vector3> _schools = new List<Vector3>();
         private readonly List<Transform> _animals = new List<Transform>();
+        private readonly List<Vector3> _trashPos = new List<Vector3>();
+        private readonly List<Vector3> _coinPos = new List<Vector3>();
 
         public static MinimapWidget Instance { get; private set; }
 
@@ -118,14 +122,12 @@ namespace DiveMap.Runtime.Ui
                 Plot(half + Mathf.Cos(t) * rEdge, half + Mathf.Sin(t) * rEdge, Ring, 1);
             }
 
-            // Everything is drawn in MAP space (north up), like the web's canvas.
-            for (int i = 0; i < _solids.Count; i++) Blip(_solids[i], Solid, 2);
-            for (int i = 0; i < _schools.Count; i++) Blip(_schools[i], Fish, 2);
-            for (int i = 0; i < _animals.Count; i++)
-            {
-                Transform t = _animals[i];
-                if (t != null) Blip(t.position, Animal, 2);
-            }
+            // 🔴 คำสั่ง user 7 ส.ค.: เรดาร์แสดงแค่ตำแหน่งขยะกับเหรียญ — ของที่เก็บได้และ
+            // หายไปจริงเมื่อเก็บ. โครงสร้าง/ฝูง/สัตว์เลิกวาด (ลิสต์ยังรับไว้ใน Configure
+            // เผื่อวันหน้าอยากได้กลับมา แต่ไม่วาด) — เข็มทิศของเกมนี้คือ "ของที่ต้องไปเก็บ".
+            TrashGameSystem.CollectPositions(_trashPos, _coinPos);
+            for (int i = 0; i < _trashPos.Count; i++) Blip(_trashPos[i], Trash, 2);
+            for (int i = 0; i < _coinPos.Count; i++) Blip(_coinPos[i], Coin, 3);
 
             // The diver: a dot plus a short heading whisker.
             Vector2 me = ToTex(eye);

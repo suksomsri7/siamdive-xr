@@ -99,6 +99,22 @@ namespace DiveMap.Runtime
         /// <summary>The coins reached an account (or the player chose to drop them).</summary>
         public static void ClearEarned() => EarnedThisSession = 0;
 
+        /// <summary>
+        /// ตำแหน่งชิ้นที่ยังเก็บได้ตอนนี้ — เรดาร์ใช้ (คำสั่ง user 7 ส.ค.: เรดาร์แสดงแค่
+        /// ขยะกับเหรียญ). ชิ้นที่กะพริบหายชั่วขณะไม่นับ เพราะบนจอก็มองไม่เห็นเช่นกัน.
+        /// </summary>
+        public static void CollectPositions(List<Vector3> trash, List<Vector3> coins)
+        {
+            trash?.Clear();
+            coins?.Clear();
+            if (_instance == null) return;
+            foreach (Piece p in _instance._pieces)
+            {
+                if (p.Go == null || !p.Go.activeSelf) continue;
+                (p.IsCoin ? coins : trash)?.Add(p.Go.transform.position);
+            }
+        }
+
         public static TrashGameSystem Ensure(Transform parent)
         {
             if (_instance != null) return _instance;
