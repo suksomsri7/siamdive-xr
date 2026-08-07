@@ -49,6 +49,11 @@ namespace DiveMap.Runtime
         private bool _running;
         private uint _rng = 0x9E3779B9;
 
+        // The scenery's true shape — the same hulls the drone collides with (see TrashPhysics:
+        // litter must land on the wreck's deck and fall through the arch's opening, not rest on
+        // an invisible lid). Handed in by TourController, which already holds them.
+        private IReadOnlyList<SolidBoxes.Group> _solids;
+
         /// <summary>Coins in the purse. Local for now; the wallet sync is its own step.</summary>
         public static int Coins
         {
@@ -82,8 +87,10 @@ namespace DiveMap.Runtime
         }
 
         /// <summary>Start dropping litter for this map.</summary>
-        public void Begin(Vector3 center, float waterLevel, float scaleX, float scaleZ)
+        public void Begin(Vector3 center, float waterLevel, float scaleX, float scaleZ,
+                          IReadOnlyList<SolidBoxes.Group> solids = null)
         {
+            _solids = solids;
             _cam = Camera.main;
             _center = center;
             _waterLevel = waterLevel;
@@ -169,7 +176,13 @@ namespace DiveMap.Runtime
                     Vector3 pos = t.position;
                     pos.y -= TrashGame.FallSpeed * Time.deltaTime;
                     pos.x += Mathf.Sin(now * 0.7f + p.Phase) * 0.04f;   // the web's drift
-                    if (pos.y <= p.FloorY) { pos.y = p.FloorY; p.Landed = true; p.LandedAt = now; }
+                    // Re-floor at the CURRENT x/z: the piece drifts while it falls, and the
+                    // floor under a drifted piece is not the floor under its spawn (the whole
+                    // half-buried-in-the-sand report). Hulls first, sand as the fallback.
+                    float floor = TrashPhysics.FloorUnder(pos.x, pos.z, pos.y + 1f,
+                                      FloorAt(pos), _solids) + TrashGame.LandOffset;
+                    p.FloorY = floor;   // HeightFactor scores against where it actually rests
+                    if (pos.y <= floor) { pos.y = floor; p.Landed = true; p.LandedAt = now; }
                     t.position = pos;
                 }
                 t.Rotate(p.IsCoin ? new Vector3(0f, 3.4f, 0f) : new Vector3(0.7f, 0.4f, 0.5f));
@@ -189,7 +202,44 @@ namespace DiveMap.Runtime
 
                 if (Vector3.Distance(eye, t.position) < TrashGame.CollectRadius) Collect(i);
             }
+
+            TapCollect();
         }
+
+        /// <summary>
+        /// Tap to pick up: the piece nearest the tap ray, no farther than the torch can throw
+        /// light (<see cref="DiveLightMath.LampRange"/> — you can only grab what you can see).
+        /// Driving into a piece still collects it; this is the second hand, not a replacement.
+        /// </summary>
+        private void TapCollect()
+        {
+            if (!Input.GetMouseButtonDown(0)) return;
+            if (UnityEngine.EventSystems.EventSystem.current != null &&
+                UnityEngine.EventSystems.EventSystem.current.IsPointerOverGameObject()) return;
+
+            Ray ray = _cam.ScreenPointToRay(Input.mousePosition);
+            var positions = new List<Vec3>(_pieces.Count);
+            var map = new List<int>(_pieces.Count);
+            for (int i = 0; i < _pieces.Count; i++)
+            {
+                Piece p = _pieces[i];
+                if (p.Go == null || !p.Go.activeSelf) continue;   // blinking-out litter is not a target
+                Vector3 at = p.Go.transform.position;
+                positions.Add(new Vec3(at.x, at.y, at.z));
+                map.Add(i);
+            }
+            int hit = TrashPhysics.PickForTap(
+                new Vec3(ray.origin.x, ray.origin.y, ray.origin.z),
+                new Vec3(ray.direction.x, ray.direction.y, ray.direction.z),
+                positions, TapPickRadius, DiveLightMath.LampRange);
+            if (hit >= 0) Collect(map[hit]);
+        }
+
+        /// <summary>
+        /// How far off the tap ray a piece may sit and still count as tapped. Litter is small and
+        /// drifts; a finger is fat. 3 world units ≈ the piece plus a thumb of forgiveness.
+        /// </summary>
+        private const float TapPickRadius = 3f;
 
         // ── spawn / collect ──────────────────────────────────────────────────────
 

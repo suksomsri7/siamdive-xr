@@ -278,7 +278,7 @@ namespace DiveMap.Runtime
 
             // The clean-up game runs inside the tour only — the web is emphatic that litter must
             // not rain onto a map you are looking at or editing.
-            TrashGameSystem.Ensure(transform).Begin(_homeCenter, _waterLevel, _scaleX, _scaleZ);
+            TrashGameSystem.Ensure(transform).Begin(_homeCenter, _waterLevel, _scaleX, _scaleZ, _solidGroups);
 
             // No toast here: the HUD's own hint line (#tourHud) says this permanently, and the web
             // does not double up. A toast on entry also fought the hint for the same screen space.
