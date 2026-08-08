@@ -476,8 +476,20 @@ namespace DiveMap.Runtime
 
             // ── QC screenshot mode (CI): -qcshot <path> → รอเฟรม settle → แคป → ปิดตัวเอง ──
             // ใช้ใน headless CI (xvfb) เพื่อให้ orchestrator เห็นภาพจริงทุก build (QC_PLAN ชั้น 2)
+            // ── SchoolClip (CI): -schoolclip <dir> → ถ่ายคลิปฝูง 90 เฟรมต่อเนื่อง ──
+            // เกิดจากมหากาพย์ "ฝูงส่ายหัว" 8 ส.ค.: ภาพนิ่ง QC พิสูจน์การเคลื่อนไหวไม่ได้
+            // และ orchestrator เคยใช้เครื่อง user เป็นเครื่องทดสอบ 9 รอบ — คลิปนี้ทำให้เห็น
+            // การเคลื่อนไหวจริงของ sim ก่อนส่งงานทุกครั้ง (Time.captureFramerate ตรึง dt
+            // ให้เวลาเกมเดิน 1/30 วิ/เฟรมแม้ llvmpipe เรนเดอร์ช้า = คลิปเล่นความเร็วจริง)
+            string clipDir = GetArg("-schoolclip");
+            if (!string.IsNullOrEmpty(clipDir))
+            {
+                var marineC = _mapRoot != null ? _mapRoot.GetComponent<FishSchoolSystem>() : null;
+                StartCoroutine(SchoolClip(clipDir, marineC));
+            }
+
             string qcPath = GetArg("-qcshot");
-            if (!string.IsNullOrEmpty(qcPath))
+            if (!string.IsNullOrEmpty(qcPath) && string.IsNullOrEmpty(clipDir))
             {
                 // FishSchoolSystem sits on the Map root (added by SceneBuilder when there are
                 // schools); the close-up angle-2 uses it to find the scad shoal nearest the wreck.
@@ -492,6 +504,50 @@ namespace DiveMap.Runtime
             for (int i = 0; i < args.Length - 1; i++)
                 if (args[i] == name) return args[i + 1];
             return null;
+        }
+
+        private IEnumerator SchoolClip(string dir, FishSchoolSystem marine)
+        {
+            System.IO.Directory.CreateDirectory(dir);
+            yield return new WaitForSeconds(6f);   // ฝูง morph เข้าที่ + template GLB ลง
+
+            Camera cam = Camera.main;
+            var orbit = cam != null ? cam.GetComponent<OrbitCamera>() : null;
+            if (orbit != null) orbit.enabled = false;
+
+            Bounds target = default;
+            bool found = false;
+            if (marine != null)
+                for (int i = 0; i < marine.SchoolCount && !found; i++)
+                    if (marine.TryGetSchoolBounds(i, out string sp, out Bounds b)
+                        && sp != null && sp.Contains("barracuda"))
+                    { target = b; found = true; }
+            if (!found && marine != null && marine.SchoolCount > 0)
+                found = marine.TryGetSchoolBounds(0, out _, out target);
+            Debug.Log($"[Clip] school found={found} centre={target.center} size={target.size}");
+            if (cam != null && found)
+            {
+                float d = target.size.magnitude * 0.9f + 10f;
+                cam.transform.position = target.center + new Vector3(0.4f, 0.25f, 0.9f).normalized * d;
+                cam.transform.LookAt(target.center);
+            }
+
+            Time.captureFramerate = 30;   // เวลาเกมเดินคงที่ 1/30 ต่อเฟรมที่แคป
+            for (int f = 0; f < 90; f++)
+            {
+                // เล็งกลางฝูงใหม่ทุก 30 เฟรม (ฝูงว่ายออกนอกเฟรมได้)
+                if (cam != null && marine != null && f % 30 == 0 && f > 0)
+                    for (int i = 0; i < marine.SchoolCount; i++)
+                        if (marine.TryGetSchoolBounds(i, out string sp2, out Bounds b2)
+                            && sp2 != null && sp2.Contains("barracuda"))
+                        { cam.transform.LookAt(b2.center); break; }
+                ScreenCapture.CaptureScreenshot(System.IO.Path.Combine(dir, $"clip_{f:000}.png"));
+                yield return new WaitForEndOfFrame();
+            }
+            Time.captureFramerate = 0;
+            Debug.Log("[Clip] done 90 frames");
+            yield return null;
+            Application.Quit();
         }
 
         private IEnumerator QcShot(string path, FishSchoolSystem marine, Vector3 boatCenter)
