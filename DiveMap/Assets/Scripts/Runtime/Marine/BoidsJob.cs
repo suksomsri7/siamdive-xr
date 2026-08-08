@@ -158,7 +158,7 @@ namespace DiveMap.Runtime.Marine
             {
                 float3 dp = f.Pos + f.Vel * Dt;
                 float3 dv = f.Vel;
-                ClampHome(ref dp, s);
+                ClampHome(ref dp, ref dv, s);
                 ClampVertical(ref dp, ref dv, s);
                 f.Pos = dp;
                 f.Vel = dv;
@@ -268,7 +268,7 @@ namespace DiveMap.Runtime.Marine
             nv.y = vy;
 
             float3 np = f.Pos + nv * Dt;
-            ClampHome(ref np, s);
+            ClampHome(ref np, ref nv, s);
             ClampVertical(ref np, ref nv, s);
 
             f.Pos = np;
@@ -422,7 +422,18 @@ namespace DiveMap.Runtime.Marine
 
         // ── helpers (mirror MarineMath) ───────────────────────────────────────────
 
-        private static void ClampHome(ref float3 p, in SchoolParams s)
+        /// <summary>
+        /// 🔴 "ห้ามว่ายถอยหลัง" ภาคสอง (user, 8 ส.ค. 2026: "ปลากะมงว่ายถอยหลัง").
+        ///
+        /// ตัวเก่าดึงแค่ตำแหน่งกลับเข้าเขตบ้าน แต่ปล่อยความเร็วชี้ออกนอกตามเดิม — pod วาดหน้า
+        /// ปลาตามความเร็ว (LookRotation(vel)) ผลคือปลาที่แตะขอบ HomeR หน้าชี้ออกแต่ตัวถูกดึง
+        /// ถอย = ไถลถอยหลังทั้งที่จมูกชี้ไปหน้า และ pod วนใกล้ขอบเกือบตลอดเวลา.
+        ///
+        /// แก้แบบเดียวกับกำแพงในเกมทุกเกม: ชนขอบแล้ว "ลื่นไปตามขอบ" — ตัดเฉพาะองค์ประกอบ
+        /// ความเร็วที่พุ่งออกนอกรัศมี เหลือแนวสัมผัสไว้ ปลาจึงเลียบขอบต่อโดยหน้ากับการ
+        /// เคลื่อนที่ตรงกันเสมอ (invariant เดียวกับ FormationStep/MarineMath).
+        /// </summary>
+        private static void ClampHome(ref float3 p, ref float3 v, in SchoolParams s)
         {
             float dx = p.x - s.Anchor.x;
             float dz = p.z - s.Anchor.z;
@@ -432,6 +443,14 @@ namespace DiveMap.Runtime.Marine
                 float kk = s.HomeR / rr;
                 p.x = s.Anchor.x + dx * kk;
                 p.z = s.Anchor.z + dz * kk;
+
+                float nx = dx / rr, nz = dz / rr;              // ทิศออกจากบ้าน (หน่วย)
+                float outward = v.x * nx + v.z * nz;
+                if (outward > 0f)                              // กำลังพุ่งออก -> เหลือแต่แนวสัมผัส
+                {
+                    v.x -= nx * outward;
+                    v.z -= nz * outward;
+                }
             }
         }
 
