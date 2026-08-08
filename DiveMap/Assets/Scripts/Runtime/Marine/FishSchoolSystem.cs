@@ -1031,7 +1031,16 @@ namespace DiveMap.Runtime.Marine
                     // accumulator to get stuck, and the sim's own TurnCap bounds the input.
                     if (sr.MaxBank > 1e-4f && sr.Yaw != null && k < sr.Yaw.Length)
                     {
-                        float yaw = Mathf.Atan2(vel.x, vel.z);
+                        // 🔴 ราก "สั่นทั้งหัวและหาง" (user 8 ส.ค. — จำลองพิสูจน์: flick 13.7°/เฟรม):
+                        // ปลา formation ที่ประจำช่องแล้ว "ก้าว" ของมันจิ๋วและทิศสุ่มทุกเฟรม —
+                        // atan2 ของก้าวนั้นคือ noise ล้วน → tanh อิ่มตัว → ตัวกลิ้งเต็มเหวี่ยงถี่
+                        // ระดับเฟรม (แย่ลงตั้งแต่ Vel ถูกเปลี่ยนเป็นก้าวจริงเพื่อ oracle ถอยหลัง).
+                        // Head คือสถานะที่เลี้ยวช้าอย่างเดียว (≤0.05 rad/เฟรม) — บรรทัด rot ข้างบน
+                        // ก็พูดเองว่า "Head is the state; velocity is a readout" แต่ bank ลืมทำตาม.
+                        // pod (ไม่ใช่ formation) vel = heading-locked เรียบอยู่แล้ว ใช้ vel ต่อได้.
+                        float yaw = _schools[si].Formation != 0
+                                  ? f.Head
+                                  : Mathf.Atan2(vel.x, vel.z);
                         float rate = 0f;
                         if (sr.YawPrimed)
                         {
