@@ -77,7 +77,7 @@ namespace DiveMap.Runtime
             new Dictionary<string, float>(StringComparer.Ordinal)
             {
                 { "can", 2.6f }, { "bottle", 2.9f }, { "plastic", 5.5f },
-                { "net", 9.0f }, { "tire", 5.5f }, { "coin", 4.2f },   // อวนใหญ่ขึ้นอีก (8 ส.ค. รอบ 2)
+                { "net", 27.0f },   // user 8 ส.ค.: อีก 3 เท่า — อวนจริงผืนใหญ่มาก { "tire", 5.5f }, { "coin", 4.2f },   // อวนใหญ่ขึ้นอีก (8 ส.ค. รอบ 2)
             };
 
         private readonly Dictionary<string, GameObject> _templates =
