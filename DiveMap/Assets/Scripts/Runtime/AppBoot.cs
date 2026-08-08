@@ -57,6 +57,12 @@ namespace DiveMap.Runtime
             }
             if (string.IsNullOrEmpty(_shortId)) _shortId = defaultShortId;
 
+            // 🔴 ราก "30fps สีเหลืองนิ่งสนิท" (fps badge ของ user, 8 ส.ค.): Unity บน iOS
+            // ล็อก targetFrameRate ไว้ที่ 30 โดย default — แอปนี้ไม่เคยตั้งค่า จึงวิ่งครึ่งจอ
+            // มาตลอดไม่ว่าเครื่องแรงแค่ไหน · ที่ 30fps ระบบเลี้ยว "ต่อเฟรม" ก้าวใหญ่ 2 เท่า
+            // (Fs=2) = ปลากระตุก · ตั้ง 60 ให้เต็มจอมาตรฐาน (ProMotion 120 ไว้ทีหลัง).
+            Application.targetFrameRate = 60;
+
             Ui.FpsBadge.Ensure();   // เลข fps มุมจอ — วิดีโอทุกคลิปจาก user กลายเป็นเครื่องวัด
             SetupCamera();
             SetupLighting();
