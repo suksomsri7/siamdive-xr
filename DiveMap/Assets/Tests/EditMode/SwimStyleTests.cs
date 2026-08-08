@@ -217,11 +217,10 @@ namespace DiveMap.Tests
             // it divides by flen, this term does not. Over a 1.8624 u barracuda that is 0.267
             // wavelengths — a plank flicking a tail. The size table was giving it 0.85, i.e. 3.19×
             // as many bends in the body, which reads as vibration rather than swimming.
-            // user 8 ส.ค.: ค่าเว็บ 0.267 ลูกคลื่น อ่านเป็น "กระตุก สั่นทั้งตัว" บนเครื่องจริง
-            // (จังหวะตอนนี้ช้าลง 0.58× แล้ว — บริบทต่างจากยุค build 280 ที่ 0.85 ลูกคลื่น
-            // ถูกตัดสินว่าสั่น เพราะตอนนั้นจังหวะเร็วเต็มสูตร) — พื้นลูกคลื่นยกเป็น CalmMinCycles
-            Assert.AreEqual(SwimStyle.CalmMinCycles, barra.Cycles, 1e-3);
+            Assert.AreEqual(1.862 * 0.9 / (2 * Math.PI), barra.Cycles, 1e-3);
             Assert.AreEqual(1.911 * 2.5 / (2 * Math.PI), scad.Cycles,  1e-3);
+            Assert.Less(barra.Cycles, 0.3, "ตัวแข็งสะบัดหาง — a stiff body, not a snake");
+            Assert.Less(barra.Cycles, scad.Cycles, "a barracuda bends less than a scad");
 
             // The web has NO gust and NO recoil: uAmp is written once at build time and the tail
             // envelope is clamped at 0, so the nose never swings back.
@@ -298,8 +297,7 @@ namespace DiveMap.Tests
             SwimWave barra = SwimStyle.For("school:barracuda", BarracudaLen);
             SwimWave scad  = SwimStyle.For("school:scad", ScadLen);
 
-            Assert.AreEqual(webBarra * SwimStyle.CalmBeatMulBarracudaTrevally,
-                            barra.Amp * 2 * Math.PI * barra.BeatHz, 1e-9);   // user 8 ส.ค.
+            Assert.AreEqual(webBarra, barra.Amp * 2 * Math.PI * barra.BeatHz, 1e-9);
             Assert.AreEqual(webScad,  scad.Amp  * 2 * Math.PI * scad.BeatHz,  1e-9);
 
             // …and the old table's barracuda, for the record: 0.075 at the same rate = 1.92× fast.
@@ -357,7 +355,7 @@ namespace DiveMap.Tests
             var rows = new[]
             {
                 Tuple.Create("school:scad",       ScadLen,       1.114),
-                Tuple.Create("school:barracuda",  BarracudaLen,  0.796 * SwimStyle.CalmBeatMulBarracudaTrevally),   // user 8 ส.ค.: หางบาราคูด้าช้าลง
+                Tuple.Create("school:barracuda",  BarracudaLen,  0.796),
                 Tuple.Create("mdl:bull_shark",    BullSharkLen,  0.45),
                 Tuple.Create("msh:oceanic_manta", MantaLen,      0.36),
                 Tuple.Create("msh:whaleshark",    WhaleSharkLen, 0.25),
@@ -440,8 +438,8 @@ namespace DiveMap.Tests
                             SwimStyle.For("school:batfish", 6.0).BeatHz, Eps);
             Assert.AreEqual(SwimStyle.SchoolBeatHzDefault,
                             SwimStyle.For("school:parrotfish_prismatic", 6.0).BeatHz, Eps);
-            Assert.AreEqual(SwimStyle.SchoolBeatHzBarracuda * SwimStyle.CalmBeatMulBarracudaTrevally,
-                            SwimStyle.For("school:barracuda", BarracudaLen).BeatHz, Eps);   // user 8 ส.ค.
+            Assert.AreEqual(SwimStyle.SchoolBeatHzBarracuda,
+                            SwimStyle.For("school:barracuda", BarracudaLen).BeatHz, Eps);
 
             // …and it survives the scene item prefix, which is how a school id can reach here.
             Assert.AreEqual(SwimStyle.SchoolBeatHzDefault,
@@ -829,9 +827,8 @@ namespace DiveMap.Tests
 
             Assert.AreEqual(shoal.Cycles, solo.Cycles, Eps,
                             "same species, same body wave: builder.html:1098 wiggleWave 0.9");
-            Assert.AreEqual(SwimStyle.CalmMinCycles, solo.Cycles, 0.005,
-                            "user 8 ส.ค.: ยกพื้นลูกคลื่นให้คลื่นวิ่งตามตัว (เดิม 0.267 = สั่นทั้งแท่ง)");
-            // (เพดานเดิม Build280Cycles/3 ถอดออก — พื้นลูกคลื่นใหม่ของ user สูงกว่าเส้นนั้นโดยตั้งใจ)
+            Assert.AreEqual(0.267, solo.Cycles, 0.005, "1.8624 u × 0.9 / 2π");
+            Assert.Less(solo.Cycles, Build280Cycles / 3.0, "3.19× fewer bends than build 280");
         }
 
         /// <summary>
@@ -850,10 +847,8 @@ namespace DiveMap.Tests
         {
             double solo = SwimStyle.For("msh:barracuda", SoloBarracudaLen).BeatHz;
 
-            Assert.AreEqual(SwimStyle.SchoolBeatHzBarracuda * 0.5
-                            * SwimStyle.CalmBeatMulBarracudaTrevally, solo, Eps);
-            Assert.AreEqual(0.398 * SwimStyle.CalmBeatMulBarracudaTrevally, solo, 0.002,
-                            "5.0 rad/s ÷ 2π ÷ 2 × calm (user 8 ส.ค.)");
+            Assert.AreEqual(SwimStyle.SchoolBeatHzBarracuda * 0.5, solo, Eps);
+            Assert.AreEqual(0.398, solo, 0.002, "5.0 rad/s ÷ 2π ÷ 2");
 
             const double WebSoloDartHz = 1.4 / (2.0 * Math.PI);   // sp = 1.0, the middle of 0.6…1.4
             Assert.Greater(solo, WebSoloDartHz, "not slower than the web's slowest barracuda");
@@ -907,19 +902,9 @@ namespace DiveMap.Tests
             {
                 SwimWave tuned = SwimStyle.For(id, 20.0);
                 SwimWave raw = SwimStyle.FromTables(id, 20.0);
-                // ชั้น UserCalm (8 ส.ค.) แตะเฉพาะบาราคูด้า/กะมง — สายพันธุ์อื่นต้องเท่าตารางเป๊ะ
-                double calm = (id.Contains("barracuda") || id.Contains("yellowtail")
-                               || id.Contains("trevally"))
-                            ? SwimStyle.CalmBeatMulBarracudaTrevally : 1.0;
-                double beatWant = raw.BeatHz * calm;
-                if (calm != 1.0 && (id.Contains("yellowtail") || id.Contains("trevally"))
-                    && beatWant > SwimStyle.CalmTrevallyBeatHzCap)
-                    beatWant = SwimStyle.CalmTrevallyBeatHzCap;
-                Assert.AreEqual(beatWant, tuned.BeatHz, Eps, id);
+                Assert.AreEqual(raw.BeatHz, tuned.BeatHz, Eps, id);
                 Assert.AreEqual(raw.Amp, tuned.Amp, Eps, id);
-                double cycWant = calm != 1.0 && raw.Cycles < SwimStyle.CalmMinCycles
-                               ? SwimStyle.CalmMinCycles : raw.Cycles;
-                Assert.AreEqual(cycWant, tuned.Cycles, Eps, id);
+                Assert.AreEqual(raw.Cycles, tuned.Cycles, Eps, id);
             }
 
             Assert.IsFalse(SwimStyle.SoloTuneFor("school:barracuda").Has,

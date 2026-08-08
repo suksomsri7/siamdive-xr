@@ -534,44 +534,7 @@ namespace DiveMap.Core
         /// beating four times a second is precisely the buzz being removed.
         /// </summary>
         public static SwimWave For(string assetId, double worldLen)
-            => UserCalm(assetId, Apply(FromTables(assetId, worldLen), SoloTuneFor(assetId)));
-
-        /// <summary>
-        /// จูนตามคำตัดสิน user บนเครื่องจริง 8 ส.ค. 2026: "บาราคูด้ากับกะมง หางยังขยับเร็ว
-        /// ไปมาก ไม่พริ้ว" — ชะลอจังหวะหางของสองสายพันธุ์นี้ลง ~42% (0.58×) ทุกเส้นทาง
-        /// (ฝูง/pod/เดี่ยว). เป็นชั้น override สุดท้ายแบบเดียวกับ SoloTune: ตารางเว็บยังอ่านได้
-        /// ตรง ๆ ข้างบน และการเบี่ยงจากเว็บถูกจดไว้ที่นี่ที่เดียวพร้อมเหตุผล.
-        /// </summary>
-        public const double CalmBeatMulBarracudaTrevally = 0.58;   // 0.55 หลุดเส้นกัน
-        // "ช้ากว่าบาราคูด้าช้าสุดของเว็บ" (0.2228 Hz) กับพื้น pod 0.4 Hz นิดเดียว — 0.58 คือ
-        // ค่าช้าสุดที่ยังอยู่เหนือเส้นกันทั้งสอง
-
-        /// <summary>
-        /// เพดานจังหวะหางของกะมง (pod/เดี่ยว) — user 8 ส.ค. รอบสอง: "หางสะบัดเร็วไปมากๆ"
-        /// แม้คูณ 0.58 แล้ว เพราะจังหวะ pod มาจากสูตรขนาดตัว (ปลาเล็ก = ถี่) ไม่ใช่ค่าคงที่
-        /// ของฝูง — จึงตั้งเพดานตรงๆ ที่ระดับใกล้บาราคูด้า.
-        /// </summary>
-        public const double CalmTrevallyBeatHzCap = 0.45;
-
-        /// <summary>
-        /// จำนวนลูกคลื่นขั้นต่ำตามลำตัว — user 8 ส.ค. รอบสอง: บาราคูด้า "กระตุกไม่พริ้ว
-        /// สั่นทั้งตัว". ค่าเว็บ 0.267 ลูกคลื่น = ทั้งตัวอยู่เฟสเดียวกัน ตัวเลยแกว่งพร้อมกัน
-        /// ทั้งแท่ง · ยกขั้นต่ำเป็น 0.8 = คลื่นวิ่งไล่จากหัวไปหางให้เห็นจริง = "พริ้ว".
-        /// </summary>
-        public const double CalmMinCycles = 0.8;
-
-        private static SwimWave UserCalm(string assetId, SwimWave w)
-        {
-            string id = Bare(assetId ?? "");
-            bool barra = id.IndexOf("barracuda", StringComparison.OrdinalIgnoreCase) >= 0;
-            bool trev  = id.IndexOf("yellowtail", StringComparison.OrdinalIgnoreCase) >= 0
-                      || id.IndexOf("trevally", StringComparison.OrdinalIgnoreCase) >= 0;
-            if (!barra && !trev) return w;
-            double beat = w.BeatHz * CalmBeatMulBarracudaTrevally;
-            if (trev && beat > CalmTrevallyBeatHzCap) beat = CalmTrevallyBeatHzCap;
-            double cycles = w.Cycles < CalmMinCycles ? CalmMinCycles : w.Cycles;
-            return new SwimWave(w.Gait, beat, w.Amp, cycles, w.Recoil, w.Gust, w.MaxBankRad);
-        }
+            => Apply(FromTables(assetId, worldLen), SoloTuneFor(assetId));
 
         /// <summary>
         /// <see cref="For"/> before <see cref="SoloTuneFor"/> gets a say — the size law and the
