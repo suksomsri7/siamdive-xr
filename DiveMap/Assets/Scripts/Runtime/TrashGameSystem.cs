@@ -77,7 +77,7 @@ namespace DiveMap.Runtime
             new Dictionary<string, float>(StringComparer.Ordinal)
             {
                 { "can", 2.6f }, { "bottle", 2.9f }, { "plastic", 5.5f },
-                { "net", 7.5f }, { "tire", 5.5f }, { "coin", 4.2f },   // ยางสมจริง · อวนใหญ่ขึ้น (8 ส.ค.)
+                { "net", 9.0f }, { "tire", 5.5f }, { "coin", 4.2f },   // อวนใหญ่ขึ้นอีก (8 ส.ค. รอบ 2)
             };
 
         private readonly Dictionary<string, GameObject> _templates =
@@ -225,16 +225,16 @@ namespace DiveMap.Runtime
                     // Re-floor at the CURRENT x/z: the piece drifts while it falls, and the
                     // floor under a drifted piece is not the floor under its spawn (the whole
                     // half-buried-in-the-sand report). Hulls first, sand as the fallback.
+                    // +ExtraLift: โมเดลจริง pivot อยู่กลางตัว ชิ้นใหญ่เลยดูจมทราย —
+                    // user 8 ส.ค.: "ขยับขึ้นมาอีกนิด ไม่ต้องเยอะ"
                     float floor = TrashPhysics.FloorUnder(pos.x, pos.z, pos.y + 1f,
-                                      FloorAt(pos), _solids) + TrashGame.LandOffset;
+                                      FloorAt(pos), _solids) + TrashGame.LandOffset + ExtraLift;
                     p.FloorY = floor;   // HeightFactor scores against where it actually rests
                     if (pos.y <= floor) { pos.y = floor; p.Landed = true; p.LandedAt = now; }
                     t.position = pos;
                 }
-                // ยางกับอวนตกตรงๆ ไม่หมุน (คำสั่ง user 8 ส.ค.) — ของหนัก/แผ่กว้างหมุนแล้วดูปลอม
-                bool spins = p.IsCoin || (p.Kind.Key != "tire" && p.Kind.Key != "net");
-                if (spins)
-                    t.Rotate(p.IsCoin ? new Vector3(0f, 3.4f, 0f) : new Vector3(0.7f, 0.4f, 0.5f));
+                // user 8 ส.ค. (รอบ 2): ขยะทุกชนิดตกตรงๆ ไม่หมุน — เหลือเหรียญตัวเดียวที่ควง
+                if (p.IsCoin) t.Rotate(new Vector3(0f, 3.4f, 0f));
 
                 if (!p.IsCoin && p.Landed)
                 {
@@ -304,6 +304,9 @@ namespace DiveMap.Runtime
         /// เป็นเส้นเดียวกับที่ป้ายรีไซเคิลโผล่: เห็นป้ายเขียว = แตะเก็บได้แน่นอน.
         /// </summary>
         public const float TapCollectRange = 115f;
+
+        /// <summary>ยกจุดวางเพิ่มจาก LandOffset ของเว็บ — โมเดลจริง pivot กลางตัว (user 8 ส.ค.).</summary>
+        private const float ExtraLift = 1.2f;
 
         // ── spawn / collect ──────────────────────────────────────────────────────
 

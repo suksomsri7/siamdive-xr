@@ -534,7 +534,28 @@ namespace DiveMap.Core
         /// beating four times a second is precisely the buzz being removed.
         /// </summary>
         public static SwimWave For(string assetId, double worldLen)
-            => Apply(FromTables(assetId, worldLen), SoloTuneFor(assetId));
+            => UserCalm(assetId, Apply(FromTables(assetId, worldLen), SoloTuneFor(assetId)));
+
+        /// <summary>
+        /// จูนตามคำตัดสิน user บนเครื่องจริง 8 ส.ค. 2026: "บาราคูด้ากับกะมง หางยังขยับเร็ว
+        /// ไปมาก ไม่พริ้ว" — ชะลอจังหวะหางของสองสายพันธุ์นี้ลง ~42% (0.58×) ทุกเส้นทาง
+        /// (ฝูง/pod/เดี่ยว). เป็นชั้น override สุดท้ายแบบเดียวกับ SoloTune: ตารางเว็บยังอ่านได้
+        /// ตรง ๆ ข้างบน และการเบี่ยงจากเว็บถูกจดไว้ที่นี่ที่เดียวพร้อมเหตุผล.
+        /// </summary>
+        public const double CalmBeatMulBarracudaTrevally = 0.58;   // 0.55 หลุดเส้นกัน
+        // "ช้ากว่าบาราคูด้าช้าสุดของเว็บ" (0.2228 Hz) กับพื้น pod 0.4 Hz นิดเดียว — 0.58 คือ
+        // ค่าช้าสุดที่ยังอยู่เหนือเส้นกันทั้งสอง
+
+        private static SwimWave UserCalm(string assetId, SwimWave w)
+        {
+            string id = Bare(assetId ?? "");
+            bool calm = id.IndexOf("barracuda", StringComparison.OrdinalIgnoreCase) >= 0
+                     || id.IndexOf("yellowtail", StringComparison.OrdinalIgnoreCase) >= 0
+                     || id.IndexOf("trevally", StringComparison.OrdinalIgnoreCase) >= 0;
+            if (!calm) return w;
+            return new SwimWave(w.Gait, w.BeatHz * CalmBeatMulBarracudaTrevally,
+                                w.Amp, w.Cycles, w.Recoil, w.Gust, w.MaxBankRad);
+        }
 
         /// <summary>
         /// <see cref="For"/> before <see cref="SoloTuneFor"/> gets a say — the size law and the
