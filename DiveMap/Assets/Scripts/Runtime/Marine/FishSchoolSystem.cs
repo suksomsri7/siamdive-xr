@@ -137,6 +137,8 @@ namespace DiveMap.Runtime.Marine
             public float        Cruise;      // the school's own cruise speed (u/s) — Effort's divisor
             public float        MaxBank;     // radians of roll this species allows in a turn
             public float[]      Yaw;         // per-fish heading last frame (for the bank)
+            public Quaternion[] DrawRot;     // per-fish smoothed DRAWN rotation (see render loop)
+            public bool         DrawRotInit;
             public float[]      YawRate;     // per-fish smoothed turn rate (rad/s)
             public bool         YawPrimed;   // false until Yaw[] holds a real reading
         }
@@ -727,6 +729,7 @@ namespace DiveMap.Runtime.Marine
                     MaxBank = (float)wave.MaxBankRad,
                     Yaw = new float[Mathf.Max(0, s.Count)],
                     YawRate = new float[Mathf.Max(0, s.Count)],
+                    DrawRot = new Quaternion[Mathf.Max(0, s.Count)],
                     YawPrimed = false,
                 });
             }
@@ -1063,6 +1066,19 @@ namespace DiveMap.Runtime.Marine
                         float wig = Mathf.Sin(t * WiggleRate + f.Phase) * WiggleAmp * Mathf.Rad2Deg;
                         rot *= Quaternion.Euler(0f, wig, 0f);
                     }
+                    // 🔴 หน่วงการหมุน "เฉพาะตอนวาด" — วิดีโอ 8 ส.ค. (60fps แล้ว): ตัวเดี่ยวนิ่ง
+                    // แต่ปลาฝูงยัง "สั่น/กระตุก" เพราะทิศหัวจาก sim แกว่งความถี่สูง (ไล่ช่อง/
+                    // ไล่ฝูงเปลี่ยนใจทุกเฟรม — ฟิล์มสตริปวัดได้แกว่ง ~หลายสิบองศา/วินาที
+                    // สลับทิศ). ตำแหน่ง/การว่าย/ฟิสิกส์ไม่แตะ — จมูกที่วาดแค่เลี้ยวตามแบบนุ่ม
+                    // (ครึ่งชีวิต ~0.12 วิ) เหมือนสัตว์จริงที่คอมันหน่วงการสะบัดของลำตัวเอง.
+                    if (sr.DrawRot != null && k < sr.DrawRot.Length)
+                    {
+                        if (!sr.DrawRotInit) sr.DrawRot[k] = rot;
+                        float kSm = 1f - Mathf.Exp(-dt / 0.12f);
+                        sr.DrawRot[k] = Quaternion.Slerp(sr.DrawRot[k], rot, kSm);
+                        rot = sr.DrawRot[k];
+                    }
+
                     float sc = sr.DrawScale * (sr.SizeMul != null && k < sr.SizeMul.Length ? sr.SizeMul[k] : 1f);
                     mats[k] = Matrix4x4.TRS(pos, rot, Vector3.one * sc);
                     // GLB template: bake the mesh node's own transform in AFTER the instance
@@ -1070,6 +1086,7 @@ namespace DiveMap.Runtime.Marine
                     if (sr.HasBake) mats[k] = mats[k] * sr.Bake;
                 }
                 sr.YawPrimed = true;
+                sr.DrawRotInit = true;
                 _render[si] = sr;
 
                 if (sr.Count <= 0) continue;
