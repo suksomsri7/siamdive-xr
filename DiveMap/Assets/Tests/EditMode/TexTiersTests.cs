@@ -37,15 +37,20 @@ namespace DiveMap.Tests
         }
 
         [Test]
-        public void SmallMap_GetsFullTierEverywhere()
+        public void SmallMap_GetsTheMobileCap_NotK4()
         {
-            // T-13 shape: few laddered assets, huge budget headroom.
+            // 8 ส.ค.: วิดีโอเครื่องจริงพิสูจน์ k4 ทั้งแมพ = ~15fps (แบนด์วิดท์ GPU) —
+            // เพดานมือถือคือ K2 แม้งบแรมเหลือเฟือ · k4 ต้องขอ explicit (XR/inspect)
             var plan = TexTiers.Choose(new List<TexTiers.Entry> { Hero("a"), Hero("b") },
                                        950 * MB, 0);
-            Assert.That(plan.BaseTier, Is.EqualTo(TexTiers.K4));
-            Assert.That(plan.Url["a"], Does.EndWith("_r0p.glb"));
-            Assert.That(plan.TotalBytes, Is.EqualTo(2 * 224 * MB));
+            Assert.That(plan.BaseTier, Is.EqualTo(TexTiers.K2));
+            Assert.That(plan.Url["a"], Does.EndWith("_k2.glb"));
             Assert.That(plan.OverBudget, Is.False);
+
+            // เส้นทาง XR ในอนาคต: ส่ง maxTier=K4 ตรงๆ ยังไปถึง k4 ได้
+            var xr = TexTiers.Choose(new List<TexTiers.Entry> { Hero("a"), Hero("b") },
+                                     950 * MB, 0, TexTiers.K4);
+            Assert.That(xr.BaseTier, Is.EqualTo(TexTiers.K4));
         }
 
         [Test]
@@ -73,7 +78,8 @@ namespace DiveMap.Tests
             };
             var plan = TexTiers.Choose(entries, 320 * MB, 0);
 
-            Assert.That(plan.Tier["big"], Is.EqualTo(TexTiers.K4));
+            // เพดาน K2: ฮีโร่ตัวใหญ่สุดได้ K2 (ไม่ใช่ K4 อีกแล้ว) — งบเหลือพออัปทั้งคู่
+            Assert.That(plan.Tier["big"], Is.EqualTo(TexTiers.K2));
             Assert.That(plan.Tier["big2"], Is.EqualTo(TexTiers.K2));
             Assert.That(plan.TotalBytes, Is.LessThanOrEqualTo(320 * MB));
         }
@@ -124,7 +130,7 @@ namespace DiveMap.Tests
 
             var plan = TexTiers.Choose(new List<TexTiers.Entry> { Hero("a") }, 950 * MB, 0);
             TexTiers.SetPlan(plan);
-            Assert.That(TexTiers.UrlFor("a"), Does.EndWith("_r0p.glb"));
+            Assert.That(TexTiers.UrlFor("a"), Does.EndWith("_k2.glb"));
             Assert.That(TexTiers.UrlFor("missing"), Is.Null);
 
             TexTiers.Clear();
@@ -142,8 +148,11 @@ namespace DiveMap.Tests
                 E("alias", 2 * MB, 2 * MB, 2 * MB),
                 E("weird", 30 * MB, 20 * MB, 10 * MB),   // nonsense ladder
             };
-            var plan = TexTiers.Choose(entries, 20 * MB, 0);
-            Assert.That(plan.TotalBytes, Is.LessThanOrEqualTo(20 * MB));
+            // งบ 40MB (เพดาน K2): base K2 = 2+20 = 22MB — ห้ามมี "อัปเกรดลง" ไปคว้า k4
+            // ราคาถูกกว่า (10MB) แม้จะถูกกว่า เพราะลำดับ tier ต้องเดินขึ้นเท่านั้น
+            var plan = TexTiers.Choose(entries, 40 * MB, 0);
+            Assert.That(plan.TotalBytes, Is.EqualTo(22 * MB));
+            Assert.That(plan.Tier["weird"], Is.EqualTo(TexTiers.K2));
         }
     }
 }

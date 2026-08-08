@@ -109,8 +109,23 @@ namespace DiveMap.Core
         /// <paramref name="budgetBytes"/> after <paramref name="fixedBytes"/> (non-laddered
         /// assets) is reserved. Pure and deterministic; see the class remarks for the policy.
         /// </summary>
+        /// <summary>
+        /// 🔴 เพดานระดับสูงสุด = K2 (≤2048) — บทเรียน 8 ส.ค. จากวิดีโอเครื่องจริง: แมพที่
+        /// TexTiers จัด k4 (PNG 4096 ไม่บีบ) ให้ทั้งแมพบนเครื่องแรม 8GB เฟรมตกเหลือ ~15-20fps
+        /// (แบนด์วิดท์ GPU ไม่ใช่แรม — งบเดิมคิดแต่แรม) จนปลาทั้งแมพ "กระตุก/สั่น/ไม่พริ้ว".
+        /// ตา user เทียบ 2K กับ 4K บนเครื่องจริงแล้วแยกไม่ออก (build 298 Harddeep) — k4 จึง
+        /// สงวนไว้ให้ XR/inspect ในอนาคต ไม่ใช่แมพมือถือ.
+        /// </summary>
+        public const int MaxMobileTier = K2;
+
         public static Plan Choose(IReadOnlyList<Entry> entries, long budgetBytes, long fixedBytes)
+            => Choose(entries, budgetBytes, fixedBytes, MaxMobileTier);
+
+        public static Plan Choose(IReadOnlyList<Entry> entries, long budgetBytes, long fixedBytes,
+                                  int maxTier)
         {
+            if (maxTier < K1) maxTier = K1;
+            if (maxTier > K4) maxTier = K4;
             var plan = new Plan
             {
                 Url = new Dictionary<string, string>(StringComparer.Ordinal),
@@ -124,7 +139,7 @@ namespace DiveMap.Core
 
             // 1) uniform base — highest tier whose total fits
             int baseTier = K1;
-            for (int t = K4; t >= K1; t--)
+            for (int t = maxTier; t >= K1; t--)
             {
                 long total = 0;
                 foreach (Entry e in live) total += e.Vram[t];
@@ -140,12 +155,12 @@ namespace DiveMap.Core
             }
 
             // 2) spend the remainder, biggest hero first, one asset to its best fitting tier
-            if (baseTier < K4 && !plan.OverBudget)
+            if (baseTier < maxTier && !plan.OverBudget)
             {
                 foreach (Entry e in live.OrderByDescending(x => x.Vram[K4])
                                         .ThenBy(x => x.Id, StringComparer.Ordinal))
                 {
-                    for (int t = K4; t > baseTier; t--)
+                    for (int t = maxTier; t > baseTier; t--)
                     {
                         long delta = e.Vram[t] - e.Vram[baseTier];
                         if (delta < 0) continue;               // alias quirk — never "upgrade" down

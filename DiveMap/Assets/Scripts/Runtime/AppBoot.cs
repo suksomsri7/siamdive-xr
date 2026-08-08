@@ -57,6 +57,7 @@ namespace DiveMap.Runtime
             }
             if (string.IsNullOrEmpty(_shortId)) _shortId = defaultShortId;
 
+            Ui.FpsBadge.Ensure();   // เลข fps มุมจอ — วิดีโอทุกคลิปจาก user กลายเป็นเครื่องวัด
             SetupCamera();
             SetupLighting();
             SetupBuilder();
