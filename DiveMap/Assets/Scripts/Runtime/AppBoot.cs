@@ -57,6 +57,12 @@ namespace DiveMap.Runtime
             }
             if (string.IsNullOrEmpty(_shortId)) _shortId = defaultShortId;
 
+            // 🔴 SchoolClip เดิมถ่ายได้แต่แมพ default (Chang) — แต่ user ชี้ว่าอาการ "ฝูงส่ายหัว"
+            // ให้ไปดูที่ Harddeep ซึ่งวาง school:barracuda สเกล 3.87 (Chang = 9.2) คนละชุดตัวเลข
+            // ทั้งความยาวตัว/รัศมีฝูง/ความเร็ว ⇒ เครื่องมือที่ถ่ายได้แมพเดียวพิสูจน์อีกแมพไม่ได้
+            string clipMap = GetArg("-clipmap");
+            if (!string.IsNullOrEmpty(clipMap)) _shortId = clipMap;
+
             // 🔴 ราก "30fps สีเหลืองนิ่งสนิท" (fps badge ของ user, 8 ส.ค.): Unity บน iOS
             // ล็อก targetFrameRate ไว้ที่ 30 โดย default — แอปนี้ไม่เคยตั้งค่า จึงวิ่งครึ่งจอ
             // มาตลอดไม่ว่าเครื่องแรงแค่ไหน · ที่ 30fps ระบบเลี้ยว "ต่อเฟรม" ก้าวใหญ่ 2 เท่า
@@ -506,6 +512,21 @@ namespace DiveMap.Runtime
             return null;
         }
 
+        /// <summary>
+        /// SchoolClip v2 — a clip a MEASUREMENT can be run on, not just looked at.
+        ///
+        /// v1 produced 89 frames that read "ฝูงว่ายลื่น หัวนิ่ง" for a build the user rejected the
+        /// same day, and the post-mortem found three reasons it could not have shown otherwise:
+        /// the frame was dark, the tutorial sheet covered the left third, and the camera framed
+        /// the WHOLE school so one fish was a few pixels across. None of those are about the sim.
+        ///
+        /// v2 fixes the instrument: frame ~<see cref="FramedBodyLengths"/> body lengths so a fish
+        /// is big enough to measure a heading off, lift the ambient so the segmentation has
+        /// contrast, hide the UI, and stay on one fixed pose (a camera that re-aims mid-clip adds
+        /// its own rotation to every measurement — v1 re-aimed every 30 frames).
+        /// </summary>
+        private const float FramedBodyLengths = 9f;
+
         private IEnumerator SchoolClip(string dir, FishSchoolSystem marine)
         {
             System.IO.Directory.CreateDirectory(dir);
@@ -515,37 +536,54 @@ namespace DiveMap.Runtime
             var orbit = cam != null ? cam.GetComponent<OrbitCamera>() : null;
             if (orbit != null) orbit.enabled = false;
 
+            // The UI is not part of the sim and the tutorial sheet covered a third of v1.
+            foreach (Canvas c in FindObjectsByType<Canvas>(FindObjectsSortMode.None))
+                c.enabled = false;
+
+            // Lift the ambient for the clip only. A dark frame is a frame whose fish cannot be
+            // segmented, and every measurement downstream starts with segmentation.
+            RenderSettings.ambientSkyColor     *= 1.9f;
+            RenderSettings.ambientEquatorColor *= 1.9f;
+            RenderSettings.ambientGroundColor  *= 1.9f;
+
+            int idx = -1;
             Bounds target = default;
-            bool found = false;
+            string want = GetArg("-clipspecies") ?? "barracuda";
             if (marine != null)
-                for (int i = 0; i < marine.SchoolCount && !found; i++)
+                for (int i = 0; i < marine.SchoolCount && idx < 0; i++)
                     if (marine.TryGetSchoolBounds(i, out string sp, out Bounds b)
-                        && sp != null && sp.Contains("barracuda"))
-                    { target = b; found = true; }
-            if (!found && marine != null && marine.SchoolCount > 0)
-                found = marine.TryGetSchoolBounds(0, out _, out target);
-            Debug.Log($"[Clip] school found={found} centre={target.center} size={target.size}");
-            if (cam != null && found)
+                        && sp != null && sp.Contains(want))
+                    { target = b; idx = i; }
+            if (idx < 0 && marine != null && marine.SchoolCount > 0
+                && marine.TryGetSchoolBounds(0, out _, out target)) idx = 0;
+
+            float flen = 1f;
+            if (marine != null && idx >= 0) marine.TryGetFishLength(idx, out flen);
+            Debug.Log($"[Clip] map={_shortId} school={idx} species={want} fishLen={flen:F2}u " +
+                      $"centre={target.center} size={target.size}");
+
+            if (cam != null && idx >= 0)
             {
-                float d = target.size.magnitude * 0.9f + 10f;
+                // Frame N body lengths, NOT the school: the question is how ONE fish moves.
+                float span = Mathf.Max(1f, flen * FramedBodyLengths);
+                float d = span * 0.5f / Mathf.Tan(cam.fieldOfView * 0.5f * Mathf.Deg2Rad);
                 cam.transform.position = target.center + new Vector3(0.4f, 0.25f, 0.9f).normalized * d;
                 cam.transform.LookAt(target.center);
+                Debug.Log($"[Clip] framed {FramedBodyLengths}×flen span={span:F1}u camDist={d:F1}u");
             }
 
-            Time.captureFramerate = 30;   // เวลาเกมเดินคงที่ 1/30 ต่อเฟรมที่แคป
-            for (int f = 0; f < 90; f++)
+            // dt stays pinned: the dt-variance hypothesis was falsified on 8 ส.ค. (เครื่อง user
+            // 60fps ไม่มีเฟรมซ้ำใน 360 เฟรม) so a fixed step costs nothing and keeps the clip
+            // reproducible frame-for-frame between builds — which is what before/after needs.
+            Time.captureFramerate = 30;
+            const int Frames = 150;                 // 5 s of game time, enough for a 0.2 Hz beat
+            for (int f = 0; f < Frames; f++)
             {
-                // เล็งกลางฝูงใหม่ทุก 30 เฟรม (ฝูงว่ายออกนอกเฟรมได้)
-                if (cam != null && marine != null && f % 30 == 0 && f > 0)
-                    for (int i = 0; i < marine.SchoolCount; i++)
-                        if (marine.TryGetSchoolBounds(i, out string sp2, out Bounds b2)
-                            && sp2 != null && sp2.Contains("barracuda"))
-                        { cam.transform.LookAt(b2.center); break; }
                 ScreenCapture.CaptureScreenshot(System.IO.Path.Combine(dir, $"clip_{f:000}.png"));
                 yield return new WaitForEndOfFrame();
             }
             Time.captureFramerate = 0;
-            Debug.Log("[Clip] done 90 frames");
+            Debug.Log($"[Clip] done {Frames} frames");
             yield return null;
             Application.Quit();
         }

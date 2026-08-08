@@ -169,6 +169,24 @@ namespace DiveMap.Runtime.Marine
         }
 
         /// <summary>
+        /// How long ONE fish of school <paramref name="i"/> is drawn, in world units.
+        ///
+        /// 🔴 Needed by SchoolClip, which has to frame a fish rather than a school. The same asset
+        /// is placed at scale 9.2 on Chang and 3.87 on Harddeep — 17.1 u against 7.2 u — so a
+        /// camera distance derived from the school's BOUNDS puts one map's fish across a third of
+        /// the frame and the other's across a dozen pixels. A clip that cannot resolve a fish
+        /// cannot answer a question about how that fish moves, which is how the first clip came
+        /// back "ฝูงว่ายลื่น หัวนิ่ง" for a build the user then rejected.
+        /// </summary>
+        public bool TryGetFishLength(int i, out float worldLen)
+        {
+            worldLen = 0f;
+            if (i < 0 || i >= _schools.Length) return false;
+            worldLen = _schools[i].FishLen;
+            return worldLen > 1e-4f;
+        }
+
+        /// <summary>
         /// C5 — the fixed facts each school needs in order to be afraid, resolved once at
         /// Configure. Anchor and HomeR live here as the AUTHORED values because the sim's copies
         /// are rewritten every frame (the shoal is dragged toward cover and tightened into a bait

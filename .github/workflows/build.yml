@@ -468,11 +468,20 @@ jobs:
           # 1350 s is 22.5 min against this job's 150 min ceiling, so there is no interaction.
           timeout 1350 xvfb-run -a -s "-screen 0 1280x720x24" \
             "$BIN" -qcshot "$PWD/qc_screenshot.png" -screen-width 1280 -screen-height 720 -force-glcore || true
-          # SchoolClip — คลิปฝูงบาราคูด้า 90 เฟรม (3 วิเวลาเกม) ให้ orchestrator เปิดดูการ
+          # SchoolClip v2 — คลิปฝูงบาราคูด้า 150 เฟรม (5 วิเวลาเกม) ให้ orchestrator วัดการ
           # เคลื่อนไหวจริงก่อนตัดสินทุกการแก้ motion (เกิดจากมหากาพย์ส่ายหัว 8 ส.ค.)
-          timeout 420 xvfb-run -a -s "-screen 0 960x540x24" \
-            "$BIN" -schoolclip "$PWD/clip" -screen-width 960 -screen-height 540 -force-glcore || true
+          #
+          # ถ่าย 2 แมพ เพราะ school:barracuda ตัวเดียวกันถูกวางคนละสเกล: Chang 9.2 (ตัวยาว
+          # 17.1u) · Harddeep 3.87 (7.2u) — user ชี้ให้ไปดู Harddeep และคลิปที่ถ่ายได้แมพเดียว
+          # พิสูจน์อีกแมพไม่ได้ · 960x540 → 1280x720 เพราะ v1 วัดหัวปลาไม่ได้ (ปลาไม่กี่พิกเซล)
+          timeout 420 xvfb-run -a -s "-screen 0 1280x720x24" \
+            "$BIN" -schoolclip "$PWD/clip" -screen-width 1280 -screen-height 720 -force-glcore || true
+          timeout 420 xvfb-run -a -s "-screen 0 1280x720x24" \
+            "$BIN" -schoolclip "$PWD/clip_hardeep" -clipmap 874ti6ignvp9 \
+            -screen-width 1280 -screen-height 720 -force-glcore || true
           ls clip/ 2>/dev/null | wc -l
+          ls clip_hardeep/ 2>/dev/null | wc -l
+          grep -h '\[Clip\]' qc_player.log 2>/dev/null || true
           ls -la qc_screenshot.png || echo "::warning::no screenshot produced"
           ls -la qc_model_*.png || echo "::warning::no per-model QC shots — see [QCModel] lines in qc_player.log"
           ls -la qc_map_*.png || echo "::warning::no per-map QC shots — see [QCMap] lines in qc_player.log"
@@ -564,6 +573,7 @@ jobs:
             # A new QC pass that writes files is not finished until its glob is on this list.
             qc_map_*.png
             clip/clip_*.png
+            clip_hardeep/clip_*.png
             qc_player.log
             qc_ui*.png
             qc_ui_player.log

@@ -917,3 +917,56 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+
+# ── map-driven geometry (so the rig can be pointed at a REAL dive site) ──────
+def school_params_from_map(site, asset="school:barracuda"):
+    """MarineMath.SchoolGeometryFor + FishSchoolSystem.Configure, for one placed item.
+
+    🔴 The rig ran on Chang's numbers (item scale 9.2) for the whole first pass. The user
+    reports the shake on Harddeep, where the SAME asset is placed at 3.87 — a different
+    fish length, radius and cruise speed. Never assume one map's geometry stands for
+    another's; read the item.
+    """
+    env = site["env"]
+    it = next(i for i in site["items"] if i["assetId"] == asset)
+    s = float(it["s"][0])
+    fish_local, web_count, form_r, swim_mul = 1.862, 200, 0.6, 0.06   # MarineMath.SpeciesFor
+    flen = fish_local * s
+    R = max(8.0 * flen, fish_local * max(2.8, web_count * 0.07) * form_r * s)
+    speed = fish_local * 0.065 * swim_mul * 60.0 * s
+    return dict(
+        scale=s, flen=flen, R=R, max_speed=speed, cap=speed / 60.0,
+        vert_half=R * 0.275, safe_r=R * 3.2,
+        anchor=[float(it["p"][0]), float(it["p"][1]), float(it["p"][2])],
+        cap_y=float(env["waterLevel"]) - flen, floor_y=flen,
+        settle_d=3.0 * flen, water=float(env["waterLevel"]),
+    )
+
+
+def calm_from_map(site, seed=7, diver_speed=30.0, diver=False, **kw):
+    """A CalmSchool wearing a real map's numbers."""
+    p = school_params_from_map(site)
+    s = CalmSchool(seed=seed, **kw)
+    s.flen, s.R, s.cap = p["flen"], p["R"], p["cap"]
+    s.safe_r, s.cap_y, s.floor_y = p["safe_r"], p["cap_y"], p["floor_y"]
+    s.anchor = np.array(p["anchor"], dtype=float)
+    s.drift_speed = p["max_speed"] * 0.5
+    s.diver_speed = diver_speed
+    # re-seed the slots at the new radius (SlotFor uses R and flen)
+    rng = np.random.default_rng(seed)
+    r0, r1, r2, r6 = (rng.random(s.n) for _ in range(4))
+    s.cx = (r0 - 0.5) * s.R * 2.0
+    s.cy = (r1 - 0.5) * s.R * 0.55
+    s.cz = (r2 - 0.5) * s.R * 2.0
+    s.yspread = (r0 - 0.5) * s.flen * 1.4
+    s.tr_jit = r6 * 0.35
+    gx, gy, gz, vx, vz = s.form_target(s.mode, 0.0)
+    s.pos = np.stack([s.anchor[0] + gx, s.anchor[1] + gy, s.anchor[2] + gz], -1)
+    s.head = np.arctan2(vx, vz)
+    s.yaw_prev = s.head.copy()
+    s.draw_q = None
+    if diver:
+        s.diver = s.anchor + np.array([-s.R * 1.6, 0.0, 0.0])
+        s.diver_dir = np.array([1.0, 0.0, 0.0])
+    return s
