@@ -29,12 +29,22 @@ import numpy as np
 from PIL import Image
 
 
-def load(path):
+def load(path, auto=True):
+    """Fish (pale, low-saturation) against water (saturated blue).
+
+    🔴 Auto-thresholded rather than fixed. The same fixed pair (sat<0.30, val>0.45) that
+    segments an iPhone recording finds nothing at all in a CI clip, whose mean brightness
+    is 0.19 — and "found no fish" and "the fish are not moving" produce the same silent
+    zero if the threshold is not checked. Percentiles adapt to either.
+    """
     im = np.asarray(Image.open(path).convert("RGB"), dtype=np.float32) / 255.0
     mx = im.max(-1)
     mn = im.min(-1)
     sat = np.where(mx > 1e-6, (mx - mn) / np.maximum(mx, 1e-6), 0.0)
-    # water = saturated blue; fish bodies = pale grey/white. Value guards against the dark wreck.
+    if auto:
+        s_th = float(np.percentile(sat, 25))
+        v_th = float(np.percentile(mx, 70))
+        return (sat < s_th) & (mx > v_th), im
     return (sat < 0.30) & (mx > 0.45), im
 
 
