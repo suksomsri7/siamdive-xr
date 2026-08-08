@@ -254,7 +254,8 @@ namespace DiveMap.Runtime.Marine
             // may turn harder — at the cruise cap alone a startled fish needs over a second to
             // come about, which reads as indifference rather than fear (FleeMath.TurnCapScale).
             float cap = TurnCap * Fs * (1f + 2f * s.Panic);
-            float newH = TurnTowardBurst(curH, desH, cap);
+            float dTurn = DeltaAngle(desH, curH);
+            float newH = math.abs(dTurn) > 0.025f ? TurnTowardBurst(curH, desH, cap) : curH;
 
             float speed = s.MaxSpeed * (s.DartMul > 0f ? s.DartMul : 1f);
             float3 nv;
@@ -313,7 +314,11 @@ namespace DiveMap.Runtime.Marine
                 // ── CALM POLARISED (builder.html :1591-1600) ──────────────────────
                 // Hold the school's heading and ease into the slot. No forward-only skid and no
                 // cruise floor: a barracuda that has arrived stops dead relative to the school.
-                f.Head += math.clamp(DeltaAngle(onDir, f.Head), -0.05f, 0.05f) * Fs;
+                float dCalm = DeltaAngle(onDir, f.Head);
+                // deadband: มุมต่างจิ๋ว = ไม่เลี้ยว — ฆ่าอาการ "ส่ายหัวถี่" (user ชี้ข้อ 2)
+                // ที่เกิดจากเป้ากระพริบซ้าย/ขวารอบศูนย์ทุกเฟรม
+                if (math.abs(dCalm) > 0.025f)
+                    f.Head += math.clamp(dCalm, -0.05f, 0.05f) * Fs;
 
                 float mv = math.min(cap * 1.8f, dh * 0.05f) * Fs;
                 float mA = dh > 0.001f ? math.atan2(ddx, ddz) : f.Head;
@@ -365,7 +370,8 @@ namespace DiveMap.Runtime.Marine
                 // the school's heads line up. Then move along the nose and nowhere else.
                 float des = dh > s.SettleD ? math.atan2(ddx, ddz) : onDir;
                 float dA  = DeltaAngle(des, f.Head);
-                f.Head += math.clamp(dA, -0.045f, 0.045f) * (flee ? 1.6f : 1f) * Fs;
+                if (math.abs(dA) > 0.025f)   // deadband กันส่ายหัว (user 8 ส.ค. ข้อ 2)
+                    f.Head += math.clamp(dA, -0.045f, 0.045f) * (flee ? 1.6f : 1f) * Fs;
 
                 // 🔴 The speed law. min(cap, distance × chaseK) — arriving costs speed.
                 sp = (math.min(cap * (flee ? 1.5f : 1f), dh * s.ChaseK) + s.CruiseFloor) * Fs;
