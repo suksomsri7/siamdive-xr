@@ -67,6 +67,7 @@ namespace DiveMap.Runtime
                 { "bottle", "game_trash_bottle_k1.glb" },
                 { "plastic", "game_trash_bag_k1.glb" },
                 { "net", "game_trash_net_k1.glb" },
+                { "tire", "game_trash_tire_k1.glb" },   // ไฟล์จาก user 8 ส.ค.
                 { "coin", "game_coin_gold2_k1.glb" },   // รุ่น mirror หน้า->หลัง (user: หลังเดิมพัง)
                 // "tire" ไม่มีโมเดลจาก user — คง primitive เดิม
             };
@@ -75,8 +76,8 @@ namespace DiveMap.Runtime
         private static readonly Dictionary<string, float> ModelSize =
             new Dictionary<string, float>(StringComparer.Ordinal)
             {
-                { "can", 2.6f }, { "bottle", 2.9f }, { "plastic", 5.5f },   // รีวิวรอบ 3: ถุง/อวน/เหรียญใหญ่ขึ้น
-                { "net", 6.2f }, { "coin", 4.2f },
+                { "can", 2.6f }, { "bottle", 2.9f }, { "plastic", 5.5f },
+                { "net", 7.5f }, { "tire", 5.5f }, { "coin", 4.2f },   // ยางสมจริง · อวนใหญ่ขึ้น (8 ส.ค.)
             };
 
         private readonly Dictionary<string, GameObject> _templates =
@@ -230,7 +231,10 @@ namespace DiveMap.Runtime
                     if (pos.y <= floor) { pos.y = floor; p.Landed = true; p.LandedAt = now; }
                     t.position = pos;
                 }
-                t.Rotate(p.IsCoin ? new Vector3(0f, 3.4f, 0f) : new Vector3(0.7f, 0.4f, 0.5f));
+                // ยางกับอวนตกตรงๆ ไม่หมุน (คำสั่ง user 8 ส.ค.) — ของหนัก/แผ่กว้างหมุนแล้วดูปลอม
+                bool spins = p.IsCoin || (p.Kind.Key != "tire" && p.Kind.Key != "net");
+                if (spins)
+                    t.Rotate(p.IsCoin ? new Vector3(0f, 3.4f, 0f) : new Vector3(0.7f, 0.4f, 0.5f));
 
                 if (!p.IsCoin && p.Landed)
                 {
@@ -314,11 +318,6 @@ namespace DiveMap.Runtime
                                   _center.z + Mathf.Sin(a) * bd * _scaleZ);
 
             TrashGame.Kind kind = TrashGame.Pick(Rand());
-            // ยางรถไม่มีโมเดลจริงจาก user — ข้ามไว้ก่อน ไม่ปล่อยรูปทรงโพลิกอนลงน้ำ
-            // (user รายงานรอบ 3: "บางอันยังเป็นแค่รูปโพลิกอน") · ส่งไฟล์มาเมื่อไหร่ค่อยเปิดคืน
-            for (int guard = 0; kind.Key == "tire" && guard < 8; guard++)
-                kind = TrashGame.Pick(Rand());
-            if (kind.Key == "tire") kind = TrashGame.Kinds[0];   // กันสุ่มค้าง: ใช้กระป๋อง
             GameObject go = FromTemplate(coin ? "coin" : kind.Key);
             if (go == null) go = coin ? BuildCoin() : BuildTrash(kind);
             go.transform.SetParent(_root, false);
