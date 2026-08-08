@@ -534,7 +534,25 @@ namespace DiveMap.Core
         /// beating four times a second is precisely the buzz being removed.
         /// </summary>
         public static SwimWave For(string assetId, double worldLen)
-            => Apply(FromTables(assetId, worldLen), SoloTuneFor(assetId));
+            => UserSlow(assetId, Apply(FromTables(assetId, worldLen), SoloTuneFor(assetId)));
+
+        /// <summary>
+        /// คำตัดสิน user 8 ส.ค. 2026 ผ่านกระบวนการ GIF (แบบ B ระดับ B3): บาราคูด้า+กะมง
+        /// "รูปคลื่นเดิมเป๊ะ แค่ช้าลงเหลือ 25%". แตะ BeatHz ตัวเดียว — cycles/amp/envelope
+        /// ห้ามแตะ (ชุดจูนที่แตะรูปคลื่นถูก user ปฏิเสธบนเครื่องจริงมาแล้ว 8 ส.ค.).
+        /// </summary>
+        public const double UserSlowMulBarracudaTrevally = 0.25;
+
+        private static SwimWave UserSlow(string assetId, SwimWave w)
+        {
+            string id = Bare(assetId ?? "");
+            bool slow = id.IndexOf("barracuda", StringComparison.OrdinalIgnoreCase) >= 0
+                     || id.IndexOf("yellowtail", StringComparison.OrdinalIgnoreCase) >= 0
+                     || id.IndexOf("trevally", StringComparison.OrdinalIgnoreCase) >= 0;
+            if (!slow) return w;
+            return new SwimWave(w.Gait, w.BeatHz * UserSlowMulBarracudaTrevally,
+                                w.Amp, w.Cycles, w.Recoil, w.Gust, w.MaxBankRad);
+        }
 
         /// <summary>
         /// <see cref="For"/> before <see cref="SoloTuneFor"/> gets a say — the size law and the

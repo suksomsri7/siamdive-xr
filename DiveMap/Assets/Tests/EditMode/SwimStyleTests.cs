@@ -297,7 +297,8 @@ namespace DiveMap.Tests
             SwimWave barra = SwimStyle.For("school:barracuda", BarracudaLen);
             SwimWave scad  = SwimStyle.For("school:scad", ScadLen);
 
-            Assert.AreEqual(webBarra, barra.Amp * 2 * Math.PI * barra.BeatHz, 1e-9);
+            Assert.AreEqual(webBarra * SwimStyle.UserSlowMulBarracudaTrevally,
+                            barra.Amp * 2 * Math.PI * barra.BeatHz, 1e-9);   // B3
             Assert.AreEqual(webScad,  scad.Amp  * 2 * Math.PI * scad.BeatHz,  1e-9);
 
             // …and the old table's barracuda, for the record: 0.075 at the same rate = 1.92× fast.
@@ -315,7 +316,8 @@ namespace DiveMap.Tests
             double shark = SwimStyle.For("msh:whaleshark", WhaleSharkLen).BeatHz;
 
             Assert.Greater(scad, barra);
-            Assert.Greater(barra, shark);
+            // barra > shark ถอดโดยตั้งใจ: B3 (user 8 ส.ค.) กดบาราคูด้าเหลือ 25% —
+            // ช้ากว่าฉลามวาฬได้ เพราะเป็นคำสั่งตรงจากตาเครื่องจริง ไม่ใช่กฎขนาดตัว
 
             // The eye's own yardstick: a small fish flickers, a bus-sized one does not. The two
             // shoals are the web's own constants; the whale shark is the size law plus SlowAnim.
@@ -355,7 +357,7 @@ namespace DiveMap.Tests
             var rows = new[]
             {
                 Tuple.Create("school:scad",       ScadLen,       1.114),
-                Tuple.Create("school:barracuda",  BarracudaLen,  0.796),
+                Tuple.Create("school:barracuda",  BarracudaLen,  0.796 * SwimStyle.UserSlowMulBarracudaTrevally),   // B3 (user เลือกผ่าน GIF 8 ส.ค.)
                 Tuple.Create("mdl:bull_shark",    BullSharkLen,  0.45),
                 Tuple.Create("msh:oceanic_manta", MantaLen,      0.36),
                 Tuple.Create("msh:whaleshark",    WhaleSharkLen, 0.25),
@@ -438,8 +440,8 @@ namespace DiveMap.Tests
                             SwimStyle.For("school:batfish", 6.0).BeatHz, Eps);
             Assert.AreEqual(SwimStyle.SchoolBeatHzDefault,
                             SwimStyle.For("school:parrotfish_prismatic", 6.0).BeatHz, Eps);
-            Assert.AreEqual(SwimStyle.SchoolBeatHzBarracuda,
-                            SwimStyle.For("school:barracuda", BarracudaLen).BeatHz, Eps);
+            Assert.AreEqual(SwimStyle.SchoolBeatHzBarracuda * SwimStyle.UserSlowMulBarracudaTrevally,
+                            SwimStyle.For("school:barracuda", BarracudaLen).BeatHz, Eps);   // B3
 
             // …and it survives the scene item prefix, which is how a school id can reach here.
             Assert.AreEqual(SwimStyle.SchoolBeatHzDefault,
@@ -455,7 +457,8 @@ namespace DiveMap.Tests
 
             // Pods land where a big animal belongs: 24 u of whale is half a beat a second.
             Assert.That(SwimStyle.For("pod:humpback", 24.0).BeatHz, Is.InRange(0.3, 0.9));
-            Assert.That(SwimStyle.For("pod:yellowtail", 20.8).BeatHz, Is.InRange(0.4, 1.0));
+            // พื้นเดิม 0.4 คลายเป็น 0.05 เพราะ B3 (user เลือกจาก GIF) กดกะมงเหลือ 25%
+            Assert.That(SwimStyle.For("pod:yellowtail", 20.8).BeatHz, Is.InRange(0.05, 1.0));
         }
 
         /// <summary>
@@ -847,12 +850,12 @@ namespace DiveMap.Tests
         {
             double solo = SwimStyle.For("msh:barracuda", SoloBarracudaLen).BeatHz;
 
-            Assert.AreEqual(SwimStyle.SchoolBeatHzBarracuda * 0.5, solo, Eps);
-            Assert.AreEqual(0.398, solo, 0.002, "5.0 rad/s ÷ 2π ÷ 2");
+            Assert.AreEqual(SwimStyle.SchoolBeatHzBarracuda * 0.5 * SwimStyle.UserSlowMulBarracudaTrevally, solo, Eps);
+            Assert.AreEqual(0.398 * SwimStyle.UserSlowMulBarracudaTrevally, solo, 0.002, "5.0 rad/s ÷ 2π ÷ 2 × B3 (user)");
 
-            const double WebSoloDartHz = 1.4 / (2.0 * Math.PI);   // sp = 1.0, the middle of 0.6…1.4
-            Assert.Greater(solo, WebSoloDartHz, "not slower than the web's slowest barracuda");
-            Assert.Less(solo, SwimStyle.SchoolBeatHzBarracuda, "…nor as fast as its fastest");
+            // เส้นกัน "ห้ามช้ากว่าเว็บช้าสุด" ถอดโดยตั้งใจ — B3 คือคำสั่งตรงของ user
+            // (เลือกจาก GIF เทียบระดับความช้า 8 ส.ค.) ให้ช้ากว่าเว็บ
+            Assert.Less(solo, SwimStyle.SchoolBeatHzBarracuda, "ไม่เร็วกว่าฝูงของเว็บแน่นอน");
         }
 
         /// <summary>
@@ -902,7 +905,9 @@ namespace DiveMap.Tests
             {
                 SwimWave tuned = SwimStyle.For(id, 20.0);
                 SwimWave raw = SwimStyle.FromTables(id, 20.0);
-                Assert.AreEqual(raw.BeatHz, tuned.BeatHz, Eps, id);
+                double slowMul = (id.Contains("barracuda") || id.Contains("yellowtail")
+                                  || id.Contains("trevally")) ? SwimStyle.UserSlowMulBarracudaTrevally : 1.0;
+                Assert.AreEqual(raw.BeatHz * slowMul, tuned.BeatHz, Eps, id);
                 Assert.AreEqual(raw.Amp, tuned.Amp, Eps, id);
                 Assert.AreEqual(raw.Cycles, tuned.Cycles, Eps, id);
             }
