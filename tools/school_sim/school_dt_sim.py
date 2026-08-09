@@ -158,6 +158,7 @@ class CalmSchool:
         self.want_until = 0.0
         self.nose_follow = False            # the 'ปลาไถลข้าง' fix, off by default
         self.nose_knee = 1.0                # fraction of the cruise step at which the nose fully follows
+        self.nose_cap = None                # max deviation from the school heading (rad)
         self.diver = None                   # set by drive_diver(); TourController:617
         self.bubble = 16.0                  # DiveLightMath.FishBubble × 2
         self.diver_speed = 30.0 * 0.35      # DroneFlight.Speed, an unhurried swim-through
@@ -337,7 +338,10 @@ class CalmSchool:
         # somewhere (SchoolFormation.CalmNoseBlend / BoidsJob.FormationStep calm branch)
         if self.nose_follow:
             blend = np.clip(dh * CALM_CHASE / max(self.cap * CALM_CAP_MUL * self.nose_knee, 1e-6), 0.0, 1.0)
-            want = on_dir + delta_angle(m_a, on_dir) * blend
+            dev = delta_angle(m_a, on_dir) * blend
+            if self.nose_cap is not None:
+                dev = np.clip(dev, -self.nose_cap, self.nose_cap)
+            want = on_dir + dev
         else:
             want = on_dir
 

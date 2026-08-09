@@ -518,12 +518,35 @@ namespace DiveMap.Core
         ///     0.25        1.4°    10.6°     0.7°           0.24°   ← here
         ///     0.12        1.4°    10.6°     0.7°           0.24°   (saturated)
         ///
-        /// 0.25 is the first value that has converged, and nothing is paid for it: the nose
-        /// shimmer is flat across every knee, and the school's slot RMS actually TIGHTENS
-        /// (0.21 → 0.16 body lengths) because a fish pointing where it is going gets there.
-        /// The residual 10.6° on `stream` is that shape's own sway term and is meant to be there.
+        /// 0.25 is the first value that has converged. The nose shimmer is flat across every knee
+        /// and the school's slot RMS TIGHTENS (0.21 → 0.16 body lengths), so the knee itself is
+        /// free. The residual 10.6° on `stream` is that shape's own sway and is meant to be there.
         /// </summary>
         public const double CalmNoseKnee = 0.25;
+
+        /// <summary>
+        /// …but the knee alone cannot be the whole answer, and this is the number that says why.
+        ///
+        /// 🔴 In `cluster` the slot ORBITS: <c>X += sin(t·0.5+…)·flen·0.5</c> and
+        /// <c>Z += cos(same phase)·flen·0.5</c> is a CIRCLE of half a body length (:1576-1578).
+        /// A fish that follows a circling target has a travel direction that sweeps all 360°, so
+        /// letting the nose follow it fully turns a polarised school into a milling swarm —
+        /// which is the one thing the port exists to prevent (Cluster_IsPolarised…, and the user's
+        /// own "สโลว์ + เรียงหัวเป็นระเบียบ"). Measured on the Harddeep barracuda:
+        ///
+        ///     deviation cap   polarisation   crab angle (speed-weighted)
+        ///     off (was)              1.00          52.4°   ← the reported "ไถลข้าง"
+        ///     20°                    0.95          38.1°
+        ///     30°                    0.90          32.2°   ← here
+        ///     40°                    0.85          27.2°
+        ///     55°                    0.73          20.4°
+        ///     uncapped               0.26           1.4°   ← no longer a school
+        ///
+        /// 30° keeps the school visibly ordered (0.90) while taking 20° off the crab. It is a
+        /// judgement between two things the user has asked for at different times, so it is a
+        /// knob with a table behind it rather than a derivation — and the user picks the row.
+        /// </summary>
+        public const double CalmNoseCapRad = 30.0 * Math.PI / 180.0;
 
         /// <summary>
         /// How much the nose should follow the direction of travel this frame: 0 while the fish is
@@ -548,8 +571,10 @@ namespace DiveMap.Core
             if (blend <= 0.0) return schoolHeading;
             if (blend > 1.0) blend = 1.0;
             double d = Math.Atan2(Math.Sin(moveHeading - schoolHeading),
-                                  Math.Cos(moveHeading - schoolHeading));
-            return schoolHeading + d * blend;
+                                  Math.Cos(moveHeading - schoolHeading)) * blend;
+            if (d >  CalmNoseCapRad) d =  CalmNoseCapRad;   // stay a SCHOOL — see CalmNoseCapRad
+            if (d < -CalmNoseCapRad) d = -CalmNoseCapRad;
+            return schoolHeading + d;
         }
 
         /// <summary>

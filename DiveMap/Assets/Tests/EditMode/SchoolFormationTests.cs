@@ -407,13 +407,25 @@ namespace DiveMap.Tests
                         "…and effectively zero on the slot, which is what keeps the old " +
                         "'atan2 of a near-zero step is noise' failure closed");
 
-            // The target itself: school heading at blend 0, travel direction at blend 1, and the
-            // SHORT way round in between (2.9 → 3.5 rad crosses no wrap; -3.0 → 3.0 does).
+            // The target itself: school heading at blend 0, and never further than the deviation
+            // cap from it — a school that lets every nose follow its own orbiting slot stops
+            // being a school (polarisation 1.00 → 0.26; see CalmNoseCapRad).
             Assert.AreEqual(2.9, SchoolFormation.CalmNoseTarget(2.9, 0.4, 0.0), 1e-12);
-            Assert.AreEqual(0.4, SchoolFormation.CalmNoseTarget(2.9, 0.4, 1.0), 1e-9);
+
+            double capped = SchoolFormation.CalmNoseTarget(2.9, 0.4, 1.0);
+            Assert.AreEqual(SchoolFormation.CalmNoseCapRad,
+                            Math.Abs(MarineMath.DeltaAngle(2.9, capped)), 1e-9,
+                            "a fish 143° off the school's heading only ever leans the cap");
+
+            double small = 10.0 * Math.PI / 180.0;
+            Assert.AreEqual(2.9 + small, SchoolFormation.CalmNoseTarget(2.9, 2.9 + small, 1.0), 1e-9,
+                            "…and inside the cap it follows the travel direction exactly");
+            // …the short way round, even across the ±π wrap.
             double half = SchoolFormation.CalmNoseTarget(-3.0, 3.0, 0.5);
-            Assert.AreEqual(Math.PI, Math.Abs(half), 1e-9,
-                            "halfway from -3.0 to 3.0 is ±π, not 0 — the short way round");
+            Assert.Less(Math.Abs(MarineMath.DeltaAngle(-3.0, half)),
+                        SchoolFormation.CalmNoseCapRad + 1e-9);
+            Assert.Less(MarineMath.DeltaAngle(-3.0, half), 0.0,
+                        "from -3.0 the short way to 3.0 is DOWNWARD through -π");
         }
 
         /// <summary>

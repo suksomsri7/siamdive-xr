@@ -326,8 +326,12 @@ namespace DiveMap.Runtime.Marine
                 // มิเรอร์ของ SchoolFormation.CalmNoseBlend/CalmNoseTarget เป็น float ด้วยเหตุผล
                 // เดียวกับทั้งไฟล์นี้ (Burst คอมไพล์เมธอดนี้ ส่วน Core เป็น managed double) —
                 // ค่าคงที่มีชื่ออยู่ที่ Core และเทสตรึงไว้ที่นั่น ถ้าสองฝั่งไม่ตรงกัน Core ถูก
+                // …และจำกัดมุมเบนจากแนวฝูงไว้ 30° (SchoolFormation.CalmNoseCapRad) เพราะช่องใน
+                // โหมด cluster โคจรเป็นวงกลม — ปล่อยให้จมูกตามเต็มที่ = ฝูงเลิกเป็นระเบียบ
+                // (polarisation 1.00 → 0.26) ซึ่งคือสิ่งที่ทั้งพอร์ตนี้มีไว้กันตั้งแต่แรก
                 float blend = math.saturate(dh * 0.05f / math.max(cap * 1.8f * 0.25f, 1e-6f));
-                float want  = onDir + DeltaAngle(mA, onDir) * blend;
+                const float noseCap = 30f * 0.017453292f;
+                float want  = onDir + math.clamp(DeltaAngle(mA, onDir) * blend, -noseCap, noseCap);
 
                 float dCalm = DeltaAngle(want, f.Head);
                 // deadband: มุมต่างจิ๋ว = ไม่เลี้ยว — ฆ่าอาการ "ส่ายหัวถี่" (user ชี้ข้อ 2)
