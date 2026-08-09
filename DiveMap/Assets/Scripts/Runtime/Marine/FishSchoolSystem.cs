@@ -153,6 +153,13 @@ namespace DiveMap.Runtime.Marine
         /// </summary>
         public int SchoolCount => _render.Count;
 
+        /// <summary>
+        /// QC only: overrides <see cref="SchoolFormation.CalmNoseCapRad"/> for a whole run so the
+        /// SchoolClip pass can film the candidates the user is choosing between (see BoidsJob's
+        /// <c>NoseCap</c>). Negative = use the shipped constant. Set before Configure.
+        /// </summary>
+        public static float NoseCapOverride = -1f;
+
         public bool TryGetSchoolBounds(int i, out string species, out Bounds bounds)
         {
             bounds = default;
@@ -522,6 +529,9 @@ namespace DiveMap.Runtime.Marine
                     SettleD     = (float)SchoolFormation.SettleDistance(fishWorld, !isShoal),
                     SafeR       = safeR,
                     FloorY      = fishWorld,   // one body length of sand clearance (see FloorY)
+                    NoseCap     = NoseCapOverride >= 0f
+                                ? NoseCapOverride
+                                : (float)SchoolFormation.CalmNoseCapRad,
                 };
 
                 if (useForm)

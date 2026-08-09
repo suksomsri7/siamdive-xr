@@ -63,6 +63,15 @@ namespace DiveMap.Runtime
             string clipMap = GetArg("-clipmap");
             if (!string.IsNullOrEmpty(clipMap)) _shortId = clipMap;
 
+            // QC only: film the three "ปลาไถลข้าง" candidates in one CI round so the user chooses
+            // from footage instead of from a diagram. off = the old build, full = nose follows.
+            string nose = GetArg("-clipnose");
+            if (!string.IsNullOrEmpty(nose))
+                FishSchoolSystem.NoseCapOverride =
+                    nose == "off"  ? 0f :
+                    nose == "full" ? Mathf.PI :
+                                     (float)DiveMap.Core.SchoolFormation.CalmNoseCapRad;
+
             // 🔴 ราก "30fps สีเหลืองนิ่งสนิท" (fps badge ของ user, 8 ส.ค.): Unity บน iOS
             // ล็อก targetFrameRate ไว้ที่ 30 โดย default — แอปนี้ไม่เคยตั้งค่า จึงวิ่งครึ่งจอ
             // มาตลอดไม่ว่าเครื่องแรงแค่ไหน · ที่ 30fps ระบบเลี้ยว "ต่อเฟรม" ก้าวใหญ่ 2 เท่า

@@ -89,6 +89,16 @@ namespace DiveMap.Runtime.Marine
         /// uses for its domain floor (FishMind.SchoolDomain, minY = VertHalf + FishLen).
         /// </summary>
         public float  FloorY;
+
+        /// <summary>
+        /// How far the nose may lean off the school's heading toward the direction the fish is
+        /// actually travelling, in radians (<see cref="DiveMap.Core.SchoolFormation.CalmNoseCapRad"/>).
+        ///
+        /// A field rather than a constant ONLY so the QC clip can photograph the three candidates
+        /// side by side in one CI round — 0 = the old build (nose welded to the school heading,
+        /// the fish crabs), π = the nose follows completely. The user picks from the footage.
+        /// </summary>
+        public float  NoseCap;
     }
 
     /// <summary>One solid obstacle as a world-space AABB (the wreck/decor fish steer around).</summary>
@@ -330,8 +340,7 @@ namespace DiveMap.Runtime.Marine
                 // โหมด cluster โคจรเป็นวงกลม — ปล่อยให้จมูกตามเต็มที่ = ฝูงเลิกเป็นระเบียบ
                 // (polarisation 1.00 → 0.26) ซึ่งคือสิ่งที่ทั้งพอร์ตนี้มีไว้กันตั้งแต่แรก
                 float blend = math.saturate(dh * 0.05f / math.max(cap * 1.8f * 0.25f, 1e-6f));
-                const float noseCap = 30f * 0.017453292f;
-                float want  = onDir + math.clamp(DeltaAngle(mA, onDir) * blend, -noseCap, noseCap);
+                float want  = onDir + math.clamp(DeltaAngle(mA, onDir) * blend, -s.NoseCap, s.NoseCap);
 
                 float dCalm = DeltaAngle(want, f.Head);
                 // deadband: มุมต่างจิ๋ว = ไม่เลี้ยว — ฆ่าอาการ "ส่ายหัวถี่" (user ชี้ข้อ 2)

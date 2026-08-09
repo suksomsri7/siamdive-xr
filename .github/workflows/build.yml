@@ -479,8 +479,16 @@ jobs:
           timeout 420 xvfb-run -a -s "-screen 0 1280x720x24" \
             "$BIN" -schoolclip "$PWD/clip_hardeep" -clipmap 874ti6ignvp9 \
             -screen-width 1280 -screen-height 720 -force-glcore || true
+          # "ปลาไถลข้าง" — ถ่ายสามตัวเลือกที่ user ต้องเลือก ในรอบเดียว (A เดิม / B จำกัด 30° /
+          # C ตามทางเต็มที่) เพื่อให้ user ตัดสินจากภาพเคลื่อนไหวจริง ไม่ใช่จากกราฟ
+          for V in off cap full; do
+            timeout 420 xvfb-run -a -s "-screen 0 1280x720x24" \
+              "$BIN" -schoolclip "$PWD/clip_nose_$V" -clipmap 874ti6ignvp9 -clipnose "$V" \
+              -screen-width 1280 -screen-height 720 -force-glcore || true
+          done
           ls clip/ 2>/dev/null | wc -l
           ls clip_hardeep/ 2>/dev/null | wc -l
+          ls clip_nose_off/ clip_nose_cap/ clip_nose_full/ 2>/dev/null | wc -l
           grep -h '\[Clip\]' qc_player.log 2>/dev/null || true
           ls -la qc_screenshot.png || echo "::warning::no screenshot produced"
           ls -la qc_model_*.png || echo "::warning::no per-model QC shots — see [QCModel] lines in qc_player.log"
@@ -574,6 +582,7 @@ jobs:
             qc_map_*.png
             clip/clip_*.png
             clip_hardeep/clip_*.png
+            clip_nose_*/clip_*.png
             qc_player.log
             qc_ui*.png
             qc_ui_player.log
