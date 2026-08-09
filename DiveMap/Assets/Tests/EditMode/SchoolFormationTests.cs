@@ -377,6 +377,46 @@ namespace DiveMap.Tests
         }
 
         /// <summary>
+        /// 🔴 "ปลาไถลข้าง" (user, 8 ส.ค. 2026). The nose follows the body ONCE THE BODY IS GOING
+        /// SOMEWHERE, and holds the school's heading when it has arrived.
+        ///
+        /// Both halves are load-bearing and they pull against each other:
+        ///   • blend → 1 while easing, or the fish crabs — measured 64° off its own nose in
+        ///     `cluster` and 75° in `stream`, which are two thirds of a school's life.
+        ///   • blend → 0 at the slot, or we reopen the bug the separate Head state exists to
+        ///     close: the step there is ~zero and its direction is noise.
+        /// </summary>
+        [Test]
+        public void CalmNose_FollowsTheBodyWhileEasing_AndHoldsTheSchoolHeadingAtTheSlot()
+        {
+            const double cap = 4.0 / 60.0;
+
+            Assert.AreEqual(0.0, SchoolFormation.CalmNoseBlend(0.0, cap), 1e-12,
+                            "parked on the slot: no travel direction to read");
+            Assert.AreEqual(1.0, SchoolFormation.CalmNoseBlend(R, cap), 1e-12,
+                            "a formation radius away: the nose is fully on the direction of travel");
+            // Fully committed at a QUARTER of the calm cruise step (CalmNoseKnee) — 0.6 u for
+            // these numbers, a twenty-eighth of a barracuda. The knee is measured, not chosen for
+            // tidiness: see the table on CalmNoseKnee.
+            double dSat = cap * SchoolFormation.CalmCapMul * SchoolFormation.CalmNoseKnee
+                        / SchoolFormation.CalmChasePerFrame;
+            Assert.AreEqual(1.0, SchoolFormation.CalmNoseBlend(dSat, cap), 1e-12);
+            Assert.AreEqual(0.5, SchoolFormation.CalmNoseBlend(dSat * 0.5, cap), 1e-12,
+                            "…and proportional below it");
+            Assert.Less(SchoolFormation.CalmNoseBlend(dSat * 0.01, cap), 0.02,
+                        "…and effectively zero on the slot, which is what keeps the old " +
+                        "'atan2 of a near-zero step is noise' failure closed");
+
+            // The target itself: school heading at blend 0, travel direction at blend 1, and the
+            // SHORT way round in between (2.9 → 3.5 rad crosses no wrap; -3.0 → 3.0 does).
+            Assert.AreEqual(2.9, SchoolFormation.CalmNoseTarget(2.9, 0.4, 0.0), 1e-12);
+            Assert.AreEqual(0.4, SchoolFormation.CalmNoseTarget(2.9, 0.4, 1.0), 1e-9);
+            double half = SchoolFormation.CalmNoseTarget(-3.0, 3.0, 0.5);
+            Assert.AreEqual(Math.PI, Math.Abs(half), 1e-9,
+                            "halfway from -3.0 to 3.0 is ±π, not 0 — the short way round");
+        }
+
+        /// <summary>
         /// The chase gain, <c>easeL*2.2</c> with <c>easeL = 0.03*easeMul</c> (:1535, :1761), and
         /// what the web's own barracuda numbers make of it.
         /// </summary>

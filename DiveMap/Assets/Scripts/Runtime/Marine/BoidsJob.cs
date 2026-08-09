@@ -314,14 +314,27 @@ namespace DiveMap.Runtime.Marine
                 // ── CALM POLARISED (builder.html :1591-1600) ──────────────────────
                 // Hold the school's heading and ease into the slot. No forward-only skid and no
                 // cruise floor: a barracuda that has arrived stops dead relative to the school.
-                float dCalm = DeltaAngle(onDir, f.Head);
+                float mv = math.min(cap * 1.8f, dh * 0.05f) * Fs;
+                float mA = dh > 0.001f ? math.atan2(ddx, ddz) : f.Head;
+
+                // 🔴 "ปลาไถลข้าง" (user, 8 ส.ค. 2026, ยืนยันด้วยภาพจมูก-เทียบ-เส้นทาง):
+                // จมูกต้องตามทางที่ตัวไปจริง "เมื่อกำลังไปจริง" และกลับไปถือ heading ของฝูงเมื่อ
+                // ถึงช่องแล้ว — วัดได้ว่าโหมด cluster/stream (สองในสามของชีวิตฝูง) ปลาเคลื่อนที่
+                // เฉียงจากจมูกตัวเอง 64-75° เกือบตลอดเวลา · ห้ามตัดการไถลข้างทิ้ง (มันคือลักษณะ
+                // ของเส้นทางนี้) แค่ให้หัวตาม
+                //
+                // มิเรอร์ของ SchoolFormation.CalmNoseBlend/CalmNoseTarget เป็น float ด้วยเหตุผล
+                // เดียวกับทั้งไฟล์นี้ (Burst คอมไพล์เมธอดนี้ ส่วน Core เป็น managed double) —
+                // ค่าคงที่มีชื่ออยู่ที่ Core และเทสตรึงไว้ที่นั่น ถ้าสองฝั่งไม่ตรงกัน Core ถูก
+                float blend = math.saturate(dh * 0.05f / math.max(cap * 1.8f * 0.25f, 1e-6f));
+                float want  = onDir + DeltaAngle(mA, onDir) * blend;
+
+                float dCalm = DeltaAngle(want, f.Head);
                 // deadband: มุมต่างจิ๋ว = ไม่เลี้ยว — ฆ่าอาการ "ส่ายหัวถี่" (user ชี้ข้อ 2)
                 // ที่เกิดจากเป้ากระพริบซ้าย/ขวารอบศูนย์ทุกเฟรม
                 if (math.abs(dCalm) > 0.025f)
                     f.Head += math.clamp(dCalm, -0.05f, 0.05f) * Fs;
 
-                float mv = math.min(cap * 1.8f, dh * 0.05f) * Fs;
-                float mA = dh > 0.001f ? math.atan2(ddx, ddz) : f.Head;
                 float stepX = math.sin(mA) * mv, stepZ = math.cos(mA) * mv;
 
                 // 🔴 "ห้ามว่ายถอยหลัง" (user, build 261). THIS is the path that could, and it is

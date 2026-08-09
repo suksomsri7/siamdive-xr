@@ -156,6 +156,8 @@ class CalmSchool:
         self.drift_speed = 4.0 * 0.5        # half cruise, a school ambling across the map
         self.want = None
         self.want_until = 0.0
+        self.nose_follow = False            # the 'ปลาไถลข้าง' fix, off by default
+        self.nose_knee = 1.0                # fraction of the cruise step at which the nose fully follows
         self.diver = None                   # set by drive_diver(); TourController:617
         self.bubble = 16.0                  # DiveLightMath.FishBubble × 2
         self.diver_speed = 30.0 * 0.35      # DroneFlight.Speed, an unhurried swim-through
@@ -328,12 +330,20 @@ class CalmSchool:
         dh = np.hypot(ddx, ddz)
         on_dir = np.arctan2(vdx, vdz)
 
-        d_calm = delta_angle(on_dir, self.head)
-        turn = np.clip(d_calm, -CALM_TURN_CLAMP, CALM_TURN_CLAMP) * fs
-        self.head = self.head + np.where(np.abs(d_calm) > deadband, turn, 0.0)
-
         mv = np.minimum(self.cap * CALM_CAP_MUL, dh * CALM_CHASE) * fs
         m_a = np.where(dh > 0.001, np.arctan2(ddx, ddz), self.head)
+
+        # the fix under test: the nose follows the body once the body is actually going
+        # somewhere (SchoolFormation.CalmNoseBlend / BoidsJob.FormationStep calm branch)
+        if self.nose_follow:
+            blend = np.clip(dh * CALM_CHASE / max(self.cap * CALM_CAP_MUL * self.nose_knee, 1e-6), 0.0, 1.0)
+            want = on_dir + delta_angle(m_a, on_dir) * blend
+        else:
+            want = on_dir
+
+        d_calm = delta_angle(want, self.head)
+        turn = np.clip(d_calm, -CALM_TURN_CLAMP, CALM_TURN_CLAMP) * fs
+        self.head = self.head + np.where(np.abs(d_calm) > deadband, turn, 0.0)
         step_x = np.sin(m_a) * mv
         step_z = np.cos(m_a) * mv
         fx, fz = np.sin(self.head), np.cos(self.head)
@@ -970,3 +980,89 @@ def calm_from_map(site, seed=7, diver_speed=30.0, diver=False, **kw):
         s.diver = s.anchor + np.array([-s.R * 1.6, 0.0, 0.0])
         s.diver_dir = np.array([1.0, 0.0, 0.0])
     return s
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  PANIC — the one game state no instrument has ever exercised
+# ══════════════════════════════════════════════════════════════════════════════
+#
+# 🔴 Why this matters more than anything else in this file. Under panic the calm branch is
+# ABANDONED (BoidsJob.FormationStep: `bool flee = s.Panic > 0.001` sends the fish down the
+# forward-only chase), and FishSchoolSystem.ApplyFlee rewrites the slot every frame as
+#
+#     slot += normalise(FISH's own position − threat) × FleePush(panic, spreadR, flen)
+#
+# That is a FEEDBACK LOOP: the target depends on where the chaser currently is. For a fish
+# near the diver the unit vector swings quickly, so the slot races around it on a circle of
+# radius `push` (up to ~58 u for the Chang barracuda) faster than the fish can chase — and
+# the fish's nose chases it. CI clips have no diver, and every sim so far ran panic = 0.
+DIVER_PANIC_SPEED = 30.0 * (11.0 / 30.0)      # FleeMath.DiverPanicSpeed
+
+
+def flee_push(panic, spread_r, flen):
+    return 0.0 if panic <= 0 else panic * (spread_r * 0.18 + flen * 1.6)
+
+
+def flee_ease(panic):
+    return 0.0 if panic <= 0 else min(0.22, panic * 0.18)
+
+
+def panic_level(dist, spread_r, flen):
+    r = spread_r * 0.85 + flen * 6.0                 # FleeMath.DiverPanicRadius
+    if r <= 0 or dist >= r:
+        return 0.0
+    return 1.0 if dist <= 0 else 1.0 - dist / r
+
+
+def step_panicked(s, dt, diver, diver_speed, deadband=DEADBAND):
+    """One frame of the school WITH a moving diver — flee slot + forward-only chase.
+
+    Mirrors BoidsJob.FormationStep's else-branch plus FishSchoolSystem.ApplyFlee.
+    """
+    fs = fs_of(dt)
+    sim_dt = BASE_STEP * fs
+    s.t += dt
+    s.move_anchor(dt)
+    s.mode_step(s.t)
+    slot, vdx, vdz = s.slots(s.t)
+
+    dist = float(np.hypot(s.anchor[0] - diver[0], s.anchor[2] - diver[2]))
+    panic = panic_level(dist, s.R * 1.2, s.flen) if diver_speed > DIVER_PANIC_SPEED else 0.0
+
+    if panic > 0.001:
+        push = flee_push(panic, s.R * 1.2, s.flen)
+        dx = s.pos[:, 0] - diver[0]
+        dz = s.pos[:, 2] - diver[2]
+        d = np.hypot(dx, dz)
+        ok = d > 1e-4
+        slot = slot.copy()
+        slot[ok, 0] += dx[ok] / d[ok] * push
+        slot[ok, 2] += dz[ok] / d[ok] * push
+
+    ddx = slot[:, 0] - s.pos[:, 0]
+    ddz = slot[:, 2] - s.pos[:, 2]
+    dh = np.hypot(ddx, ddz)
+    on_dir = np.arctan2(vdx, vdz)
+    settle = 3.0 * s.flen
+    flee = panic > 0.001
+
+    if not flee:
+        return s.step(dt, deadband=deadband)
+
+    chase_k = (0.03 * 0.8 + flee_ease(panic)) * 2.2
+    des = np.where(dh > settle, np.arctan2(ddx, ddz), on_dir)
+    d_a = delta_angle(des, s.head)
+    turn = np.clip(d_a, -0.045, 0.045) * 1.6 * fs
+    s.head = s.head + np.where(np.abs(d_a) > deadband, turn, 0.0)
+
+    sp = np.minimum(s.cap * 1.5, dh * chase_k) * fs       # CruiseFloor = 0 for a calm species
+    s.pos[:, 0] += np.sin(s.head) * sp
+    s.pos[:, 2] += np.cos(s.head) * sp
+    dy = slot[:, 1] - s.pos[:, 1]
+    s.pos[:, 1] += np.clip(dy * 0.08, -sp * 0.55, sp * 0.55)
+    s.pos[:, 1] = np.clip(s.pos[:, 1], s.floor_y, s.cap_y)
+
+    per_sec = sp / max(sim_dt, 1e-4)
+    s.vel = np.stack([np.sin(s.head) * per_sec, np.zeros(s.n), np.cos(s.head) * per_sec], -1)
+    yaw, bank = s.draw(dt, sim_dt, True)
+    return yaw, bank, panic

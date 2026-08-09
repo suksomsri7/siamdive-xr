@@ -483,6 +483,75 @@ namespace DiveMap.Core
         public static double ChaseK(double easeMul, double fleeEase)
             => (EaseLBase * (easeMul > 0.0 ? easeMul : 1.0) + fleeEase) * ChaseKMul;
 
+        // ── "ปลาไถลข้าง" (user, 8 ส.ค. 2026) ──────────────────────────────────────
+        //
+        // 🔴 What was measured. On the calm path the NOSE holds the school's heading while the
+        // BODY eases toward the slot, as two independent quantities (:1592-1593). Measuring the
+        // angle between the two — which nothing had ever measured, because heading and position
+        // are each perfectly smooth on their own — gives, for the Harddeep barracuda:
+        //
+        //     cluster  64° off its own nose, 69 % of frames        (both POLARISED modes)
+        //     stream   75° off its own nose, 93 % of frames
+        //     vortex   14°,  tornado/ball/cone 28-30°               (nose = ring tangent, fine)
+        //
+        // i.e. in the two shapes a school spends two thirds of its life in, 160 barracuda hold
+        // their noses parallel and crab sideways up to half a body length. The user reports it as
+        // "ไถลข้าง". It survived ten rounds of tuning because every one of those rounds moved the
+        // wave, the beat, the turn deadband or the drawn-rotation damping — and not one of them
+        // touches the DIRECTION the body travels.
+        //
+        // The fix is not to forbid sideways easing: that easing is the character of this path
+        // (see ForwardOnlyCalmStep) and a fish restricted to its nose axis would have to swim a
+        // circle to move a metre across. It is to let the nose FOLLOW the body when the body is
+        // actually going somewhere, and only hold the school's heading when it has arrived —
+        // which is also what keeps the old "atan2 of a near-zero step is noise" failure closed.
+        /// <summary>
+        /// Fraction of the calm cruise step at which the nose is FULLY on the direction of travel.
+        ///
+        /// Measured, not guessed (Harddeep barracuda, speed-weighted crab angle — the angle the eye
+        /// actually reads, since a fish barely moving cannot look like it is sliding):
+        ///
+        ///     knee     cluster   stream   vortex     nose shimmer
+        ///     off        52.4°    75.0°    13.9°           0.03°
+        ///     1.00       26.4°    10.5°     3.8°           0.24°
+        ///     0.50        6.7°    10.6°     0.8°           0.24°
+        ///     0.25        1.4°    10.6°     0.7°           0.24°   ← here
+        ///     0.12        1.4°    10.6°     0.7°           0.24°   (saturated)
+        ///
+        /// 0.25 is the first value that has converged, and nothing is paid for it: the nose
+        /// shimmer is flat across every knee, and the school's slot RMS actually TIGHTENS
+        /// (0.21 → 0.16 body lengths) because a fish pointing where it is going gets there.
+        /// The residual 10.6° on `stream` is that shape's own sway term and is meant to be there.
+        /// </summary>
+        public const double CalmNoseKnee = 0.25;
+
+        /// <summary>
+        /// How much the nose should follow the direction of travel this frame: 0 while the fish is
+        /// parked on its slot (hold the school's heading — a stationary fish has no travel
+        /// direction and reading one is how the heading used to jitter), 1 once it is easing at
+        /// <see cref="CalmNoseKnee"/> of the calm cruise step.
+        /// </summary>
+        public static double CalmNoseBlend(double distToSlot, double capPerFrame)
+        {
+            double cruise = capPerFrame * CalmCapMul * CalmNoseKnee;
+            if (cruise <= 1e-12 || distToSlot <= 0.0) return 0.0;
+            double w = distToSlot * CalmChasePerFrame / cruise;
+            return w > 1.0 ? 1.0 : w;
+        }
+
+        /// <summary>
+        /// The heading the nose should aim at: the school's heading blended toward the direction
+        /// the body is actually moving, by <see cref="CalmNoseBlend"/>. Angles are Unity yaws.
+        /// </summary>
+        public static double CalmNoseTarget(double schoolHeading, double moveHeading, double blend)
+        {
+            if (blend <= 0.0) return schoolHeading;
+            if (blend > 1.0) blend = 1.0;
+            double d = Math.Atan2(Math.Sin(moveHeading - schoolHeading),
+                                  Math.Cos(moveHeading - schoolHeading));
+            return schoolHeading + d * blend;
+        }
+
         /// <summary>
         /// Which heading a fish steers at: its slot while it is still far from it, the FORMATION's
         /// heading once it has arrived (:1600-1602). The settle band is deliberately wide for a
