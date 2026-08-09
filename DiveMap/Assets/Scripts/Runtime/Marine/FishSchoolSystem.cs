@@ -194,6 +194,24 @@ namespace DiveMap.Runtime.Marine
         }
 
         /// <summary>
+        /// The school's AUTHORED anchor — where the map placed it, not where the shoal has
+        /// swum to.
+        ///
+        /// 🔴 SchoolClip must frame from this and nothing else. Posing the camera from the live
+        /// bounds made the pose depend on the very behaviour under test: the three "ปลาไถลข้าง"
+        /// candidates each put the school somewhere slightly different by second six, so the
+        /// three clips meant to be compared side by side came back from three different camera
+        /// positions — one of them looking at the wreck instead of the fish.
+        /// </summary>
+        public bool TryGetSchoolAnchor(int i, out Vector3 anchor)
+        {
+            anchor = Vector3.zero;
+            if (i < 0 || i >= _fear.Length) return false;
+            anchor = _fear[i].Anchor0;
+            return true;
+        }
+
+        /// <summary>
         /// C5 — the fixed facts each school needs in order to be afraid, resolved once at
         /// Configure. Anchor and HomeR live here as the AUTHORED values because the sim's copies
         /// are rewritten every frame (the shoal is dragged toward cover and tightened into a bait

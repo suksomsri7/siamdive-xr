@@ -573,12 +573,17 @@ namespace DiveMap.Runtime
 
             if (cam != null && idx >= 0)
             {
-                // Frame N body lengths, NOT the school: the question is how ONE fish moves.
+                // 🔴 Pose from the AUTHORED anchor, never the live bounds: the pose must not
+                // depend on the behaviour being filmed, or two builds cannot be compared (see
+                // FishSchoolSystem.TryGetSchoolAnchor — that mistake sent one of three otherwise
+                // identical clips to look at the wreck).
+                Vector3 aim = marine != null && marine.TryGetSchoolAnchor(idx, out Vector3 a)
+                            ? a : target.center;
                 float span = Mathf.Max(1f, flen * FramedBodyLengths);
                 float d = span * 0.5f / Mathf.Tan(cam.fieldOfView * 0.5f * Mathf.Deg2Rad);
-                cam.transform.position = target.center + new Vector3(0.4f, 0.25f, 0.9f).normalized * d;
-                cam.transform.LookAt(target.center);
-                Debug.Log($"[Clip] framed {FramedBodyLengths}×flen span={span:F1}u camDist={d:F1}u");
+                cam.transform.position = aim + new Vector3(0.4f, 0.25f, 0.9f).normalized * d;
+                cam.transform.LookAt(aim);
+                Debug.Log($"[Clip] framed {FramedBodyLengths}×flen span={span:F1}u camDist={d:F1}u aim={aim}");
             }
 
             // dt stays pinned: the dt-variance hypothesis was falsified on 8 ส.ค. (เครื่อง user
