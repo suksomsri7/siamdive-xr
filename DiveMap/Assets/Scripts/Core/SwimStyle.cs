@@ -549,17 +549,33 @@ namespace DiveMap.Core
         /// ยังมี amp 0.18 (กวาด 18% ของลำตัว เทียบบาราคูด้า 0.039) จึงเป็นตัวที่ตาจับได้ก่อน
         /// เพื่อน · เข้ากลุ่มแล้วเหลือ 0.13 Hz
         /// </summary>
-        public const double UserSlowMulBarracudaTrevally = 0.12;
+        /// <summary>
+        /// 9 ส.ค. — user เลือก "ช่อง 4" จาก GIF สี่ระดับ = ทุกชนิดช้าลง 6 เท่าจากอัตรา ณ ตอนนั้น
+        /// (msg 2451). อัตรา ณ ตอนนั้นของแต่ละชนิดไม่เท่ากัน เพราะ scad ยังไม่เคยถูกลดเลย —
+        /// ตัวคูณจากฐานเว็บจึงต่างกัน แต่ "สิ่งที่ user เห็นและอนุมัติ" คือคอลัมน์นั้นทั้งคอลัมน์
+        ///
+        ///   บาราคูด้า  0.796 × 0.040 = 0.032 Hz  (สะบัดหางครั้งเดียวต่อ 31 วินาที)
+        ///   กะมง       ตามกฎขนาด × 0.040 ≈ 0.037 Hz
+        ///   ข้างเหลือง 1.114 × 0.160 = 0.178 Hz  (ครั้งเดียวต่อ 6 วินาที)
+        ///
+        /// 🔴 ตั้งใจให้ scad ยังเร็วกว่าเพื่อน ~5 เท่า เพราะนั่นคือสิ่งที่อยู่ในคอลัมน์ที่ user
+        /// ดูแล้วเลือก — ไม่ใช่ค่าที่ผมคิดเองว่าควรเท่ากัน (ผมเคยเสนอให้เท่ากันแล้ว user เลือก
+        /// อย่างอื่น) · ถ้าจะรวบให้เท่ากันภายหลัง ต้องผ่านตาบนเครื่องจริงอีกรอบ
+        /// </summary>
+        public const double UserSlowMulBarracudaTrevally = 0.040;
+        /// <summary>…และ scad ที่เพิ่งเข้ากลุ่มรอบนี้ (ดู <see cref="UserSlowMulBarracudaTrevally"/>).</summary>
+        public const double UserSlowMulScad = 0.160;
 
         private static SwimWave UserSlow(string assetId, SwimWave w)
         {
             string id = Bare(assetId ?? "");
-            bool slow = id.IndexOf("barracuda", StringComparison.OrdinalIgnoreCase) >= 0
+            bool scad = id.IndexOf("scad", StringComparison.OrdinalIgnoreCase) >= 0;
+            bool slow = scad
+                     || id.IndexOf("barracuda", StringComparison.OrdinalIgnoreCase) >= 0
                      || id.IndexOf("yellowtail", StringComparison.OrdinalIgnoreCase) >= 0
-                     || id.IndexOf("trevally", StringComparison.OrdinalIgnoreCase) >= 0
-                     || id.IndexOf("scad", StringComparison.OrdinalIgnoreCase) >= 0;
+                     || id.IndexOf("trevally", StringComparison.OrdinalIgnoreCase) >= 0;
             if (!slow) return w;
-            return new SwimWave(w.Gait, w.BeatHz * UserSlowMulBarracudaTrevally,
+            return new SwimWave(w.Gait, w.BeatHz * (scad ? UserSlowMulScad : UserSlowMulBarracudaTrevally),
                                 w.Amp, w.Cycles, w.Recoil, w.Gust, w.MaxBankRad);
         }
 
