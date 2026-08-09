@@ -130,6 +130,44 @@ namespace DiveMap.Tests
             Assert.AreEqual(0.0, p, 1e-9);
         }
 
+        /// <summary>
+        /// 🔴 "ฝูงสั่นถี่ๆ" (user, 8-9 ส.ค. 2026). The threat test is a hard comparison on a signal
+        /// that jitters, so a diver holding station near the threshold armed and disarmed the whole
+        /// school 8.7 times a second — and each flip swaps the fish's motion law and jumps its slot
+        /// by the whole flee push. The gate must have a band, and the panic it produces must be
+        /// eased rather than stepped.
+        /// </summary>
+        [Test]
+        public void ThreatGate_HasHysteresis_SoStickNoiseCannotChatterIt()
+        {
+            double on = FleeMath.DiverPanicSpeed;
+            double band = on * FleeMath.ThreatSpeedRelease;
+
+            // Arming still takes the full speed…
+            Assert.IsFalse(FleeMath.DiverIsThreatening(on, wasThreatening: false));
+            Assert.IsTrue(FleeMath.DiverIsThreatening(on + 0.01, wasThreatening: false));
+
+            // …but once armed it survives a dip that the old test would have dropped.
+            Assert.IsTrue(FleeMath.DiverIsThreatening(on - 0.01, wasThreatening: true),
+                          "a diver who eased off a fraction is still the same diver");
+            Assert.IsTrue(FleeMath.DiverIsThreatening(band + 0.01, wasThreatening: true));
+            Assert.IsFalse(FleeMath.DiverIsThreatening(band - 0.01, wasThreatening: true),
+                           "…but slowing right down does end it");
+
+            // And the value itself ramps: fast on, slow off, on the WALL CLOCK (a per-frame lerp
+            // here would be the same class of bug this fixes).
+            double up = FleeMath.EasePanic(0.0, 1.0, FleeMath.PanicAttackSeconds);
+            double down = FleeMath.EasePanic(1.0, 0.0, FleeMath.PanicAttackSeconds);
+            Assert.Greater(up, 0.6, "fear arrives inside one attack constant");
+            Assert.Greater(down, 0.8, "…and has barely started to leave in the same time");
+            Assert.AreEqual(0.5, FleeMath.EasePanic(0.5, 0.5, 0.016), 1e-12, "already there = still");
+            // Frame-rate independence: one 100 ms step must land where four 25 ms steps do.
+            double a = FleeMath.EasePanic(0.0, 1.0, 0.1);
+            double b = 0.0;
+            for (int i = 0; i < 4; i++) b = FleeMath.EasePanic(b, 1.0, 0.025);
+            Assert.AreEqual(a, b, 1e-9);
+        }
+
         // ── the scatter ──────────────────────────────────────────────────────────
 
         [Test]

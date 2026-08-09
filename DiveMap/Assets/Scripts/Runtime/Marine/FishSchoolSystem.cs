@@ -203,6 +203,8 @@ namespace DiveMap.Runtime.Marine
             public Vector3 Shelter;
             public float   ShelterR;
             public float   BallUntil;   // Time.time the bait ball may relax (FleeMath.BallHoldSeconds)
+            public bool    Threatened;  // the threat gate's own memory (Schmitt band — see ApplyFear)
+            public float   PanicNow;    // the EASED panic this school is acting on
             public Vector3 HomeNow;     // where the shoal is CURRENTLY centred (eased, never snapped)
             public bool    HomeInit;
             public float   HomeRNow;    // its CURRENT radius (eased — a bait ball forms fast, not instantly)
@@ -1400,10 +1402,18 @@ namespace DiveMap.Runtime.Marine
             float diverDist = Mathf.Sqrt((camPos.x - centre.x) * (camPos.x - centre.x) +
                                          (camPos.z - centre.z) * (camPos.z - centre.z));
 
-            float panic = (float)FleeMath.SchoolPanic(
+            // 🔴 "ฝูงสั่นถี่ๆ" — the gate chatters, not the swimming. Hysteresis on the boolean and
+            // an eased value on top: a school on the threshold was flipping between the calm ease
+            // and the forward-only chase 8.7 times a second, with its slot jumping the whole flee
+            // push each time. See the table on FleeMath.ThreatSpeedRelease.
+            float rawPanic = (float)FleeMath.SchoolPanic(
                 predDist, hasPred,
                 diverDist, _camSpeed, diverActive,
-                fx.HomeR0, sp.FishLen);
+                fx.HomeR0, sp.FishLen,
+                fx.Threatened, out bool nowThreat);
+            fx.Threatened = nowThreat;
+            float panic = (float)FleeMath.EasePanic(fx.PanicNow, rawPanic, Time.deltaTime);
+            fx.PanicNow = panic;
 
             // Which of the two is the thing to swim away from — the same test that produced the
             // panic, so the shoal never bursts away from something that did not scare it.

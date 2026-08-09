@@ -159,6 +159,9 @@ class CalmSchool:
         self.nose_follow = False            # the 'ปลาไถลข้าง' fix, off by default
         self.nose_knee = 1.0                # fraction of the cruise step at which the nose fully follows
         self.nose_cap = None                # max deviation from the school heading (rad)
+        self.gate_fix = False               # hysteresis + eased panic
+        self.threatened = False
+        self.panic_now = 0.0
         self.diver = None                   # set by drive_diver(); TourController:617
         self.bubble = 16.0                  # DiveLightMath.FishBubble × 2
         self.diver_speed = 30.0 * 0.35      # DroneFlight.Speed, an unhurried swim-through
@@ -1031,7 +1034,16 @@ def step_panicked(s, dt, diver, diver_speed, deadband=DEADBAND):
     slot, vdx, vdz = s.slots(s.t)
 
     dist = float(np.hypot(s.anchor[0] - diver[0], s.anchor[2] - diver[2]))
-    panic = panic_level(dist, s.R * 1.2, s.flen) if diver_speed > DIVER_PANIC_SPEED else 0.0
+    # the fix under test: Schmitt band on the gate + eased panic value (FleeMath)
+    if getattr(s, 'gate_fix', False):
+        arm = DIVER_PANIC_SPEED * (0.8 if s.threatened else 1.0)
+        s.threatened = diver_speed > arm
+        raw = panic_level(dist, s.R * 1.2, s.flen) if s.threatened else 0.0
+        tau = 0.15 if raw > s.panic_now else 0.8
+        s.panic_now += (raw - s.panic_now) * (1.0 - math.exp(-dt / tau))
+        panic = s.panic_now
+    else:
+        panic = panic_level(dist, s.R * 1.2, s.flen) if diver_speed > DIVER_PANIC_SPEED else 0.0
 
     if panic > 0.001:
         push = flee_push(panic, s.R * 1.2, s.flen)

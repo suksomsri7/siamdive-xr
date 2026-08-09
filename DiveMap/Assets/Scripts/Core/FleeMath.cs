@@ -88,6 +88,74 @@ namespace DiveMap.Core
         /// <summary>Is the diver moving fast enough to frighten anything? (web: <c>camVel&gt;11</c>)</summary>
         public static bool DiverIsThreatening(double diverSpeed) => diverSpeed > DiverPanicSpeed;
 
+        // ── "ฝูงสั่นถี่ๆ" (user, 8-9 ส.ค. 2026) — the gate, not the swimming ──────
+        //
+        // 🔴 <see cref="DiverIsThreatening(double)"/> is a HARD binary test on a NOISY signal, and
+        // panic is rebuilt from scratch every frame with no memory (FishSchoolSystem.ApplyFear).
+        // A diver holding station near the threshold therefore flips the whole school between two
+        // completely different motion laws at frame rate — measured on the Harddeep barracuda with
+        // a realistic stick jitter (±1.6 u/s, the app's own 0.25 smoothing):
+        //
+        //     diver speed   gate flips/s   raw heading wobble   peak-to-peak
+        //         9 u/s          0.0              0.39°             8.7°
+        //        11 u/s          8.7              1.25°            26.5°   ← at the threshold
+        //        12 u/s          3.7              0.74°            26.7°
+        //        20 u/s          0.0              0.68°            26.7°
+        //
+        // Each flip also teleports the fish's SLOT by the whole flee push (tens of units) and
+        // swaps the calm ease for the forward-only chase. Nothing about the fish's swimming is
+        // wrong; the thing telling it what to do is chattering.
+        //
+        // Two independent guards, because they fix different halves: the Schmitt band stops the
+        // BOOLEAN chattering, the ease stops the panic VALUE stepping when the gate does flip.
+
+        /// <summary>Release the threat gate at 0.8× the speed that armed it (Schmitt band).</summary>
+        public const double ThreatSpeedRelease = 0.8;
+
+        /// <summary>Fear arrives fast…</summary>
+        public const double PanicAttackSeconds = 0.15;
+        /// <summary>…and leaves slowly. A shoal does not relax the instant a diver coasts.</summary>
+        public const double PanicReleaseSeconds = 0.8;
+
+        /// <summary>
+        /// The threat gate WITH hysteresis: once a diver is frightening they stay frightening
+        /// until they slow well below the arming speed, instead of toggling on stick noise.
+        /// </summary>
+        public static bool DiverIsThreatening(double diverSpeed, bool wasThreatening)
+            => diverSpeed > (wasThreatening ? DiverPanicSpeed * ThreatSpeedRelease : DiverPanicSpeed);
+
+        /// <summary>
+        /// Move panic toward <paramref name="target"/> on the wall clock — quickly up, slowly
+        /// down. Exponential, so it is frame-rate independent (the whole point: a per-frame lerp
+        /// would put the fix back in the class of bug it is fixing).
+        /// </summary>
+        public static double EasePanic(double current, double target, double dtSeconds)
+        {
+            if (dtSeconds <= 0.0) return current;
+            double tau = target > current ? PanicAttackSeconds : PanicReleaseSeconds;
+            double k = 1.0 - Math.Exp(-dtSeconds / tau);
+            return current + (target - current) * k;
+        }
+
+        /// <summary>
+        /// <see cref="SchoolPanic"/> with the hysteretic gate. <paramref name="wasThreatening"/>
+        /// is this school's own memory of the gate, and it comes back out so the caller can store it.
+        /// </summary>
+        public static double SchoolPanic(
+            double predatorDistance, bool hasPredator,
+            double diverDistance, double diverSpeed, bool diverActive,
+            double spreadR, double fishLen,
+            bool wasThreatening, out bool nowThreatening)
+        {
+            nowThreatening = diverActive && DiverIsThreatening(diverSpeed, wasThreatening);
+            if (hasPredator)
+            {
+                double p = PanicLevel(predatorDistance, PredatorPanicRadius(spreadR, fishLen));
+                if (p > 0.0) return p;
+            }
+            return nowThreatening ? PanicLevel(diverDistance, DiverPanicRadius(spreadR, fishLen)) : 0.0;
+        }
+
         /// <summary>
         /// The shoal's panic this frame. A real predator wins over the diver — the web checks the
         /// predator first and only consults the drone when <c>!S._panic</c>.
