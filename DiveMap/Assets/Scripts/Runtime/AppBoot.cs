@@ -65,6 +65,14 @@ namespace DiveMap.Runtime
 
             // QC only: film the three "ปลาไถลข้าง" candidates in one CI round so the user chooses
             // from footage instead of from a diagram. off = the old build, full = nose follows.
+            string mode = GetArg("-clipmode");
+            if (!string.IsNullOrEmpty(mode))
+                FishSchoolSystem.ModeLockOverride =
+                    mode == "cluster" ? DiveMap.Core.SchoolMode.Cluster :
+                    mode == "stream"  ? DiveMap.Core.SchoolMode.Stream :
+                    mode == "vortex"  ? DiveMap.Core.SchoolMode.Vortex :
+                                        (DiveMap.Core.SchoolMode?)null;
+
             string nose = GetArg("-clipnose");
             if (!string.IsNullOrEmpty(nose))
                 FishSchoolSystem.NoseCapOverride =

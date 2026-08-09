@@ -481,10 +481,12 @@ jobs:
             -screen-width 1280 -screen-height 720 -force-glcore || true
           # "ปลาไถลข้าง" — ถ่ายสามตัวเลือกที่ user ต้องเลือก ในรอบเดียว (A เดิม / B จำกัด 30° /
           # C ตามทางเต็มที่) เพื่อให้ user ตัดสินจากภาพเคลื่อนไหวจริง ไม่ใช่จากกราฟ
+          # 🔴 -clipmode cluster: อาการ "ไถลข้าง" มีเฉพาะโหมด polarised — สองรอบแรกฝูงบังเอิญ
+          # อยู่โหมดวงแหวนตอนถ่าย วัดได้ 4.8° เท่ากันทั้งก่อน/หลังแก้ = ถ่ายไม่ตรงเงื่อนไข
           for V in off cap full; do
             timeout 420 xvfb-run -a -s "-screen 0 1280x720x24" \
               "$BIN" -schoolclip "$PWD/clip_nose_$V" -clipmap 874ti6ignvp9 -clipnose "$V" \
-              -screen-width 1280 -screen-height 720 -force-glcore || true
+              -clipmode cluster -screen-width 1280 -screen-height 720 -force-glcore || true
           done
           ls clip/ 2>/dev/null | wc -l
           ls clip_hardeep/ 2>/dev/null | wc -l

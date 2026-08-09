@@ -160,6 +160,9 @@ namespace DiveMap.Runtime.Marine
         /// </summary>
         public static float NoseCapOverride = -1f;
 
+        /// <summary>QC only: lock every formation school to one shape (see BuildSlots). null = the mode wheel.</summary>
+        public static SchoolMode? ModeLockOverride = null;
+
         public bool TryGetSchoolBounds(int i, out string species, out Bounds bounds)
         {
             bounds = default;
@@ -1278,7 +1281,12 @@ namespace DiveMap.Runtime.Marine
             }
 
             // ── A named formation: the mode wheel + the morph ─────────────────────
-            SchoolFormation.Step(ref fm.Mode, t, sp.Panic, false, fm.ModeDurMul, fm.TransDurMul);
+            // ModeLockOverride = QC เท่านั้น: บังคับให้ฝูงอยู่รูปเดียวทั้งคลิป
+            // 🔴 จำเป็นเพราะอาการ "ไถลข้าง" เกิดเฉพาะโหมด polarised (cluster/stream) — คลิป CI
+            // สองรอบแรกไปจับตอนฝูงอยู่โหมดวงแหวนพอดี ซึ่งไม่มีอาการอยู่แล้ว วัดได้ 4.8° ทั้ง
+            // ก่อนและหลังแก้ = เครื่องมือถ่ายไม่ตรงเงื่อนไขที่กำลังทดสอบ (บทเรียนเดียวกับมุมกล้อง)
+            SchoolFormation.Step(ref fm.Mode, t, sp.Panic, false, fm.ModeDurMul, fm.TransDurMul,
+                                 ModeLockOverride);
             if (SchoolFormation.MorphFinished(fm.Mode, t)) fm.Mode.HasPrev = false;
 
             double gh = fm.Heading;
