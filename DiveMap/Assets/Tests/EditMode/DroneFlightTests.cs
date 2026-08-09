@@ -176,7 +176,10 @@ namespace DiveMap.Tests
         {
             Assert.AreEqual(0.12f, DroneFlight.DeadZone, 1e-6f, "builder.html:3766");
             Assert.AreEqual(1.1f, DroneFlight.YawRate, 1e-6f, "builder.html:3768");
-            Assert.AreEqual(30f, DroneFlight.Speed, 1e-6f, "builder.html:3770 — SP=30");
+            // 🔴 ตัวเดียวในไฟล์นี้ที่ไม่ใช่ค่าเว็บอีกต่อไป: user สั่งลด 9 ส.ค. ("โดรนเคลื่อนที่
+            // ช้าลงอีกนิด") · ค่าเว็บคือ 30 ส่วนที่ใช้จริงคือ 24 = 80% · เลขอื่นทุกตัวในเทสนี้
+            // ยังตรึงกับ builder.html เหมือนเดิม
+            Assert.AreEqual(24f, DroneFlight.Speed, 1e-6f, "user 9 ส.ค. — เว็บ 3770 SP=30 × 0.8");
             Assert.AreEqual(1f, DroneFlight.StrafeRatio, 1e-6f, "builder.html:3770 — strafe=rx");
             Assert.AreEqual(0.72f, DroneFlight.AscendRatio, 1e-6f, "builder.html:3771");
             Assert.AreEqual(0.72f, DroneFlight.DescendRatio, 1e-6f, "builder.html:3771 — one factor");
@@ -199,15 +202,16 @@ namespace DiveMap.Tests
             Assert.AreEqual(6.0, ItemPicker.UnitsPerMetre, 1e-9,
                             "the whole conversion hangs off this — see builder.html U_PER_M");
 
-            Assert.AreEqual(5.0f, DroneFlight.MetresPerSecond(DroneFlight.Speed), 0.01f);
-            Assert.AreEqual(5.0f, DroneFlight.MetresPerSecond(DroneFlight.Speed * DroneFlight.StrafeRatio), 0.01f);
-            Assert.AreEqual(3.6f, DroneFlight.MetresPerSecond(DroneFlight.Speed * DroneFlight.AscendRatio), 0.01f);
-            Assert.AreEqual(3.6f, DroneFlight.MetresPerSecond(DroneFlight.Speed * DroneFlight.DescendRatio), 0.01f);
+            // 5.00 → 4.00 m/s (user 9 ส.ค. ลดความเร็วโดรน 20%) · อัตราส่วนขึ้น/ลง/สไลด์ยังเป็นของเว็บ
+            Assert.AreEqual(4.0f, DroneFlight.MetresPerSecond(DroneFlight.Speed), 0.01f);
+            Assert.AreEqual(4.0f, DroneFlight.MetresPerSecond(DroneFlight.Speed * DroneFlight.StrafeRatio), 0.01f);
+            Assert.AreEqual(2.88f, DroneFlight.MetresPerSecond(DroneFlight.Speed * DroneFlight.AscendRatio), 0.01f);
+            Assert.AreEqual(2.88f, DroneFlight.MetresPerSecond(DroneFlight.Speed * DroneFlight.DescendRatio), 0.01f);
 
             // And the preset that carries build 261's drone forward for anyone who preferred it.
             // 0.30 is SettingsStore.CalmSpeedScale, inlined: SettingsStore needs PlayerPrefs and so
             // cannot be compiled into tools/test.sh's harness.
-            Assert.AreEqual(1.5f, DroneFlight.MetresPerSecond(DroneFlight.Speed * 0.30f), 0.01f);
+            Assert.AreEqual(1.2f, DroneFlight.MetresPerSecond(DroneFlight.Speed * 0.30f), 0.01f);
         }
 
         /// <summary>
@@ -219,8 +223,8 @@ namespace DiveMap.Tests
         {
             var s = Fresh();
             for (int i = 0; i < 600; i++) s = Step(s, new DroneFlight.Sticks { Ry = -0.5f });
-            Assert.AreEqual(15f, s.Vel.Z, 0.2f, "half a stick, half of SP=30");
-            Assert.Greater(s.Vel.Z, 9f, "…and faster than build 261 managed at FULL stick");
+            Assert.AreEqual(DroneFlight.Speed * 0.5f, s.Vel.Z, 0.2f, "half a stick, half of top speed");
+            Assert.Greater(s.Vel.Z, 9f, "…and still faster than build 261 managed at FULL stick");
         }
 
         /// <summary>

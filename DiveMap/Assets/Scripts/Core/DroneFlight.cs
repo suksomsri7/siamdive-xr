@@ -76,7 +76,18 @@ namespace DiveMap.Core
         public const float DeadZone = 0.12f;
 
         public const float YawRate = 1.1f;      // rad/s at full deflection — builder.html:3768
-        public const float Speed = 30f;         // u/s = 5.00 m/s          — builder.html:3770 (SP)
+        /// <summary>
+        /// 30 → 24 u/s (5.00 → 4.00 m/s) — user 9 ส.ค.: "ปรับให้โดรนเคลื่อนที่ช้าลงอีกนิด"
+        ///
+        /// ประวัติของเลขนี้: เคยถูกลดเป็นเมตริกจริงแล้ว user บอก "โดรนเคลื่อนที่ช้าไป" (4 ส.ค.)
+        /// จึงกลับมาที่ค่าเว็บ 30 · รอบนี้ลดลง 20% ซึ่งยังอยู่เหนือค่าที่เคยถูกบ่นว่าช้า
+        /// (build 261 = 9 u/s ซึ่งตอนนี้เป็นพรีเซ็ต "สงบ")
+        ///
+        /// ⚠️ FleeMath.DiverPanicSpeed ผูกกับเลขนี้เป็นสัดส่วน (11/30) จึงเลื่อนตามเป็น 8.8 u/s
+        /// โดยอัตโนมัติ — เกณฑ์ "ว่ายเร็วพอจะทำให้ฝูงตกใจ" ยังเป็นสัดส่วนเดิมของความเร็วเต็ม
+        /// ซึ่งเป็นสิ่งที่ตั้งใจตั้งแต่แรก (ดูคอมเมนต์บน DiverPanicSpeed)
+        /// </summary>
+        public const float Speed = 24f;         // u/s = 4.00 m/s (เว็บ 3770 = 30; user ขอช้าลง)
         public const float StrafeRatio = 1f;    // the web strafes at SP   — builder.html:3770-3771
         public const float AscendRatio = 0.72f; // builder.html:3771 — ty = lift·SP·0.72
         public const float DescendRatio = 0.72f;// …the same factor both ways; the web has one term
