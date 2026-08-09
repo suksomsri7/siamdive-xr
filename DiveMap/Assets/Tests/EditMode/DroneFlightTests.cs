@@ -211,7 +211,9 @@ namespace DiveMap.Tests
             // And the preset that carries build 261's drone forward for anyone who preferred it.
             // 0.30 is SettingsStore.CalmSpeedScale, inlined: SettingsStore needs PlayerPrefs and so
             // cannot be compiled into tools/test.sh's harness.
-            Assert.AreEqual(1.2f, DroneFlight.MetresPerSecond(DroneFlight.Speed * 0.30f), 0.01f);
+            // 0.375 = SettingsStore.CalmSpeedScale (inline: SettingsStore ต้องใช้ PlayerPrefs
+            // จึงคอมไพล์เข้า harness ของ tools/test.sh ไม่ได้) — ยังเท่ากับโดรน build 261 พอดี
+            Assert.AreEqual(1.5f, DroneFlight.MetresPerSecond(DroneFlight.Speed * 0.375f), 0.01f);
         }
 
         /// <summary>

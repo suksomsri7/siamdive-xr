@@ -40,13 +40,19 @@ namespace DiveMap.Core
         /// drone: the metric re-scale that the "เร็วไป" round shipped globally now lives here, where
         /// someone who wants to hang over one coral head can choose it and nobody else pays for it.
         /// </summary>
-        public const float CalmSpeedScale = 0.30f;
+        /// 0.30 → 0.375 เมื่อฐานลดจาก 30 เป็น 24 u/s (user 9 ส.ค. "โดรนช้าลงอีกนิด"):
+        /// พรีเซ็ตนี้มีความหมายว่า "โดรนของ build 261" = 9 u/s = 1.50 m/s ซึ่งเป็นหมุดจริงที่
+        /// user เคยเลือก — ถ้าปล่อยไว้ที่ 0.30 มันจะกลายเป็น 7.2 u/s แล้วความหมายหาย
+        /// (เทส SettingsStoreTests.EverySpeedPreset_IsAMultipleOfTheWebsFlightModel ตรึงไว้)
+        public const float CalmSpeedScale = 0.375f;
 
         /// <summary>
         /// 1.25 × 30 u/s = 37.5 u/s = 6.25 m/s — for crossing a big site. Cut from 1.45 with the
         /// base restored: 1.45 would now be 43.5 u/s, a speed nothing in the app has ever been
         /// flown at and well past the web's own ceiling.
         /// </summary>
+        /// 1.25 × 24 = 30 u/s — พอฐานลดเป็น 24 พรีเซ็ต "เร็ว" จึงกลายเป็นความเร็วเว็บเดิมพอดี
+        /// ซึ่งเป็นความหมายที่ดีสำหรับพรีเซ็ตนี้: ใครอยากได้ความเร็วแบบก่อน 9 ส.ค. ก็เลือกอันนี้
         public const float FastSpeedScale = 1.25f;
 
         /// <summary>
