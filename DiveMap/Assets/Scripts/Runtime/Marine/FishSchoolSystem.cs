@@ -166,6 +166,16 @@ namespace DiveMap.Runtime.Marine
         /// <summary>QC only: false = the pre-fix circular cluster breath, so the "before" clip is a real before.</summary>
         public static bool ClusterBreatheAlongHeading = true;
 
+        /// <summary>
+        /// กี่ฝูงที่ได้ GLB จริง / ทั้งหมด — โชว์บนจอคู่กับเลข fps
+        ///
+        /// 🔴 user ถามเองว่า "เป็นไปได้ไหมที่ไม่ได้โหลดโมเดลใหม่เวลาอัปเดต" — คำถามที่ตอบไม่ได้
+        /// มาสองคืน เพราะหลักฐานเดียวที่มีคือ Player.log ซึ่งดึงจากเครื่องเขาไม่ได้ · ปลาที่โหลด
+        /// GLB ไม่สำเร็จจะตกไปใช้เมชสำรอง + โบกตัวทั้งแท่ง ซึ่งเมื่อก่อนตรึงที่ 1.114 Hz ตายตัว
+        /// = อธิบาย "จูนอะไรก็ไม่เปลี่ยน" ได้ทั้งหมด · สองตัวเลขนี้ทำให้ภาพหน้าจอเดียวตอบได้
+        /// </summary>
+        public static int GlbSchools, TotalSchools;
+
         public bool TryGetSchoolBounds(int i, out string species, out Bounds bounds)
         {
             bounds = default;
@@ -471,6 +481,8 @@ namespace DiveMap.Runtime.Marine
             _mH  = new double[widest];
             _alloc = true;
 
+            GlbSchools = 0;
+            TotalSchools = schools.Count;
             _fear = new SchoolFear[schools.Count];
             _mind = new Mind[schools.Count];
             _traits = new MindTraits[schools.Count];
@@ -896,6 +908,7 @@ namespace DiveMap.Runtime.Marine
                 applied++;
             }
 
+            if (applied > 0) GlbSchools += applied;
             if (applied > 0)
                 Debug.Log($"[Marine] fishGlb applied species={species} schools={applied} " +
                           $"bakedLen={bakedLen:F3} drawScale={lastScale:F3} " +
@@ -1134,9 +1147,16 @@ namespace DiveMap.Runtime.Marine
                     }
 
                     // Only the fish that cannot bend get the old plank-waggle.
+                    //
+                    // 🔴 จังหวะต้องมาจาก SwimStyle เหมือนเส้นทางบิดตัว ไม่ใช่ WiggleRate 7.0 ตายตัว
+                    // (user 9 ส.ค.: "จูนหางมากี่รอบก็เหมือนเดิม ยังเร็วมาก" ทั้งที่ [Swim] log
+                    // ยืนยันว่าค่าใหม่ถึงตัวปลาแล้ว) — 7.0 rad/s = 1.114 Hz พอดีเป๊ะ ซึ่งคือ
+                    // อัตราเว็บเต็มสูตร: ปลาที่ตกมาเส้นทางนี้จึงโบกตัวเร็วคงที่ตลอดกาล ไม่ว่าจะ
+                    // จูน BeatHz ไปกี่รอบ · เส้นทางสำรองไม่ใช่ข้ออ้างให้ไม่เชื่อฟังค่าที่ user เลือก
                     if (!bends)
                     {
-                        float wig = Mathf.Sin(t * WiggleRate + f.Phase) * WiggleAmp * Mathf.Rad2Deg;
+                        float wigRate = 2f * Mathf.PI * Mathf.Max(0f, sr.BeatHz);
+                        float wig = Mathf.Sin(t * wigRate + f.Phase) * WiggleAmp * Mathf.Rad2Deg;
                         rot *= Quaternion.Euler(0f, wig, 0f);
                     }
                     // 🔴 หน่วงการหมุน "เฉพาะตอนวาด" — วิดีโอ 8 ส.ค. (60fps แล้ว): ตัวเดี่ยวนิ่ง
