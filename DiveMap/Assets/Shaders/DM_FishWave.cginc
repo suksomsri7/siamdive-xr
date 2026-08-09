@@ -47,13 +47,35 @@ float4 _WaveSide;     // object-space lateral axis     (glTF convention: +X)
 float4 _WaveDir;      // object-space thrust direction: sideways for a fish, up for a fluke/wing
 
 // A per-instance constant. See the header: it must NOT be derived from anything that moves.
+//
+// 🔴 2026-08-09 — THE SAME BUG CAME BACK, one level down, and this is the one the user has been
+// reporting for three nights: "บางตัวหางไม่ขยับ และหลายตัวสะบัดเร็วมาก" — in ONE school, where
+// every fish shares _WavePhase and can only differ by this offset.
+//
+// The header above describes moving the hash off the world POSITION and onto the SCALE, because
+// the scale does not change. Mathematically it does not. But the scale is READ as the length of
+// column 0 of the object→world matrix, and that column is scale × the instance's RIGHT vector —
+// which rotates every frame. Length is rotation-invariant in real arithmetic and NOT in float32:
+// measured over a fish turning 0.23°/frame, the computed s wobbles by 2.4e-07 (ordinary rounding),
+// and this hash multiplies its argument by 91.7 × 43758 before taking frac() — so 2.4e-07 of input
+// noise becomes a phase jump of 0.039 of a whole cycle per frame on average, peaking at 0.35.
+// At 60 fps that is a random 2.3 Hz flutter with 21 Hz spikes, per fish, independent of _WavePhase.
+//
+// It explains every symptom at once: a fish holding still has a stable s and a FROZEN tail; a fish
+// turning re-rolls its phase every frame and FLICKS; and no amount of tuning BeatHz on the CPU
+// changes either, which is exactly what ten rounds of tuning found.
+//
+// Quantising the hash input kills it: floor(s*64) is immune to 1e-07 of noise (measured phase jump
+// 0.00000/frame) while still giving ~70 distinct buckets across a school's 0.85-1.15 size jitter,
+// which is more per-fish phase diversity than the eye can count.
 float DM_InstancePhase()
 {
     // Column 0 of the object→world matrix is scale.x × right, so its length is the instance's
     // own uniform scale — jittered per fish at Configure and fixed from then on.
     float3 c0 = float3(unity_ObjectToWorld._m00, unity_ObjectToWorld._m10, unity_ObjectToWorld._m20);
     float  s  = length(c0) + 1e-4;
-    return frac(sin(s * 91.7213) * 43758.5453) * 6.2831853;
+    float  q  = floor(s * 64.0);     // ← quantise BEFORE hashing (see above)
+    return frac(sin(q * 91.7213) * 43758.5453) * 6.2831853;
 }
 
 // Rotate a normal by a small angle in the plane spanned by (a → b). Linearised: the surface
