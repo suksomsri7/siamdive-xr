@@ -330,6 +330,18 @@ namespace DiveMap.Core
 
         public const double SchoolFrameRate        = 60.0;  // web per-frame caps → per-second
         public const double ShoalSpeedPerFrame     = 0.04;
+
+        /// <summary>
+        /// 🔴 "ฝูงปลาข้างเหลือง ระยะห่างระหว่างตัวมากไป ทำให้ฝูงเล็กลงแน่นขึ้น และทำให้ปลา
+        /// เคลื่อนที่ช้าลง" (user 9 ส.ค.) — สองตัวคูณสำหรับฝูงแบบ Shoal เท่านั้น
+        ///
+        /// รัศมีฝูงมาจากสูตรเว็บ flen×(3+∛N×1.6) ซึ่งกาง 500 ตัวไว้ แต่แอปวาดจริงแค่ 120 ตัว
+        /// (UnityCount) — ความหนาแน่นจึงบางกว่าเว็บโดยโครงสร้าง ไม่ใช่ความรู้สึกของ user
+        /// ย่อรัศมี 0.6 ⇒ ปริมาตรเหลือ ~22% = แน่นขึ้นราว 4.6 เท่าที่จำนวนตัวเท่าเดิม
+        /// </summary>
+        public const double ShoalTightenMul = 0.6;
+        /// <summary>…และว่ายช้าลงตามที่ user ขอ (ไม่แตะจังหวะหาง ซึ่งเป็นคนละเรื่อง).</summary>
+        public const double ShoalSpeedUserMul = 0.6;
         public const double FormationSpeedPerFrame = 0.065;
         public const double PodSpeedPerFrame       = 0.02;  // pods hold slots + bob, they don't dash
         public const double ShoalVertFactor        = 0.40;
@@ -525,11 +537,12 @@ namespace DiveMap.Core
             else if (sp.Formation == SchoolFormation.Shoal)
             {
                 fishWorld = sp.FishLenLocal * s;
-                radius    = ShoalRadius(sp.FishLenLocal, sp.WebCount) * s;
+                radius    = ShoalRadius(sp.FishLenLocal, sp.WebCount) * s * ShoalTightenMul;
                 double floor = SchoolRadiusFloorMul * fishWorld;
                 if (radius < floor) radius = floor;
                 vertHalf  = radius * ShoalVertFactor;
-                speed     = SpeedCapPerSecond(sp.FishLenLocal, ShoalSpeedPerFrame, sp.SwimMul) * s;
+                speed     = SpeedCapPerSecond(sp.FishLenLocal, ShoalSpeedPerFrame, sp.SwimMul)
+                          * s * ShoalSpeedUserMul;
             }
             else
             {

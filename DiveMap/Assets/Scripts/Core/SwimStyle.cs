@@ -563,21 +563,49 @@ namespace DiveMap.Core
         /// ครึ่งหนึ่งของค่าเว็บ: เห็นหางขยับชัดแต่ยังสงบกว่าเว็บเดิมที่ user เคยว่าเร็ว
         /// (บาราคูด้า 0.40 Hz · ปลาข้างเหลือง 0.56 Hz · กะมง ~0.46-0.68)
         /// ปรับได้ที่เลขเดียวนี้: 1.0 = เท่าเว็บเป๊ะ · 0.25 = ค่าที่เลือกไว้ 8 ส.ค.
-        public const double UserSlowMulBarracudaTrevally = 0.50;
+        public const double UserSlowMulBarracudaTrevally = 1.00;
+
+        /// <summary>
+        /// 🔴 "หางของบาราคูด้าและกะมง โบกน้อยไปมากๆๆ" (user 9 ส.ค. หลังเห็นภาพที่ไม่มีสัญญาณ
+        /// รบกวนแล้ว) — ตัวคูณ "ระยะกวาดหาง" ไม่ใช่จังหวะ
+        ///
+        /// ค่าเว็บของบาราคูด้าคือ 0.06 × stiffness 0.65 = 3.9% ของความยาวตัว ซึ่งบนปลายาว 7.2u
+        /// ที่ Harddeep = ปลายหางกวาดแค่ 0.28 หน่วย — จิ๋วมากจนแทบมองไม่ออกว่าขยับ
+        /// กะมง 7.5% ก็ยังน้อย · ×2.6 ⇒ บาราคูด้า 10.3% · กะมง 19.5%
+        ///
+        /// หมายเหตุประวัติ: 8 ส.ค. เคยมีชุดจูนที่ไปแตะ "รูปคลื่น" แล้วถูก user ปฏิเสธ — แต่ครั้ง
+        /// นั้นแตะ cycles/envelope (รูปของคลื่น) และตัดสินบนภาพที่ยังมีสัญญาณรบกวน · ครั้งนี้แตะ
+        /// แอมพลิจูดอย่างเดียวตามที่ user ขอตรงๆ บนภาพที่สะอาดแล้ว
+        /// </summary>
+        public const double UserAmpMulBarracudaTrevally = 2.6;
         /// <summary>…และ scad ที่เพิ่งเข้ากลุ่มรอบนี้ (ดู <see cref="UserSlowMulBarracudaTrevally"/>).</summary>
         public const double UserSlowMulScad = 0.50;
 
         private static SwimWave UserSlow(string assetId, SwimWave w)
         {
             string id = Bare(assetId ?? "");
+
+            // 🔴 เฉพาะ school:/pod: เท่านั้น — ห้ามแตะสัตว์ตัวเดี่ยว (msh:*)
+            //
+            // user ชี้เอง 9 ส.ค. ว่า "barracuda ตัวเดียวใน map Harddeep เคลื่อนไหวลำตัวและหางได้
+            // ถูกต้องมาก" และใช้มันเป็นมาตรฐานให้ฝูงเทียบ · ตัวเดี่ยวคือ msh:barracuda ซึ่งมีชื่อ
+            // ขึ้นต้นต่างกันแต่มีคำว่า "barracuda" เหมือนกัน — ถ้าไม่กั้น prefix ตัวคูณจะไปแก้
+            // ของที่ user บอกว่าถูกอยู่แล้ว (รอบนี้ดันแอมพลิจูดตัวเดี่ยวไป 39% ของลำตัว
+            // ซึ่งหลุดกรอบปลาจริง — เทส SoloBarracuda_* จับได้)
+            bool crowd = id.StartsWith("school:", StringComparison.OrdinalIgnoreCase)
+                      || id.StartsWith("pod:", StringComparison.OrdinalIgnoreCase);
+            if (!crowd) return w;
+
             bool scad = id.IndexOf("scad", StringComparison.OrdinalIgnoreCase) >= 0;
             bool slow = scad
                      || id.IndexOf("barracuda", StringComparison.OrdinalIgnoreCase) >= 0
                      || id.IndexOf("yellowtail", StringComparison.OrdinalIgnoreCase) >= 0
                      || id.IndexOf("trevally", StringComparison.OrdinalIgnoreCase) >= 0;
             if (!slow) return w;
-            return new SwimWave(w.Gait, w.BeatHz * (scad ? UserSlowMulScad : UserSlowMulBarracudaTrevally),
-                                w.Amp, w.Cycles, w.Recoil, w.Gust, w.MaxBankRad);
+            return new SwimWave(w.Gait,
+                                w.BeatHz * (scad ? UserSlowMulScad : UserSlowMulBarracudaTrevally),
+                                w.Amp * (scad ? 1.0 : UserAmpMulBarracudaTrevally),
+                                w.Cycles, w.Recoil, w.Gust, w.MaxBankRad);
         }
 
         /// <summary>

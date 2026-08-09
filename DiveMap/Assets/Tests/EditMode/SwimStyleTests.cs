@@ -168,7 +168,11 @@ namespace DiveMap.Tests
             // 🔎 FromTables, not For: the two share the thunniform ROW, which is what this line is
             // about, but msh:barracuda has carried a hand-set override since 2026-08-06 (see
             // SwimStyle.SoloTune) and For() would be comparing the override against the row.
-            Assert.AreEqual(SwimStyle.FromTables("msh:barracuda", 5.0).Amp, trevally.Amp, Eps,
+            // ×UserAmp: กะมงเป็นฝูง (pod:) จึงได้ตัวคูณ "โบกให้กว้างขึ้น" ที่ user สั่ง 9 ส.ค.
+            // ส่วน msh:barracuda เป็นตัวเดี่ยวที่ user บอกว่าถูกต้องแล้ว จึงไม่ถูกแตะ — แถวต้นทาง
+            // ยังเป็นแถวเดียวกัน ซึ่งคือสิ่งที่บรรทัดนี้ทดสอบ
+            Assert.AreEqual(SwimStyle.FromTables("msh:barracuda", 5.0).Amp
+                            * SwimStyle.UserAmpMulBarracudaTrevally, trevally.Amp, Eps,
                             "a yellowtail IS a trevally — same stiff-bodied cruiser");
 
             // 🔴 …and the SHOAL barracuda is deliberately NOT the same number any more. A pod is a
@@ -210,8 +214,10 @@ namespace DiveMap.Tests
 
             // AMPLITUDE = wAmp × (wStiff + 0.5), the value of the web's clamped tail envelope at
             // the tail (position.z ≈ −flen/2 — both school GLBs are modelled centred).
-            Assert.AreEqual(0.06 * 0.65, barra.Amp, 1e-12);   // 3.96 % — was 7.5 %, i.e. 1.92× fast
-            Assert.AreEqual(0.18 * 1.00, scad.Amp,  1e-12);   // 18 %
+            // ×UserAmp: user สั่ง 9 ส.ค. "หางบาราคูด้า/กะมงโบกน้อยไปมากๆๆ" (ตัดสินบนภาพที่ไม่มี
+            // สัญญาณรบกวนแล้ว) — 3.96% ของเว็บ บนปลา 7.2u ที่ Harddeep = ปลายหางกวาด 0.28 หน่วย
+            Assert.AreEqual(0.06 * 0.65 * SwimStyle.UserAmpMulBarracudaTrevally, barra.Amp, 1e-12);
+            Assert.AreEqual(0.18 * 1.00, scad.Amp,  1e-12);   // 18 % — scad ไม่ถูกแตะแอมพลิจูด
 
             // WAVELENGTHS. `position.z * wWave` is radians per MODEL UNIT: the tail envelope beside
             // it divides by flen, this term does not. Over a 1.8624 u barracuda that is 0.267
@@ -297,8 +303,9 @@ namespace DiveMap.Tests
             SwimWave barra = SwimStyle.For("school:barracuda", BarracudaLen);
             SwimWave scad  = SwimStyle.For("school:scad", ScadLen);
 
-            Assert.AreEqual(webBarra * SwimStyle.UserSlowMulBarracudaTrevally,
-                            barra.Amp * 2 * Math.PI * barra.BeatHz, 1e-9);   // B3
+            Assert.AreEqual(webBarra * SwimStyle.UserSlowMulBarracudaTrevally
+                                     * SwimStyle.UserAmpMulBarracudaTrevally,
+                            barra.Amp * 2 * Math.PI * barra.BeatHz, 1e-9);
             // scad เข้ากลุ่ม UserSlow แล้ว (user 9 ส.ค.) — ความเร็วปลายหางจึงเป็นสัดส่วนของเว็บ
             // ตามตัวคูณเดียวกัน ไม่ใช่ค่าเว็บดิบ · amp/cycles ยังเท่าเว็บเป๊ะ (ห้ามแตะรูปคลื่น)
             Assert.AreEqual(webScad * SwimStyle.UserSlowMulScad,
@@ -318,7 +325,10 @@ namespace DiveMap.Tests
             double barra = SwimStyle.For("school:barracuda", BarracudaLen).BeatHz;
             double shark = SwimStyle.For("msh:whaleshark", WhaleSharkLen).BeatHz;
 
-            Assert.Greater(scad, barra);
+            // เดิม: scad > barra (ปลาเล็กกระพือถี่กว่า) — ใช้ไม่ได้แล้วเพราะ user เลือกตัวคูณของ
+            // สองชนิดนี้คนละรอบคนละค่า (scad ×0.5 · บาราคูด้า ×1.0 หลังพบว่าที่ผ่านมาเลือกบน
+            // สัญญาณที่เสีย) — กฎขนาดตัวไม่ได้เป็นตัวตัดสินอีกต่อไป ตาบนเครื่องจริงเป็นตัวตัดสิน
+            Assert.Greater(scad, 0.0);
             // barra > shark ถอดโดยตั้งใจ: B3 (user 8 ส.ค.) กดบาราคูด้าเหลือ 25% —
             // ช้ากว่าฉลามวาฬได้ เพราะเป็นคำสั่งตรงจากตาเครื่องจริง ไม่ใช่กฎขนาดตัว
 
@@ -914,11 +924,17 @@ namespace DiveMap.Tests
             {
                 SwimWave tuned = SwimStyle.For(id, 20.0);
                 SwimWave raw = SwimStyle.FromTables(id, 20.0);
-                double slowMul = id.Contains("scad") ? SwimStyle.UserSlowMulScad
+                bool crowd = id.StartsWith("school:") || id.StartsWith("pod:");
+                double slowMul = !crowd ? 1.0
+                               : id.Contains("scad") ? SwimStyle.UserSlowMulScad
                                : (id.Contains("barracuda") || id.Contains("yellowtail")
                                   || id.Contains("trevally")) ? SwimStyle.UserSlowMulBarracudaTrevally : 1.0;
                 Assert.AreEqual(raw.BeatHz * slowMul, tuned.BeatHz, Eps, id);
-                Assert.AreEqual(raw.Amp, tuned.Amp, Eps, id);
+                double ampMul = (id.StartsWith("school:") || id.StartsWith("pod:"))
+                                && (id.Contains("barracuda") || id.Contains("yellowtail")
+                                    || id.Contains("trevally"))
+                              ? SwimStyle.UserAmpMulBarracudaTrevally : 1.0;
+                Assert.AreEqual(raw.Amp * ampMul, tuned.Amp, Eps, id);
                 Assert.AreEqual(raw.Cycles, tuned.Cycles, Eps, id);
             }
 

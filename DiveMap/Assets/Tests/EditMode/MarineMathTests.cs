@@ -212,9 +212,12 @@ namespace DiveMap.Tests
         {
             MarineMath.SchoolGeometry g = MarineMath.SchoolGeometryFor("school:scad", 2.2);
             Assert.AreEqual(4.20, g.FishWorldLen, 0.02);
-            Assert.AreEqual(66.0, g.RadiusWorld, 0.1);
-            Assert.AreEqual(26.4, g.VertHalfWorld, 0.1);   // 0.40 × SR — a flat pancake
-            Assert.AreEqual(10.1, g.SpeedCap, 0.1);
+            // 66.0 → 39.6 และ 10.1 → 6.1: user 9 ส.ค. "ฝูงปลาข้างเหลืองระยะห่างระหว่างตัวมากไป
+            // ทำให้ฝูงเล็กลงแน่นขึ้น และทำให้ปลาเคลื่อนที่ช้าลง" → MarineMath.ShoalTighten/SpeedUserMul
+            // ค่าเว็บดั้งเดิมยังอยู่ในสูตร ตัวคูณเป็นชั้นบนสุดที่มองเห็นได้
+            Assert.AreEqual(66.0 * MarineMath.ShoalTightenMul, g.RadiusWorld, 0.1);
+            Assert.AreEqual(26.4 * MarineMath.ShoalTightenMul, g.VertHalfWorld, 0.1);  // 0.40 × SR
+            Assert.AreEqual(10.1 * MarineMath.ShoalSpeedUserMul, g.SpeedCap, 0.1);
             Assert.AreEqual(120, g.Spec.UnityCount);
             Assert.AreEqual(500, g.Spec.WebCount);          // the SPAN uses the WEB count
             Assert.IsFalse(g.IsPod);

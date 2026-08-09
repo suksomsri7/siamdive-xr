@@ -571,7 +571,10 @@ namespace DiveMap.Core
         /// judgement between two things the user has asked for at different times, so it is a
         /// knob with a table behind it rather than a derivation — and the user picks the row.
         /// </summary>
-        public const double CalmNoseCapRad = 30.0 * Math.PI / 180.0;
+        public const double CalmNoseCapRad = 60.0 * Math.PI / 180.0;
+        // 9 ส.ค. รอบสอง: user "ยังมีไถลข้างมากไป" → 30° → 60°
+        // วัดแล้ว: stream 48.8° → 25.5° · cluster เท่าเดิม 14° (ไม่ได้ติดเพดาน) · โหมดวงไม่กระทบ
+        // ราคา: หัวในฝูงกระจายจาก 8° → 13° ซึ่งยังอยู่ใต้ช่วงฝูงจริงในธรรมชาติ (26-33°)
 
         /// <summary>
         /// How much the nose should follow the direction of travel this frame: 0 while the fish is
