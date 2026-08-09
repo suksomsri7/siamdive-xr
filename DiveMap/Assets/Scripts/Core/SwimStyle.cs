@@ -537,18 +537,27 @@ namespace DiveMap.Core
             => UserSlow(assetId, Apply(FromTables(assetId, worldLen), SoloTuneFor(assetId)));
 
         /// <summary>
-        /// คำตัดสิน user 8 ส.ค. 2026 ผ่านกระบวนการ GIF (แบบ B ระดับ B3): บาราคูด้า+กะมง
-        /// "รูปคลื่นเดิมเป๊ะ แค่ช้าลงเหลือ 25%". แตะ BeatHz ตัวเดียว — cycles/amp/envelope
-        /// ห้ามแตะ (ชุดจูนที่แตะรูปคลื่นถูก user ปฏิเสธบนเครื่องจริงมาแล้ว 8 ส.ค.).
+        /// คำตัดสิน user ผ่านกระบวนการ GIF — แตะ BeatHz ตัวเดียว cycles/amp/envelope ห้ามแตะ
+        /// (ชุดจูนที่แตะรูปคลื่นถูก user ปฏิเสธบนเครื่องจริงมาแล้ว 8 ส.ค.).
+        ///
+        /// 8 ส.ค. = 0.25 ("แบบ B ระดับ B3") กับบาราคูด้า+กะมง
+        /// 9 ส.ค. = 0.12 และ **เพิ่มปลาข้างเหลือง (scad) เข้ากลุ่ม** — user: "ส่วนหางขยับ
+        /// ช้ากว่านี้มากๆ" ทั้งสามชนิด
+        ///
+        /// 🔴 ทำไม scad ถึงโดดออกมาชัด: มันไม่เคยอยู่ในกลุ่มนี้เลย จึงวิ่งที่ 1.11 Hz เต็มสูตร
+        /// ขณะที่อีกสองตัวถูกลดไปเหลือ 0.20/0.23 แล้ว — ต่างกัน 5 เท่าในฉากเดียวกัน และ scad
+        /// ยังมี amp 0.18 (กวาด 18% ของลำตัว เทียบบาราคูด้า 0.039) จึงเป็นตัวที่ตาจับได้ก่อน
+        /// เพื่อน · เข้ากลุ่มแล้วเหลือ 0.13 Hz
         /// </summary>
-        public const double UserSlowMulBarracudaTrevally = 0.25;
+        public const double UserSlowMulBarracudaTrevally = 0.12;
 
         private static SwimWave UserSlow(string assetId, SwimWave w)
         {
             string id = Bare(assetId ?? "");
             bool slow = id.IndexOf("barracuda", StringComparison.OrdinalIgnoreCase) >= 0
                      || id.IndexOf("yellowtail", StringComparison.OrdinalIgnoreCase) >= 0
-                     || id.IndexOf("trevally", StringComparison.OrdinalIgnoreCase) >= 0;
+                     || id.IndexOf("trevally", StringComparison.OrdinalIgnoreCase) >= 0
+                     || id.IndexOf("scad", StringComparison.OrdinalIgnoreCase) >= 0;
             if (!slow) return w;
             return new SwimWave(w.Gait, w.BeatHz * UserSlowMulBarracudaTrevally,
                                 w.Amp, w.Cycles, w.Recoil, w.Gust, w.MaxBankRad);
