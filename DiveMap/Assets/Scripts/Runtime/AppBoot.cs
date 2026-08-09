@@ -75,10 +75,15 @@ namespace DiveMap.Runtime
 
             string nose = GetArg("-clipnose");
             if (!string.IsNullOrEmpty(nose))
+            {
                 FishSchoolSystem.NoseCapOverride =
                     nose == "off"  ? 0f :
                     nose == "full" ? Mathf.PI :
                                      (float)DiveMap.Core.SchoolFormation.CalmNoseCapRad;
+                // "off" = the whole pre-fix build, breath included — a before-shot that already
+                // carries half the fix is not a before-shot.
+                FishSchoolSystem.ClusterBreatheAlongHeading = nose != "off";
+            }
 
             // 🔴 ราก "30fps สีเหลืองนิ่งสนิท" (fps badge ของ user, 8 ส.ค.): Unity บน iOS
             // ล็อก targetFrameRate ไว้ที่ 30 โดย default — แอปนี้ไม่เคยตั้งค่า จึงวิ่งครึ่งจอ

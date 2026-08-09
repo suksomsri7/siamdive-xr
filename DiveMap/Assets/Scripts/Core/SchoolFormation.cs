@@ -229,9 +229,13 @@ namespace DiveMap.Core
         /// same way (a POLARISED school). That single line is the difference between the web's
         /// barracuda and the ribbon of independently-aimed boids the iPhone photographed.
         /// </summary>
+        /// <param name="breatheAlongHeading">
+        /// false = the pre-fix circular breath (see the Cluster branch). QC ONLY: the "before"
+        /// clip has to be the real before, or a side-by-side proves nothing.
+        /// </param>
         public static Target FormTarget(in Slot fi, SchoolMode mode, double t, double R,
                                         double spin, double flen, double streamDir,
-                                        double groupHeading)
+                                        double groupHeading, bool breatheAlongHeading = true)
         {
             Target o;
             switch (mode)
@@ -286,10 +290,31 @@ namespace DiveMap.Core
                 {
                     // Cluster — a POLARISED school: a spaced, gently breathing slot, and EVERY
                     // fish faces the school's own heading.
-                    o.X = fi.ClusterX + Math.Sin(t * 0.5 + fi.Ang * 1.7) * flen * 0.5;
-                    o.Y = fi.ClusterY + Math.Sin(t * 0.7 + fi.Ang * 1.3) * flen * 0.35;
-                    o.Z = fi.ClusterZ + Math.Cos(t * 0.5 + fi.Ang * 1.7) * flen * 0.5;
+                    //
+                    // 🔴 The breathing runs FORE-AND-AFT along that heading, not round a circle —
+                    // and this one line is the root of "ปลาไถลข้าง" (user, 8-9 ส.ค. 2026).
+                    //
+                    // builder.html :1576-1578 puts sin() on X and cos() on Z at the SAME phase,
+                    // which is the parametric form of a circle: every fish's slot orbits a ring of
+                    // half a body length, once every ~12.6 s. A fish chasing a target that goes
+                    // round in a circle has a travel direction that sweeps all 360° — while its
+                    // nose is pinned to the school's heading. Measured on the Harddeep barracuda:
+                    // it travels 52° off its own nose, and 69 % of frames are past 45°. The eye
+                    // reads a school of fish crabbing sideways.
+                    //
+                    // Breathing along the heading instead keeps everything that made the shape —
+                    // same amplitude, same rate, same per-fish phase, same address, still a
+                    // POLARISED cluster — and drops the crab to 14° with the school's own order
+                    // untouched (user picked this, 9 ส.ค., after seeing the numbers per mode).
+                    // The ring shapes (vortex/tornado/cone/ball) are NOT touched: their slots are
+                    // meant to travel round a ring and their fish face along it.
+                    double breath = Math.Sin(t * 0.5 + fi.Ang * 1.7) * flen * 0.5;
                     o.VX = Math.Cos(groupHeading); o.VZ = Math.Sin(groupHeading);
+                    o.X = fi.ClusterX + (breatheAlongHeading ? breath * o.VX : breath);
+                    o.Y = fi.ClusterY + Math.Sin(t * 0.7 + fi.Ang * 1.3) * flen * 0.35;
+                    o.Z = fi.ClusterZ + (breatheAlongHeading
+                                         ? breath * o.VZ
+                                         : Math.Cos(t * 0.5 + fi.Ang * 1.7) * flen * 0.5);
                     return o;
                 }
             }

@@ -260,6 +260,8 @@ namespace DiveMap.Tests
             double maxDx = 0.0, maxDy = 0.0, maxDz = 0.0;
             for (double t = 0.0; t < 200.0; t += 0.05)
             {
+                // groupHeading 0 ⇒ the heading unit vector is (VX, VZ) = (1, 0), so the whole
+                // fore-and-aft breath lands on X and none of it on Z.
                 SchoolFormation.Target g =
                     SchoolFormation.FormTarget(fi, SchoolMode.Cluster, t, R, 0.0, Flen, 0.0, 0.0);
                 maxDx = Math.Max(maxDx, Math.Abs(g.X - fi.ClusterX));
@@ -268,7 +270,37 @@ namespace DiveMap.Tests
             }
             Assert.AreEqual(Flen * 0.5,  maxDx, Flen * 0.01);
             Assert.AreEqual(Flen * 0.35, maxDy, Flen * 0.01);
-            Assert.AreEqual(Flen * 0.5,  maxDz, Flen * 0.01);
+            Assert.AreEqual(0.0,         maxDz, Flen * 0.01, "the breath is fore-and-aft, not a circle");
+        }
+
+        /// <summary>
+        /// 🔴 "ปลาไถลข้าง" — the cluster slot breathes ALONG the school's heading, so the fish that
+        /// chases it travels along its own nose instead of crabbing (user 9 ส.ค., option "B+E").
+        ///
+        /// The old form put sin() on X and cos() on Z at one phase — a CIRCLE — which is what made
+        /// the travel direction sweep 360° while the nose stayed pinned to the heading. This test
+        /// pins the property rather than the formula: the offset from the fish's address must stay
+        /// parallel to the heading whichever way the school is pointing.
+        /// </summary>
+        [Test]
+        public void ClusterSlot_BreathesAlongTheSchoolHeading_NotRoundACircle()
+        {
+            SchoolFormation.Slot fi = MakeSlot(11, 32);
+            foreach (double heading in new[] { 0.0, 0.7, 2.2, -1.9, Math.PI })
+            {
+                double maxCross = 0.0, maxAlong = 0.0;
+                for (double t = 0.0; t < 60.0; t += 0.05)
+                {
+                    SchoolFormation.Target g =
+                        SchoolFormation.FormTarget(fi, SchoolMode.Cluster, t, R, 0.0, Flen, 0.0, heading);
+                    double dx = g.X - fi.ClusterX, dz = g.Z - fi.ClusterZ;
+                    // ‖ and ⟂ components against the school's own heading
+                    maxAlong = Math.Max(maxAlong, Math.Abs(dx * Math.Cos(heading) + dz * Math.Sin(heading)));
+                    maxCross = Math.Max(maxCross, Math.Abs(dx * -Math.Sin(heading) + dz * Math.Cos(heading)));
+                }
+                Assert.AreEqual(Flen * 0.5, maxAlong, Flen * 0.01, $"heading {heading}: breathes fore-and-aft");
+                Assert.Less(maxCross, Flen * 1e-6, $"heading {heading}: nothing sideways — that was the crab");
+            }
         }
 
         /// <summary>The per-fish seeds, builder.html :1526-1533 — the deterministic half, exactly.</summary>

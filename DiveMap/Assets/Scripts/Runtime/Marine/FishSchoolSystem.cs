@@ -163,6 +163,9 @@ namespace DiveMap.Runtime.Marine
         /// <summary>QC only: lock every formation school to one shape (see BuildSlots). null = the mode wheel.</summary>
         public static SchoolMode? ModeLockOverride = null;
 
+        /// <summary>QC only: false = the pre-fix circular cluster breath, so the "before" clip is a real before.</summary>
+        public static bool ClusterBreatheAlongHeading = true;
+
         public bool TryGetSchoolBounds(int i, out string species, out Bounds bounds)
         {
             bounds = default;
@@ -1293,7 +1296,8 @@ namespace DiveMap.Runtime.Marine
             for (int k = 0; k < n; k++)
             {
                 SchoolFormation.Target g = SchoolFormation.FormTarget(
-                    fm.Slots[k], fm.Mode.Mode, t, fm.R, fm.Spin, fm.Flen, fm.Mode.StreamDir, gh);
+                    fm.Slots[k], fm.Mode.Mode, t, fm.R, fm.Spin, fm.Flen, fm.Mode.StreamDir, gh,
+                    ClusterBreatheAlongHeading);
 
                 if (fm.Mode.HasPrev)
                 {
@@ -1302,7 +1306,7 @@ namespace DiveMap.Runtime.Marine
                     {
                         SchoolFormation.Target pv = SchoolFormation.FormTarget(
                             fm.Slots[k], fm.Mode.PrevMode, t, fm.R, fm.Spin, fm.Flen,
-                            fm.Mode.PrevStreamDir, gh);
+                            fm.Mode.PrevStreamDir, gh, ClusterBreatheAlongHeading);
                         g.X = pv.X + (g.X - pv.X) * e;
                         g.Y = pv.Y + (g.Y - pv.Y) * e;
                         g.Z = pv.Z + (g.Z - pv.Z) * e;

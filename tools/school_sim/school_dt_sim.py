@@ -159,6 +159,7 @@ class CalmSchool:
         self.nose_follow = False            # the 'ปลาไถลข้าง' fix, off by default
         self.nose_knee = 1.0                # fraction of the cruise step at which the nose fully follows
         self.nose_cap = None                # max deviation from the school heading (rad)
+        self.axis_breathe = False           # ช่อง cluster หายใจตามแนวฝูง แทนโคจรเป็นวง
         self.gate_fix = False               # hysteresis + eased panic
         self.threatened = False
         self.panic_now = 0.0
@@ -248,10 +249,19 @@ class CalmSchool:
             y = self.yspread * 0.5 + np.sin(t * 0.7 + self.ang) * R * 0.12
             return x, y, z, np.full(self.n, np.cos(d)), np.full(self.n, np.sin(d))
         # cluster
-        x = self.cx + np.sin(t * 0.5 + self.ang * 1.7) * flen * 0.5
-        y = self.cy + np.sin(t * 0.7 + self.ang * 1.3) * flen * 0.35
-        z = self.cz + np.cos(t * 0.5 + self.ang * 1.7) * flen * 0.5
         gh = self.group_heading
+        y = self.cy + np.sin(t * 0.7 + self.ang * 1.3) * flen * 0.35
+        if self.axis_breathe:
+            # ช่องหายใจ "ไป-กลับตามแนวฝูง" แทนที่จะโคจรเป็นวงกลม
+            # 🔴 นี่คือรากของการไถล: เว็บใช้ sin ใน X และ cos ใน Z ที่เฟสเดียวกัน = วงกลม
+            # ปลาที่ไล่เป้าที่โคจรเป็นวง ทิศเดินจึงกวาดครบ 360° ไม่ว่าจมูกจะทำอะไร
+            off = np.sin(t * 0.5 + self.ang * 1.7) * flen * 0.5
+            yaw = math.atan2(math.cos(gh), math.sin(gh))     # heading ในระบบ yaw ของปลา
+            x = self.cx + math.sin(yaw) * off
+            z = self.cz + math.cos(yaw) * off
+        else:
+            x = self.cx + np.sin(t * 0.5 + self.ang * 1.7) * flen * 0.5
+            z = self.cz + np.cos(t * 0.5 + self.ang * 1.7) * flen * 0.5
         return x, y, z, np.full(self.n, np.cos(gh)), np.full(self.n, np.sin(gh))
 
     def mode_step(self, t):
