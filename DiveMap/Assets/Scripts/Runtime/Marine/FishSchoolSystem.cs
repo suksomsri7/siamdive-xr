@@ -948,6 +948,25 @@ namespace DiveMap.Runtime.Marine
                 int stepEvery = MarineMath.StepEveryForDistance(dist);
                 int phase = si < _render.Count ? _render[si].PhaseOffset : 0;
                 sp.Think = (byte)(((_frame + phase) % stepEvery == 0) ? 1 : 0);
+
+                // 🔴 "ยังไถลข้างเยอะมาก" หลังบิลด์ 357 (user 9 ส.ค.) — ผมวัดผิดสถานะมาตลอด.
+                //
+                // ทุกการวัดก่อนหน้านี้ล็อกรูปฝูงไว้ (`-clipmode`) จึงไม่เคยเห็นว่า ฝูงใช้เวลา
+                // **84% ไปกับการ "เปลี่ยนรูป"** ไม่ใช่การอยู่ในรูป: hold = 15-29 วิ แต่ morph
+                // = 8×2.5 = 20 วิ และนับว่าจบที่ 1.4 เท่า = 28 วิ ⇒ รูปใหม่มาก่อนรูปเก่าจะ
+                // morph เสร็จ ฝูงจึงแทบไม่เคยนิ่งอยู่ในรูปไหนเลย
+                //
+                // ระหว่าง morph ช่องประจำตัวเดินทางข้ามฝูงจากทรงหนึ่งไปอีกทรง = ปลากำลัง
+                // "ย้ายที่" จริงๆ ไม่ใช่ประจำรูปอยู่ การบังคับให้จมูกอยู่ในกรอบ 30° ของแนวฝูง
+                // ตอนนั้นคือการสั่งให้มันเดินขวางตัว — วัดได้ 41° (ของเดิม 58° จึงแทบไม่ต่าง
+                // ตรงกับที่ user เห็นว่า "ไม่เปลี่ยน") · ปล่อยจมูกตามทางตอน morph = 2.8°
+                //
+                // ตรงกับกฎที่ user ให้มาเอง: อยู่ในรูป (วงกลม/ไซโคลน) = หันทางเดียวกัน ·
+                // กำลังย้าย = หันไปทางที่ไป
+                bool morphing = si < _form.Length && _form[si].Active && _form[si].Mode.HasPrev;
+                sp.NoseCap = NoseCapOverride >= 0f
+                           ? NoseCapOverride
+                           : (morphing ? Mathf.PI : (float)SchoolFormation.CalmNoseCapRad);
                 sp.Avoid = (byte)(MarineMath.AvoidanceActiveForDistance(dist) ? 1 : 0);
                 ApplyFear(si, ref sp, camPos, diverActive, t);
                 _schools[si] = sp;

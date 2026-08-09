@@ -160,6 +160,8 @@ class CalmSchool:
         self.nose_knee = 1.0                # fraction of the cruise step at which the nose fully follows
         self.nose_cap = None                # max deviation from the school heading (rad)
         self.axis_breathe = False           # ช่อง cluster หายใจตามแนวฝูง แทนโคจรเป็นวง
+        self.morph_free_nose = False        # ปล่อยจมูกตามทางเต็มที่ระหว่างเปลี่ยนรูป
+        self.trans_mul = 2.5                # tranDurMul ของบาราคูด้า
         self.gate_fix = False               # hysteresis + eased panic
         self.threatened = False
         self.panic_now = 0.0
@@ -277,7 +279,7 @@ class CalmSchool:
             self.prev_stream_dir = self.stream_dir
             self.has_prev = True
             self.trans_t0 = t
-            self.trans_dur = 8.0 * self.trans_dur_mul
+            self.trans_dur = 8.0 * self.trans_mul
             self.mode = m
             self.until = t + hold
             if m == "stream":
@@ -352,8 +354,11 @@ class CalmSchool:
         if self.nose_follow:
             blend = np.clip(dh * CALM_CHASE / max(self.cap * CALM_CAP_MUL * self.nose_knee, 1e-6), 0.0, 1.0)
             dev = delta_angle(m_a, on_dir) * blend
-            if self.nose_cap is not None:
-                dev = np.clip(dev, -self.nose_cap, self.nose_cap)
+            cap = self.nose_cap
+            if cap is not None and self.morph_free_nose and self.has_prev:
+                cap = None          # ระหว่าง morph = ปลากำลังย้ายที่ ต้องหันไปทางที่ไป
+            if cap is not None:
+                dev = np.clip(dev, -cap, cap)
             want = on_dir + dev
         else:
             want = on_dir
