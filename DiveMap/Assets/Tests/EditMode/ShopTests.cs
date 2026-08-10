@@ -142,5 +142,31 @@ namespace DiveMap.Tests
             Assert.Greater(affordable, 10, "a starting balance must buy more than a token");
             Assert.Less(affordable, Shop.Count, "…and must not buy the whole ocean");
         }
+
+        // ── WO-L: who actually pays (builder.html:4298) ──────────────────────────
+
+        [Test]
+        public void ShouldCharge_TheAdminNeverPays()
+        {
+            // `if (isBuyable(a) && !_isAdmin)`. The official game worlds are built on the admin
+            // account, where a whale shark is set dressing — and that account is shown ∞ coins
+            // precisely because nothing is ever taken from it.
+            string animal = Shop.Catalogue[0];
+            Assert.IsTrue(Shop.ShouldCharge(animal, isAdmin: false));
+            Assert.IsFalse(Shop.ShouldCharge(animal, isAdmin: true));
+        }
+
+        [Test]
+        public void ShouldCharge_SceneryIsStillFreeForEveryone()
+        {
+            // The admin bypass must not be the ONLY reason a rock is free, or a regression in
+            // IsBuyable would start charging players for scenery and pass this file.
+            foreach (bool admin in new[] { true, false })
+            {
+                Assert.IsFalse(Shop.ShouldCharge("cc0:rock_a", admin));
+                Assert.IsFalse(Shop.ShouldCharge("", admin));
+                Assert.IsFalse(Shop.ShouldCharge(null, admin));
+            }
+        }
     }
 }

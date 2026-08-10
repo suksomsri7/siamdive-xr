@@ -160,6 +160,12 @@ namespace DiveMap.Runtime.Ui
             ApplySafeArea(true);
 
             _thumbs = gameObject.AddComponent<ThumbnailCache>();
+
+            // WO-L item 8 — ask the backoffice what it has, in the background, so the palette can
+            // draw the instant it is opened. Nothing waits on this and nothing breaks without it:
+            // an empty result merges to exactly the shipped manifest. See AssetCatalog for why
+            // the answer is currently zero extra cards and why the plumbing is still correct.
+            AssetCatalogClient.Warm(this);
         }
 
         private void ApplySafeArea(bool force)
@@ -272,10 +278,16 @@ namespace DiveMap.Runtime.Ui
             _actions.anchorMax = new Vector2(1f, 0f);
             _actions.pivot = new Vector2(1f, 0f);
             // The column sits directly above the toggle: 48 px buttons with the web's 10 px gap.
-            // TWO columns. One column of 12 buttons needs 12×58 + the toggle's 78 = 774 css px,
-            // which does not fit a 720-tall phone — the QC menu shot showed the twelfth button
-            // (AR) simply missing off the top edge, with nothing in any log to say so.
-            _actions.sizeDelta = new Vector2(UiKit.Css(48f * 2f + 10f),
+            // Columns of six. One column of 12 buttons needs 12×58 + the toggle's 78 = 774 css
+            // px, which does not fit a 720-tall phone — the QC menu shot showed the twelfth
+            // button (AR) simply missing off the top edge, with nothing in any log to say so.
+            //
+            // WO-L widened this to THREE columns for the 🛒 palette. Widening rather than
+            // re-flowing (ActionRows 6→7 would have fitted it in two) is deliberate: the buttons
+            // are right-anchored inside this box, so a wider box leaves all twelve existing ones
+            // exactly where a user's thumb already knows them, and the new one lands at the
+            // bottom of a fresh column — at thumb height, next to the others, not at the rim.
+            _actions.sizeDelta = new Vector2(UiKit.Css(48f * 3f + 10f * 2f),
                                              UiKit.Css(48f * ActionRows + 40f));
             _actions.anchoredPosition = new Vector2(-UiKit.Css(12f), UiKit.Css(20f + 48f + 10f));
 
@@ -376,6 +388,26 @@ namespace DiveMap.Runtime.Ui
                 if (boot == null || !boot.CanEditCurrent) { Toast.ShowTr("แมพนี้แก้ไม่ได้"); return; }
                 CloseActions();
                 SculptSheet.Open();
+            });
+
+            // 🛒 the PALETTE — and with it, Edit mode (WO-L item 1).
+            //
+            // 🔴 This is the button whose absence made an entire finished screen invisible.
+            // PaletteSheet has existed since E5, ported CSS value for value, and nothing in a
+            // shipping build ever opened it: AppMode.Edit was never requested by any code path,
+            // and the only callers of PaletteSheet.Open were inside the CI screenshot harness.
+            // The user reported "the palette is missing"; it was not missing, it had no door.
+            //
+            // The slot is the one the map hub's list button vacates in library mode, so the
+            // eleven tools keep the positions a user has already learned. Gated exactly like its
+            // neighbours, at tap time, because edit rights arrive from the server after the menu
+            // is built.
+            ActionButton(12, "cart", () =>
+            {
+                var boot = FindFirstObjectByType<AppBoot>();
+                if (boot == null || !boot.CanEditCurrent) { Toast.ShowTr("แมพนี้แก้ไม่ได้"); return; }
+                CloseActions();
+                PaletteSheet.Open(_thumbs);
             });
             _actions.gameObject.SetActive(false);
         }
@@ -1600,16 +1632,35 @@ namespace DiveMap.Runtime.Ui
                     Debug.Log("[UI] qcui shot -> " + prefix + "_palette_buy.png");
                     yield return new WaitForSecondsRealtime(1.2f);
                 }
-                PaletteSheet.Close();
-                yield return new WaitForSecondsRealtime(0.4f);
 
-                // The older openShop() list is still reachable and still has to work.
-                ShopSheet.Open();
-                yield return new WaitForSecondsRealtime(0.8f);
-                ScreenCapture.CaptureScreenshot(prefix + "_shop.png");
-                Debug.Log("[UI] qcui shot -> " + prefix + "_shop.png");
-                yield return new WaitForSecondsRealtime(1.2f);
-                ShopSheet.Close();
+                // WO-L — the LAST chip. The row is a real horizontal ScrollRect now, so the eye
+                // needs a frame proving the chips past the fifth can be reached at all: that is
+                // the whole bug, and it is invisible in a shot of the first tab. Scrolled by
+                // driving the ScrollRect rather than by faking a swipe, so the shot fails when
+                // the content width is wrong instead of when the gesture is.
+                if (pal != null && pal.QcScrollChipsToEnd())
+                {
+                    yield return new WaitForSecondsRealtime(0.6f);
+                    Debug.Log($"[UI] qcui palette chips={pal.ChipCount} scrolled to the tool end");
+                    ScreenCapture.CaptureScreenshot(prefix + "_palette_chips.png");
+                    Debug.Log("[UI] qcui shot -> " + prefix + "_palette_chips.png");
+                    yield return new WaitForSecondsRealtime(1.0f);
+                }
+
+                // WO-L — ▶ turns teal and becomes ❚❚, and the animals start swimming. One shot,
+                // because "did the icon swap" is the only part a screenshot can settle.
+                if (pal != null)
+                {
+                    pal.QcTogglePlay();
+                    yield return new WaitForSecondsRealtime(0.6f);
+                    Debug.Log($"[UI] qcui palette playMode={PaletteSheet.Playing}");
+                    ScreenCapture.CaptureScreenshot(prefix + "_palette_play.png");
+                    Debug.Log("[UI] qcui shot -> " + prefix + "_palette_play.png");
+                    yield return new WaitForSecondsRealtime(1.0f);
+                    pal.QcTogglePlay();
+                }
+
+                PaletteSheet.Close();
                 yield return new WaitForSecondsRealtime(0.4f);
 
             // 6.95) D10 — the first-dive spotlight. Forced, because the automatic path marks

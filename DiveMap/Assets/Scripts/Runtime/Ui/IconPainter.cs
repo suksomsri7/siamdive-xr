@@ -149,6 +149,13 @@ namespace DiveMap.Runtime.Ui
                     fills.Add(new[] { P(7, 4), P(20, 12), P(7, 20) });
                     break;
 
+                case "pause":  // #playBtn while playMode is on (builder.html:3903 _PAUSE_ICON)
+                    // Two bars on the same 4→20 baseline as the triangle, so the button does not
+                    // appear to change size when the author toggles it.
+                    fills.Add(new[] { P(8, 4), P(11, 4), P(11, 20), P(8, 20) });
+                    fills.Add(new[] { P(15, 4), P(18, 4), P(18, 20), P(15, 20) });
+                    break;
+
                 case "exit":   // door + arrow out
                     strokes.Add(new[] { P(13, 4), P(5, 4), P(5, 20), P(13, 20) });
                     strokes.Add(Line(10, 12, 20, 12));

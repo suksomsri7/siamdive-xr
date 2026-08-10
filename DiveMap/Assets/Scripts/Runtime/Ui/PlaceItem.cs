@@ -34,7 +34,11 @@ namespace DiveMap.Runtime.Ui
         {
             if (string.IsNullOrEmpty(assetId)) return false;
 
-            if (Shop.IsBuyable(assetId))
+            // WO-L: the web's guard is `isBuyable(a) && !_isAdmin`, not `isBuyable(a)`. Charging
+            // the admin was a real difference, not a nicety — the official game worlds are built
+            // on that account, and a whale shark placed there is set dressing, so the app was
+            // asking its own author for 14,000 coins they are shown as having infinitely many of.
+            if (Shop.ShouldCharge(assetId, Account.IsAdmin))
             {
                 // The web refuses offline because the coin balance is server-authoritative and a
                 // stale local number would let the same coins be spent twice.

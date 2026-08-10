@@ -560,6 +560,60 @@ namespace DiveMap.Runtime.Ui
             return scroll;
         }
 
+        /// <summary>
+        /// Sideways twin of <see cref="MakeScroll"/>, for a strip of chips rather than a list of
+        /// rows. <paramref name="content"/> is anchored LEFT-stretch with pivot (0, 0.5) so
+        /// children are laid out by hand at increasing +X, the mirror of the vertical helper's
+        /// negative-Y convention.
+        ///
+        /// WO-L: the palette's chip row is <c>#cats{display:flex;overflow-x:auto}</c>
+        /// (builder.html:132) and was ported as a bare RectTransform with a comment claiming it
+        /// scrolled. Ten chips are 712 css px wide; a phone in portrait is about 400, so chips
+        /// six to ten — Artificial, Special, 📍, ⚙️, ⛰️ — were laid out past the right edge,
+        /// unclipped and untouchable. Nothing logged it, because nothing was wrong: they were
+        /// drawn exactly where they were told to be.
+        /// </summary>
+        public static ScrollRect MakeScrollH(Transform parent, string name, out RectTransform content)
+        {
+            var go = new GameObject(name);
+            go.transform.SetParent(parent, false);
+            var rt = go.AddComponent<RectTransform>();
+            Stretch(rt);
+
+            var scroll = go.AddComponent<ScrollRect>();
+            scroll.horizontal = true;
+            scroll.vertical = false;
+            scroll.movementType = ScrollRect.MovementType.Elastic;
+            scroll.elasticity = 0.1f;
+            scroll.inertia = true;
+            scroll.decelerationRate = 0.135f;
+            scroll.scrollSensitivity = 40f;
+
+            var viewport = MakeNode(go.transform, "Viewport");
+            viewport.gameObject.AddComponent<RectMask2D>();
+
+            // Same reason as the vertical helper: a transparent raycast target so a swipe that
+            // starts on the gap BETWEEN two chips still scrolls the strip.
+            var catcher = viewport.gameObject.AddComponent<Image>();
+            catcher.color = new Color(0f, 0f, 0f, 0f);
+            catcher.raycastTarget = true;
+
+            var contentGo = new GameObject("Content");
+            contentGo.transform.SetParent(viewport, false);
+            content = contentGo.AddComponent<RectTransform>();
+            content.anchorMin = new Vector2(0f, 0f);
+            content.anchorMax = new Vector2(0f, 1f);
+            content.pivot = new Vector2(0f, 0.5f);
+            content.offsetMin = new Vector2(0f, 0f);
+            content.offsetMax = new Vector2(0f, 0f);
+            content.anchoredPosition = Vector2.zero;
+            content.sizeDelta = new Vector2(0f, 0f);
+
+            scroll.viewport = viewport;
+            scroll.content = content;
+            return scroll;
+        }
+
         /// <summary>RawImage for a downloaded thumbnail (UnityWebRequestTexture output).</summary>
         public static RawImage MakeRaw(Transform parent, string name, Color placeholder)
         {

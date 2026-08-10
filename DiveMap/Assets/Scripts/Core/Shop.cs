@@ -154,6 +154,17 @@ namespace DiveMap.Core
             return false;
         }
 
+        /// <summary>
+        /// Does this placement cost the CURRENT user anything? The web's tryPlace opens with
+        /// <c>if (isBuyable(a) &amp;&amp; !_isAdmin)</c> (builder.html:4298) — the admin builds the
+        /// official game worlds, where a whale shark is set dressing, not a 14,000-coin purchase,
+        /// and an admin balance is displayed as ∞ precisely because nothing is ever deducted from
+        /// it. Kept next to <see cref="IsBuyable"/> so the two can never disagree, and pure so the
+        /// rule is asserted by a test rather than by a comment in the UI layer.
+        /// </summary>
+        public static bool ShouldCharge(string assetId, bool isAdmin)
+            => IsBuyable(assetId) && !isAdmin;
+
         /// <summary>Can this purchase go through right now?</summary>
         public static bool CanBuy(int coins, string assetId)
             => IsBuyable(assetId) && Wallet.CanAfford(coins, PriceOf(assetId));

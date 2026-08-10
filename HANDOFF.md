@@ -147,7 +147,7 @@ tools/publish_build.sh <run> <tag>  # พอเขียว เอาไฟล�
 | งาน | สาระ |
 |---|---|
 | **C5** ปลาตกใจหนีผู้เล่น | `Core/FleeMath.cs` + `Core/SpeciesGenome.cs` (พอร์ต `speciesGenome` ครบ) · panic 0..1 · **โดรนต้องเร็ว >11 u/s เท่านั้น** ลอยเข้าไปเฉยๆ ปลาไม่หนี · bait ball 2.5 วิ · วิ่งเข้าที่กำบัง · เทส 38 ตัว |
-| **E5** ร้านค้า | `Core/Shop.cs` ราคา **89 รายการดึงจาก builder.html ตรงตัว** · `Core/ShopStock.cs` เก็บของที่ซื้อลงเครื่องต่อแมพ แล้ว inject กลับเข้า SceneData ตอนโหลด (ใช้ pipeline เดิม ไม่มีเส้นทางสร้างวัตถุเส้นที่สอง) · `Ui/ShopSheet.cs` |
+| **E5** ร้านค้า | `Core/Shop.cs` ราคา **89 รายการดึงจาก builder.html ตรงตัว** · `Core/ShopStock.cs` เก็บของที่ซื้อลงเครื่องต่อแมพ แล้ว inject กลับเข้า SceneData ตอนโหลด (ใช้ pipeline เดิม ไม่มีเส้นทางสร้างวัตถุเส้นที่สอง) · หน้าร้าน = `Ui/PaletteSheet.cs` ทางเดียว (WO-L ลบ `ShopSheet` ทิ้ง) · แอดมินไม่เสียเหรียญ (`Shop.ShouldCharge`) |
 | **D9** จุดเกิดสุ่ม | `DroneFlight.RandomSpawn` วงแหวน 20-80% ของรัศมี สูงเหนือพื้น 18u · วาปข้ามแมพแล้วลงน้ำต่อทันที |
 | **D10** สอนท่าเล่น | `Ui/TutorialGuide.cs` spotlight 7 ขั้น · uGUI ไม่มี box-shadow เจาะรู → แผ่นมืด 4 ด้านล้อมช่อง |
 | **A5** ปุ่มเรด้า · **E1** ป้าย ♻️ | ตำแหน่งเว็บจริง (ซ้าย 14 / บน 174) · ป้ายวาดเป็น texture ไม่ใช้ emoji |

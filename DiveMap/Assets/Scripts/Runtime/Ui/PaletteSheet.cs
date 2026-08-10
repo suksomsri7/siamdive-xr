@@ -19,12 +19,21 @@ namespace DiveMap.Runtime.Ui
     ///   coinUI          centred pill, black 60%, gold 14 px bold, radius 9, gold disc 13 px
     /// </code>
     ///
-    /// Chips: the seven kinds that have items, then 📍 Pin · ⚙️ Settings · ⛰️ Sculpt floor —
-    /// ten in total, exactly what the screenshot shows. The 🌀 Warp chip is admin-only on the
-    /// web (<c>PALETTE.SPECIAL = _isAdmin ? … : []</c>) so it is absent here too.
+    /// Chips: the kinds that have items, then 📍 Pin · ⚙️ Settings · ⛰️ Sculpt floor. The 🌀 Warp
+    /// chip is admin-only on the web (<c>PALETTE.SPECIAL = _isAdmin ? … : []</c>) and is
+    /// admin-only here, so a signed-in admin sees eleven chips and everyone else ten — which is
+    /// exactly what the user's screenshots show for each.
     ///
     /// Thumbnails are the server's pre-rendered PNGs (<see cref="Palette.ThumbUrl"/>), fetched
     /// through the same <see cref="ThumbnailCache"/> as the map hub.
+    ///
+    /// WO-L — THIS SHEET IS THE EDIT MODE. Opening it enters <see cref="AppMode.Edit"/> and
+    /// closing it leaves; there is no separate builder chrome, because on the web there is none
+    /// either. The sheet sits over the live scene, the map stays orbitable behind it
+    /// (<c>ModeRules.AllowsOrbit(Edit)</c> is true), and the ▶ button decides whether the animals
+    /// are swimming or holding still to be arranged. Before this WO the whole class was
+    /// unreachable: <c>AppMode.Edit</c> was never requested by anything, and the only callers of
+    /// <see cref="Open"/> were inside the CI screenshot harness.
     /// </summary>
     [DisallowMultipleComponent]
     public sealed class PaletteSheet : MonoBehaviour
@@ -46,12 +55,21 @@ namespace DiveMap.Runtime.Ui
         private static readonly Color ChipOnBg = new Color(0.224f, 0.690f, 0.910f, 0.22f);
         private static readonly Color Gold = new Color(1f, 0.835f, 0.290f, 1f);   // #ffd54a
         private static readonly Color PinChipBg = new Color(1f, 0.690f, 0.361f, 0.12f); // #cats button.pin
+        /// <summary>#playBtn.on — the web's teal gradient, flattened to its midpoint.</summary>
+        private static readonly Color PlayOnBg = new Color(0.070f, 0.596f, 0.600f, 0.96f);
 
         private RectTransform _root;
         private RectTransform _chipRow;
+        private ScrollRect _chipScroll;
         private RectTransform _grid;
         private ScrollRect _gridScroll;
         private Text _coinLabel;
+        private Button _play;
+        private Image _playBg;
+        private Color _playIdleBg;
+        private GameObject _coinPill;
+        /// <summary>Was the app already in Edit when this opened? Then leaving must not exit it.</summary>
+        private bool _enteredEdit;
 
         private Dictionary<string, List<PaletteItem>> _byKind;
         private readonly List<string> _chipKinds = new List<string>();
@@ -64,7 +82,9 @@ namespace DiveMap.Runtime.Ui
         public static bool IsOpen => _open != null;
         public static PaletteSheet Current => _open;
         /// <summary>Chips drawn, including the three tool chips.</summary>
-        public int ChipCount => _chipKinds.Count + 3;
+        public int ChipCount => _chipBg.Count;
+        /// <summary>QC — is the ▶ toggle currently letting the animals swim?</summary>
+        public static bool Playing => ModeRules.EditPlayback;
         /// <summary>Cards in the grid right now.</summary>
         public int CardCount => _cards.Count;
         public string CurrentKind => _kind;
@@ -73,6 +93,24 @@ namespace DiveMap.Runtime.Ui
 
         /// <summary>QC only — switch tabs without a synthetic touch event.</summary>
         public void QcShowKind(string kind) => ShowKind(kind);
+
+        /// <summary>QC only — flip ▶ ↔ ❚❚ without a synthetic tap.</summary>
+        public void QcTogglePlay() => TogglePlay();
+
+        /// <summary>
+        /// QC only — drive the chip strip to its right-hand end. Returns false when there is
+        /// nothing to scroll, which is itself the answer the CI shot is looking for: the strip
+        /// only overflows on a narrow screen, and a run that could not scroll proves the row
+        /// fitted rather than that the ScrollRect works.
+        /// </summary>
+        public bool QcScrollChipsToEnd()
+        {
+            if (_chipScroll == null || _chipRow == null) return false;
+            RectTransform vp = _chipScroll.GetComponent<RectTransform>();
+            if (vp == null || _chipRow.sizeDelta.x <= vp.rect.width) return false;
+            _chipScroll.horizontalNormalizedPosition = 1f;
+            return true;
+        }
 
         /// <summary>QC only — the card button for one asset id, so the buy test presses real UI.</summary>
         public Button QcCard(string assetId)
@@ -91,17 +129,30 @@ namespace DiveMap.Runtime.Ui
         {
             if (_open != null) { _open.Refresh(); return; }
 
-            RectTransform layer = HudLayer.For(ModeManager.Current) ?? HudLayer.For(AppMode.Tour);
-            if (layer == null) return;
+            // 🔴 Enter Edit BEFORE asking for a layer. HudLayer shows exactly one mode's layer at
+            // a time (HudLayer.SetActiveMode), so a sheet parented to Hud_View and then switched
+            // to Edit would be built into a container that is immediately deactivated — a palette
+            // that "opened" and drew nothing, with no error anywhere.
+            bool entered = false;
+            if (ModeManager.Instance != null && ModeManager.Current != AppMode.Edit)
+                entered = ModeManager.Instance.Request(AppMode.Edit);
 
-            // On the web this screen belongs to EDIT mode, where the tour HUD does not exist.
-            // Keep it up and you get two coin badges and a compass sticking out of the sheet.
+            RectTransform layer = HudLayer.For(ModeManager.Current) ?? HudLayer.For(AppMode.Tour);
+            if (layer == null)
+            {
+                if (entered && ModeManager.Instance != null) ModeManager.Instance.Exit();
+                return;
+            }
+
+            // The tour HUD does not exist in the web's builder. Keep it up and you get two coin
+            // badges and a compass sticking out of the sheet.
             TourHud.SetChromeVisible(false);
 
             RectTransform root = UiKit.MakeNode(layer, "PaletteSheet");
             UiKit.Stretch(root);
             var sheet = root.gameObject.AddComponent<PaletteSheet>();
             sheet._thumbs = thumbs;
+            sheet._enteredEdit = entered;
             sheet.Build(root);
             _open = sheet;
         }
@@ -109,9 +160,15 @@ namespace DiveMap.Runtime.Ui
         public static void Close()
         {
             if (_open == null) return;
+            bool leaveEdit = _open._enteredEdit;
             Destroy(_open.gameObject);
             _open = null;
             TourHud.SetChromeVisible(true);
+            // Only undo what this sheet did. A caller that was already in Edit (a tool sheet
+            // reopening the palette) keeps its mode; anything else would drop the author out of
+            // the builder every time they closed a panel.
+            if (leaveEdit && ModeManager.Instance != null && ModeManager.Current == AppMode.Edit)
+                ModeManager.Instance.Exit();
         }
 
         private void OnDestroy()
@@ -166,10 +223,13 @@ namespace DiveMap.Runtime.Ui
             // First chip open, like the web's firstKind().
             ShowKind(_chipKinds.Count > 0 ? _chipKinds[0] : null);
 
+            Refresh();   // ∞ for the admin, and the pill hidden when there is no signal
+
             int total = 0;
             foreach (KeyValuePair<string, List<PaletteItem>> kv in _byKind) total += kv.Value.Count;
-            Debug.Log($"[Palette] open kinds={_chipKinds.Count} items={total} " +
-                      $"coins={TrashGameSystem.Coins} first={_kind}");
+            Debug.Log($"[Palette] open kinds={_chipKinds.Count} chips={ChipCount} items={total} " +
+                      $"coins={TrashGameSystem.Coins} admin={Account.IsAdmin} " +
+                      $"live={AssetCatalogClient.Count} first={_kind}");
         }
 
         /// <summary>‹ back (left) · 🪙 coins (centre) · ▶ play (right) — above the sheet.</summary>
@@ -185,11 +245,17 @@ namespace DiveMap.Runtime.Ui
             brt.pivot = new Vector2(0f, 1f);
             brt.anchoredPosition = new Vector2(pad, -pad);
 
-            Button play = UiKit.MakeIconButton(root, "Play", "play", () =>
-            {
-                Close();
-                if (ModeManager.Instance != null) ModeManager.Instance.Request(AppMode.Tour);
-            }, false, size);
+            // ▶ / ❚❚ — the web's playMode toggle (builder.html:292, :3903), NOT a way into the
+            // tour. It decides whether the animals this author is arranging are swimming or
+            // holding still; the icon swaps to a pause bar and the button turns teal while they
+            // are moving (`#playBtn.on`, CSS :55). Entering the tour stays where it has always
+            // been, on the 🤿 action in the menu column — a builder who wanted to fly the drone
+            // and got thrown out of the palette instead was the round-4 complaint.
+            Button play = UiKit.MakeIconButton(root, "Play", "play", null, false, size);
+            _play = play;
+            _playBg = play.GetComponent<Image>();
+            if (_playBg != null) _playIdleBg = _playBg.color;
+            play.onClick.AddListener(TogglePlay);
             RectTransform yrt = play.GetComponent<RectTransform>();
             yrt.anchorMin = new Vector2(1f, 1f);
             yrt.anchorMax = new Vector2(1f, 1f);
@@ -199,6 +265,7 @@ namespace DiveMap.Runtime.Ui
             // coinUI: black 60% pill, gold disc + bold gold number.
             Image pill = UiKit.MakeRounded(root, "Coins", new Color(0f, 0f, 0f, 0.6f), 9f);
             pill.raycastTarget = false;
+            _coinPill = pill.gameObject;
             RectTransform crt = pill.rectTransform;
             crt.anchorMin = new Vector2(0.5f, 1f);
             crt.anchorMax = new Vector2(0.5f, 1f);
@@ -215,28 +282,52 @@ namespace DiveMap.Runtime.Ui
             drt.sizeDelta = new Vector2(UiKit.Css(13f), UiKit.Css(13f));
             drt.anchoredPosition = new Vector2(UiKit.Css(11f), 0f);
 
-            _coinLabel = UiKit.MakeLine(pill.transform, "Value", TrashGameSystem.Coins.ToString(),
+            _coinLabel = UiKit.MakeLine(pill.transform, "Value",
+                                        Palette.CoinLabel(TrashGameSystem.Coins, Account.IsAdmin),
                                         UiKit.CssFont(14f), TextAnchor.MiddleLeft, Gold);
             _coinLabel.fontStyle = FontStyle.Bold;
             RectTransform vrt = _coinLabel.rectTransform;
             UiKit.Stretch(vrt);
             vrt.offsetMin = new Vector2(UiKit.Css(11f + 13f + 5f), 0f);
             vrt.offsetMax = new Vector2(-UiKit.Css(10f), 0f);
+
+            ApplyPlayVisual();
+        }
+
+        /// <summary>
+        /// ▶ ↔ ❚❚. The whole toggle is one bool in <see cref="ModeRules"/>, read by the animal
+        /// brain; nothing here reaches into the marine code.
+        /// </summary>
+        private void TogglePlay()
+        {
+            ModeRules.EditPlayback = !ModeRules.EditPlayback;
+            ApplyPlayVisual();
+            Debug.Log($"[Palette] playMode={ModeRules.EditPlayback}");
+        }
+
+        private void ApplyPlayVisual()
+        {
+            bool on = ModeRules.EditPlayback;
+            UiKit.SetIcon(_play, on ? "pause" : "play");
+            if (_playBg != null) _playBg.color = on ? PlayOnBg : _playIdleBg;
         }
 
         private void BuildChips(RectTransform sheet)
         {
-            // Horizontally scrollable strip — the web's #cats is overflow-x:auto.
-            var go = new GameObject("Cats");
-            go.transform.SetParent(sheet, false);
-            _chipRow = go.AddComponent<RectTransform>();
-            _chipRow.anchorMin = new Vector2(0f, 1f);
-            _chipRow.anchorMax = new Vector2(1f, 1f);
-            _chipRow.pivot = new Vector2(0.5f, 1f);
-            _chipRow.offsetMin = new Vector2(UiKit.Css(SidePad), 0f);
-            _chipRow.offsetMax = new Vector2(-UiKit.Css(SidePad), 0f);
-            _chipRow.sizeDelta = new Vector2(_chipRow.sizeDelta.x, UiKit.Css(ChipH));
-            _chipRow.anchoredPosition = new Vector2(0f, -UiKit.Css(26f));
+            // 🔴 A REAL horizontally scrollable strip — the web's #cats is overflow-x:auto
+            // (builder.html:132). This used to be a bare RectTransform with a comment claiming it
+            // scrolled: eleven chips are 776 css px wide, a portrait phone is about 400, and
+            // everything past the fifth was laid out beyond the right edge where no finger could
+            // reach it. See UiKit.MakeScrollH.
+            _chipScroll = UiKit.MakeScrollH(sheet, "Cats", out _chipRow);
+            RectTransform vp = _chipScroll.GetComponent<RectTransform>();
+            vp.anchorMin = new Vector2(0f, 1f);
+            vp.anchorMax = new Vector2(1f, 1f);
+            vp.pivot = new Vector2(0.5f, 1f);
+            vp.offsetMin = new Vector2(UiKit.Css(SidePad), 0f);
+            vp.offsetMax = new Vector2(-UiKit.Css(SidePad), 0f);
+            vp.sizeDelta = new Vector2(vp.sizeDelta.x, UiKit.Css(ChipH));
+            vp.anchoredPosition = new Vector2(0f, -UiKit.Css(26f));
 
             float x = 0f, w = UiKit.Css(ChipMinW), gap = UiKit.Css(ChipGap);
 
@@ -248,17 +339,42 @@ namespace DiveMap.Runtime.Ui
                 x += w + gap;
             }
 
-            // The three tool chips the web appends after the kinds. Their panels belong to the
-            // editing work orders (pins need write access, sculpt is section I) — the chips are
-            // here because the screenshot has them, and they say so rather than doing nothing.
-            string[] tools = { Palette.PinTool, Palette.SettingsTool, Palette.SculptTool };
-            foreach (string tool in tools)
-            {
-                AddChip(tool, Palette.ToolIcon(tool), UiStrings.Tr(Palette.ToolLabel(tool)),
-                        tool == Palette.PinTool ? PinChipBg : ChipBg, x, w,
-                        () => Toast.ShowTr("ยังไม่เปิดให้ใช้ในแอปนี้"));
-                x += w + gap;
-            }
+            // The three tool chips the web appends after the kinds (buildCats :1408-1416). Each
+            // one now opens the panel that already existed behind the ☰ column — the sheets were
+            // written long ago, they were simply never reachable from the place the user's
+            // screenshot puts them. All three write to the map, so all three ask the same
+            // question the ☰ buttons ask, at TAP time, because the palette is built before the
+            // server has answered whether this account may edit this site.
+            AddChip(Palette.PinTool, Palette.ToolIcon(Palette.PinTool),
+                    UiStrings.Tr(Palette.ToolLabel(Palette.PinTool)), PinChipBg, x, w,
+                    () => WithEditRights(() => { Close(); PinPlacer.Start(); }));
+            x += w + gap;
+
+            AddChip(Palette.SettingsTool, Palette.ToolIcon(Palette.SettingsTool),
+                    UiStrings.Tr(Palette.ToolLabel(Palette.SettingsTool)), ChipBg, x, w,
+                    () => WithEditRights(() => { Close(); MapSettingsSheet.Open(); }));
+            x += w + gap;
+
+            AddChip(Palette.SculptTool, Palette.ToolIcon(Palette.SculptTool),
+                    UiStrings.Tr(Palette.ToolLabel(Palette.SculptTool)), ChipBg, x, w,
+                    () => WithEditRights(() => { Close(); SculptSheet.Open(); }));
+            x += w + gap;
+
+            // Content width, or the strip refuses to scroll: a ScrollRect with content no wider
+            // than its viewport treats every drag as an over-scroll and springs straight back.
+            _chipRow.sizeDelta = new Vector2(Mathf.Max(0f, x - gap), 0f);
+        }
+
+        /// <summary>
+        /// The gate every editing tool shares. Deliberately identical in wording and timing to
+        /// the ☰ column's (UiShell.BuildActions) — two different refusals for the same reason is
+        /// how a user learns to distrust both.
+        /// </summary>
+        private static void WithEditRights(System.Action run)
+        {
+            var boot = FindFirstObjectByType<AppBoot>();
+            if (boot == null || !boot.CanEditCurrent) { Toast.ShowTr("แมพนี้แก้ไม่ได้"); return; }
+            run();
         }
 
         private void AddChip(string key, string icon, string label, Color bg, float x, float w,
@@ -458,24 +574,36 @@ namespace DiveMap.Runtime.Ui
 
         public void Refresh()
         {
-            if (_coinLabel != null) _coinLabel.text = TrashGameSystem.Coins.ToString();
+            if (_coinLabel != null)
+                _coinLabel.text = Palette.CoinLabel(TrashGameSystem.Coins, Account.IsAdmin);
+            // The web hides the pill offline (coinUI :4123, "ยอด local อาจ stale") because the
+            // balance is server-authoritative: showing a number that cannot be spent, and may be
+            // wrong, is worse than showing nothing. An admin's ∞ is not a balance, so it stays.
+            if (_coinPill != null)
+                _coinPill.SetActive(Account.IsAdmin ||
+                                    Application.internetReachability != NetworkReachability.NotReachable);
         }
 
         // ── catalogue ────────────────────────────────────────────────────────────
 
         /// <summary>
-        /// Map the shipped asset registry onto the palette. The manifest is the same list the
-        /// web's <c>/api/assets</c> returns, so the same fold/hide/drop rules apply verbatim.
+        /// Map the asset registry onto the palette: the shipped manifest as the base, anything
+        /// the backoffice has served since merged over it by id (WO-L item 8 — see
+        /// <see cref="AssetCatalog"/> for why that union currently adds nothing visible, and why
+        /// it is still the right shape).
+        ///
+        /// The 🌀 Warp category is included only for a signed-in admin, matching
+        /// <c>PALETTE.SPECIAL = _isAdmin ? … : []</c>.
         /// </summary>
         private static Dictionary<string, List<PaletteItem>> BuildCatalogue()
         {
             AssetManifest manifest = AppBoot.Manifest;
-            var sources = new List<PaletteSource>();
+            var shipped = new List<PaletteSource>();
             if (manifest != null)
             {
                 foreach (AssetManifest.Module m in manifest.All)
                 {
-                    sources.Add(new PaletteSource
+                    shipped.Add(new PaletteSource
                     {
                         Id = m.Id,
                         Kind = m.Kind,
@@ -488,7 +616,9 @@ namespace DiveMap.Runtime.Ui
             {
                 Debug.LogWarning("[Palette] no asset manifest yet — the grid will be empty");
             }
-            return Palette.Build(sources, MapApiClient.DefaultBaseUrl);
+
+            List<PaletteSource> sources = AssetCatalog.Merge(shipped, AssetCatalogClient.Live);
+            return Palette.Build(sources, MapApiClient.DefaultBaseUrl, Account.IsAdmin);
         }
     }
 }

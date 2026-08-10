@@ -83,6 +83,10 @@ namespace DiveMap.Runtime
         {
             // Never carry a held stick across a mode change.
             InputRig.Clear();
+            // …nor the builder's ▶ playback switch (WO-L). It only means anything inside Edit,
+            // and a tour that inherited it would be indistinguishable from one where the animal
+            // brains had simply stopped.
+            ModeRules.EditPlayback = false;
             HudLayer.SetActiveMode(next);
 
             // Orientation: the web locks its tour to landscape. Restore the default afterwards

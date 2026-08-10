@@ -192,8 +192,16 @@ namespace DiveMap.Core
         /// Group the asset registry into the palette's display categories, in chip order.
         /// Animals and schools come out cheapest-first, like <c>showVariants</c>.
         /// </summary>
+        /// <summary>
+        /// The coin pill's text. The web prints a literal infinity for the admin rather than a
+        /// number, because an admin never spends (<c>coinUI()</c> :4123,
+        /// <c>_isAdmin?'∞':coins</c>) — showing them a balance that never moves reads as a bug.
+        /// </summary>
+        public static string CoinLabel(int coins, bool isAdmin) => isAdmin ? "∞" : coins.ToString();
+
         public static Dictionary<string, List<PaletteItem>> Build(IEnumerable<PaletteSource> sources,
-                                                                  string baseUrl)
+                                                                  string baseUrl,
+                                                                  bool includeWarp = false)
         {
             var byKind = new Dictionary<string, List<PaletteItem>>(StringComparer.Ordinal);
             if (sources == null) return byKind;
@@ -204,8 +212,12 @@ namespace DiveMap.Core
                 if (IsProcedural(s.Id) || IsHidden(s.Id)) continue;
 
                 string kind = FoldKind(s.Kind, s.Id);
-                // The admin-only warp category has no place in a player build.
-                if (kind == Special) continue;
+                // 🌀 Warp is the admin's category, not a hidden one: the web builds it as
+                // `PALETTE.SPECIAL = _isAdmin ? [...] : []` (buildCats :1399) and rebuilds the
+                // chip row the moment an admin signs in (:4388). Dropping it unconditionally —
+                // which is what this line used to do — cost the signed-in admin a whole chip and
+                // the only way to place a warp gate, on the product's own author account.
+                if (kind == Special && !includeWarp) continue;
 
                 if (!byKind.TryGetValue(kind, out List<PaletteItem> list))
                 {

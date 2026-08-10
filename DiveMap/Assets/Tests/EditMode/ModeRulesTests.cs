@@ -91,5 +91,29 @@ namespace DiveMap.Tests
             foreach (AppMode m in new[] { AppMode.View, AppMode.Tour, AppMode.Game, AppMode.Ar })
                 Assert.IsTrue(ModeRules.AnimalsSwim(m), m.ToString());
         }
+
+        [Test]
+        public void EditPlayback_IsTheBuildersPlayButtonAndOnlyAffectsEdit()
+        {
+            // WO-L. ▶ in the palette header is the web's playMode: the author's "let me see it
+            // alive" switch. It is the one thing that may overrule the freeze above, and it must
+            // not leak — ModeManager clears it on every mode change, and this asserts the rule
+            // it is clearing.
+            Assert.IsFalse(ModeRules.EditPlayback, "must default to frozen");
+            try
+            {
+                ModeRules.EditPlayback = true;
+                Assert.IsTrue(ModeRules.AnimalsSwim(AppMode.Edit));
+                foreach (AppMode m in new[] { AppMode.View, AppMode.Tour, AppMode.Game, AppMode.Ar })
+                    Assert.IsTrue(ModeRules.AnimalsSwim(m), m.ToString());
+            }
+            finally
+            {
+                // Static state shared with every other test in this file — a leak here would
+                // silently disarm AnimalsSwim_FurnitureDoesNotSwimAway above, depending on order.
+                ModeRules.EditPlayback = false;
+            }
+            Assert.IsFalse(ModeRules.AnimalsSwim(AppMode.Edit));
+        }
     }
 }

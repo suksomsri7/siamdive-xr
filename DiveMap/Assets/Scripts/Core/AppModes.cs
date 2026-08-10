@@ -53,7 +53,24 @@ namespace DiveMap.Core
         /// have become unplaceable. In Edit an animal is furniture — which is exactly what an
         /// author is trying to arrange.
         /// </summary>
-        public static bool AnimalsSwim(AppMode mode) => mode != AppMode.Edit;
+        public static bool AnimalsSwim(AppMode mode) => mode != AppMode.Edit || EditPlayback;
+
+        /// <summary>
+        /// WO-L — the web's <c>playMode</c>, the ▶ button in the top-right of the builder
+        /// (builder.html:292, toggled at :3903 where the icon swaps to ❚❚ and the button turns
+        /// teal). It is the author's "let me see it alive" switch: the animals an author has just
+        /// arranged start swimming, and pressing it again freezes them so they can be arranged
+        /// some more.
+        ///
+        /// It lives here, as the one exception to <see cref="AnimalsSwim"/>, rather than as an
+        /// argument, because the single consumer is deep in the animal brain
+        /// (Runtime/Marine/WhaleController.cs:615) and threading a flag down to it would mean
+        /// editing marine code for a UI feature. A property keeps that file untouched.
+        ///
+        /// Always false outside Edit — <see cref="ModeManager"/> clears it on every mode change,
+        /// so a tour can never inherit a frozen reef from a builder session.
+        /// </summary>
+        public static bool EditPlayback { get; set; }
 
         /// <summary>Where "exit" lands from <paramref name="mode"/>. Always somewhere usable.</summary>
         public static AppMode ExitTarget(AppMode mode) => AppMode.View;
