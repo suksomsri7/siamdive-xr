@@ -45,9 +45,57 @@ namespace DiveMap.Runtime
             DontDestroyOnLoad(go);
         }
 
+        private void Awake()
+        {
+            // The receiver is alive the instant this runs — that is the whole point of creating it
+            // at BeforeSceneLoad and of it depending on nothing (no map, no UI, no network). So
+            // "ready" is TRUE from here on, and the only question left is when the host can hear
+            // it, which is what the coroutine below waits out.
+            StartCoroutine(AnnounceReady());
+        }
+
         private void OnDestroy()
         {
             if (_instance == this) _instance = null;
+        }
+
+        /// <summary>How long to keep offering "dm:ready" before deciding nobody is listening.</summary>
+        private const float ReadyAnnounceTimeoutSeconds = 10f;
+
+        /// <summary>
+        /// Say "dm:ready" exactly once, as soon as saying it can be heard.
+        ///
+        /// 🔴 Why this is a coroutine and not one line in Awake. On iOS the host registers its
+        /// callback right after <c>runEmbeddedWithArgc:</c> returns — and Unity loads its first
+        /// scene INSIDE that call. So at Awake there is no <c>api</c> yet, and
+        /// <c>sendMessageToMobileApp</c> would be a message to nil: delivered nowhere, reported
+        /// nowhere, and the host would wait for a "ready" that was already spent. Polling
+        /// <see cref="NativeBridge.HostAttached"/> costs one P/Invoke per frame for a handful of
+        /// frames and removes the race entirely.
+        ///
+        /// In the standalone build <c>HostAttached</c> is false forever, so this simply expires
+        /// after ten seconds having sent nothing — which is correct, there is nobody to tell.
+        /// </summary>
+        private System.Collections.IEnumerator AnnounceReady()
+        {
+            float deadline = Time.realtimeSinceStartup + ReadyAnnounceTimeoutSeconds;
+
+            while (!NativeBridge.HostAttached)
+            {
+                // A boot payload that somehow arrived first makes the handshake moot: the host is
+                // plainly able to reach us, and it is not waiting on anything.
+                if (NativeBoot.Received) yield break;
+                if (Time.realtimeSinceStartup > deadline)
+                {
+                    if (NativeBridge.EmbeddedInHost)
+                        Debug.LogWarning("[Native] embedded, but no host attached after " +
+                                         ReadyAnnounceTimeoutSeconds + "s — 'dm:ready' never sent");
+                    yield break;
+                }
+                yield return null;
+            }
+
+            NativeBridge.Send(NativeBoot.ReadyMessage);
         }
 
         /// <summary>
@@ -130,11 +178,15 @@ namespace DiveMap.Runtime
 
             AppBoot boot = UnityEngine.Object.FindFirstObjectByType<AppBoot>();
             if (boot == null)
-            {
                 Debug.Log("[Native] map " + shortId + " parked in PlayerPrefs — AppBoot has not started yet");
-                return;
-            }
-            boot.SwitchMapFromHost(shortId);
+            else
+                boot.SwitchMapFromHost(shortId);
+
+            // Acknowledge in every one of those cases: "applied or queued" is exactly what has
+            // happened by this line, and the host's whole reason for wanting an ack is to know
+            // its payload was not the one that vanished into a GameObject that did not exist yet.
+            // The shortId is echoed so an ack can be matched to the request that earned it.
+            NativeBridge.Send(NativeBoot.BootAck(shortId));
         }
 
         /// <summary>Never log a whole device id; eight characters is enough to match two logs up.</summary>

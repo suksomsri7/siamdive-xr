@@ -228,5 +228,91 @@ namespace DiveMap.Tests
             Assert.AreEqual("OnNativeBoot", NativeBoot.ReceiverMethodName);
             Assert.AreEqual("exit", NativeBoot.ExitMessage);
         }
+
+        [Test]
+        public void ContractV2_MessagesAreSpeltExactlyAsTheHostExpects()
+        {
+            // Same reasoning as above, for the messages added after the first device test. The
+            // host string-compares every one of them; a typo here is a feature that silently
+            // does nothing on a phone.
+            Assert.AreEqual("dm:ready", NativeBoot.ReadyMessage);
+            Assert.AreEqual("dm:boot-ack:", NativeBoot.BootAckPrefix);
+            Assert.AreEqual("dm:tour:on", NativeBoot.TourOnMessage);
+            Assert.AreEqual("dm:tour:off", NativeBoot.TourOffMessage);
+            Assert.AreEqual("dm:boot-ack:299", NativeBoot.BootAck("299"));
+        }
+
+        [Test]
+        public void BootAck_SurvivesAMissingShortId()
+        {
+            // Never null-reference on the way to telling the host something went through.
+            Assert.AreEqual("dm:boot-ack:", NativeBoot.BootAck(null));
+        }
+
+        [Test]
+        public void ExitMessage_KeptUnprefixed()
+        {
+            // "exit" shipped in a build that is on a phone right now. Renaming it to "dm:exit"
+            // for tidiness would break that build against the new host and buy nothing.
+            Assert.IsFalse(NativeBoot.ExitMessage.StartsWith("dm:"));
+        }
+
+        // ── the tour ↔ landscape signal ──────────────────────────────────────────
+
+        [TestCase(AppMode.View, AppMode.Tour)]
+        [TestCase(AppMode.View, AppMode.Game)]
+        [TestCase(AppMode.Edit, AppMode.Tour)]
+        [TestCase(AppMode.Ar, AppMode.Game)]
+        public void EnteringALandscapeMode_TellsTheHostToLock(AppMode from, AppMode to)
+        {
+            Assert.AreEqual(NativeBoot.TourOnMessage, NativeBoot.TourSignal(from, to));
+        }
+
+        [TestCase(AppMode.Tour, AppMode.View)]
+        [TestCase(AppMode.Game, AppMode.View)]
+        [TestCase(AppMode.Game, AppMode.Edit)]
+        [TestCase(AppMode.Tour, AppMode.Ar)]
+        public void LeavingALandscapeMode_TellsTheHostToUnlock(AppMode from, AppMode to)
+        {
+            Assert.AreEqual(NativeBoot.TourOffMessage, NativeBoot.TourSignal(from, to));
+        }
+
+        [TestCase(AppMode.Tour, AppMode.Game)]
+        [TestCase(AppMode.Game, AppMode.Tour)]
+        public void TourAndGameSwap_SaysNothing(AppMode from, AppMode to)
+        {
+            // Both are landscape and both are the same rig. A host that unlocked and relocked
+            // here would spin the screen in the player's hands in the middle of a dive.
+            Assert.IsNull(NativeBoot.TourSignal(from, to));
+        }
+
+        [TestCase(AppMode.View, AppMode.Edit)]
+        [TestCase(AppMode.Edit, AppMode.View)]
+        [TestCase(AppMode.View, AppMode.Ar)]
+        [TestCase(AppMode.Ar, AppMode.View)]
+        [TestCase(AppMode.View, AppMode.View)]
+        public void MovesThatNeverLeavePortrait_SayNothing(AppMode from, AppMode to)
+        {
+            Assert.IsNull(NativeBoot.TourSignal(from, to));
+        }
+
+        [Test]
+        public void TheSignalIsDerivedFromTheAppsOwnLandscapeRule()
+        {
+            // The point of deriving it: a mode added to LocksLandscape later starts signalling
+            // the host without anyone remembering to come back here. Asserted over every mode so
+            // a new one cannot quietly disagree with the rule it is supposed to follow.
+            foreach (AppMode from in System.Enum.GetValues(typeof(AppMode)))
+            foreach (AppMode to in System.Enum.GetValues(typeof(AppMode)))
+            {
+                string signal = NativeBoot.TourSignal(from, to);
+                bool changes = ModeRules.LocksLandscape(from) != ModeRules.LocksLandscape(to);
+
+                if (!changes) Assert.IsNull(signal, from + "→" + to);
+                else Assert.AreEqual(ModeRules.LocksLandscape(to)
+                                     ? NativeBoot.TourOnMessage : NativeBoot.TourOffMessage,
+                                     signal, from + "→" + to);
+            }
+        }
     }
 }

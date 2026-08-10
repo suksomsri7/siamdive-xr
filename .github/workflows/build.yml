@@ -466,15 +466,19 @@ jobs:
           # Names, not just the file: the pod adopts the protocol and looks the class up by
           # string at run time (NSClassFromString(@"FrameworkLibAPI")), so a header that was
           # exported but edited into a different shape is the same outage one step later.
-          for SYM in NativeCallsProtocol FrameworkLibAPI registerAPIforNativeCalls sendMessageToMobileApp; do
+          # The first four are the RN pod's contract; the last two are ours (host detection,
+          # WO-MERGE P1b) and are equally load-bearing — without them the embedded build cannot
+          # tell it is embedded and opens whatever map the standalone app left in PlayerPrefs.
+          for SYM in NativeCallsProtocol FrameworkLibAPI registerAPIforNativeCalls sendMessageToMobileApp \
+                     dm_hostAttached dm_embeddedInHost; do
             grep -q "$SYM" "$H" || {
               echo "::error::Headers/NativeCallProxy.h does not mention $SYM — the bridge contract has drifted."
               cat "$H"
               exit 1
             }
           done
-          echo "NativeCallProxy.h is public and carries all four bridge symbols:"
-          cat "$H" | grep -nE 'NativeCallsProtocol|FrameworkLibAPI|sendMessageToMobileApp|registerAPIforNativeCalls'
+          echo "NativeCallProxy.h is public and carries every bridge symbol:"
+          grep -nE 'NativeCallsProtocol|FrameworkLibAPI|sendMessageToMobileApp|registerAPIforNativeCalls|dm_hostAttached|dm_embeddedInHost' "$H"
 
       - name: Package the framework
         run: |

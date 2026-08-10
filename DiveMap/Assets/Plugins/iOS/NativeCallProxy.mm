@@ -34,4 +34,34 @@ extern "C"
     {
         return [api sendMessageToMobileApp:[NSString stringWithUTF8String:message]];
     }
+
+    // ── Additions (WO-MERGE P1b) — see the header for why there are two of these ──────────
+
+    bool dm_hostAttached(void)
+    {
+        return api != NULL;
+    }
+
+    bool dm_embeddedInHost(void)
+    {
+        // The bundle this very class was compiled into. In the standalone DiveMap app that is
+        // the app itself, so the two bundles are the same object; under "Unity as a Library"
+        // this file lives in UnityFramework.framework and they differ. Compared by identity —
+        // +bundleForClass: returns the cached singleton for a loaded bundle, and comparing paths
+        // instead would only add a way to be wrong about trailing slashes.
+        //
+        // Cached because AppBoot asks once per frame while it waits for the host's boot message,
+        // and the answer is decided at link time — it cannot change while the process lives.
+        static bool computed = false;
+        static bool embedded = false;
+        if (!computed)
+        {
+            NSBundle *own = [NSBundle bundleForClass:[FrameworkLibAPI class]];
+            embedded = (own != nil && own != [NSBundle mainBundle]);
+            computed = true;
+            NSLog(@"[DiveMap] embedded in host = %@ (own bundle %@)",
+                  embedded ? @"YES" : @"NO", own.bundleIdentifier);
+        }
+        return embedded;
+    }
 }

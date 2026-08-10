@@ -35,6 +35,7 @@
 // library's README shows as a screenshot (step 5) and which no CI run can perform by hand.
 
 #import <Foundation/Foundation.h>
+#include <stdbool.h>
 
 @protocol NativeCallsProtocol
 @required
@@ -49,3 +50,43 @@ __attribute__ ((visibility("default")))
 +(void) registerAPIforNativeCalls:(id<NativeCallsProtocol>) aApi;
 
 @end
+
+// ── Additions below this line (WO-MERGE P1b) ─────────────────────────────────────────────────
+//
+// 🔴 ADD ONLY. The three declarations above are the contract the RN pod compiles against; the
+// two functions below are ours and the pod neither knows nor cares about them. Nothing above may
+// be renamed, reordered or re-typed — the pod's #include would still succeed and it would fail
+// later, at link time or (worse) at runtime through NSClassFromString.
+//
+// Both answer the same question from opposite directions: "is Unity a screen inside somebody
+// else's app right now?" — the question AppBoot has to answer BEFORE it opens a map, because the
+// beta shares an iOS sandbox with the standalone DiveMap install and PlayerPrefs "shortId"
+// therefore holds whatever map the OTHER app was last looking at (the "tapped Htms Chang, got
+// Posidon" report). Two of them because they become true at different moments:
+//
+//   dm_embeddedInHost()  true from the first instruction Unity ever executes — it is a fact about
+//                        how this code was PACKAGED, not about anything that has happened yet.
+//   dm_hostAttached()    true only once the host has called registerAPIforNativeCalls:, which on
+//                        iOS happens right AFTER runEmbeddedWithArgc: returns — and Unity's first
+//                        scene is loaded inside that call. So this is false during Awake and true
+//                        by the first Update, and anything that gates on it during startup has to
+//                        be prepared to wait.
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+/// YES once the host app has registered itself through +registerAPIforNativeCalls: — i.e. once
+/// there is somebody on the other end of sendMessageToMobileApp. Used by C# to decide whether a
+/// message is worth sending at all, and to know when "dm:ready" can actually be delivered.
+bool dm_hostAttached(void);
+
+/// YES when this code is running from inside UnityFramework.framework rather than from the app's
+/// own executable — the definition of "Unity as a Library". Available immediately and never
+/// changes, which is what makes it safe to gate a startup WAIT on: in the standalone build it is
+/// false on the first line and nothing waits for anything.
+bool dm_embeddedInHost(void);
+
+#ifdef __cplusplus
+}
+#endif

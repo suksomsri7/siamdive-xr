@@ -61,8 +61,11 @@ namespace DiveMap.Runtime
             // 🔴 …but never when the host app chose the map. The pin exists to make a QC build
             // open on a known reef; in library mode the RN screen has already said which dive
             // site the user tapped, and forcing Htms Chang over that would open the wrong map
-            // with nothing in any log to explain it.
-            if (!NativeBoot.LibraryMode && PlayerPrefs.GetString("firstMapPin", "") != FirstMapPin)
+            // with nothing in any log to explain it. EmbeddedInHost is tested as well as the
+            // flag because the flag arrives with the boot payload and this line runs before it:
+            // on a first launch of the embedded app the pin would otherwise fire anyway.
+            if (!NativeBoot.LibraryMode && !NativeBridge.EmbeddedInHost &&
+                PlayerPrefs.GetString("firstMapPin", "") != FirstMapPin)
             {
                 PlayerPrefs.SetString("firstMapPin", FirstMapPin);
                 _shortId = "";   // fall through to the default map (Htms Chang) once
@@ -382,6 +385,8 @@ namespace DiveMap.Runtime
         /// </summary>
         private IEnumerator BootTracked()
         {
+            yield return WaitForHostBoot();
+
             while (true)
             {
                 _booting = true;
@@ -403,6 +408,71 @@ namespace DiveMap.Runtime
                 // in flight (the load above ran to its end), so the next turn of the loop is a
                 // clean reload rather than a second map growing behind the first.
             }
+        }
+
+        /// <summary>Only the first boot of a session may wait for the host — see below.</summary>
+        private bool _hostWaitDone;
+
+        /// <summary>
+        /// How long the embedded build gives the host to say which map it wants. Long enough for
+        /// a handshake that normally takes a frame or two, short enough that a host which never
+        /// answers costs the player three seconds rather than a hang.
+        /// </summary>
+        private const float HostBootWaitSeconds = 3f;
+
+        /// <summary>
+        /// Do not open the wrong map (WO-MERGE P1b, bug 1).
+        ///
+        /// 🔴 The report: the user tapped Htms Chang in the RN app and got Posidon. Two causes,
+        /// and this is the second one. The beta shares an iOS sandbox with the standalone DiveMap
+        /// install — same bundle id — so PlayerPrefs "shortId" is a value the OTHER app wrote,
+        /// pointing at whatever map somebody was last looking at there. <see cref="Start"/> reads
+        /// that key and, left alone, would open Posidon a whole second before the host's boot
+        /// payload arrived to say Htms Chang. The user sees the wrong reef load, then reload.
+        ///
+        /// So when Unity is embedded, the first boot waits for the host to speak. Not for the
+        /// map — just for the payload, which is a handshake away.
+        ///
+        /// 🔴 The gate is <see cref="NativeBridge.EmbeddedInHost"/> and NOT
+        /// <c>HostAttached</c>. HostAttached is still false at this point in an embedded launch:
+        /// the host registers its callback after <c>runEmbeddedWithArgc:</c> returns and Unity
+        /// loads this scene inside that call, so gating on it would skip the wait in exactly the
+        /// case the wait exists for. EmbeddedInHost is a packaging fact and is already true.
+        ///
+        /// The standalone build answers false and returns on the first line: not one frame of
+        /// delay, not one changed behaviour, which is the condition this fix had to meet.
+        /// </summary>
+        private IEnumerator WaitForHostBoot()
+        {
+            // Only the first boot. Later ones (Retry after a purchase, a map switch) must never
+            // stall — and by then the host has either spoken or is not going to.
+            if (_hostWaitDone) yield break;
+            _hostWaitDone = true;
+
+            if (!NativeBridge.EmbeddedInHost) yield break;
+            if (NativeBoot.Received) yield break;
+
+            // The map load has not started, so nothing else is on screen to explain the pause.
+            ShowCenter("กำลังโหลดแมพ…");
+
+            float started = Time.realtimeSinceStartup;
+            float deadline = started + HostBootWaitSeconds;
+            while (!NativeBoot.Received)
+            {
+                if (Time.realtimeSinceStartup > deadline)
+                {
+                    // Not an error: a host that never sends a payload is a host that is happy
+                    // with whatever map we remember. Logged as a warning because in the RN app
+                    // it means the handshake broke, and that is worth finding in a device log.
+                    Debug.LogWarning($"[Native] embedded, but no boot payload after " +
+                                     $"{HostBootWaitSeconds}s — opening '{_shortId}' from PlayerPrefs");
+                    yield break;
+                }
+                yield return null;
+            }
+
+            Debug.Log($"[Native] host boot payload arrived after " +
+                      $"{Time.realtimeSinceStartup - started:0.00}s — no stale map was opened");
         }
 
         /// <summary>

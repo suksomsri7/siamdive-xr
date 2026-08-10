@@ -30,7 +30,66 @@ namespace DiveMap.Runtime
 #if UNITY_IOS && !UNITY_EDITOR
         [DllImport("__Internal")]
         private static extern void sendMessageToMobileApp(string message);
+
+        // 🔴 MarshalAs(I1) is not optional. C# marshals `bool` as a 4-byte Win32 BOOL by default
+        // and C returns a 1-byte _Bool: without this attribute the other three bytes are whatever
+        // was in the register, and the result reads true essentially at random. The failure would
+        // be "the standalone build sometimes waits three seconds for a host that is not there",
+        // which is exactly the kind of intermittent nobody traces back to a P/Invoke signature.
+        [DllImport("__Internal")]
+        [return: MarshalAs(UnmanagedType.I1)]
+        private static extern bool dm_hostAttached();
+
+        [DllImport("__Internal")]
+        [return: MarshalAs(UnmanagedType.I1)]
+        private static extern bool dm_embeddedInHost();
 #endif
+
+        /// <summary>
+        /// Is somebody listening right now? True once the host app has called
+        /// <c>registerAPIforNativeCalls:</c> on the other side of the bridge.
+        ///
+        /// ⚠️ FALSE EARLY, TRUE LATER. On iOS the host registers immediately after
+        /// <c>runEmbeddedWithArgc:</c> returns — and Unity loads its first scene INSIDE that
+        /// call. So every Awake in the first scene runs before this can be true, and the first
+        /// Update runs after. Never treat a false here during startup as "there is no host";
+        /// that is what <see cref="EmbeddedInHost"/> is for.
+        /// </summary>
+        public static bool HostAttached
+        {
+            get
+            {
+#if UNITY_IOS && !UNITY_EDITOR
+                try { return dm_hostAttached(); }
+                catch (System.Exception) { return false; }
+#else
+                return false;
+#endif
+            }
+        }
+
+        /// <summary>
+        /// Is Unity running as a LIBRARY inside another app's binary? A fact about packaging, so
+        /// it is already true on the first line of the first Awake and it never changes — which
+        /// is what makes it the right thing to gate a startup wait on.
+        ///
+        /// The standalone DiveMap build answers false here on every platform (on iOS because the
+        /// plugin is compiled into the app's own executable; everywhere else because the plugin
+        /// is not compiled at all), so nothing in the standalone boot path is delayed, skipped or
+        /// otherwise changed by any of the host handling.
+        /// </summary>
+        public static bool EmbeddedInHost
+        {
+            get
+            {
+#if UNITY_IOS && !UNITY_EDITOR
+                try { return dm_embeddedInHost(); }
+                catch (System.Exception) { return false; }
+#else
+                return false;
+#endif
+            }
+        }
 
         /// <summary>
         /// Send one message to the host, if there is one. Never throws: a bridge that is not

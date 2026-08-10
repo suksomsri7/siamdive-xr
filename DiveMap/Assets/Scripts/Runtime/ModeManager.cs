@@ -87,7 +87,20 @@ namespace DiveMap.Runtime
 
             // Orientation: the web locks its tour to landscape. Restore the default afterwards
             // rather than leaving the app stuck sideways in the map list.
-            if (ModeRules.LocksLandscape(next) && !ModeRules.LocksLandscape(prev))
+            //
+            // 🔴 …but only when Unity IS the app (WO-MERGE P1b, bug 4). Embedded, Screen.orientation
+            // is a process-wide setting reaching straight out of the framework into somebody else's
+            // UIViewController stack: Unity would turn the whole React Native app sideways, including
+            // the navigation bar and the WebView behind it, and — worse — would leave it that way if
+            // the player backed out of the tour through the host's own back button instead of ours.
+            // So embedded we SIGNAL and the host decides; the host is the only party that knows what
+            // the rest of its screen can survive.
+            string tourSignal = NativeBoot.TourSignal(prev, next);
+            if (NativeBridge.HostAttached)
+            {
+                if (tourSignal != null) NativeBridge.Send(tourSignal);
+            }
+            else if (ModeRules.LocksLandscape(next) && !ModeRules.LocksLandscape(prev))
             {
                 Screen.orientation = ScreenOrientation.LandscapeLeft;
             }

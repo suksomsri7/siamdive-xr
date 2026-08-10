@@ -77,6 +77,58 @@ namespace DiveMap.Core
         /// </summary>
         public const string ExitMessage = "exit";
 
+        // ── Unity → host, contract v2 ────────────────────────────────────────────
+        //
+        // Namespaced "dm:" while <see cref="ExitMessage"/> deliberately is not: "exit" already
+        // shipped in a build the user has on a phone, and renaming it would break that build
+        // against a newer host for no gain. Everything added since is prefixed so the host can
+        // tell our protocol apart from anything else that might one day share the channel.
+
+        /// <summary>
+        /// "I can receive OnNativeBoot now." The host waits for this before posting its payload,
+        /// because UnitySendMessage to a GameObject that does not exist yet is dropped in
+        /// SILENCE — no exception, no log, no delivery. That is half of the "tapped Htms Chang,
+        /// got Posidon" report: the host posted while Unity was still starting and the message
+        /// went nowhere.
+        /// </summary>
+        public const string ReadyMessage = "dm:ready";
+
+        /// <summary>
+        /// "I received your boot payload and this is the map I took from it." The suffix is the
+        /// shortId, echoed back rather than a bare acknowledgement so the host can tell an ack
+        /// for the map it just asked for from an ack for the one before it.
+        /// </summary>
+        public const string BootAckPrefix = "dm:boot-ack:";
+
+        /// <summary>Entering the drone tour — the host locks itself to landscape.</summary>
+        public const string TourOnMessage = "dm:tour:on";
+
+        /// <summary>Leaving it — the host unlocks.</summary>
+        public const string TourOffMessage = "dm:tour:off";
+
+        /// <summary>Compose the boot acknowledgement for one map.</summary>
+        public static string BootAck(string shortId) => BootAckPrefix + (shortId ?? "");
+
+        /// <summary>
+        /// What (if anything) the host must be told about a mode change, from the ONE rule that
+        /// already decides this for the standalone app: <see cref="ModeRules.LocksLandscape"/>.
+        ///
+        /// Deriving it instead of listing modes is what keeps the host in step for free. Tour and
+        /// Game are both first-person and both landscape, so swapping between them signals
+        /// NOTHING — a host that unlocked and relocked on that transition would spin the screen
+        /// in the player's hands halfway through a dive. And when a future mode joins the
+        /// landscape set, it joins here too without anyone remembering to come back.
+        ///
+        /// Returns null when nothing changed, which is most calls.
+        /// </summary>
+        public static string TourSignal(AppMode prev, AppMode next)
+        {
+            bool was = ModeRules.LocksLandscape(prev);
+            bool now = ModeRules.LocksLandscape(next);
+            if (was == now) return null;
+            return now ? TourOnMessage : TourOffMessage;
+        }
+
         /// <summary>
         /// True once a host message said so. Read by the UI to skip Unity's own map hub and its
         /// login flow — both of which the host app owns when Unity is only one of its screens.
