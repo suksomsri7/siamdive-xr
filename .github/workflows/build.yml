@@ -442,6 +442,40 @@ jobs:
           file "$FW/UnityFramework" || true
           du -sh "$FW"
 
+      # ────────────────────────────────────────────────────────────────────────
+      # The RN bridge contract (WO-MERGE P1). @azesmway/react-native-unity compiles
+      # its iOS view from source inside the host's Pods, and that source opens with
+      #     #include <UnityFramework/NativeCallProxy.h>          (ios/RNUnityView.mm:4)
+      # so a framework without that header in Headers/ does not fail HERE — it fails
+      # in the other repository, hours later, as "file not found" in a pod nobody
+      # was editing. Unity marks plugin headers project-private by default; the
+      # Editor post-processor Assets/Editor/IosNativeCallProxyHeader.cs makes this
+      # one Public. This step is the proof that it worked, on the ARTIFACT rather
+      # than in a log, and it is a hard failure because an artifact that cannot be
+      # embedded is worth less than no artifact at all.
+      # ────────────────────────────────────────────────────────────────────────
+      - name: Verify the framework exports NativeCallProxy.h
+        run: |
+          H="$FRAMEWORK/Headers/NativeCallProxy.h"
+          if [ ! -f "$H" ]; then
+            echo "::error::UnityFramework.framework exports no Headers/NativeCallProxy.h — the RN pod cannot compile against this build."
+            echo "── what IS exported ──"
+            ls -la "$FRAMEWORK/Headers" 2>/dev/null || echo "(no Headers directory at all)"
+            exit 1
+          fi
+          # Names, not just the file: the pod adopts the protocol and looks the class up by
+          # string at run time (NSClassFromString(@"FrameworkLibAPI")), so a header that was
+          # exported but edited into a different shape is the same outage one step later.
+          for SYM in NativeCallsProtocol FrameworkLibAPI registerAPIforNativeCalls sendMessageToMobileApp; do
+            grep -q "$SYM" "$H" || {
+              echo "::error::Headers/NativeCallProxy.h does not mention $SYM — the bridge contract has drifted."
+              cat "$H"
+              exit 1
+            }
+          done
+          echo "NativeCallProxy.h is public and carries all four bridge symbols:"
+          cat "$H" | grep -nE 'NativeCallsProtocol|FrameworkLibAPI|sendMessageToMobileApp|registerAPIforNativeCalls'
+
       - name: Package the framework
         run: |
           STAGE="${{ runner.temp }}/UnityFramework-ios"

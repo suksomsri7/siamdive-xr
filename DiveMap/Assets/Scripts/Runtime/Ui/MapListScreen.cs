@@ -217,6 +217,16 @@ namespace DiveMap.Runtime.Ui
         private void RenderAccount()
         {
             bool on = Account.IsSignedIn;
+
+            // 🔴 WO-MERGE P1 — in library mode the host app owns login, so the SIGNED-OUT face of
+            // this button has nowhere to go (LoginSheet.Open is gated) and is hidden rather than
+            // left as a circle that does nothing when tapped. The signed-in face stays: the host
+            // injects its deviceId, the server links that device to an account, and the profile
+            // this opens is then the same person the host is showing everywhere else. This screen
+            // is still reachable in library mode as the warp gate's destination picker even though
+            // the menu no longer opens it.
+            if (_accountBtn != null) _accountBtn.gameObject.SetActive(on || !NativeBoot.LibraryMode);
+
             if (_accountBg != null) _accountBg.color = on ? AddBg : ProfBg;
             if (_accountRim != null) _accountRim.color = on ? UiKit.Accent : ProfRim;
             if (_accountIcon != null) _accountIcon.gameObject.SetActive(!on);

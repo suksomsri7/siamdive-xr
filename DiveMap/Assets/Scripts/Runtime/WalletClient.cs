@@ -46,11 +46,35 @@ namespace DiveMap.Runtime
             if (_instance == this) _instance = null;
         }
 
-        /// <summary>Stable per-install id, the same idea as the web's getDeviceId().</summary>
+        /// <summary>
+        /// Stable per-install id, the same idea as the web's getDeviceId().
+        ///
+        /// 🔴 WO-MERGE P1 — the host app's id wins when there is one. Everything the player owns
+        /// hangs off this string: coins (/api/wallet), the maps they made, their favourites and
+        /// the account those got adopted into (/api/account/me?deviceId=). When Unity runs as a
+        /// screen inside the RN app, that app has ALREADY been using its own id against the same
+        /// endpoints, so generating a second one here would show the same person an empty purse
+        /// and none of their own maps, one tap away from where they were full. Injecting the
+        /// host's id is therefore not a convenience, it is the difference between one identity
+        /// and two.
+        ///
+        /// It deliberately does NOT overwrite PlayerPrefs. The standalone DiveMap build is still
+        /// installed on the same phones as the QC channel for the fish work, and it must keep its
+        /// own wallet — the override lives only as long as the process that was told about it.
+        ///
+        /// ⚠️ Only real hardware can prove the last step. The id arrives by UnitySendMessage
+        /// AFTER Unity has started, so an early wallet read can still have used the local id;
+        /// requests made after the message use the host's. Nothing is lost either way (the
+        /// server is authoritative per device and pending deltas are held in PlayerPrefs), but
+        /// "the coin count blinked once at startup" is a device observation, not a CI one.
+        /// </summary>
         public static string DeviceId
         {
             get
             {
+                string host = DiveMap.Core.NativeBoot.HostDeviceId;
+                if (!string.IsNullOrEmpty(host)) return host;
+
                 string id = PlayerPrefs.GetString(DeviceKey, "");
                 if (!string.IsNullOrEmpty(id)) return id;
                 id = SystemInfo.deviceUniqueIdentifier;

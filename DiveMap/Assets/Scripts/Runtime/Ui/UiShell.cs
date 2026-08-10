@@ -257,7 +257,13 @@ namespace DiveMap.Runtime.Ui
                 vrt.anchoredPosition = new Vector2(0f, -UiKit.Css(2f));
             }
 
-            ActionButton(0, "list", OpenMapList);
+            // 🔴 In library mode this is the way OUT of the 3D screen, not the way into Unity's
+            // own map hub — the host app owns the list of dive sites (WO-MERGE P1). The icon is
+            // decided here and can also be swapped later by ApplyHostMode, because the host's
+            // boot message may not have arrived by the time the column is built. What the button
+            // DOES is decided at tap time inside OpenMapList, which is the pattern every other
+            // button in this column already uses for facts not known at startup.
+            ActionButton(0, NativeBoot.LibraryMode ? "back" : "list", OpenMapList);
             ActionButton(1, "mask", StartTour);
             ActionButton(2, "depth", ToggleDepthView);   // the web's #depthViewBtn
             ActionButton(3, "wave", ToggleEnv);          // the web's #env (☀️ / 💧)
@@ -464,7 +470,9 @@ namespace DiveMap.Runtime.Ui
             // warp lands you IN the next map, not looking at it.
             TourController.ArrivingByWarp = true;
             if (ModeManager.Instance != null) ModeManager.Instance.Exit();
-            OpenMapList();
+            // Internal on purpose: a warp gate needs the picker even in library mode, where
+            // OpenMapList means "leave the 3D screen" (WO-MERGE P1).
+            OpenMapListInternal();
         }
 
         /// <summary>
@@ -491,19 +499,25 @@ namespace DiveMap.Runtime.Ui
                 UiStrings.Tr("เก็บเหรียญที่ได้?") + "  " + earned);
             if (sheet == null) { go?.Invoke(); return; }
 
-            sheet.AddItem(UiStrings.Tr("เข้าสู่ระบบเก็บ"), () =>
+            // No "sign in to keep them" in library mode: LoginSheet.Open is gated there (RN owns
+            // the account), so the item would be a button that visibly does nothing. The choice
+            // stays honest — keep playing, or leave and lose them (WO-MERGE P1).
+            if (!NativeBoot.LibraryMode)
             {
-                // Do NOT leave yet: the coins have to reach the account first, and navigating
-                // away mid-request is exactly how they get lost.
-                LoginSheet.SignedIn += OnceThenGo;
-                LoginSheet.Open();
-                void OnceThenGo()
+                sheet.AddItem(UiStrings.Tr("เข้าสู่ระบบเก็บ"), () =>
                 {
-                    LoginSheet.SignedIn -= OnceThenGo;
-                    WalletClient.Flush();
-                    go?.Invoke();
-                }
-            });
+                    // Do NOT leave yet: the coins have to reach the account first, and navigating
+                    // away mid-request is exactly how they get lost.
+                    LoginSheet.SignedIn += OnceThenGo;
+                    LoginSheet.Open();
+                    void OnceThenGo()
+                    {
+                        LoginSheet.SignedIn -= OnceThenGo;
+                        WalletClient.Flush();
+                        go?.Invoke();
+                    }
+                });
+            }
             sheet.AddItem(UiStrings.Tr("ทิ้ง"), () => go?.Invoke(), true);
             sheet.AddCancel(UiStrings.Tr("ภายหลัง"));
             Debug.Log($"[Game] arena exit gate — {earned} coin(s) at risk");
@@ -519,6 +533,24 @@ namespace DiveMap.Runtime.Ui
 
         public void OpenMapList()
         {
+            // 🔴 WO-MERGE P1 — the hub is not deleted, it is skipped. When Unity is a screen
+            // inside the RN app, that app already has a map list (map.tsx) with favourites and
+            // offline copies in it; showing a second one inside the 3D view would be two hubs
+            // disagreeing about which maps exist. So the top-level "out" action leaves instead.
+            // The standalone DiveMap build never sets the flag and is untouched — it still needs
+            // this screen, and it is the QC channel for the fish work.
+            if (NativeBoot.LibraryMode) { ExitToHost(); return; }
+            OpenMapListInternal();
+        }
+
+        /// <summary>
+        /// The hub as it has always opened: guard unsaved work, offer to bank loose coins, then
+        /// push the screen. Split out of <see cref="OpenMapList"/> so that the warp gate — which
+        /// uses the same list as a DESTINATION PICKER inside the world, not as a way out — keeps
+        /// both of those guards in library mode instead of being turned into an exit.
+        /// </summary>
+        private void OpenMapListInternal()
+        {
             GuardUnsaved();
             // Coins earned this session vanish if the player walks away without an account.
             if (TrashGameSystem.EarnedThisSession > 0 && !DiveMap.Core.Account.IsSignedIn)
@@ -527,6 +559,40 @@ namespace DiveMap.Runtime.Ui
                 return;
             }
             OpenMapListNow();
+        }
+
+        /// <summary>
+        /// Hand the screen back to the host app (WO-MERGE P1). Unsaved work is flushed on the way
+        /// out for the same reason the hub flushes it: the player is leaving the map, and whether
+        /// the next screen is Unity's or React Native's makes no difference to the edit they just
+        /// made. Unity itself keeps running — the host pauses and hides the view, because
+        /// unloading Unity is what makes the NEXT visit a black screen.
+        ///
+        /// In the standalone build nothing is listening, the message goes to a nil receiver and
+        /// this is a no-op — which is why the call needs no flag around it.
+        /// </summary>
+        public void ExitToHost()
+        {
+            GuardUnsaved();
+            CloseActions();
+            CloseAll();
+            NativeBridge.RequestExit();
+        }
+
+        /// <summary>
+        /// Re-dress the shell after the host declares library mode (WO-MERGE P1). The action
+        /// column is built at startup and the host's boot message can arrive later, so the one
+        /// affordance whose MEANING changed — the hub button, now an exit — gets its icon swapped
+        /// the same way <see cref="ToggleEnv"/> swaps the day/night one. Behaviour needs no
+        /// refresh: it is decided at tap time.
+        /// </summary>
+        public void ApplyHostMode()
+        {
+            if (_actions == null) return;
+            Transform t = _actions.Find("Action_list");
+            Button b = t != null ? t.GetComponent<Button>() : null;
+            if (b != null) UiKit.SetIcon(b, "back");
+            Debug.Log("[UI] library mode — the map hub button is now the way back to the host app");
         }
 
         private void OpenMapListNow()
@@ -703,6 +769,7 @@ namespace DiveMap.Runtime.Ui
         private void Update()
         {
             ApplySafeArea(false);
+            HostBackKey();
 
             // Three independent vetoes: an open screen, a finger on a UI element, and the
             // current mode (a first-person tour must not also orbit — P0.5).
@@ -710,6 +777,33 @@ namespace DiveMap.Runtime.Ui
             if (allow && !ModeManager.OrbitAllowed) allow = false;
             if (allow && PointerOverUi()) allow = false;
             SetOrbitEnabled(allow);
+        }
+
+        /// <summary>
+        /// The system back gesture at the TOP level, in library mode (WO-MERGE P1).
+        ///
+        /// Unity maps the Android back key (and the Editor's Esc) to KeyCode.Escape. Three other
+        /// places already claim it and each is checked here so this never steals a press from
+        /// them: UiNav pops an open screen (stack &gt; 0), InfoCardController closes an open card,
+        /// and a first-person mode owns the key while it is running. What is left over is
+        /// "nothing is open and the player pressed back on the map" — which in the standalone
+        /// build does nothing at all, and which in library mode is precisely the moment to hand
+        /// the screen back to the host.
+        ///
+        /// ⚠️ On iOS there IS no back key, so this path never fires there: the iOS way out is the
+        /// action-column button, and the host's own navigation bar. It is written now because
+        /// the Android work order will need it and because it costs one comparison per frame.
+        /// </summary>
+        private void HostBackKey()
+        {
+            if (!NativeBoot.LibraryMode) return;
+            if (!Input.GetKeyDown(KeyCode.Escape)) return;
+            if (_nav != null && _nav.Count > 0) return;
+            if (_card != null && _card.IsVisible) return;
+            if (!ModeManager.OrbitAllowed) return;
+
+            Debug.Log("[UI] back at the top level → exit to the host app");
+            ExitToHost();
         }
 
         private void SetOrbitEnabled(bool on)

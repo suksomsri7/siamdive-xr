@@ -77,6 +77,11 @@
     <Compile Include="../../DiveMap/Assets/Scripts/Core/KtxTranscodeTarget.cs" />
     <Compile Include="../../DiveMap/Assets/Scripts/Core/AstcAssetPick.cs" />
     <Compile Include="../../DiveMap/Assets/Scripts/Core/LoadProgress.cs" />
+    <!-- WO-MERGE P1. The boot message from the React Native host. Pure (Newtonsoft only), and
+         the failures it guards against are invisible from inside Unity: a misread payload opens
+         the wrong dive site, or shows Unity's own map hub inside an app that already has one,
+         and neither writes an error anywhere. -->
+    <Compile Include="../../DiveMap/Assets/Scripts/Core/NativeBoot.cs" />
   </ItemGroup>
 
   <ItemGroup Label="EditMode tests for exactly those files">
@@ -112,6 +117,7 @@
     <Compile Include="../../DiveMap/Assets/Tests/EditMode/LoadProgressTests.cs" />
     <Compile Include="../../DiveMap/Assets/Tests/EditMode/TexTiersTests.cs" />
     <Compile Include="../../DiveMap/Assets/Tests/EditMode/TrashPhysicsTests.cs" />
+    <Compile Include="../../DiveMap/Assets/Tests/EditMode/NativeBootTests.cs" />
     <Compile Include="Runner.cs" />
   </ItemGroup>
 </Project>

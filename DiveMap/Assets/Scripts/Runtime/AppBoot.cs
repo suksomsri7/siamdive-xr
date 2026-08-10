@@ -47,10 +47,22 @@ namespace DiveMap.Runtime
         /// </summary>
         private const string FirstMapPin = "299";
 
+        /// <summary>
+        /// Where the last (or the requested) map is remembered. Written by <see cref="LoadMap"/>,
+        /// read below — and also written by the native host before this component exists, which
+        /// is the whole reason it is a named constant rather than a literal in two files
+        /// (WO-MERGE P1, see <c>NativeBootReceiver</c>).
+        /// </summary>
+        public const string ShortIdPrefKey = "shortId";
+
         private void Start()
         {
-            _shortId = PlayerPrefs.GetString("shortId", "");
-            if (PlayerPrefs.GetString("firstMapPin", "") != FirstMapPin)
+            _shortId = PlayerPrefs.GetString(ShortIdPrefKey, "");
+            // 🔴 …but never when the host app chose the map. The pin exists to make a QC build
+            // open on a known reef; in library mode the RN screen has already said which dive
+            // site the user tapped, and forcing Htms Chang over that would open the wrong map
+            // with nothing in any log to explain it.
+            if (!NativeBoot.LibraryMode && PlayerPrefs.GetString("firstMapPin", "") != FirstMapPin)
             {
                 PlayerPrefs.SetString("firstMapPin", FirstMapPin);
                 _shortId = "";   // fall through to the default map (Htms Chang) once
@@ -97,7 +109,11 @@ namespace DiveMap.Runtime
             SetupBuilder();
             BuildUi();
 
-            StartCoroutine(Boot());
+            // _started before the coroutine, not after: a host message that lands during this
+            // very frame must find a component that is ready to switch maps rather than one that
+            // will quietly start a SECOND boot on top of this one.
+            _started = true;
+            StartCoroutine(BootTracked());
         }
 
         // ── Scene wiring ────────────────────────────────────────────────────────────
@@ -336,6 +352,75 @@ namespace DiveMap.Runtime
         }
 
         // ── Boot flow ───────────────────────────────────────────────────────────────
+
+        /// <summary>True from <see cref="Start"/> onwards — see <see cref="SwitchMapFromHost"/>.</summary>
+        private bool _started;
+
+        /// <summary>True while <see cref="Boot"/> is between its first line and its last.</summary>
+        private bool _booting;
+
+        /// <summary>A host map switch that arrived too early to act on, or "" for none.</summary>
+        private string _pendingShortId;
+
+        /// <summary>
+        /// <see cref="Boot"/> with a flag around it, and a place for a queued map switch to run
+        /// (WO-MERGE P1).
+        ///
+        /// Why a flag at all: Boot() has four exits — three of them <c>yield break</c> after an
+        /// error — so "is a load in flight?" cannot be answered from inside it without repeating
+        /// the same two lines at every exit and getting one of them wrong the next time an exit
+        /// is added. A <c>yield return</c> on the inner coroutine resumes here however it ended,
+        /// so one wrapper answers it for all four.
+        ///
+        /// 🔴 Why a LOOP instead of calling <see cref="LoadMap"/> for the queued map. LoadMap ends
+        /// in <see cref="Retry"/>, and Retry's first act is <c>StopAllCoroutines</c> — which from
+        /// in here means "stop the coroutine that is calling you". Unity can only suspend a
+        /// coroutine at a yield, so it would in fact work; but it depends on that detail, it can
+        /// only be disproved on a device, and the fix is to not need it. Looping runs the very
+        /// same Boot() the map hub's switch runs, with the same bookkeeping in
+        /// <see cref="RememberMap"/> — one reload path, no coroutine stopping itself.
+        /// </summary>
+        private IEnumerator BootTracked()
+        {
+            while (true)
+            {
+                _booting = true;
+                yield return Boot();
+                _booting = false;
+
+                // Nothing queued: this is the ordinary end of a load.
+                if (string.IsNullOrEmpty(_pendingShortId)) yield break;
+
+                string next = _pendingShortId;
+                _pendingShortId = null;
+                // The load that just finished may already have been the queued map (the host and
+                // PlayerPrefs can agree without either knowing about the other).
+                if (string.Equals(next, _shortId, StringComparison.Ordinal)) yield break;
+
+                Debug.Log("[Native] queued map switch → " + next);
+                RememberMap(next);
+                // Boot() destroys the previous map root on its way in and the builder has nothing
+                // in flight (the load above ran to its end), so the next turn of the loop is a
+                // clean reload rather than a second map growing behind the first.
+            }
+        }
+
+        /// <summary>
+        /// Make <paramref name="shortId"/> the current map for both this session and the next
+        /// launch. Split out of <see cref="LoadMap"/> so the boot loop can reuse the bookkeeping
+        /// without reusing <see cref="Retry"/>; persisting is also what gives "remember the last
+        /// map" for free, because <see cref="Start"/> reads this key.
+        /// </summary>
+        private void RememberMap(string shortId)
+        {
+            _shortId = shortId;
+            // Whatever the host queued is stale the moment a newer choice is made — otherwise a
+            // player who queued map A during boot and then tapped map B in the hub would arrive
+            // at B and be yanked to A a few seconds later.
+            _pendingShortId = null;
+            PlayerPrefs.SetString(ShortIdPrefKey, shortId);
+            PlayerPrefs.Save();
+        }
 
         private IEnumerator Boot()
         {
@@ -711,7 +796,7 @@ namespace DiveMap.Runtime
             StopAllCoroutines();
             _rebuild = null;
             if (_builder != null) _builder.DiscardInFlight();
-            StartCoroutine(Boot());
+            StartCoroutine(BootTracked());
         }
 
         /// <summary>The map on screen right now (E5 stores purchases against it).</summary>
@@ -818,10 +903,66 @@ namespace DiveMap.Runtime
         public void LoadMap(string shortId)
         {
             if (string.IsNullOrEmpty(shortId)) return;
-            _shortId = shortId;
-            PlayerPrefs.SetString("shortId", shortId);
-            PlayerPrefs.Save();
+            RememberMap(shortId);
             Retry();
+        }
+
+        /// <summary>
+        /// The native host's <c>UnitySendMessage("AppBoot", "OnNativeBoot", json)</c>, forwarded
+        /// (WO-MERGE P1). Kept here as well as on the receiver object so that a host which
+        /// addresses the scene's bootstrap object — however it came to be named "AppBoot" — gets
+        /// the same behaviour instead of a silent miss.
+        /// </summary>
+        public void OnNativeBoot(string json) => NativeBootReceiver.Apply(json);
+
+        /// <summary>
+        /// Open the map the host named, from whichever of the three moments the message arrived
+        /// in (WO-MERGE P1). Every one of them ends in <see cref="Boot"/> — no new reload path is
+        /// invented here. Once the map is up it goes through <see cref="LoadMap"/>, the SAME call
+        /// the in-app map hub makes (UiShell.OnMapSelected): PlayerPrefs, then <see cref="Retry"/>,
+        /// which stops the in-flight build and calls <c>SceneBuilder.DiscardInFlight</c> before
+        /// starting the next one. That last part is the bug this must not reintroduce — a stopped
+        /// coroutine does not clean up the "Map" root it already created, and reloading without
+        /// discarding leaves a whole ghost map: two seabeds, two wrecks, twice the draw calls,
+        /// nothing in any log. A switch queued mid-load reaches the same Boot() through
+        /// <see cref="BootTracked"/>'s loop instead, for the reason written there.
+        ///
+        /// The three moments:
+        ///   • before <see cref="Start"/> ran — do nothing here; the receiver has already written
+        ///     PlayerPrefs and Start reads it. Calling LoadMap now would start a boot that Start
+        ///     is about to start again, and two builds racing into one scene is exactly the ghost
+        ///     map above.
+        ///   • during the first load — remembered and applied when it finishes. Deliberately NOT
+        ///     an immediate Retry: the first seconds after launch are when the host is still
+        ///     settling its own view, and tearing a half-built scene down there costs more than
+        ///     the few seconds of finishing it.
+        ///   • after the map is up — an ordinary switch.
+        /// </summary>
+        public void SwitchMapFromHost(string shortId)
+        {
+            if (string.IsNullOrEmpty(shortId)) return;
+
+            // Already there, or already on the way there (LoadMap sets _shortId before it builds).
+            if (string.Equals(shortId, _shortId, StringComparison.Ordinal))
+            {
+                _pendingShortId = null;
+                return;
+            }
+
+            if (!_started)
+            {
+                Debug.Log("[Native] map " + shortId + " will be picked up by Start()");
+                return;
+            }
+
+            if (_booting)
+            {
+                _pendingShortId = shortId;
+                Debug.Log("[Native] map " + shortId + " queued behind the load in flight");
+                return;
+            }
+
+            LoadMap(shortId);
         }
 
         // ── UI (built in code) ────────────────────────────────────────────────────────

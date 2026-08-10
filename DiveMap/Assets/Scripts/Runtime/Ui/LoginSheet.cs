@@ -54,6 +54,20 @@ namespace DiveMap.Runtime.Ui
         public static void Open()
         {
             if (_open != null) return;
+
+            // 🔴 WO-MERGE P1 — RN owns the account when Unity is only one of its screens. Two
+            // login flows over one identity is not a cosmetic problem: this sheet ADOPTS every
+            // map made on the device into whichever account signs in here (email/verify:50), and
+            // that is not reversible. So the gate is at the one door every entry point goes
+            // through rather than at each of them — a caller added later inherits it for free.
+            // The standalone build never sets the flag and keeps the whole flow, including the
+            // -qcui screenshot pass that photographs this sheet.
+            if (DiveMap.Core.NativeBoot.LibraryMode)
+            {
+                Debug.Log("[UI] login suppressed — the host app owns the account (library mode)");
+                return;
+            }
+
             RectTransform host = UiShell.Instance != null ? UiShell.Instance.OverlayRoot : null;
             if (host == null) return;
 
