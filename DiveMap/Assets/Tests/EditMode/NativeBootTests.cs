@@ -257,6 +257,76 @@ namespace DiveMap.Tests
             Assert.IsFalse(NativeBoot.ExitMessage.StartsWith("dm:"));
         }
 
+        // ── badge / eco: parsed now, sent by the host later ──────────────────────
+
+        [Test]
+        public void BadgeAndEco_AreAbsentFromTodaysPayload()
+        {
+            // The RN screen does not send either field yet. Absent must mean "no opinion", which
+            // for both of these is the default the app already wants: no badge when embedded, and
+            // the reef at full size.
+            const string json = "{\"shortId\":\"299\",\"deviceId\":\"abc123\",\"lang\":\"th\",\"libraryMode\":1}";
+            Assert.IsTrue(NativeBoot.TryParse(json, out NativeBootArgs a));
+            Assert.AreEqual(null, a.Badge);
+            Assert.AreEqual(null, a.Eco);
+
+            NativeBoot.Adopt(a);
+            Assert.IsFalse(NativeBoot.BadgeForced);
+            Assert.IsFalse(NativeBoot.EcoMode);
+        }
+
+        [Test]
+        public void Badge_TurnsTheInstrumentBackOnWhenEmbedded()
+        {
+            Assert.IsTrue(NativeBoot.TryParse("{\"libraryMode\":1,\"badge\":1}", out NativeBootArgs a));
+            Assert.AreEqual(true, a.Badge);
+            NativeBoot.Adopt(a);
+            Assert.IsTrue(NativeBoot.BadgeForced);
+        }
+
+        [Test]
+        public void Eco_HalvesTheReefWhenTheHostAsks()
+        {
+            Assert.IsTrue(NativeBoot.TryParse("{\"libraryMode\":1,\"eco\":1}", out NativeBootArgs a));
+            Assert.AreEqual(true, a.Eco);
+            NativeBoot.Adopt(a);
+            Assert.IsTrue(NativeBoot.EcoMode);
+        }
+
+        [TestCase("{\"eco\":true}", true)]
+        [TestCase("{\"eco\":\"1\"}", true)]
+        [TestCase("{\"eco\":0}", false)]
+        [TestCase("{\"badge\":\"false\"}", false)]
+        public void BadgeAndEco_AcceptTheSameBooleanShapesAsLibraryMode(string json, bool expected)
+        {
+            Assert.IsTrue(NativeBoot.TryParse(json, out NativeBootArgs a));
+            Assert.AreEqual(expected, a.Eco ?? a.Badge);
+        }
+
+        [Test]
+        public void EcoAndBadge_SurviveALaterMessageThatDoesNotMentionThem()
+        {
+            NativeBoot.TryParse("{\"libraryMode\":1,\"eco\":1,\"badge\":1}", out NativeBootArgs first);
+            NativeBoot.Adopt(first);
+
+            NativeBoot.TryParse("{\"shortId\":\"301\"}", out NativeBootArgs second);
+            NativeBoot.Adopt(second);
+
+            Assert.IsTrue(NativeBoot.EcoMode, "a map switch must not quietly un-throttle the reef");
+            Assert.IsTrue(NativeBoot.BadgeForced);
+            Assert.AreEqual("301", NativeBoot.Current.ShortId);
+        }
+
+        [Test]
+        public void Reset_ClearsBadgeAndEcoToo()
+        {
+            NativeBoot.TryParse("{\"eco\":1,\"badge\":1}", out NativeBootArgs a);
+            NativeBoot.Adopt(a);
+            NativeBoot.Reset();
+            Assert.IsFalse(NativeBoot.EcoMode);
+            Assert.IsFalse(NativeBoot.BadgeForced);
+        }
+
         // ── the tour ↔ landscape signal ──────────────────────────────────────────
 
         [TestCase(AppMode.View, AppMode.Tour)]

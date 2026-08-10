@@ -82,6 +82,10 @@
          the wrong dive site, or shows Unity's own map hub inside an app that already has one,
          and neither writes an error anywhere. -->
     <Compile Include="../../DiveMap/Assets/Scripts/Core/NativeBoot.cs" />
+    <!-- WO-MERGE P1c. When to answer an iOS memory warning. The handler needs a device; the
+         throttle rule is the part that can be wrong (answering a burst four times over is a
+         freeze added to a phone that was only nearly out of memory) and it is pure. -->
+    <Compile Include="../../DiveMap/Assets/Scripts/Core/MemoryRelief.cs" />
   </ItemGroup>
 
   <ItemGroup Label="EditMode tests for exactly those files">
@@ -118,6 +122,7 @@
     <Compile Include="../../DiveMap/Assets/Tests/EditMode/TexTiersTests.cs" />
     <Compile Include="../../DiveMap/Assets/Tests/EditMode/TrashPhysicsTests.cs" />
     <Compile Include="../../DiveMap/Assets/Tests/EditMode/NativeBootTests.cs" />
+    <Compile Include="../../DiveMap/Assets/Tests/EditMode/MemoryReliefTests.cs" />
     <Compile Include="Runner.cs" />
   </ItemGroup>
 </Project>

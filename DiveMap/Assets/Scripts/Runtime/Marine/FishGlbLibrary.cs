@@ -48,6 +48,49 @@ namespace DiveMap.Runtime.Marine
         /// <summary>Templates finished so far (safe to apply immediately).</summary>
         public IReadOnlyList<Template> Ready => _ready;
 
+        /// <summary>How many imports this library is holding open (diagnostics / the leak audit).</summary>
+        public int HeldImports => _keepAlive.Count;
+
+        /// <summary>
+        /// Give the species meshes and textures back (WO-MERGE P1c).
+        ///
+        /// 🔴 The leak this closes. SceneBuilder makes a NEW library for every map
+        /// (<c>_fishGlb = new FishGlbLibrary()</c>) and <c>_keepAlive</c> holds one
+        /// <see cref="GltfImport"/> per species so the shared instancing mesh cannot be pulled out
+        /// from under <c>RenderMeshInstanced</c> mid-frame. That is right for the map that is on
+        /// screen and wrong the moment the next one loads: the old library was simply dropped, and
+        /// an undisposed GltfImport keeps its meshes and its textures — which for fish are the
+        /// expensive half — resident for the rest of the process. Nothing referenced them and
+        /// nothing could free them either, because the import still did.
+        ///
+        /// On Htms Chang that is up to ten species per visit, on a build that now shares an iOS
+        /// memory budget with React Native and a WebView. Two or three trips in and the app is
+        /// killed by the system with no crash log of its own — which is exactly the report.
+        ///
+        /// ⚠️ Only safe once the map that was drawing from these is gone. The single caller,
+        /// <c>SceneBuilder.ReleaseImports</c>, is called at the top of a build for precisely that
+        /// reason and carries the note explaining it; do not call this from anywhere else.
+        /// </summary>
+        public void Dispose()
+        {
+            int n = _keepAlive.Count;
+            for (int i = 0; i < _keepAlive.Count; i++)
+            {
+                try { _keepAlive[i]?.Dispose(); }
+                catch (Exception e)
+                {
+                    // Freeing memory must never be the thing that takes the app down.
+                    Debug.LogWarning("[Marine] fishGlb dispose failed: " + e.Message);
+                }
+            }
+            _keepAlive.Clear();
+            _ready.Clear();
+            // The callback closes over the previous map's FishSchoolSystem. Cleared so a template
+            // that lands after the map is gone cannot reach into it.
+            OnReady = null;
+            if (n > 0) Debug.Log($"[Marine] fishGlb released {n} species import(s)");
+        }
+
         /// <summary>
         /// Set by <c>SceneBuilder</c> once the school system exists; called for every
         /// template that lands afterwards so a slow GLB still hot-swaps in mid-scene.

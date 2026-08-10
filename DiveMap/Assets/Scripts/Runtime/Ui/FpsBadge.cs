@@ -14,6 +14,24 @@ namespace DiveMap.Runtime.Ui
         private int _n;
         private GUIStyle _style;
 
+        /// <summary>
+        /// Should the numbers be on screen right now? (WO-MERGE P1c)
+        ///
+        /// 🔴 Two products, two answers, and the reason the check is here rather than at the
+        /// <see cref="Ensure"/> call site. Standalone DiveMap keeps the badge unconditionally —
+        /// it is not a debug overlay, it is the instrument: every video the user films of the
+        /// standalone build carries its own fps reading, which is the only thing that has ever
+        /// been able to tell "the fish swim wrong" from "the phone renders at 18 fps". Embedded in
+        /// the SiamDive app it is somebody else's product surface and the user asked for it gone.
+        ///
+        /// Asked every frame instead of once at startup because <c>badge</c> arrives with the
+        /// host's boot payload, which lands after the badge object already exists — and because
+        /// <see cref="NativeBridge.EmbeddedInHost"/> is a cached packaging fact, so the common
+        /// answer costs a P/Invoke into a static bool.
+        /// </summary>
+        public static bool Visible =>
+            !NativeBridge.EmbeddedInHost || DiveMap.Core.NativeBoot.BadgeForced;
+
         public static void Ensure()
         {
             if (Object.FindFirstObjectByType<FpsBadge>() != null) return;
@@ -36,6 +54,10 @@ namespace DiveMap.Runtime.Ui
 
         private void OnGUI()
         {
+            // The object stays alive and keeps counting: a debug switch that turned the badge back
+            // on should show the fps of the last half second, not start from zero.
+            if (!Visible) return;
+
             if (_style == null)
             {
                 _style = new GUIStyle(GUI.skin.label)

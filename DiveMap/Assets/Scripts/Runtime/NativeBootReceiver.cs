@@ -124,7 +124,11 @@ namespace DiveMap.Runtime
             Debug.Log($"[Native] boot shortId='{NativeBoot.Current.ShortId}' " +
                       $"device={Mask(NativeBoot.HostDeviceId)} lang='{NativeBoot.Current.Lang}' " +
                       $"libraryMode={NativeBoot.LibraryMode} " +
-                      $"token={(string.IsNullOrEmpty(NativeBoot.AuthToken) ? "none" : "held")}");
+                      $"token={(string.IsNullOrEmpty(NativeBoot.AuthToken) ? "none" : "held")} " +
+                      // Both are off in every payload the host sends today. They are logged
+                      // anyway because the day one of them IS sent is the day somebody is reading
+                      // a device log trying to work out whether it arrived (WO-MERGE P1c).
+                      $"badge={NativeBoot.BadgeForced} eco={NativeBoot.EcoMode}");
 
             ApplyLanguage(args.Lang);
 

@@ -288,7 +288,14 @@ namespace DiveMap.Runtime
             // instead (never below 8 per school, or a "school" stops reading as one). Applied
             // HERE, not in MakeSchoolReg, so the web formulas and their tests stay untouched;
             // the QC run is always high-gfx, so 1,100 remains the oracle.
-            bool liteGfx = SettingsStore.IsLite(SettingsStore.Gfx);
+            // …or because the host app asked for it (WO-MERGE P1c, "eco":1). The merged iOS app
+            // shares one memory budget between React Native, a resident WebView and Unity, and
+            // Htms Chang's load peak on top of that is what the system killed. This is the
+            // fallback lever if releasing the WebView is not enough: the host can halve the reef
+            // without the player having to find a setting, and without a second code path — it
+            // joins the switch that already exists rather than adding one. The user's own saved
+            // preference is NOT written; eco lasts as long as the session that was told about it.
+            bool liteGfx = SettingsStore.IsLite(SettingsStore.Gfx) || NativeBoot.EcoMode;
 
             foreach (SceneItem item in items)
             {
@@ -877,6 +884,20 @@ namespace DiveMap.Runtime
                 if (t != null && t.Status == TaskStatus.RanToCompletion) t.Result?.Dispose();
             }
             _imports.Clear();
+
+            // 🔴 The FISH imports were not in this sweep, and they are the ones that hurt
+            // (WO-MERGE P1c). _imports holds the scenery — wreck, rocks, coral, keyed by URL. The
+            // species meshes and their textures live in a separate FishGlbLibrary that is REPLACED
+            // wholesale on the next build (`_fishGlb = new FishGlbLibrary()` below), so the old
+            // one was dropped without ever being disposed and its ten-odd imports stayed resident
+            // for the rest of the session. Same reasoning as above, same place, one more line:
+            // by the time this runs the caller has already destroyed the map that was drawing from
+            // them (AppBoot's Boot and RebuildRoutine both Destroy(_mapRoot) first).
+            if (_fishGlb != null)
+            {
+                _fishGlb.Dispose();
+                _fishGlb = null;
+            }
             // Hulls own nothing on the GPU — they are plain numbers — but they are keyed by URL
             // for THIS map, and a map that no longer has the object must not keep asking about it.
             _hulls.Clear();

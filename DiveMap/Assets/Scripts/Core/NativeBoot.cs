@@ -36,6 +36,20 @@ namespace DiveMap.Core
         /// null = the host did not say, so whatever was decided earlier stands.
         /// </summary>
         public bool? LibraryMode;
+
+        /// <summary>
+        /// Show the fps/build/fish badge even though we are embedded. The user asked for those
+        /// numbers gone from the merged app, but they are the instrument that settled the whole
+        /// "fish are twitching" investigation, so the switch to bring them back has to exist
+        /// somewhere the host can reach without a new build.
+        /// </summary>
+        public bool? Badge;
+
+        /// <summary>
+        /// Run the reef in economy mode (half the fish). The host's lever for the memory ceiling
+        /// of the merged app — see the note where it is consumed in <c>SceneBuilder</c>.
+        /// </summary>
+        public bool? Eco;
     }
 
     /// <summary>
@@ -155,6 +169,19 @@ namespace DiveMap.Core
         /// </summary>
         public static string AuthToken { get; private set; } = "";
 
+        /// <summary>
+        /// Has the host explicitly asked for the corner badge? Default false, which only matters
+        /// when embedded — the standalone build shows the badge regardless, because there it is
+        /// the QC instrument every video from the user is measured with (see <c>Ui.FpsBadge</c>).
+        /// </summary>
+        public static bool BadgeForced { get; private set; }
+
+        /// <summary>
+        /// Has the host asked for economy mode? Consumed by <c>SceneBuilder</c> on the next map
+        /// load, through the same switch the in-app "ประหยัดพลังงาน" setting uses.
+        /// </summary>
+        public static bool EcoMode { get; private set; }
+
         /// <summary>The merged view of every host message so far (diagnostics, and tests).</summary>
         public static NativeBootArgs Current { get; private set; }
 
@@ -174,12 +201,16 @@ namespace DiveMap.Core
             if (!string.IsNullOrEmpty(args.Lang)) next.Lang = args.Lang;
             if (!string.IsNullOrEmpty(args.AuthToken)) next.AuthToken = args.AuthToken;
             if (args.LibraryMode.HasValue) next.LibraryMode = args.LibraryMode;
+            if (args.Badge.HasValue) next.Badge = args.Badge;
+            if (args.Eco.HasValue) next.Eco = args.Eco;
 
             Current = next;
             Received = true;
             LibraryMode = next.LibraryMode ?? false;
             HostDeviceId = next.DeviceId ?? "";
             AuthToken = next.AuthToken ?? "";
+            BadgeForced = next.Badge ?? false;
+            EcoMode = next.Eco ?? false;
         }
 
         /// <summary>Back to "no host has spoken" — the standalone build's state, and every test's.</summary>
@@ -190,6 +221,8 @@ namespace DiveMap.Core
             LibraryMode = false;
             HostDeviceId = "";
             AuthToken = "";
+            BadgeForced = false;
+            EcoMode = false;
         }
 
         /// <summary>
@@ -223,6 +256,8 @@ namespace DiveMap.Core
             args.Lang = Language(Text(root["lang"]));
             args.AuthToken = Text(root["authToken"]);
             args.LibraryMode = Flag(root["libraryMode"]);
+            args.Badge = Flag(root["badge"]);
+            args.Eco = Flag(root["eco"]);
             return true;
         }
 
