@@ -107,6 +107,9 @@ namespace DiveMap.Runtime
             Application.targetFrameRate = 60;
 
             Ui.FpsBadge.Ensure();   // เลข fps มุมจอ — วิดีโอทุกคลิปจาก user กลายเป็นเครื่องวัด
+            // …and the one that answers "why is the screen blank?" without a second device round.
+            // Silent unless the world really is missing or flat, and library mode only (P1e).
+            Ui.StateBadge.Ensure();
             SetupCamera();
             SetupLighting();
             SetupBuilder();
@@ -324,6 +327,13 @@ namespace DiveMap.Runtime
             // screenshot — the job it was hired for, opening up shadowed undersides, is carried by
             // ambientGroundColor above and by the underwater floor. Left in because in SH it still
             // costs nothing and it does hold the Windows/desktop build together.
+
+            // 🔴 LAST LINE ON PURPOSE (WO-MERGE P1e). Everything above is the ONLY atmosphere in
+            // this app written from constants instead of from something read a moment earlier, so
+            // this is the one moment in the process where an absolute reference can be taken. Every
+            // later map load restores this snapshot before it builds, which is what stops a tour's
+            // near-black fog outliving the map it belonged to. Add new lighting above this line.
+            SceneAtmosphere.CaptureDefaults();
         }
 
         // A tiny uniform-colour cubemap used as the scene's custom reflection. Cached so
@@ -361,6 +371,12 @@ namespace DiveMap.Runtime
 
         /// <summary>True while <see cref="Boot"/> is between its first line and its last.</summary>
         private bool _booting;
+
+        /// <summary>
+        /// Is a map load in flight? Read by the QC harness, which has to wait for a switch to
+        /// finish before it can photograph the result, and by the library-mode diagnostic overlay.
+        /// </summary>
+        public bool IsBuilding => _booting;
 
         /// <summary>A host map switch that arrived too early to act on, or "" for none.</summary>
         private string _pendingShortId;
@@ -560,6 +576,19 @@ namespace DiveMap.Runtime
             // to the builder's own counters, and it is never created in a -qcshot run.
             Ui.LoadOverlay.Show(_builder != null ? _builder.Progress : null);
 
+            // 🔴 A new map must never inherit the previous MODE's atmosphere (WO-MERGE P1e).
+            //
+            // This is the defensive half of the flat-navy fix, and it is the half that matters,
+            // because the way out of the app that causes it can send NOTHING: an iOS swipe-back
+            // pauses the engine mid-tour without a single line of Unity code running. There is no
+            // message to handle and no callback to hook — so the only reliable place to put the
+            // scene right is the start of the next thing we DO control, which is here.
+            //
+            // Unconditional, before the fetch and before any build: whatever happened in the last
+            // session of this process, the map about to be built starts from the atmosphere
+            // AppBoot.SetupLighting authored. See SceneAtmosphere for the whole mechanism.
+            SceneAtmosphere.ResetForNewMap();
+
             // 🔴 RetireRoot, not Destroy (WO-MERGE P1d). Destroy is deferred to the end of the
             // frame, and BuildRoutine below releases the previous map's imports on its FIRST line —
             // so for the rest of this frame the old FishSchoolSystem would still be running,
@@ -732,6 +761,21 @@ namespace DiveMap.Runtime
             {
                 var marineC = _mapRoot != null ? _mapRoot.GetComponent<FishSchoolSystem>() : null;
                 StartCoroutine(SchoolClip(clipDir, marineC));
+            }
+
+            // The flat-navy positive control (WO-MERGE P1e). Runs the whole tour→swipe-back→switch
+            // sequence twice, once with the atmosphere reset held back, and fails the CI run
+            // unless the first pass reproduces the bug AND the second one does not. Checked before
+            // -qcshot because it drives map loads of its own and the two would fight over the
+            // camera; it ends in Application.Quit like the other harnesses.
+            string blankDir = GetArg("-qcblank");
+            if (!string.IsNullOrEmpty(blankDir))
+            {
+                // Begin, not StartCoroutine: the harness drives LoadMap, and LoadMap→Retry calls
+                // StopAllCoroutines on THIS object — a harness started here would kill itself on
+                // its first map switch and the run would end green with no verdict at all.
+                QcBlankShot.Begin(blankDir, this);
+                yield break;
             }
 
             string qcPath = GetArg("-qcshot");

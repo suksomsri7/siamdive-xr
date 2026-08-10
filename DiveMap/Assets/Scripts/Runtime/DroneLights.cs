@@ -246,6 +246,29 @@ namespace DiveMap.Runtime
 
         private void OnDestroy() => RestoreScene();
 
+        /// <summary>
+        /// Drop the "what the scene looked like before the tour" snapshot (WO-MERGE P1e).
+        ///
+        /// 🔴 This object outlives maps. It hangs off the ModeManager GameObject, which is never
+        /// destroyed — only the "Map" root is — so a snapshot taken on map A is still armed while
+        /// map B is being built, and <see cref="RestoreScene"/> would write map A's fog and
+        /// ambient over map B's. <see cref="SceneAtmosphere.ResetForNewMap"/> calls this so the
+        /// absolute restore it performs a line later cannot be undone by a stale relative one.
+        ///
+        /// Deactivates too: the lamps belong to a tour that is over, and the beams have been
+        /// reported as "light shafts on the water" once already when they were left alive.
+        /// The next tour re-arms it — <see cref="EnsureSaved"/> then captures the NEW map's
+        /// atmosphere, which is what "entering the tour sets up its own atmosphere from scratch"
+        /// means in practice.
+        /// </summary>
+        public void ForgetSceneSnapshot()
+        {
+            _saved = false;
+            _sun = null;
+            _fill = null;
+            if (gameObject.activeSelf) gameObject.SetActive(false);
+        }
+
         // ── meshes / material ────────────────────────────────────────────────────
 
         private static Material _glow;

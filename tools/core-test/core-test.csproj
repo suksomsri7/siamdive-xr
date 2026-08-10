@@ -89,6 +89,10 @@
     <!-- WO-MERGE P1d. The dive-site GET URL. Pure, and the reason it is here is that a missing
          ?deviceId= on it made every map read-only for its own owner in both products. -->
     <Compile Include="../../DiveMap/Assets/Scripts/Core/SiteRequest.cs" />
+    <!-- WO-MERGE P1e. The "is this frame a dead world" verdict behind the flat-navy positive
+         control. The pixels come from CI; the judgement — including what to do when the bug
+         fails to reproduce — is settled here. -->
+    <Compile Include="../../DiveMap/Assets/Scripts/Core/QcBlank.cs" />
   </ItemGroup>
 
   <ItemGroup Label="EditMode tests for exactly those files">
@@ -127,6 +131,7 @@
     <Compile Include="../../DiveMap/Assets/Tests/EditMode/NativeBootTests.cs" />
     <Compile Include="../../DiveMap/Assets/Tests/EditMode/MemoryReliefTests.cs" />
     <Compile Include="../../DiveMap/Assets/Tests/EditMode/SiteRequestTests.cs" />
+    <Compile Include="../../DiveMap/Assets/Tests/EditMode/QcBlankTests.cs" />
     <Compile Include="Runner.cs" />
   </ItemGroup>
 </Project>

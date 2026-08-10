@@ -836,11 +836,56 @@ jobs:
           find ~/.config/unity3d -name Player.log -exec cp {} qc_ui_player.log \; 2>/dev/null || true
           test -s qc_ui_player.log || echo "::warning::no Player.log found — QC log evidence missing"
 
+      # ────────────────────────────────────────────────────────────────────────
+      # POSITIVE CONTROL — "enter map A, leave mid-tour, open map B, the world is
+      # one flat navy colour while the HUD keeps working" (WO-MERGE P1e).
+      #
+      # 🔴 This step is a CONTROL, not a check. It runs the sequence TWICE in one
+      # player: once with the atmosphere reset suppressed, which must come out
+      # blank, and once as shipped, which must not. It fails the job in BOTH
+      # directions — and the direction that matters most is the first one, because
+      # a "before" frame that is NOT blank means the reproduction stopped
+      # reproducing and the instrument has gone blind. A green tick from a blind
+      # instrument is how this bug survived four device rounds.
+      #
+      # Both mean-luminance numbers land in verdict.txt and in the log, so the
+      # planner can see how close to the thresholds the run actually was rather
+      # than just which way it fell. Not `|| true`: this one is allowed to be red.
+      # ────────────────────────────────────────────────────────────────────────
+      - name: Positive control — a map switch must not inherit the tour's fog
+        run: |
+          BIN=$(find . -path '*/build/*' -name 'DiveMap' -type f | head -1)
+          echo "BIN=$BIN"; chmod +x "$BIN"
+          mkdir -p qc_blank
+          set +e
+          timeout 900 xvfb-run -a -s "-screen 0 1280x720x24" \
+            "$BIN" -qcblank "$PWD/qc_blank" -screen-width 1280 -screen-height 720 -force-glcore
+          RC=$?
+          set -e
+          find ~/.config/unity3d -name Player.log -exec cp {} qc_blank/player.log \; 2>/dev/null || true
+
+          echo "── verdict ──"
+          cat qc_blank/verdict.txt 2>/dev/null || echo "(no verdict written)"
+          grep -E '\[QcBlank\]|\[Atmos\]' qc_blank/player.log 2>/dev/null | tail -40 || true
+          ls -la qc_blank || true
+
+          if [ ! -s qc_blank/verdict.txt ]; then
+            echo "::error::the control produced no verdict (exit $RC) — it did not run to the end, so nothing is proven"
+            exit 1
+          fi
+          if [ "$RC" -ne 0 ]; then
+            echo "::error::$(cat qc_blank/verdict.txt)"
+            exit 1
+          fi
+          echo "$(cat qc_blank/verdict.txt)"
+
       - name: Upload QC artifacts
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: qc-screenshot
           path: |
+            qc_blank/
             qc_screenshot.png
             qc_screenshot2.png
             qc_model_*.png

@@ -627,6 +627,28 @@ namespace DiveMap.Runtime.Ui
             GuardUnsaved();
             CloseActions();
             CloseAll();
+
+            // 🔴 Leave the MODE before leaving the screen (WO-MERGE P1e).
+            //
+            // The standalone app could not reach this state: there, the only way to another map is
+            // the hub, and the hub is unreachable from inside the tour. Embedded, the exit button
+            // sits on top of the tour, so a player can hand the screen back while the drone is
+            // still flying — and the drone owns scene-wide fog and ambient (lights off ⇒ fog
+            // 70-200, ambient ×0.32, near-black by design). Its restore hangs off the mode change,
+            // nothing else, and Unity is never unloaded — so skipping this line leaves the whole
+            // process in a near-black atmosphere that the NEXT map then adopts as its own baseline.
+            // That is the "flat navy world with a working HUD" the user photographed.
+            //
+            // Exit() is the ordinary path (TourController.End → lights restored → orbit camera
+            // back), so nothing here needs to know what a tour is. Before RequestExit, not after:
+            // once the host pops the route it may pause the engine, and a paused engine runs no
+            // more frames in which to tidy up.
+            if (ModeManager.Current != AppMode.View && ModeManager.Instance != null)
+            {
+                Debug.Log("[UI] leaving " + ModeManager.Current + " on the way out to the host");
+                ModeManager.Instance.Exit();
+            }
+
             NativeBridge.RequestExit();
         }
 
