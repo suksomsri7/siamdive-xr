@@ -212,6 +212,34 @@ namespace DiveMap.Runtime
         /// </summary>
         public GameObject InFlightRoot { get; private set; }
 
+        /// <summary>
+        /// Take a map root out of service NOW, then let Unity collect it (WO-MERGE P1d).
+        ///
+        /// 🔴 <c>Destroy</c> is DEFERRED to the end of the frame, and that gap is a real hazard now
+        /// that map switching also disposes the imports the old map was drawing from
+        /// (<see cref="ReleaseImports"/>). Between the Destroy call and the actual destruction the
+        /// old <c>FishSchoolSystem</c> is still a live, enabled component: its Update still runs and
+        /// still issues <c>Graphics.RenderMeshInstanced</c> — with the mesh and material of a
+        /// GltfImport that has just been disposed. Best case one bad frame, worst case a Metal
+        /// validation kill, which is one of the shapes the "pick map B, nothing renders, sometimes
+        /// killed" report can take.
+        ///
+        /// <c>SetActive(false)</c> closes the gap because it is SYNCHRONOUS and covers the whole
+        /// subtree: from that line on nothing under this root gets an Update, a LateUpdate or a
+        /// render, so nothing can reference a freed mesh. The deferred Destroy is kept exactly as
+        /// it was — it is what actually releases the GameObjects, and doing it immediately would
+        /// mean destroying objects from inside their own callbacks.
+        ///
+        /// Order matters at every call site: retire the root FIRST, dispose SECOND.
+        /// </summary>
+        public static void RetireRoot(GameObject root)
+        {
+            if (root == null) return;
+            // Deactivating an already-inactive root is harmless, so no state to track.
+            root.SetActive(false);
+            Destroy(root);
+        }
+
         /// <summary>Destroy a build that was abandoned part-way. Safe to call at any time.</summary>
         public void DiscardInFlight()
         {
@@ -224,7 +252,7 @@ namespace DiveMap.Runtime
 
             if (InFlightRoot == null) return;
             Debug.Log("[Scene] discarding a cancelled build's root — it would have kept drawing");
-            Destroy(InFlightRoot);
+            RetireRoot(InFlightRoot);
             InFlightRoot = null;
         }
 

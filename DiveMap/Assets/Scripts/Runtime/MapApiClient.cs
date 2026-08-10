@@ -25,11 +25,20 @@ namespace DiveMap.Runtime
         public const string DefaultShortId = "wl6zwxh1tdgn"; // Htms Chang demo (14 items)
         public const int TimeoutSeconds = 20;
 
-        public static string BuildUrl(string shortId, string baseUrl = DefaultBaseUrl)
-        {
-            string b = (baseUrl ?? DefaultBaseUrl).TrimEnd('/');
-            return b + "/api/dive-sites/" + UnityWebRequest.EscapeURL(shortId);
-        }
+        /// <summary>
+        /// 🔴 The <c>?deviceId=</c> is not optional decoration (WO-MERGE P1d). It is the ONLY thing
+        /// in this request that says who is asking, and <c>canEdit</c> in the response is the
+        /// server's answer to exactly that question. Without it every map came back
+        /// <c>canEdit:false</c> — including the owner's own, including admin's — and the app told
+        /// the owner "This map is not editable". See <see cref="SiteRequest"/> for the web call
+        /// this now matches and for why no token or email belongs here.
+        ///
+        /// <paramref name="deviceId"/> defaults to null so the pure/URL-only callers and tests can
+        /// still ask for the anonymous form; <see cref="Fetch"/> always passes the real one.
+        /// </summary>
+        public static string BuildUrl(string shortId, string baseUrl = DefaultBaseUrl,
+                                      string deviceId = null)
+            => SiteRequest.Url(baseUrl ?? DefaultBaseUrl, shortId, deviceId);
 
         /// <summary>
         /// Coroutine. Calls <paramref name="onSuccess"/> with the parsed scene, or
@@ -41,7 +50,10 @@ namespace DiveMap.Runtime
             Action<string> onError,
             string baseUrl = DefaultBaseUrl)
         {
-            string url = BuildUrl(shortId, baseUrl);
+            // WalletClient.DeviceId is the app's single identity — and in the embedded build it is
+            // the HOST's device id, injected at boot, which is what makes the SiamDive app's
+            // signed-in user recognisable to this request as the owner of their own maps.
+            string url = BuildUrl(shortId, baseUrl, WalletClient.DeviceId);
 
             using (UnityWebRequest req = UnityWebRequest.Get(url))
             {

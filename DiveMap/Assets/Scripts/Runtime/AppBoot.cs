@@ -410,6 +410,64 @@ namespace DiveMap.Runtime
             }
         }
 
+        /// <summary>One rights re-check at a time.</summary>
+        private bool _rightsInFlight;
+
+        /// <summary>
+        /// Ask the server again whether this device may edit the map that is already on screen
+        /// (WO-MERGE P1d).
+        ///
+        /// 🔴 What this does NOT do: infer anything. There is no local ownership test in this app
+        /// and there must not be one — the single-site GET does not even expose the map's
+        /// deviceId, admin maps carry an accountId instead, and <c>editPolicy</c>/<c>editEmails</c>
+        /// can grant rights this client cannot evaluate. <c>canEdit</c> is computed server-side
+        /// from the device→account link and it is the only truth.
+        ///
+        /// Only <see cref="CanEditCurrent"/> is taken from the response. <see cref="CurrentScene"/>
+        /// and <see cref="CurrentRev"/> are deliberately left alone: the scene on screen is what a
+        /// save writes back, and adopting a newer rev without rebuilding would tell the
+        /// optimistic-concurrency guard that this device had seen an edit it has not seen. A rev
+        /// that has moved on should fail the save as a conflict, which is what already happens.
+        /// </summary>
+        public void RefreshEditRights()
+        {
+            if (_rightsInFlight) return;
+            _rightsInFlight = true;
+            StartCoroutine(RefreshEditRightsRoutine());
+        }
+
+        private IEnumerator RefreshEditRightsRoutine()
+        {
+            // Never race the boot's own fetch — it is the same GET with the same identity, and it
+            // owns CanEditCurrent while it runs.
+            while (_booting) yield return null;
+
+            string want = _shortId;
+            if (string.IsNullOrEmpty(want)) { _rightsInFlight = false; yield break; }
+
+            SceneData fresh = null;
+            yield return MapApiClient.Fetch(want, s => fresh = s,
+                                            e => Debug.Log("[AppBoot] rights re-check skipped: " + e));
+            _rightsInFlight = false;
+
+            // The map changed under us (a switch landed while this was in the air) — the new map's
+            // own fetch is authoritative and this answer is about a map nobody is looking at.
+            if (fresh == null || !string.Equals(want, _shortId, StringComparison.Ordinal)) yield break;
+
+            bool can = fresh.Root["canEdit"] != null && (bool)fresh.Root["canEdit"];
+            if (can == CanEditCurrent)
+            {
+                Debug.Log($"[AppBoot] rights re-check: canEdit={can} (unchanged)");
+                yield break;
+            }
+
+            CanEditCurrent = can;
+            Debug.Log($"[AppBoot] rights re-check: canEdit {!can}→{can} for {want}");
+            // The card's ✏️ button is drawn from this flag and was built before the answer changed.
+            var shell = Ui.UiShell.Instance;
+            if (shell != null && shell.Card != null) shell.Card.Render();
+        }
+
         /// <summary>Only the first boot of a session may wait for the host — see below.</summary>
         private bool _hostWaitDone;
 
@@ -502,9 +560,14 @@ namespace DiveMap.Runtime
             // to the builder's own counters, and it is never created in a -qcshot run.
             Ui.LoadOverlay.Show(_builder != null ? _builder.Progress : null);
 
+            // 🔴 RetireRoot, not Destroy (WO-MERGE P1d). Destroy is deferred to the end of the
+            // frame, and BuildRoutine below releases the previous map's imports on its FIRST line —
+            // so for the rest of this frame the old FishSchoolSystem would still be running,
+            // instancing meshes that had just been disposed. SetActive(false) inside RetireRoot
+            // stops the whole subtree synchronously; the Destroy is unchanged.
             if (_mapRoot != null)
             {
-                Destroy(_mapRoot);
+                SceneBuilder.RetireRoot(_mapRoot);
                 _mapRoot = null;
             }
 
@@ -934,7 +997,9 @@ namespace DiveMap.Runtime
 
         private IEnumerator RebuildRoutine()
         {
-            if (_mapRoot != null) { Destroy(_mapRoot); _mapRoot = null; }
+            // Same reason as in Boot: RebuildRoutine also calls BuildRoutine, which releases the
+            // imports the root below is still drawing from (WO-MERGE P1d).
+            if (_mapRoot != null) { SceneBuilder.RetireRoot(_mapRoot); _mapRoot = null; }
 
             SceneBuilder.BuildResult result = default;
             bool done = false;
@@ -1016,6 +1081,13 @@ namespace DiveMap.Runtime
             if (string.Equals(shortId, _shortId, StringComparison.Ordinal))
             {
                 _pendingShortId = null;
+                // …but the PERMISSION may have changed even though the map has not (WO-MERGE P1d).
+                // Unity stays resident between visits — the host pauses and hides it, it never
+                // unloads — so a second entry into the same dive site skips the reload entirely,
+                // and with it the fetch that carries the server's canEdit verdict. If the user
+                // signed in between the two visits, the map they now own would still be read-only
+                // from a verdict computed before they had an account. One small GET closes that.
+                RefreshEditRights();
                 return;
             }
 

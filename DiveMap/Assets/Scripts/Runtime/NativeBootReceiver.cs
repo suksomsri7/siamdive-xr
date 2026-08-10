@@ -132,6 +132,9 @@ namespace DiveMap.Runtime
 
             ApplyLanguage(args.Lang);
 
+            // Who is signed in, asked again, every single time the host hands us a screen.
+            if (_instance != null) _instance.RefreshIdentity();
+
             // Chrome before the map: switching maps tears the scene down and rebuilds it, and the
             // action column must already know it is a host screen when the new map's UI settles.
             if (NativeBoot.LibraryMode && !wasLibrary) ApplyHostChrome();
@@ -191,6 +194,38 @@ namespace DiveMap.Runtime
             // its payload was not the one that vanished into a GameObject that did not exist yet.
             // The shortId is echoed so an ack can be matched to the request that earned it.
             NativeBridge.Send(NativeBoot.BootAck(shortId));
+        }
+
+        /// <summary>
+        /// Re-ask the server who this device belongs to (WO-MERGE P1d).
+        ///
+        /// 🔴 Nothing else does this in library mode. <c>AccountClient.FetchMe</c> has exactly ONE
+        /// caller in the whole app — <c>MapListScreen</c>, when the map hub opens (MapListScreen:456)
+        /// — and library mode skips that hub by design. So the embedded build ran on whatever
+        /// <see cref="Account"/> happened to have cached in PlayerPrefs, which on a phone that also
+        /// has the standalone DiveMap installed is another app's idea of who is signed in, from
+        /// another session, possibly nobody. The user signing in inside the SiamDive app changed
+        /// nothing that Unity could see.
+        ///
+        /// Every host boot, not once per process: entering a map is exactly when the answer might
+        /// have changed (the user could have signed in, out, or as somebody else since the last
+        /// visit), and it is one small GET on a screen that is about to download a whole reef.
+        ///
+        /// ⚠️ This fixes what Unity KNOWS about the account. It is not what fixed
+        /// "This map is not editable" — that was the missing <c>?deviceId=</c> in
+        /// <see cref="MapApiClient"/>, because <c>canEdit</c> never came from here: it is the
+        /// server's verdict on the map request itself. Both were needed and they are independent.
+        /// </summary>
+        private void RefreshIdentity()
+        {
+            StartCoroutine(AccountClient.FetchMe((me, changed) =>
+            {
+                Debug.Log($"[Native] identity re-checked for the host: linked={me.Linked} " +
+                          $"admin={me.Admin} changed={changed}");
+                // A different account than last time invalidates anything the UI drew from the old
+                // one. The hub is not open in library mode, so this is only the shell's own chrome.
+                if (changed && Ui.UiShell.Instance != null) Ui.UiShell.Instance.ApplyHostMode();
+            }));
         }
 
         /// <summary>Never log a whole device id; eight characters is enough to match two logs up.</summary>

@@ -218,7 +218,46 @@ namespace DiveMap.Runtime.Ui
                          new Vector2(UiKit.Css(48f), UiKit.Css(48f)),
                          new Vector2(UiKit.Css(12f), -UiKit.Css(16f)));
             _backButton.SetActive(false);
+
+            // ── the way out of the 3D screen, in library mode (WO-MERGE P1d) ──────────
+            //
+            // The user found the ‹ where round 2 put it — the bottom-right action column — and
+            // said it belongs top-left. They are right, and not just as a preference: the column
+            // is the MAP's tools, and leaving the map is not one of them. Top-left is also where
+            // every other screen in the SiamDive app puts its back affordance, so the 3D screen
+            // stops being the odd one.
+            //
+            // 🔴 Same slot as #backBtn above, on purpose, and the two are never on screen together
+            // (OnStackChanged / SetChromeVisible below). At depth 0 there is nothing to close and
+            // this hands the screen to the host; at depth > 0 the chevron closes the open sheet
+            // first. One position, one meaning — "back" — and no overlap to arbitrate.
+            //
+            // Placement is _safe-relative like every other floating button: _safe is inset by the
+            // device's safe area every frame (ApplySafeArea), so the 12/16 css offsets are measured
+            // from inside the notch rather than from the glass edge, and UiKit.Css scales them to
+            // the screen. Nothing here needs to know what phone it is on.
+            Button host = UiKit.MakeIconButton(_safe, "HostBackButton", "back", ExitToHost,
+                                               false, UiKit.Css(48f));
+            _hostBackButton = host.gameObject;
+            UiKit.Anchor(host.GetComponent<RectTransform>(), new Vector2(0f, 1f),
+                         new Vector2(UiKit.Css(48f), UiKit.Css(48f)),
+                         new Vector2(UiKit.Css(12f), -UiKit.Css(16f)));
+            // Asked, not assumed false: if the host's payload arrived before the shell bootstrapped
+            // (AfterSceneLoad), library mode is already on and no later event would switch this on
+            // by itself. From here it is maintained by OnStackChanged / SetChromeVisible / ApplyHostMode.
+            _hostBackButton.SetActive(HostBackWanted);
         }
+
+        /// <summary>Top-left exit, library mode only. Never visible at the same time as <c>#backBtn</c>.</summary>
+        private GameObject _hostBackButton;
+
+        /// <summary>
+        /// Should the top-left exit be on screen right now? Library mode, nothing open on top of
+        /// the map, and the chrome not hidden by a first-person mode (the tour has its own exit and
+        /// owns the whole screen).
+        /// </summary>
+        private bool HostBackWanted =>
+            NativeBoot.LibraryMode && _chromeVisible && (_nav == null || _nav.Count == 0);
 
         /// <summary>
         /// The web's ☰ does not open a panel — it EXPANDS a column of round icon buttons above
@@ -255,15 +294,24 @@ namespace DiveMap.Runtime.Ui
                 vrt.pivot = new Vector2(1f, 1f);
                 vrt.sizeDelta = new Vector2(UiKit.Css(120f), UiKit.Css(14f));
                 vrt.anchoredPosition = new Vector2(0f, -UiKit.Css(2f));
+                // Kept so host mode can hide it: embedded, this is a debug string in somebody
+                // else's product (WO-MERGE P1d). Same rule and same switch as the fps badge.
+                _buildTag = ver;
+                ver.gameObject.SetActive(FpsBadge.Visible);
             }
 
-            // 🔴 In library mode this is the way OUT of the 3D screen, not the way into Unity's
-            // own map hub — the host app owns the list of dive sites (WO-MERGE P1). The icon is
-            // decided here and can also be swapped later by ApplyHostMode, because the host's
-            // boot message may not have arrived by the time the column is built. What the button
-            // DOES is decided at tap time inside OpenMapList, which is the pattern every other
-            // button in this column already uses for facts not known at startup.
-            ActionButton(0, NativeBoot.LibraryMode ? "back" : "list", OpenMapList);
+            // The map hub. 🔴 In library mode it is not here AT ALL any more (WO-MERGE P1d): the
+            // host owns the list of dive sites, and round 2's compromise — turning this slot into
+            // the exit — put "leave the screen" inside the map's own toolbox, which is where the
+            // user found it and said it did not belong. The exit is now the top-left button built
+            // in BuildHamburger; this slot is simply absent, leaving one empty cell at the bottom
+            // of the first column. Deliberately NOT re-flowed: the eleven remaining buttons keep
+            // the exact positions they have in the standalone build, so a user moving between the
+            // two products finds every tool under the same thumb.
+            //
+            // Still built through OpenMapList rather than OpenMapListInternal: the gate inside it
+            // stays as the backstop for any caller reached another way (the QC harness is one).
+            if (!NativeBoot.LibraryMode) ActionButton(0, "list", OpenMapList);
             ActionButton(1, "mask", StartTour);
             ActionButton(2, "depth", ToggleDepthView);   // the web's #depthViewBtn
             ActionButton(3, "wave", ToggleEnv);          // the web's #env (☀️ / 💧)
@@ -331,6 +379,9 @@ namespace DiveMap.Runtime.Ui
             });
             _actions.gameObject.SetActive(false);
         }
+
+        /// <summary>The "bNNN" label under the column; null in the Editor (nothing stamped it).</summary>
+        private Text _buildTag;
 
         /// <summary>How tall the action column is allowed to get before it wraps.</summary>
         private const int ActionRows = 6;
@@ -588,11 +639,24 @@ namespace DiveMap.Runtime.Ui
         /// </summary>
         public void ApplyHostMode()
         {
-            if (_actions == null) return;
-            Transform t = _actions.Find("Action_list");
-            Button b = t != null ? t.GetComponent<Button>() : null;
-            if (b != null) UiKit.SetIcon(b, "back");
-            Debug.Log("[UI] library mode — the map hub button is now the way back to the host app");
+            // The column is built at startup and the host's boot payload can land afterwards, so
+            // whatever BuildActions decided has to be correctable here rather than assumed.
+            if (_actions != null)
+            {
+                Transform t = _actions.Find("Action_list");
+                if (t != null) t.gameObject.SetActive(!NativeBoot.LibraryMode);
+            }
+
+            // The build number under the column ("b378" in the user's screenshot, the small grey
+            // label above the ✕). Standalone keeps it — it is how a bug report gets tied to a
+            // build — but embedded it is a debug string sitting in somebody else's product, and it
+            // follows exactly the same rule as the fps badge, from the same switch.
+            if (_buildTag != null) _buildTag.gameObject.SetActive(FpsBadge.Visible);
+
+            if (_hostBackButton != null) _hostBackButton.SetActive(HostBackWanted);
+
+            Debug.Log($"[UI] host mode applied — hub button={!NativeBoot.LibraryMode} " +
+                      $"buildTag={(_buildTag != null && FpsBadge.Visible)} exitTopLeft={HostBackWanted}");
         }
 
         private void OpenMapListNow()
@@ -715,6 +779,9 @@ namespace DiveMap.Runtime.Ui
             // and show the web's back chevron in its place.
             if (_hamburger != null) _hamburger.SetActive(depth == 0 && _chromeVisible);
             if (_backButton != null) _backButton.SetActive(depth > 0 && _chromeVisible);
+            // The two share the top-left slot and swap: nothing open ⇒ back means "leave the 3D
+            // screen"; something open ⇒ back means "close it" (WO-MERGE P1d).
+            if (_hostBackButton != null) _hostBackButton.SetActive(HostBackWanted);
             // The info card is not in the stack, so it would otherwise sit UNDER an opened sheet
             // and reappear behind it (the settings QC shot showed exactly that).
             if (depth > 0 && _card != null) _card.Hide();
@@ -763,6 +830,9 @@ namespace DiveMap.Runtime.Ui
             if (_hamburger != null) _hamburger.SetActive(visible && (_nav == null || _nav.Count == 0));
             if (_backButton != null) _backButton.SetActive(visible && _nav != null && _nav.Count > 0);
             _chromeVisible = visible;
+            // After _chromeVisible, because HostBackWanted reads it. A first-person mode owns the
+            // whole screen and has its own exit — the host chevron must not float over the tour.
+            if (_hostBackButton != null) _hostBackButton.SetActive(HostBackWanted);
         }
         private bool _chromeVisible = true;
 

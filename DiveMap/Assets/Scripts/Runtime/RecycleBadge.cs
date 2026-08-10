@@ -26,14 +26,48 @@ namespace DiveMap.Runtime
         private static Material _mat;
         private static Mesh _quad;
 
-        /// <summary>Hang a badge over <paramref name="parent"/> (one piece of litter).</summary>
+        /// <summary>
+        /// Hang a badge over <paramref name="parent"/> (one piece of litter).
+        ///
+        /// 🔴 The giant pixelated ♻️ that filled the sky (round-3 device report). The badge is
+        /// 4.6 world units across and it was inheriting the LITTER's scale, which is not 1 and is
+        /// not bounded:
+        /// <code>
+        ///   TrashGameSystem.LoadTemplates: holder.transform.localScale = Vector3.one * (want / max)
+        /// </code>
+        /// — every trash model is normalised so its longest side becomes the wanted size, and the
+        /// raw GLBs are authored small, so <c>want/max</c> is a LARGE multiplier. A bottle whose
+        /// GLB measures 0.05 u gets ×40, and its badge came out 184 units wide, 176 units up, drawn
+        /// unlit and depth-independent: a green wall across the sky. It looked pixelated for the
+        /// same reason — a 128² texture stretched over most of the screen — so the blur was the
+        /// symptom, not the cause. The primitive fallback shapes scale 1.3-3.4, which is why this
+        /// only became grotesque once the real models finished downloading.
+        ///
+        /// The web has no such coupling: <c>_trashSprite()</c> returns a Sprite with
+        /// <c>scale.set(4.6,4.6,1)</c> added to a group that is added straight to the scene with no
+        /// scale of its own (builder.html:4137-4140). 4.6 means 4.6 there, always.
+        ///
+        /// So the badge cancels its parent's scale, per axis. Exact rather than approximate: a
+        /// badged piece is never ROTATED (only coins spin, and coins get no badge — see
+        /// TrashGameSystem), and without a rotation between the two transforms scale composes
+        /// component-wise. The lift is divided too, so 4.4 is 4.4 world units above the litter
+        /// whatever the piece's own scale does.
+        /// </summary>
         public static GameObject Attach(Transform parent)
         {
             if (parent == null) return null;
 
             var go = new GameObject("RecycleBadge");
             go.transform.SetParent(parent, false);
-            go.transform.localPosition = new Vector3(0f, Lift, 0f);
+
+            Vector3 ps = parent.lossyScale;
+            // A zero or near-zero axis would make the badge infinite. Fall back to 1 (= no
+            // compensation) rather than to a number nobody can see past.
+            float sx = Mathf.Abs(ps.x) > 1e-4f ? ps.x : 1f;
+            float sy = Mathf.Abs(ps.y) > 1e-4f ? ps.y : 1f;
+            float sz = Mathf.Abs(ps.z) > 1e-4f ? ps.z : 1f;
+            go.transform.localScale = new Vector3(1f / sx, 1f / sy, 1f / sz);
+            go.transform.localPosition = new Vector3(0f, Lift / sy, 0f);
 
             go.AddComponent<MeshFilter>().sharedMesh = Quad();
             var mr = go.AddComponent<MeshRenderer>();
@@ -121,7 +155,14 @@ namespace DiveMap.Runtime
         {
             if (_tex != null) return _tex;
 
-            _tex = new Texture2D(Size, Size, TextureFormat.RGBA32, false) { name = "RecycleBadge" };
+            // Mipmapped (round 3). At its correct 4.6 units the badge is small on screen and a
+            // 128² texture with no mip chain aliases into sparkling white speckle on the white
+            // arrows as the drone moves — the opposite failure to the one that was reported and
+            // just as distracting. Size stays 128 to keep every drawing constant below EXACTLY the
+            // web's canvas numbers (cx 64, r 60, _R 34, arrow 16/13): the pixelation the user saw
+            // was the scale bug, and re-deriving the artwork at another resolution would risk the
+            // shape to fix something already fixed.
+            _tex = new Texture2D(Size, Size, TextureFormat.RGBA32, true) { name = "RecycleBadge" };
             var px = new Color32[Size * Size];
 
             const float cx = 64f, cy = 64f;
@@ -151,9 +192,13 @@ namespace DiveMap.Runtime
             }
 
             _tex.SetPixels32(px);
-            _tex.Apply(false, false);
+            _tex.Apply(true, false);   // true = build the mip chain from the pixels just written
             _tex.wrapMode = TextureWrapMode.Clamp;
-            _tex.filterMode = FilterMode.Bilinear;
+            // Trilinear, not Bilinear: bilinear smooths WITHIN one mip level and does nothing about
+            // the jump between levels, which on a badge that changes size continuously as the drone
+            // approaches is a visible pop.
+            _tex.filterMode = FilterMode.Trilinear;
+            _tex.anisoLevel = 4;
             return _tex;
         }
 
