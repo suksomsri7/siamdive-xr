@@ -15,6 +15,10 @@ on:
         description: 'Build iOS and send it to TestFlight (macOS runner — 10x minutes once this repo is private).'
         type: boolean
         default: false
+      ios_framework:
+        description: 'Build UnityFramework.framework for the React Native app (macOS runner — unsigned, no TestFlight).'
+        type: boolean
+        default: false
 
 concurrency:
   # Split by EVENT, not just by ref. With one group per ref, pushing anything — a doc, a fix for
@@ -255,6 +259,232 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: DiveMap-xcode
+          path: ${{ env.XCODE_DIR }}
+          retention-days: 7
+
+  # ────────────────────────────────────────────────────────────────────────────
+  # 2c) iOS → UnityFramework.framework ("Unity as a Library", WO-MERGE P0).
+  #
+  #     Same Unity step as the TestFlight job above, different ENDING: instead of
+  #     archiving and signing an app, this builds ONLY the UnityFramework target and
+  #     hands the framework back as an artifact, so the React Native app
+  #     (com.siamdive.app, @azesmway/react-native-unity) can show Unity as one of its
+  #     screens instead of the user having to install a second app.
+  #
+  #     A SEPARATE job on purpose, never a flag inside the ios job: that job is the
+  #     channel the fish QC builds go to TestFlight through, and it has to keep
+  #     working unchanged while this one is still being proven on a real iPhone.
+  #
+  #     Nothing here signs anything, which is why the "Install the App Store
+  #     provisioning profile" step and the whole fastlane half are absent: a framework
+  #     is signed by whoever EMBEDS it (the RN app, at EAS build time), so the runner
+  #     needs no certificate, no profile and no App Store Connect key. Reusing
+  #     CIBuild.BuildIos is safe for the same reason — with IOS_PROFILE_UUID unset it
+  #     logs a warning and writes an unsigned Xcode project (CIBuild.cs, "Local builds
+  #     open in Xcode and get signed by hand"), so no parallel build method is needed
+  #     and the framework comes out of the exact same generator as the shipping app.
+  # ────────────────────────────────────────────────────────────────────────────
+  ios_framework:
+    name: Build iOS UnityFramework
+    needs: test
+    if: github.event_name == 'workflow_dispatch' && inputs.ios_framework
+    # Pinned for the same reason as the ios job: this framework is embedded into
+    # com.siamdive.app, which goes to TestFlight, and Apple checks the SDK of the whole
+    # binary at upload. Building the Unity half against an older SDK would fail there —
+    # one repo away, hours later, where nothing points back here.
+    runs-on: macos-26
+    timeout-minutes: 120
+    steps:
+      - name: Fail early if the SDK is too old for App Store Connect
+        run: |
+          xcodebuild -version
+          MAJOR=$(xcodebuild -version | sed -nE '1s/Xcode ([0-9]+).*/\1/p')
+          if [ "$MAJOR" -lt 26 ]; then
+            echo "::error::Xcode $MAJOR ships an SDK App Store Connect no longer accepts (needs 26+)."
+            ls -d /Applications/Xcode*.app
+            exit 1
+          fi
+
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          lfs: true
+
+      # Same key family as the ios job on purpose: both import the same project for the
+      # same platform, so they should share one Library rather than each pay the ~20
+      # minutes of a cold import. Whichever job finishes second just logs "cache already
+      # exists" and moves on — that warning is the two jobs agreeing, not a fault.
+      - name: Cache Library
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.PROJECT_PATH }}/Library
+          key: Library-ios-${{ hashFiles('DiveMap/Packages/manifest.json') }}
+          restore-keys: |
+            Library-ios-
+            Library-
+
+      - name: Build Xcode project (Unity)
+        uses: game-ci/unity-builder@v4
+        env:
+          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+          # No IOS_PROFILE_UUID and no APPLE_TEAM_ID: with both empty Unity writes a
+          # project with manual signing and no identity on any target, which is exactly
+          # what CODE_SIGNING_ALLOWED=NO below expects. Handing it a team here would put
+          # a DEVELOPMENT_TEAM on the framework target that nothing on this runner can
+          # satisfy.
+          #
+          # IOS_BUILD_NUMBER is still set even though nothing is uploaded: it is what
+          # BuildStamp writes into the player, i.e. the `bNNN` on the badge in the corner
+          # of the screen — the only way to tell which CI run a framework on a phone
+          # came from.
+          IOS_BUILD_NUMBER: ${{ github.run_number }}
+          # NOT BUILD_PATH: unity-builder exports that name itself and wins. Ours is namespaced.
+          DM_BUILD_PATH: ${{ github.workspace }}/build/iOS-framework
+        with:
+          projectPath: ${{ env.PROJECT_PATH }}
+          unityVersion: ${{ env.UNITY_VERSION }}
+          targetPlatform: iOS
+          buildMethod: DiveMap.EditorTools.CIBuild.BuildIos
+          allowDirtyBuild: true
+
+      - name: Locate the Xcode project and read where Data landed
+        run: |
+          # FIND it, do not assume where it is — same lesson the ios job carries: unity-builder
+          # exports its own BUILD_PATH and has overridden ours before, putting the project under
+          # DiveMap/build/ while every later step read an empty build/.
+          PROJ=$(find . -maxdepth 5 -name 'Unity-iPhone.xcodeproj' -not -path '*/Library/*' | head -1)
+          if [ -z "$PROJ" ]; then
+            echo "::error::Unity reported success but produced no Xcode project"
+            find . -maxdepth 4 -type d -name 'iOS*' -not -path '*/Library/*' || true
+            exit 1
+          fi
+          DIR=$(dirname "$PROJ")
+          echo "XCODE_DIR=$DIR" >> "$GITHUB_ENV"
+          echo "found: $DIR"
+          ls -la "$DIR"
+
+          # The one thing that decides whether this artifact is usable at all. In "Unity as a
+          # Library" the host app calls setDataBundleId("com.unity3d.framework"), i.e. Unity looks
+          # for its Data folder INSIDE the framework bundle, not next to the app binary. Unity is
+          # supposed to give Data target membership in UnityFramework itself; whether THIS Unity
+          # version does is printed here rather than assumed, because if it stops doing it the
+          # symptom on the phone is a black screen with no log line naming the cause.
+          echo "── does UnityFramework claim the Data folder? ──"
+          grep -nE '(Data (in Resources|\*/)|/\* Data \*/)' "$PROJ/project.pbxproj" | head -20 || \
+            echo "no Data build-file entries found in project.pbxproj"
+          ls -la "$DIR/Data" | head -10 || echo "::warning::no Data folder in the generated project"
+
+      - name: Build UnityFramework (device arm64, unsigned)
+        run: |
+          set -o pipefail
+          DD="${{ runner.temp }}/uf-derived"
+          PROJ="$XCODE_DIR/Unity-iPhone.xcodeproj"
+
+          # Unity generates the UnityFramework SCHEME, but a scheme is a file on disk that a
+          # future Unity version could stop sharing, and "scheme not found" would arrive 0 seconds
+          # into this step after 40 minutes of IL2CPP. The target always exists, so it is the
+          # fallback: -target builds the same thing without needing xcshareddata.
+          xcodebuild -list -project "$PROJ" || true
+          if xcodebuild -list -project "$PROJ" 2>/dev/null | sed -n '/Schemes:/,$p' | grep -qE '^[[:space:]]+UnityFramework[[:space:]]*$'; then
+            SEL=(-scheme UnityFramework)
+          else
+            echo "::warning::no shared UnityFramework scheme — building the target directly"
+            SEL=(-target UnityFramework)
+          fi
+
+          # CODE_SIGNING_ALLOWED=NO because the RN app re-signs the framework when Xcode embeds
+          # it; signing here would only require a certificate this runner deliberately does not
+          # have. ONLY_ACTIVE_ARCH=NO with the generic iOS destination is what makes this arm64
+          # device slices rather than whatever the runner happens to be.
+          xcodebuild build \
+            -project "$PROJ" \
+            "${SEL[@]}" \
+            -configuration Release \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath "$DD" \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
+            ONLY_ACTIVE_ARCH=NO
+
+      - name: Verify the framework carries its Data folder
+        run: |
+          DD="${{ runner.temp }}/uf-derived"
+          FW=$(find "$DD/Build/Products" -maxdepth 3 -type d -name 'UnityFramework.framework' | head -1)
+          if [ -z "$FW" ]; then
+            echo "::error::xcodebuild reported success but no UnityFramework.framework exists"
+            find "$DD/Build/Products" -maxdepth 3 || true
+            exit 1
+          fi
+          echo "FRAMEWORK=$FW" >> "$GITHUB_ENV"
+          echo "framework: $FW"
+
+          # If Unity did not give Data target membership, put it in by hand. Copying is safe
+          # either way — the framework is the only place Unity will look once the host calls
+          # setDataBundleId, so a Data folder outside it is dead weight, not an alternative.
+          if [ ! -d "$FW/Data" ]; then
+            echo "Data was not built into the framework — copying it from $XCODE_DIR"
+            ditto "$XCODE_DIR/Data" "$FW/Data"
+          fi
+
+          if [ ! -d "$FW/Data" ] || [ -z "$(ls -A "$FW/Data" 2>/dev/null)" ]; then
+            echo "::error::UnityFramework.framework has no Data — Unity would boot to a black screen"
+            ls -la "$FW" || true
+            exit 1
+          fi
+          # boot.config is the file the player reads first, so its absence is worth naming even
+          # when the rest of Data is there; it is a warning and not a failure because Unity has
+          # moved things around inside Data between versions and a missing filename is a weaker
+          # signal than a missing folder.
+          test -f "$FW/Data/boot.config" || \
+            echo "::warning::no Data/boot.config — check the Data layout below against this Unity version"
+          ls "$FW/Data" | head -20
+          file "$FW/UnityFramework" || true
+          du -sh "$FW"
+
+      - name: Package the framework
+        run: |
+          STAGE="${{ runner.temp }}/UnityFramework-ios"
+          rm -rf "$STAGE" && mkdir -p "$STAGE"
+          # ditto, not cp/zip: a framework is a bundle whose symlinks and permissions matter, and
+          # upload-artifact flattens both. Zipping it here means what the RN repo downloads is
+          # byte-identical to what came out of xcodebuild (GitHub wraps this zip in its own —
+          # unzip twice).
+          ditto "$FRAMEWORK" "$STAGE/UnityFramework.framework"
+
+          # Which commit a framework on a phone came from is otherwise unanswerable: the RN app
+          # pins an artifact, not a source tree, and the badge only carries the run number.
+          {
+            echo "artifact:     UnityFramework-ios"
+            echo "commit:       ${{ github.sha }}"
+            echo "ref:          ${{ github.ref }}"
+            echo "run_number:   ${{ github.run_number }}  (= bNNN on the in-app badge)"
+            echo "run_id:       ${{ github.run_id }}"
+            echo "unity:        ${{ env.UNITY_VERSION }}"
+            echo "xcode:        $(xcodebuild -version | head -1)"
+            echo "built:        $(date -u '+%Y-%m-%dT%H:%M:%SZ')"
+            echo "size:         $(du -sh "$STAGE/UnityFramework.framework" | cut -f1)"
+            echo "signing:      none — the host app signs the framework when it embeds it"
+            echo "host must call: [ufw setDataBundleId:\"com.unity3d.framework\"] (Data is inside the bundle)"
+          } > "$STAGE/MANIFEST.txt"
+          cat "$STAGE/MANIFEST.txt"
+
+          ditto -c -k --keepParent "$STAGE" "${{ runner.temp }}/UnityFramework-ios.zip"
+          ls -la "${{ runner.temp }}/UnityFramework-ios.zip"
+
+      - name: Upload UnityFramework
+        uses: actions/upload-artifact@v4
+        with:
+          name: UnityFramework-ios
+          path: ${{ runner.temp }}/UnityFramework-ios.zip
+          retention-days: 14
+          if-no-files-found: error
+
+      - name: Upload the Xcode project when something goes wrong
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: UnityFramework-xcode
           path: ${{ env.XCODE_DIR }}
           retention-days: 7
 
