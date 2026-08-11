@@ -210,6 +210,11 @@ namespace DiveMap.Runtime.Ui
             _menuToggleBtn = btn;
             BuildActions();
 
+            // ↺ ↻ stacked above the ☰ (WO-N item 3). Built here rather than inside the action
+            // column because undo has to be reachable at the speed of the mistake, not two taps
+            // deep — see UndoBar's header for why we depart from the web on that one point.
+            UndoBar.Create(_safe);
+
             // The web's compass lives in the MAP VIEW (#compass: right 12, bottom 80), not in the
             // tour — the tour has the minimap instead. Same here.
             CompassWidget.Create(_safe);
@@ -1263,6 +1268,17 @@ namespace DiveMap.Runtime.Ui
                 int hist0 = MapEditor.HistoryCount;
 
                 GizmoController.Select(pick);
+                // WO-N — the frame the user asked for: an object selected, the ✥⟳⤢ toolbar up,
+                // and ↺ ↻ live at the bottom right. The three things they reported as "missing"
+                // are all in this one shot, so it is the shot to compare against their photo.
+                yield return new WaitForSecondsRealtime(0.8f);
+                Debug.Log($"[UI] qcui gizmo selected={pick} toolbar={SelectionToolbar.IsOpen} " +
+                          $"undoBar={UndoBar.IsVisible} canUndo={MapEditor.CanUndo} " +
+                          $"canRedo={MapEditor.CanRedo} mode={ModeManager.Current}");
+                ScreenCapture.CaptureScreenshot(prefix + "_gizmo.png");
+                Debug.Log("[UI] qcui shot -> " + prefix + "_gizmo.png");
+                yield return new WaitForSecondsRealtime(1.0f);
+
                 GizmoController.QcDrag(SelectionToolbar.Mode.Translate,
                                        new Vector2(640f, 400f), new Vector2(760f, 470f));
                 yield return new WaitForSecondsRealtime(2.5f);
@@ -1282,9 +1298,29 @@ namespace DiveMap.Runtime.Ui
                           $"(expected {DiveMap.Core.GizmoMath.YawAfterDrag(yaw0, 210):F3}) " +
                           $"· history {hist0}→{MapEditor.HistoryCount} (expected +2, one per gesture)");
 
-                // Put the map back: undo everything this block did.
-                MapEditor.Undo(); yield return new WaitForSecondsRealtime(1.2f);
-                MapEditor.Undo(); yield return new WaitForSecondsRealtime(1.2f);
+                // Put the map back: undo everything this block did — and do the first two through
+                // the BUTTON rather than the API, because the button is the part that was missing
+                // (WO-N item 3). A shot in between proves ↻ has woken up: redo is dimmed until
+                // there is something to redo, so this is also the only frame that shows the
+                // enabled/disabled pair the web draws with :disabled.
+                UndoBar bar = UndoBar.Current;
+                if (bar != null)
+                {
+                    bar.QcUndo();
+                    yield return new WaitForSecondsRealtime(1.2f);
+                    Debug.Log($"[UI] qcui after undo canUndo={MapEditor.CanUndo} canRedo={MapEditor.CanRedo}");
+                    ScreenCapture.CaptureScreenshot(prefix + "_undo.png");
+                    Debug.Log("[UI] qcui shot -> " + prefix + "_undo.png");
+                    yield return new WaitForSecondsRealtime(1.0f);
+                    bar.QcUndo();
+                    yield return new WaitForSecondsRealtime(1.2f);
+                }
+                else
+                {
+                    Debug.LogWarning("[UI] qcui no UndoBar — falling back to the API");
+                    MapEditor.Undo(); yield return new WaitForSecondsRealtime(1.2f);
+                    MapEditor.Undo(); yield return new WaitForSecondsRealtime(1.2f);
+                }
                 MapEditor.Undo();
                 yield return new WaitForSecondsRealtime(2.0f);
                 SelectionToolbar.Hide();

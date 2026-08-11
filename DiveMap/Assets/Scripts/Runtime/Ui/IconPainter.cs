@@ -289,6 +289,13 @@ namespace DiveMap.Runtime.Ui
                     strokes.Add(new[] { P(8.2f, 2.2f), P(5.2f, 6.2f), P(9.8f, 7.6f) });
                     break;
 
+                case "redo":     // ↻ — "undo" mirrored about x = 12 (WO-N item 3)
+                    // Mirroring rather than authoring a second path keeps the two buttons an
+                    // obvious pair at a glance, which is the whole job of a redo icon.
+                    strokes.Add(Arc(12f, 12.4f, 7.2f, -20f, -320f));
+                    strokes.Add(new[] { P(15.8f, 2.2f), P(18.8f, 6.2f), P(14.2f, 7.6f) });
+                    break;
+
                 // ── palette chips — the web's emoji, drawn (NotoSansThai has no emoji) ──
 
                 case "rock":     // 🪨 — a faceted boulder
