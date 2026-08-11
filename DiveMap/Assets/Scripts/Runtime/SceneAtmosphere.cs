@@ -54,6 +54,19 @@ namespace DiveMap.Runtime
         public static bool HasDefaults => _have;
 
         /// <summary>
+        /// The authored ambient sky as a single number, and the live one beside it — what the
+        /// narrowed positive control compares (WO-MERGE DARK). Ambient rather than fog distance
+        /// because CI b383 showed the build re-authors the fog distances by itself
+        /// (<c>ApplyViewRange</c>) while the ambient is exactly what a stale mode leaves behind:
+        /// with the reset suppressed the next map inherited sky 41.8, with it running it got 93.7.
+        /// -1 when nothing has been captured yet.
+        /// </summary>
+        public static float AuthoredSky => _have ? _sky.grayscale : -1f;
+
+        /// <summary>The ambient sky the scene is actually rendering with right now.</summary>
+        public static float LiveSky => RenderSettings.ambientSkyColor.grayscale;
+
+        /// <summary>
         /// Remember the authored atmosphere. Called at the end of <c>AppBoot.SetupLighting</c>,
         /// which is the only code that writes these values from constants rather than from
         /// something it read a moment earlier.

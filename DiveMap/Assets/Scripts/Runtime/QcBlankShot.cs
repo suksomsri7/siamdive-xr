@@ -103,6 +103,9 @@ namespace DiveMap.Runtime
         /// </summary>
         private static bool _started;
 
+        /// <summary>Ambient sky at each pass's build-complete — what the verdict is made of.</summary>
+        private static float _beforeSky = -1f, _afterSky = -1f;
+
         /// <summary>Entry point from <c>AppBoot</c>: starts the control on its own object, once.</summary>
         public static void Begin(string dir, AppBoot boot)
         {
@@ -168,6 +171,7 @@ namespace DiveMap.Runtime
                                "— no pass completed");
 
             QcBlank.Frame before = default, after = default;
+            _beforeSky = _afterSky = -1f;
             float runDeadline = Time.realtimeSinceStartup + WholeRunSeconds;
             string budgetBroke = null;
 
@@ -180,8 +184,23 @@ namespace DiveMap.Runtime
                 yield return OnePass(dir, boot, rt, readback, suppressFix: false, runDeadline,
                                      f => after = f, s => budgetBroke = s);
 
-            string verdict = budgetBroke ?? QcBlank.Verdict(before, after);
-            bool ok = budgetBroke == null && QcBlank.Passed(before, after);
+            // 🔴 The verdict is now about AMBIENT VALUES, not pixels (WO-MERGE DARK).
+            //
+            // b383's dark probe forced the drone's full lights-off atmosphere into RenderSettings
+            // and photographed it: mean 181.6 against a healthy 186.9. Five parts in 255. The
+            // frame is dominated by the unlit screen-space backdrop, which fog and ambient do not
+            // touch, so no luminance threshold could ever separate a dark world from a bright one
+            // here. The luminance numbers are still measured and still printed — they are how that
+            // was discovered, and they keep the PNGs interpretable — but they no longer decide
+            // anything.
+            string verdict = budgetBroke ??
+                             QcBlank.AtmosphereVerdict(_beforeSky, _afterSky, SceneAtmosphere.AuthoredSky);
+            bool ok = budgetBroke == null &&
+                      QcBlank.AtmospherePassed(_beforeSky, _afterSky, SceneAtmosphere.AuthoredSky);
+
+            Debug.Log($"[QcBlank] frames (informational only — luminance is blind to the " +
+                      $"atmosphere here): before mean={before.MeanLuminance:F1} sd={before.StdDev:F1} " +
+                      $"· after mean={after.MeanLuminance:F1} sd={after.StdDev:F1}");
 
             Write(verdictPath, verdict);
             if (ok) Debug.Log("[QcBlank] " + verdict);
@@ -370,6 +389,16 @@ namespace DiveMap.Runtime
             Trace(tag, "T3-before-loading-map-B");
             yield return LoadAndSettle(boot, MapB, deadline);
             Trace(tag, "T4-map-B-build-complete");
+
+            // 🔴 THE measurement, taken here and not at capture. T4 is the moment the new map's
+            // build has finished and nothing has had a chance to re-enter a mode yet — b383's
+            // trace showed ArenaEntry auto-play putting the drone back out between T4 and T5,
+            // which dims the ambient again for a perfectly legitimate reason and would make the
+            // "after" pass look like a failure.
+            float sky = SceneAtmosphere.LiveSky;
+            if (suppressFix) _beforeSky = sky; else _afterSky = sky;
+            Debug.Log($"[QcBlank] {tag}: ambient sky at build-complete = {sky:F3} " +
+                      $"(authored {SceneAtmosphere.AuthoredSky:F3})");
             if (Overdue(tag, deadline, started, onBudgetBroken)) yield break;
 
             // Give the newly built map a few frames to draw before judging it. Six, not twelve:
