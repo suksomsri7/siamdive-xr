@@ -61,7 +61,15 @@ namespace DiveMap.Core
         /// light gives you before the beam is lost in the water.
         public const float LampRange = 90f;
 
-        /// <summary>Headlight OFF: 0x08303f, near 70, far 200, ambient ×0.32, dive light 0.5.</summary>
+        /// <summary>Headlight OFF: 0x08303f, near 70, far 200, ambient ×0.55, dive light 0.5.</summary>
+        /// <remarks>
+        /// 🔴 This line said "×0.32" until 11 ส.ค. while the field below said 0.55, and it cost a CI
+        /// round: the qcblank positive control took its "blank frame" threshold from the comment
+        /// (mean ≤ 46) when a fully fogged frame can never be darker than this fog colour itself —
+        /// 0x08303f is a mid navy, Rec.601 luminance 56.8. The gate was unsatisfiable, so a perfect
+        /// reproduction of the bug still reported "did not reproduce". Read the field, not the prose.
+        /// Same stale figure appears in DroneLights' header; both are corrected.
+        /// </remarks>
         public static Atmosphere HeadlightOff => new Atmosphere
         {
             FogNear = 70f, FogFar = 200f,

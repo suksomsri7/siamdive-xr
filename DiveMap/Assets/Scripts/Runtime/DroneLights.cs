@@ -10,8 +10,10 @@ namespace DiveMap.Runtime
     ///   • a point light travelling with the drone — the "clear bubble" you can always see in
     ///   • two headlamps aimed forward-and-down, throwing two overlapping pools on the sand
     ///   • two soft cones so the beams are visible in the water, not just their result
-    ///   • and the atmosphere swap: with the lamps off the water closes in (fog 70-200, nearly
-    ///     black-green, ambient ×0.32); with them on it opens up (170-680, blue, ×0.55)
+    ///   • and the atmosphere swap: with the lamps off the water closes in (fog 70-200, a mid navy
+    ///     0x08303f — NOT black, luminance 56.8 — ambient ×0.55); with them on it opens up
+    ///     (170-680, blue, ×0.72). 🔴 This line read "×0.32 / ×0.55" until 11 ส.ค. and the numbers
+    ///     were never in the code; see the remarks on DiveLightMath.HeadlightOff for what it cost.
     ///
     /// That last part is what makes the button worth pressing. All values live in
     /// <see cref="DiveLightMath"/> and are unit-tested; this class only builds objects and moves
