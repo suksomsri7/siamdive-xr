@@ -35,6 +35,10 @@ namespace DiveMap.Runtime
             public float SpawnY;
             public float FloorY;
             public float Phase;
+            /// <summary>Template key ("coin" / kind key) — what this piece SHOULD look like.</summary>
+            public string Key;
+            /// <summary>True while it is still the primitive stand-in (WO-N item 5).</summary>
+            public bool Primitive;
         }
 
         private static TrashGameSystem _instance;
@@ -67,10 +71,20 @@ namespace DiveMap.Runtime
                 { "bottle", "game_trash_bottle_k1.glb" },
                 { "plastic", "game_trash_bag_k1.glb" },
                 { "net", "game_trash_net_k1.glb" },
-                { "tire", "game_trash_tire_k1.glb" },   // ไฟล์จาก user 8 ส.ค.
+                { "tire", "game_trash_tire_k1.glb" },   // ไฟล์จาก user 8 ส.ค. (มีจริงบน CDN — คอมเมนต์เก่าที่บอกว่า "ไม่มีโมเดล" ผิด)
                 { "coin", "game_coin_gold2_k1.glb" },   // รุ่น mirror หน้า->หลัง (user: หลังเดิมพัง)
-                // "tire" ไม่มีโมเดลจาก user — คง primitive เดิม
             };
+
+        /// <summary>
+        /// ลำดับโหลด — 🪙 "coin" มาก่อน (WO-N item 5).
+        ///
+        /// 🔴 เดิมวนตามลำดับใน ModelFiles ซึ่ง coin อยู่ท้ายสุด = ต้องรอ trash 5 ไฟล์ ~22.6 MB
+        /// ดาวน์โหลดจบทีละไฟล์ก่อนถึงจะเริ่มขอเหรียญ · เหรียญเกิดใหม่ทุก 60 วิ และตายทุก 60 วิ
+        /// เพราะฉะนั้นบนเน็ตเรือ/โรงแรม ผู้เล่นเห็น "จานสีน้ำตาลแบน" ทั้งเซสชัน ซึ่งคือรูปที่
+        /// user ถ่ายมา · เหรียญคือชิ้นที่ผู้เล่นจ้องมากที่สุด (เป็นตัวให้รางวัล) จึงต้องมาก่อน
+        /// </summary>
+        private static readonly string[] LoadOrder =
+            { "coin", "can", "bottle", "plastic", "net", "tire" };
 
         /// <summary>ขนาดเป้าหมาย (ด้านยาวสุด, world unit) ให้ใกล้เคียง primitive เดิมต่อชนิด.</summary>
         private static readonly Dictionary<string, float> ModelSize =
@@ -322,8 +336,10 @@ namespace DiveMap.Runtime
                                   _center.z + Mathf.Sin(a) * bd * _scaleZ);
 
             TrashGame.Kind kind = TrashGame.Pick(Rand());
-            GameObject go = FromTemplate(coin ? "coin" : kind.Key);
-            if (go == null) go = coin ? BuildCoin() : BuildTrash(kind);
+            string key = coin ? "coin" : kind.Key;
+            GameObject go = FromTemplate(key);
+            bool primitive = go == null;
+            if (primitive) go = coin ? BuildCoin() : BuildTrash(kind);
             go.transform.SetParent(_root, false);
             go.transform.position = pos;
             // ♻️ over litter only — a gold coin already reads as "pick me up" on its own, and the
@@ -338,14 +354,18 @@ namespace DiveMap.Runtime
                 SpawnY = pos.y,
                 FloorY = FloorAt(pos) + TrashGame.LandOffset,
                 Phase = Rand() * 6.283f,
+                Key = key,
+                Primitive = primitive,
             });
         }
 
         /// <summary>โหลดแม่แบบโมเดลจริงเบื้องหลัง — สำเร็จเมื่อไหร่ ชิ้นที่เกิดใหม่ใช้ทันที.</summary>
         private async void LoadTemplates()
         {
-            foreach (KeyValuePair<string, string> kv in ModelFiles)
+            foreach (string key in LoadOrder)
             {
+                if (!ModelFiles.TryGetValue(key, out string file)) continue;
+                var kv = new KeyValuePair<string, string>(key, file);
                 if (_templates.ContainsKey(kv.Key)) continue;
                 var holder = new GameObject($"tpl_{kv.Key}");
                 holder.transform.SetParent(_root, false);
@@ -369,7 +389,46 @@ namespace DiveMap.Runtime
                 }
                 _templates[kv.Key] = holder;
                 Debug.Log($"[Game] template {kv.Key} ready");
+                UpgradePieces(kv.Key);
             }
+        }
+
+        /// <summary>
+        /// เปลี่ยนชิ้นที่ยังเป็น primitive ให้เป็นโมเดลจริง ทันทีที่แม่แบบของชนิดนั้นมาถึง
+        /// (WO-N item 5).
+        ///
+        /// 🔴 นี่คือรูรั่วตัวจริงของรูปที่ user ถ่ายมา ไม่ใช่แค่ลำดับโหลด: `Spawn` เลือกระหว่าง
+        /// โมเดลกับ primitive "ครั้งเดียวตอนเกิด" แล้วไม่มีใครกลับมาดูอีกเลย — `Update` ไม่เคย
+        /// แตะ `_templates` · ทัวร์เริ่มปุ๊บโปรยขยะ 3 ชิ้น + เหรียญ 3 เหรียญในเฟรมแรก ตอนที่
+        /// `_templates` ยังว่างแน่ ๆ · เหรียญมีอายุ 60 วิ ขยะ 30 วิหลังตกถึงพื้น เพราะฉะนั้น
+        /// ชิ้นแรกที่ผู้เล่นเห็น (และถ่ายรูป) เป็น primitive เสมอ 100% ต่อให้เน็ตเร็วแค่ไหน
+        ///
+        /// ย้ายตำแหน่ง/การหมุน/badge ♻️ ไปให้ตัวใหม่ครบ แล้วทำลายตัวเก่า — ชิ้นที่ตกถึงพื้นแล้ว
+        /// จะไม่กระโดดกลับขึ้นไป เพราะเราคัดลอก transform ปัจจุบัน ไม่ใช่ตำแหน่งตอนเกิด
+        /// </summary>
+        private void UpgradePieces(string key)
+        {
+            if (string.IsNullOrEmpty(key)) return;
+            int swapped = 0;
+            for (int i = 0; i < _pieces.Count; i++)
+            {
+                Piece p = _pieces[i];
+                if (p == null || !p.Primitive || p.Key != key || p.Go == null) continue;
+
+                GameObject repl = FromTemplate(key);
+                if (repl == null) return;   // แม่แบบหายไประหว่างทาง — ไว้รอบหน้า
+
+                Transform old = p.Go.transform;
+                repl.transform.SetParent(_root, false);
+                repl.transform.SetPositionAndRotation(old.position, old.rotation);
+                if (!p.IsCoin) RecycleBadge.Attach(repl.transform);
+
+                Destroy(p.Go);
+                p.Go = repl;
+                p.Primitive = false;
+                swapped++;
+            }
+            if (swapped > 0) Debug.Log($"[Game] upgraded {swapped} {key} piece(s) to the real model");
         }
 
         /// <summary>ชิ้นจากแม่แบบโมเดลจริง หรือ null เมื่อยังโหลดไม่เสร็จ (ผู้เรียกใช้ primitive).</summary>
@@ -503,6 +562,11 @@ namespace DiveMap.Runtime
             mat.color = c;
             if (mat.HasProperty("_Glossiness")) mat.SetFloat("_Glossiness", 0.3f);
             if (mat.HasProperty("_Metallic")) mat.SetFloat("_Metallic", 0.1f);
+            // WO-N item 5 — เว็บให้ทุกวัสดุขยะ emissive เท่ากับสีตัวเอง แรง 0.1
+            // (builder.html:4108) เพราะโหมดทัวร์มีหมอกน้ำ + ambient หรี่ ของที่ไม่เรืองเองจะจม
+            // หายไปในน้ำ · เรามีหมอกเดียวกัน (DroneLights:176-180, UnderwaterShading:133-135)
+            // แต่ลืมส่วนนี้ไป
+            Emit(mat, c * 0.1f);
             _mats[key] = mat;
             return mat;
         }
@@ -516,8 +580,23 @@ namespace DiveMap.Runtime
             mat.color = new Color(1f, 0.776f, 0.180f);            // 0xffc62e
             if (mat.HasProperty("_Glossiness")) mat.SetFloat("_Glossiness", 0.72f);
             if (mat.HasProperty("_Metallic")) mat.SetFloat("_Metallic", 0.92f);
+            // 🔴 นี่คือ "จานสีน้ำตาล" ในรูปที่ user ถ่าย · metalness 0.92 แปลว่าสีเกือบทั้งหมด
+            // มาจากการสะท้อนสภาพแวดล้อม — ใต้น้ำไม่มี reflection probe ก็ไม่มีอะไรให้สะท้อน
+            // ทองจึงกลายเป็นน้ำตาลเข้ม · เว็บเจอปัญหาเดียวกันแล้วแก้ด้วย emissive พร้อม
+            // คอมเมนต์ว่า "เรืองทอง ไม่มืด" (builder.html:4138 emissive 0x6a4800 × 0.55)
+            // เราลอก metalness มาแต่ไม่ได้ลอก emissive มาด้วย
+            Emit(mat, new Color(0.416f, 0.282f, 0f) * 0.55f);      // 0x6a4800 × 0.55
             _coinMat = mat;
             return mat;
+        }
+
+        /// <summary>เปิด emission ให้วัสดุ Standard (ต้องเปิด keyword ด้วย ไม่งั้นสีถูกเมิน).</summary>
+        private static void Emit(Material mat, Color c)
+        {
+            if (mat == null || !mat.HasProperty("_EmissionColor")) return;
+            mat.EnableKeyword("_EMISSION");
+            mat.globalIlluminationFlags = MaterialGlobalIlluminationFlags.EmissiveIsBlack;
+            mat.SetColor("_EmissionColor", c);
         }
     }
 }
