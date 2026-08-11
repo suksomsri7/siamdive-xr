@@ -43,6 +43,12 @@ namespace DiveMap.Runtime.Ui
 
         private SelectionToolbar.Mode _mode = SelectionToolbar.Mode.Translate;
 
+        // WO-O — which arrow/quad this drag grabbed, and where along it the finger started.
+        private GizmoMath.Handle _handle = GizmoMath.Handle.None;
+        private double _grabT;                 // axis drags: the axis parameter under the finger
+        private double[] _grabPos = { 0, 0, 0 };  // plane drags: object − hit, so it does not snap
+        private double[] _startPos = { 0, 0, 0 };
+
         /// <summary>The currently selected item id, or null.</summary>
         public static string Selected => _instance != null ? _instance._id : null;
 
@@ -90,6 +96,8 @@ namespace DiveMap.Runtime.Ui
             if (_instance == null) return;
             _instance._id = null;
             _instance._dragging = false;
+            _instance._handle = GizmoMath.Handle.None;
+            GizmoHandles.Current?.Hide();
             MapEditor.Dragging = false;
         }
 
@@ -123,6 +131,26 @@ namespace DiveMap.Runtime.Ui
             g.Release();
         }
 
+        /// <summary>
+        /// QC — force the handles to lay themselves out now, so a screenshot taken in the same
+        /// frame as the selection has arrows in it. Update() would do this a frame later, and the
+        /// CI harness captures immediately after selecting.
+        /// </summary>
+        public static void QcLayOutHandles()
+        {
+            if (_instance == null || _instance._id == null) return;
+            _instance.UpdateHandles();
+        }
+
+        /// <summary>QC — which handle a press at this screen point would grab.</summary>
+        public static GizmoMath.Handle QcHandleAt(Vector2 screenPos)
+            => GizmoHandles.Current != null ? GizmoHandles.Current.PickAt(screenPos)
+                                            : GizmoMath.Handle.None;
+
+        /// <summary>QC — the handle the CURRENT drag grabbed (None = free/whole-screen drag).</summary>
+        public static GizmoMath.Handle QcGrabbed =>
+            _instance != null ? _instance._handle : GizmoMath.Handle.None;
+
         // ── input ────────────────────────────────────────────────────────────────
 
         private void Update()
@@ -135,7 +163,9 @@ namespace DiveMap.Runtime.Ui
                 if (_id != null) { SelectionToolbar.Hide(); Deselect(); }
                 return;
             }
-            if (_id == null) return;
+            if (_id == null) { GizmoHandles.Current?.Hide(); return; }
+
+            UpdateHandles();
 
             if (Input.touchCount > 0)
             {
@@ -149,6 +179,24 @@ namespace DiveMap.Runtime.Ui
             if (Input.GetMouseButtonDown(0)) Press(Input.mousePosition, -1);
             else if (Input.GetMouseButton(0)) Move(Input.mousePosition);
             else if (Input.GetMouseButtonUp(0)) Release();
+        }
+
+        /// <summary>
+        /// Keep the arrows on the object and the right size, every frame.
+        ///
+        /// Only in Translate. The web draws rings for rotate and boxes for scale; we have neither
+        /// yet, and showing translate arrows while the toolbar says ⟳ would be the exact lie this
+        /// work order exists to avoid — the handles would not do what they look like they do.
+        /// Rotate and scale keep the whole-screen drag they have always had.
+        /// </summary>
+        private void UpdateHandles()
+        {
+            GizmoHandles h = GizmoHandles.Ensure();
+            if (_mode != SelectionToolbar.Mode.Translate) { h.Hide(); return; }
+
+            Transform t = _dragging && _target != null ? _target : FindBuilt(_id);
+            if (t == null) { h.Hide(); return; }
+            h.ShowAt(t.position);
         }
 
         private void Press(Vector2 pos, int finger)
@@ -174,6 +222,23 @@ namespace DiveMap.Runtime.Ui
             _planeY = p[1];
             _startYaw = r[1];
             _startScale = s[0];
+            _startPos = new[] { p[0], p[1], p[2] };
+
+            // 🔴 WO-O — TOUCH ARBITRATION, the rule the whole feature hangs on.
+            //
+            // A press that lands ON a handle is a constrained drag. A press that lands anywhere
+            // else must fall through to the camera exactly as before, or selecting an object
+            // would freeze the orbit and the map would feel broken. So the handle is decided
+            // ONCE, here, from the press position — never re-tested mid-drag, because a fast
+            // finger leaves the 26 px shaft within two frames and re-testing would drop the
+            // constraint halfway through the gesture.
+            //
+            // Only translate has handles; in rotate/scale this resolves to None and the old
+            // whole-screen behaviour is what runs.
+            _handle = _mode == SelectionToolbar.Mode.Translate && GizmoHandles.Current != null
+                    ? GizmoHandles.Current.PickAt(pos)
+                    : GizmoMath.Handle.None;
+            GizmoHandles.Current?.SetHot(_handle);
 
             // Grab offset: keep the object under the same part of the finger it was grabbed by,
             // instead of snapping its centre to the touch point.
@@ -183,6 +248,24 @@ namespace DiveMap.Runtime.Ui
                 _grabDz = p[2] - hz;
             }
             else { _grabDx = 0; _grabDz = 0; }
+
+            // …and the same idea for the constrained handles, in their own coordinates.
+            if (GizmoMath.IsAxis(_handle))
+            {
+                // Remember WHERE ALONG the axis the finger grabbed. The object then moves by the
+                // CHANGE in that parameter, so grabbing the tip of the arrow does not snap the
+                // object's centre out to the tip.
+                GizmoMath.AxisOf(_handle, out double ux, out double uy, out double uz);
+                _grabT = AxisAt(pos, p, ux, uy, uz, out bool okT) ? _axisT : 0.0;
+                if (!okT) _handle = GizmoMath.Handle.None;   // edge-on: refuse rather than fling
+            }
+            else if (GizmoMath.IsPlane(_handle))
+            {
+                GizmoMath.NormalOf(_handle, out double nx, out double ny, out double nz);
+                if (PlaneHitN(pos, p, nx, ny, nz, out double qx, out double qy, out double qz))
+                    _grabPos = new[] { p[0] - qx, p[1] - qy, p[2] - qz };
+                else _grabPos = new double[] { 0, 0, 0 };
+            }
 
             // Find the built object ONCE, and work out what one unit of JSON scale is worth on
             // it: SceneBuilder bakes the module's defaultScale in, so item.s is a multiplier on
@@ -233,8 +316,37 @@ namespace DiveMap.Runtime.Ui
             switch (_mode)
             {
                 case SelectionToolbar.Mode.Translate:
-                    if (PlaneHit(pos, _planeY, out double hx, out double hz))
+                    if (GizmoMath.IsAxis(_handle))
+                    {
+                        // 🔴 THE CONSTRAINT. One axis moves; the other two keep the values they
+                        // had when the finger went down. This is the difference between a real
+                        // axis handle and an arrow that is only decoration.
+                        GizmoMath.AxisOf(_handle, out double ux, out double uy, out double uz);
+                        if (AxisAt(pos, _startPos, ux, uy, uz, out bool ok) && ok)
+                        {
+                            double along = _axisT - _grabT;
+                            SceneEdit.Move(items, _id,
+                                           _startPos[0] + ux * along,
+                                           _startPos[1] + uy * along,
+                                           _startPos[2] + uz * along);
+                        }
+                        // !ok = the axis is within half a degree of edge-on. Hold the last good
+                        // position: a pixel of movement there would fling the object off the map.
+                    }
+                    else if (GizmoMath.IsPlane(_handle))
+                    {
+                        GizmoMath.NormalOf(_handle, out double nx, out double ny, out double nz);
+                        if (PlaneHitN(pos, _startPos, nx, ny, nz,
+                                      out double qx, out double qy, out double qz))
+                            SceneEdit.Move(items, _id, qx + _grabPos[0], qy + _grabPos[1],
+                                           qz + _grabPos[2]);
+                    }
+                    else if (PlaneHit(pos, _planeY, out double hx, out double hz))
+                    {
+                        // No handle grabbed: the original whole-screen slide, unchanged. Keeping
+                        // it means a user who never notices the arrows can still move things.
                         SceneEdit.Move(items, _id, hx + _grabDx, _planeY, hz + _grabDz);
+                    }
                     break;
 
                 case SelectionToolbar.Mode.Rotate:
@@ -263,6 +375,8 @@ namespace DiveMap.Runtime.Ui
             _dragging = false;
             _finger = -1;
             _armed = false;
+            _handle = GizmoMath.Handle.None;
+            GizmoHandles.Current?.SetHot(GizmoMath.Handle.None);
             MapEditor.Dragging = false;
 
             if (!wasDragging)
@@ -295,6 +409,62 @@ namespace DiveMap.Runtime.Ui
         {
             JArray items = Items();
             return items != null ? SceneEdit.Find(items, _id) : null;
+        }
+
+        /// <summary>
+        /// Axis parameter under the pointer, written to <see cref="_axisT"/>. Returns false when
+        /// the axis is seen too close to end-on for the answer to mean anything.
+        /// </summary>
+        private bool AxisAt(Vector2 screenPos, double[] origin,
+                            double ux, double uy, double uz, out bool ok)
+        {
+            ok = false;
+            _axisT = 0.0;
+            Camera cam = Camera.main;
+            if (cam == null) return false;
+
+            // The gizmo is drawn in UNITY space but the scene JSON is in WEB space, and the two
+            // differ by a handedness flip (WebCoord). Do the geometry in Unity space, where the
+            // camera ray lives, then convert the answer back — converting the ray instead would
+            // mean maintaining a second, mirrored copy of the same transform.
+            double[] uo = WebCoord.PositionToUnity(origin);
+            Vec3 a = WebCoord.DirectionToUnity(ux, uy, uz);
+
+            Ray ray = cam.ScreenPointToRay(screenPos);
+            ok = GizmoMath.AxisParam(ray.origin.x, ray.origin.y, ray.origin.z,
+                                     ray.direction.x, ray.direction.y, ray.direction.z,
+                                     uo[0], uo[1], uo[2],
+                                     a.X, a.Y, a.Z,
+                                     out double t);
+            _axisT = t;
+            return ok;
+        }
+
+        /// <summary>Last axis parameter computed by <see cref="AxisAt"/>.</summary>
+        private double _axisT;
+
+        /// <summary>Ray hit on an arbitrary plane through a WEB-space point, in web space.</summary>
+        private static bool PlaneHitN(Vector2 screenPos, double[] through,
+                                      double nx, double ny, double nz,
+                                      out double x, out double y, out double z)
+        {
+            x = y = z = 0;
+            Camera cam = Camera.main;
+            if (cam == null) return false;
+
+            double[] up = WebCoord.PositionToUnity(through);
+            Vec3 un = WebCoord.DirectionToUnity(nx, ny, nz);
+
+            Ray ray = cam.ScreenPointToRay(screenPos);
+            if (!GizmoMath.RayOnPlaneN(ray.origin.x, ray.origin.y, ray.origin.z,
+                                       ray.direction.x, ray.direction.y, ray.direction.z,
+                                       up[0], up[1], up[2], un.X, un.Y, un.Z,
+                                       out double hx, out double hy, out double hz))
+                return false;
+
+            double[] w = WebCoord.PositionToWeb(new[] { hx, hy, hz });
+            x = w[0]; y = w[1]; z = w[2];
+            return true;
         }
 
         private static bool PlaneHit(Vector2 screenPos, double planeY, out double x, out double z)

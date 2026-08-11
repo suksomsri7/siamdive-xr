@@ -225,6 +225,33 @@ namespace DiveMap.Tests
             Assert.AreEqual(4.0, by, 1e-9);
         }
 
+        // ── touch arbitration: the map must stay orbitable ───────────────────────
+
+        [Test]
+        public void Pick_APressBesideTheGizmoFallsThroughToTheCamera()
+        {
+            // 🔴 The ambiguity case, deliberately. Selecting an object must NOT swallow the whole
+            // screen: a press near the object but off every handle has to return None so the
+            // press reaches the orbit. Get this wrong and the map stops rotating the moment
+            // anything is selected, which reads as the app freezing.
+            //
+            // 40 px below the origin: past the 26 px shaft radius and past the 20 px quad radius,
+            // and on no arrow (X goes right, Y up, Z down-LEFT).
+            Assert.AreEqual(GizmoMath.Handle.None, PickAt(100, 60));
+            // Straight up beyond the Y arrow's tip — the segment clamp means the shaft does not
+            // extend forever.
+            Assert.AreEqual(GizmoMath.Handle.None, PickAt(100, 260));
+        }
+
+        [Test]
+        public void Pick_TheOriginItselfResolvesToSomething()
+        {
+            // Dead centre every handle overlaps. Any answer is defensible EXCEPT None — a press
+            // on the middle of the gizmo that fell through to the camera would spin the map while
+            // the user was trying to move an object.
+            Assert.AreNotEqual(GizmoMath.Handle.None, PickAt(100, 100));
+        }
+
         // ── handle → geometry lookups ────────────────────────────────────────────
 
         [Test]

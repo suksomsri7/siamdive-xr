@@ -1268,6 +1268,44 @@ namespace DiveMap.Runtime.Ui
                 int hist0 = MapEditor.HistoryCount;
 
                 GizmoController.Select(pick);
+
+                // WO-O — the arrows. Laid out explicitly because Update() would not run until
+                // the next frame and the shot below happens in this one. This is the frame the
+                // planner compares against the user's photo of the web build: three axis arrows
+                // on the object plus the plane quads, all screen-sized.
+                GizmoController.QcLayOutHandles();
+                yield return new WaitForSecondsRealtime(0.6f);
+                Debug.Log($"[UI] qcui gizmo axes visible={GizmoHandles.Visible} " +
+                          $"origin={(GizmoHandles.Current != null ? GizmoHandles.Current.Origin.ToString("F1") : "-")}");
+                ScreenCapture.CaptureScreenshot(prefix + "_gizmo_axes.png");
+                Debug.Log("[UI] qcui shot -> " + prefix + "_gizmo_axes.png");
+                yield return new WaitForSecondsRealtime(1.0f);
+
+                // …and prove the constraint is real, not decorative: drag the X arrow and check
+                // that Z did NOT move. A screenshot cannot tell those two apart; this log can.
+                {
+                    Newtonsoft.Json.Linq.JObject b4 =
+                        DiveMap.Core.SceneEdit.Find(DiveMap.Core.SceneEdit.Items(eb.CurrentScene), pick);
+                    double zBefore = (double)b4["p"][2];
+                    Camera c = Camera.main;
+                    Vector2 originPx = c != null && GizmoHandles.Current != null
+                        ? (Vector2)c.WorldToScreenPoint(GizmoHandles.Current.Origin)
+                        : new Vector2(640f, 400f);
+                    // Aim a third of the way along the X arrow — comfortably inside the 26 px
+                    // shaft tolerance, and clear of the plane quads near the origin.
+                    Vector2 onX = originPx + new Vector2(GizmoHandles.AxisPixels * 0.34f, 0f);
+                    GizmoController.QcDrag(SelectionToolbar.Mode.Translate,
+                                           onX, onX + new Vector2(70f, 40f));
+                    yield return new WaitForSecondsRealtime(1.6f);
+                    Newtonsoft.Json.Linq.JObject aft =
+                        DiveMap.Core.SceneEdit.Find(DiveMap.Core.SceneEdit.Items(eb.CurrentScene), pick);
+                    Debug.Log($"[QC] axis-constrained drag grabbed={GizmoController.QcHandleAt(onX)} " +
+                              $"z {zBefore:F2}→{(double)aft["p"][2]:F2} (must be unchanged) " +
+                              $"x {(double)b4["p"][0]:F2}→{(double)aft["p"][0]:F2} (must differ)");
+                    MapEditor.Undo();
+                    yield return new WaitForSecondsRealtime(1.0f);
+                }
+
                 // WO-N — the frame the user asked for: an object selected, the ✥⟳⤢ toolbar up,
                 // and ↺ ↻ live at the bottom right. The three things they reported as "missing"
                 // are all in this one shot, so it is the shot to compare against their photo.

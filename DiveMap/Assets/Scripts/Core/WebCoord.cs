@@ -118,6 +118,19 @@ namespace DiveMap.Core
         public static double[] PositionToUnity(double[] web) => PositionToUnity(Vec3.FromArray(web)).ToArray();
         public static double[] PositionToWeb(double[] unity) => PositionToWeb(Vec3.FromArray(unity)).ToArray();
 
+        /// <summary>
+        /// A DIRECTION across the handedness flip (WO-O). Same linear map as
+        /// <see cref="PositionToUnity(Vec3)"/> — the flip is a reflection with no translation, so
+        /// a direction transforms exactly like a point. Spelled out as its own method because
+        /// reusing the position one for a vector reads like a bug even when it is not, and the
+        /// gizmo's axis handles need the web's +Z to become Unity's −Z or the blue arrow drags
+        /// the object backwards.
+        /// </summary>
+        public static Vec3 DirectionToUnity(Vec3 web) => new Vec3(web.X, web.Y, -web.Z);
+
+        public static Vec3 DirectionToUnity(double x, double y, double z)
+            => new Vec3(x, y, -z);
+
         // ── Scale (unchanged) ────────────────────────────────────────────────────
         public static Vec3 Scale(Vec3 s) => s;
         public static double[] Scale(double[] s) => new[] { s[0], s[1], s[2] };
