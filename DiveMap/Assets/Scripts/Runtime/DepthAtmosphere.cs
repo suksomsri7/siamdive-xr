@@ -50,21 +50,43 @@ namespace DiveMap.Runtime
             if (_cam == null) return;
 
             // Somebody else (EnvMode, the headlamp) wrote new values → they are the new surface.
-            if (!_haveBase ||
-                RenderSettings.ambientSkyColor != _wroteSky ||
-                RenderSettings.ambientEquatorColor != _wroteEquator ||
-                RenderSettings.ambientGroundColor != _wroteGround ||
-                RenderSettings.fogColor != _wroteFog ||
-                !Mathf.Approximately(RenderSettings.fogEndDistance, _wroteFogEnd))
+            //
+            // 🔴 …but each baseline follows ONLY ITS OWN SIGNAL (WO-MERGE DARK). This used to be
+            // one all-or-nothing test: any difference in any field re-read all six. That made the
+            // fog distances a hostage of the ambient, and the ambient is written every frame by
+            // more than one system — including this one. Each stray ambient write re-captured the
+            // fog distances FROM THIS COMPONENT'S OWN ALREADY-SCALED OUTPUT and multiplied them by
+            // vis again, so the fog crept in geometrically instead of tracking the camera's depth.
+            //
+            // The user's badge photograph is the measurement: authored 500..9000, live 489..8797,
+            // both ends down by the same 0.9774 in View mode. One multiplication is the feature;
+            // the loop that produces the second one is the bug. See Core/AtmosphereBaseline.
+            bool ambientChanged = RenderSettings.ambientSkyColor != _wroteSky ||
+                                  RenderSettings.ambientEquatorColor != _wroteEquator ||
+                                  RenderSettings.ambientGroundColor != _wroteGround;
+            bool fogColorChanged = RenderSettings.fogColor != _wroteFog;
+            // Both ends now, not just the far one: _wroteFogStart was recorded and never compared,
+            // so a near-plane change alone was invisible to the check that is supposed to see it.
+            bool fogDistChanged = !Mathf.Approximately(RenderSettings.fogStartDistance, _wroteFogStart) ||
+                                  !Mathf.Approximately(RenderSettings.fogEndDistance, _wroteFogEnd);
+
+            AtmosphereBaseline.Refresh refresh =
+                AtmosphereBaseline.Decide(_haveBase, ambientChanged, fogColorChanged, fogDistChanged);
+
+            if ((refresh & AtmosphereBaseline.Refresh.Ambient) != 0)
             {
                 _baseSky = RenderSettings.ambientSkyColor;
                 _baseEquator = RenderSettings.ambientEquatorColor;
                 _baseGround = RenderSettings.ambientGroundColor;
+            }
+            if ((refresh & AtmosphereBaseline.Refresh.FogColor) != 0)
                 _baseFog = RenderSettings.fogColor;
+            if ((refresh & AtmosphereBaseline.Refresh.FogDistance) != 0)
+            {
                 _baseFogStart = RenderSettings.fogStartDistance;
                 _baseFogEnd = RenderSettings.fogEndDistance;
-                _haveBase = true;
             }
+            _haveBase = true;
 
             // In air none of this applies — the web's daylight mode is a view from a boat.
             if (EnvMode.Daylight) return;
