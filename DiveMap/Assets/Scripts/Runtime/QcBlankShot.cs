@@ -193,6 +193,104 @@ namespace DiveMap.Runtime
             Application.Quit(ok ? 0 : 1);
         }
 
+        /// <summary>
+        /// One line of global render state (WO-MERGE P1h).
+        ///
+        /// 🔴 Two rounds have now been spent on hypotheses about why this harness does not
+        /// reproduce the device condition, and both were wrong. The project's own rule applies:
+        /// เลิกเดา ให้ log บอกเอง. This prints everything that could possibly decide whether the
+        /// frame is dark, at five points along the sequence, so the FIRST line where the
+        /// atmosphere stops being dark names the culprit without anyone having to have a theory
+        /// about it first.
+        ///
+        /// Everything on it is read live from the engine — nothing is inferred, and nothing is
+        /// summarised into a verdict here. Reading is the next round's job.
+        /// </summary>
+        private static void Trace(string pass, string tag)
+        {
+            var sb = new System.Text.StringBuilder(320);
+            sb.Append("[QcBlankTrace] ").Append(pass).Append('/').Append(tag)
+              .Append(" · fog=").Append(RenderSettings.fog ? "on" : "OFF")
+              .Append(' ').Append(RenderSettings.fogMode)
+              .Append(' ').Append(RenderSettings.fogStartDistance.ToString("F0"))
+              .Append("..").Append(RenderSettings.fogEndDistance.ToString("F0"))
+              .Append(" fogLum=").Append(Lum(RenderSettings.fogColor).ToString("F1"))
+              .Append(" · ambMode=").Append(RenderSettings.ambientMode)
+              .Append(" ambI=").Append(RenderSettings.ambientIntensity.ToString("F2"))
+              .Append(" sky=").Append(Lum(RenderSettings.ambientSkyColor).ToString("F1"))
+              .Append(" eq=").Append(Lum(RenderSettings.ambientEquatorColor).ToString("F1"))
+              .Append(" gnd=").Append(Lum(RenderSettings.ambientGroundColor).ToString("F1"))
+              .Append(" · mode=").Append(ModeManager.Current);
+
+            // The two directional lights DroneLights also scales — a restored fog with a
+            // still-dimmed sun (or the reverse) is a different fault to either one alone.
+            foreach (Light l in Object.FindObjectsByType<Light>(FindObjectsInactive.Include,
+                                                                FindObjectsSortMode.None))
+            {
+                if (l.type != LightType.Directional) continue;
+                sb.Append(" · ").Append(l.gameObject.name).Append('=')
+                  .Append(l.intensity.ToString("F2"))
+                  .Append(l.gameObject.activeInHierarchy ? "" : "(off)");
+            }
+
+            DroneLights[] drones = Object.FindObjectsByType<DroneLights>(FindObjectsInactive.Include,
+                                                                        FindObjectsSortMode.None);
+            sb.Append(" · drones=").Append(drones.Length);
+            for (int i = 0; i < drones.Length; i++)
+                sb.Append(" [lamp=").Append(drones[i].HeadlightOn ? "on" : "off")
+                  .Append(drones[i].gameObject.activeInHierarchy ? "" : " INACTIVE").Append(']');
+
+            Debug.Log(sb.ToString());
+        }
+
+        /// <summary>Rec.601 on a 0-1 colour, scaled to the 0-255 the frame measurements use.</summary>
+        private static double Lum(Color c) => QcBlank.Luminance((byte)(Mathf.Clamp01(c.r) * 255f),
+                                                                (byte)(Mathf.Clamp01(c.g) * 255f),
+                                                                (byte)(Mathf.Clamp01(c.b) * 255f));
+
+        /// <summary>
+        /// Write the drone's lights-off atmosphere straight into RenderSettings and photograph it
+        /// (WO-MERGE P1h) — the control's own control.
+        ///
+        /// 🔴 It costs no extra map load and it settles the one question that decides whether this
+        /// harness is salvageable at all: CAN a dark global atmosphere make this frame dark? If
+        /// this probe comes out near the fog colour's own luminance, the measurement works and
+        /// whatever went wrong is upstream of it (the drone never darkened the scene, or something
+        /// put it back). If it comes out bright anyway, then fog and ambient simply do not
+        /// dominate this view — the screen-space backdrop would be the thing to look at next — and
+        /// mean luminance of the whole frame is the wrong instrument, whatever the sequence does.
+        ///
+        /// Uses <c>DiveLightMath.HeadlightOff</c> itself rather than invented numbers, so what is
+        /// photographed is exactly what the drone applies. Note for whoever reads the log: the
+        /// summary comment above that struct says "ambient ×0.32" but the field says 0.55, and the
+        /// fog colour is a mid navy — its own luminance is printed on the line so the expected
+        /// value is never a matter of anyone's arithmetic.
+        /// </summary>
+        private static IEnumerator DarkProbe(string dir, RenderTexture rt, Texture2D readback)
+        {
+            DiveLightMath.Atmosphere a = DiveLightMath.HeadlightOff;
+
+            RenderSettings.fog = true;
+            RenderSettings.fogMode = FogMode.Linear;
+            RenderSettings.fogColor = new Color(a.FogR, a.FogG, a.FogB);
+            RenderSettings.fogStartDistance = a.FogNear;
+            RenderSettings.fogEndDistance = a.FogFar;
+            RenderSettings.ambientSkyColor *= a.AmbientMul;
+            RenderSettings.ambientEquatorColor *= a.AmbientMul;
+            RenderSettings.ambientGroundColor *= a.AmbientMul;
+
+            for (int i = 0; i < 3; i++) yield return null;
+            Trace("probe", "T6-forced-dark");
+
+            byte[] rgb = null;
+            yield return Capture(rt, readback, Path.Combine(dir, "darkprobe.png"), b => rgb = b);
+            QcBlank.Frame f = QcBlank.Measure(rgb);
+            Debug.Log($"[QcBlank] darkprobe: mean={f.MeanLuminance:F1} sd={f.StdDev:F1} " +
+                      $"px={f.Pixels} · fogColour's own luminance={Lum(RenderSettings.fogColor):F1} " +
+                      $"· blank gate is mean<={QcBlank.BlankMeanMax:F0} sd<={QcBlank.BlankStdDevMax:F0} " +
+                      $"· blank={QcBlank.IsBlank(f)}");
+        }
+
         /// <summary>Never let a failure to write the verdict be the thing that hides the verdict.</summary>
         private static void Write(string path, string text)
         {
@@ -246,6 +344,8 @@ namespace DiveMap.Runtime
                 yield break;
             }
 
+            Trace(tag, "T1-tour-entered");
+
             DroneLights lights = Object.FindFirstObjectByType<DroneLights>();
             if (lights == null)
             {
@@ -254,7 +354,12 @@ namespace DiveMap.Runtime
                 yield break;
             }
             lights.Set(false);
-            for (int i = 0; i < 3; i++) yield return null;
+            Trace(tag, "T2-lamp-off-same-frame");
+            yield return null;
+            // A second look one frame later: Apply() writes RenderSettings synchronously, but
+            // LateUpdate is where DroneLights polices itself and could undo it before anyone sees.
+            Trace(tag, "T2b-lamp-off-next-frame");
+            for (int i = 0; i < 2; i++) yield return null;
             Debug.Log($"[QcBlank] tour atmosphere armed — {SceneAtmosphere.StateLine()} " +
                       $"mode={ModeManager.Current}");
 
@@ -262,13 +367,16 @@ namespace DiveMap.Runtime
             // native message. iOS just stops giving Unity frames, and the next thing that happens
             // is the user picking another map.
             SceneAtmosphere.SuppressResetForQc = suppressFix;
+            Trace(tag, "T3-before-loading-map-B");
             yield return LoadAndSettle(boot, MapB, deadline);
+            Trace(tag, "T4-map-B-build-complete");
             if (Overdue(tag, deadline, started, onBudgetBroken)) yield break;
 
             // Give the newly built map a few frames to draw before judging it. Six, not twelve:
             // on llvmpipe every one of these is up to 300 ms, and nothing in the scene animates
             // into or out of existence — the build is already finished.
             for (int i = 0; i < 6; i++) yield return null;
+            Trace(tag, "T5-at-capture");
 
             byte[] rgb = null;
             yield return Capture(rt, readback, Path.Combine(dir, tag + ".png"), b => rgb = b);
@@ -276,6 +384,10 @@ namespace DiveMap.Runtime
             Debug.Log($"[QcBlank] {tag}: mean={f.MeanLuminance:F1} sd={f.StdDev:F1} px={f.Pixels} " +
                       $"· {SceneAtmosphere.StateLine()} mode={ModeManager.Current}");
             onFrame(f);
+
+            // The control's own control, once, at the end of the pass that is supposed to be dark.
+            // Costs no map load and answers "can a dark atmosphere darken this frame AT ALL".
+            if (suppressFix) yield return DarkProbe(dir, rt, readback);
 
             SceneAtmosphere.SuppressResetForQc = false;
         }

@@ -93,6 +93,9 @@
          control. The pixels come from CI; the judgement — including what to do when the bug
          fails to reproduce — is settled here. -->
     <Compile Include="../../DiveMap/Assets/Scripts/Core/QcBlank.cs" />
+    <!-- P1h: the blank gate is pinned against the drone's REAL lights-off fog colour, so it can
+         never again be set below the very thing it exists to detect. -->
+    <Compile Include="../../DiveMap/Assets/Scripts/Core/DiveLightMath.cs" />
     <!-- WO-MERGE P1g. The auto-play gate, added here so the ordering rule that P1e depends on
          (exit any stale mode BEFORE the gate is consulted, never after) is pinned on this
          machine instead of only on CI. Both files are UnityEngine-free. -->

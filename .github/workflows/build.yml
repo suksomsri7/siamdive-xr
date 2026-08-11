@@ -883,7 +883,17 @@ jobs:
 
           echo "── verdict ──"
           cat qc_blank/verdict.txt 2>/dev/null || echo "(no verdict written)"
-          grep -E '\[QcBlank\]|\[Atmos\]' qc_blank/player.log 2>/dev/null | tail -40 || true
+
+          # 🔴 The trace is the point of this run (WO-MERGE P1h). Printed IN FULL and in order,
+          # not tailed: the question it answers is "which is the FIRST checkpoint where the
+          # atmosphere stops being dark", and a tail can cut the answer off the top. Bounded by
+          # construction — seven checkpoints per pass.
+          echo "── trace (first non-dark checkpoint is the answer) ──"
+          grep -F '[QcBlankTrace]' qc_blank/player.log 2>/dev/null || echo "(no trace lines)"
+          echo "── measurements ──"
+          grep -F '[QcBlank]' qc_blank/player.log 2>/dev/null | grep -vF 'Trace' | tail -30 || true
+          echo "── atmosphere resets ──"
+          grep -F '[Atmos]' qc_blank/player.log 2>/dev/null | tail -10 || true
           ls -la qc_blank || true
 
           if [ ! -s qc_blank/verdict.txt ]; then

@@ -41,9 +41,34 @@ namespace DiveMap.Core
         /// everything, while any map that is actually drawing has a lit seabed in the lower half
         /// of the frame and a backdrop gradient in the upper.
         /// </summary>
-        public const double BlankMeanMax = 46.0;
+        /// <summary>
+        /// 🔴 Raised 46 → 70 (WO-MERGE P1h), and this is arithmetic, not tuning.
+        ///
+        /// A fully fogged frame cannot be darker than the fog COLOUR, and the drone's lights-off
+        /// fog colour is <c>DiveLightMath.HeadlightOff</c> = (0.078, 0.271, 0.353) — a mid navy
+        /// whose own Rec.601 luminance is ≈56.8 out of 255. So a gate at 46 could never be
+        /// satisfied by the very condition it was built to detect, no matter what else was true:
+        /// a PERFECT reproduction of the bug would still have been reported as CONTROL-BROKEN.
+        ///
+        /// The 46 came from a summary comment above that struct which says "ambient ×0.32"; the
+        /// field beside it says <c>AmbientMul = 0.55f</c>. I read the comment and not the code —
+        /// the exact trap this repo has a rule about.
+        ///
+        /// Both ends of the new number have evidence: the floor is the shipped fog colour's own
+        /// luminance (56.8) plus margin, and the ceiling is a MEASURED healthy frame from CI run
+        /// 31458246375 — mean 185.8 and 186.8 on the two passes. 70 sits far from both.
+        /// <see cref="DiveMap.Tests"/> pins the floor so it cannot drift back under.
+        /// </summary>
+        public const double BlankMeanMax = 70.0;
 
-        /// <summary>Below this spread the frame carries no shapes at all — see the class note.</summary>
+        /// <summary>
+        /// Below this spread the frame carries no shapes at all — see the class note.
+        ///
+        /// ⚠️ UNVALIDATED, deliberately left alone this round. Nobody has yet measured what a real
+        /// fogged-out frame's spread actually is; the healthy frames measured 52-70. The dark
+        /// probe added in P1h photographs a forced lights-off atmosphere and prints its mean AND
+        /// its sd, so the next round can set this from data instead of from anyone's expectation.
+        /// </summary>
         public const double BlankStdDevMax = 9.0;
 
         /// <summary>Rec.601, the same weights <c>QcPixels.Luminance</c> uses.</summary>

@@ -76,9 +76,46 @@ namespace DiveMap.Tests
         [Test]
         public void TheFogWall_IsBlank()
         {
-            // Roughly what ambient ×0.32 behind linear fog closing at 200 units puts on screen:
-            // dark, navy, and the same everywhere.
+            // Roughly what the lights-off ambient behind linear fog closing at 200 units puts on
+            // screen: dark, navy, and the same everywhere.
             Assert.IsTrue(QcBlank.IsBlank(QcBlank.Measure(Flat(14, 26, 43))));
+        }
+
+        [Test]
+        public void TheGateCanActuallyAdmitTheRealFogColour()
+        {
+            // 🔴 The bug in the instrument itself (WO-MERGE P1h). A fully fogged frame cannot be
+            // darker than the fog colour, so if the gate sits BELOW that colour's luminance it is
+            // unsatisfiable: a perfect reproduction of the device condition would still be
+            // reported as "the bug did not reproduce", and two CI rounds would be spent hunting a
+            // sequence that was working. The gate was 46; the colour is ≈57.
+            //
+            // Read from DiveLightMath itself rather than restated, so the day somebody re-tunes
+            // the drone's fog this fails instead of quietly going unsatisfiable again.
+            DiveLightMath.Atmosphere off = DiveLightMath.HeadlightOff;
+            double fogLum = QcBlank.Luminance((byte)(off.FogR * 255f),
+                                              (byte)(off.FogG * 255f),
+                                              (byte)(off.FogB * 255f));
+
+            Assert.Greater(QcBlank.BlankMeanMax, fogLum,
+                           $"a frame made entirely of the lights-off fog colour reads {fogLum:F1}; " +
+                           "a blank gate below that can never fire");
+
+            // …and still nowhere near a healthy frame. 185.8 / 186.8 measured on CI 31458246375.
+            Assert.Less(QcBlank.BlankMeanMax, 150.0,
+                        "the gate must stay far below a healthy frame (measured ~186)");
+
+            // The whole point, stated as the thing that must be true: a frame of exactly the fog
+            // colour is blank.
+            var wall = new byte[3 * 64];
+            for (int i = 0; i < 64; i++)
+            {
+                wall[i * 3] = (byte)(off.FogR * 255f);
+                wall[i * 3 + 1] = (byte)(off.FogG * 255f);
+                wall[i * 3 + 2] = (byte)(off.FogB * 255f);
+            }
+            Assert.IsTrue(QcBlank.IsBlank(QcBlank.Measure(wall)),
+                          "the drone's own lights-off fog colour must read as blank");
         }
 
         [Test]
