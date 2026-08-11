@@ -215,11 +215,25 @@ namespace DiveMap.Runtime
             // map's own footprint, so it is a fair "you cannot see the map any more" mark.
             int rounds = AtmosphereBaseline.RoundsToReach(_fogEnd, fEnd, 500.0);
 
+            // 🔴 The ambient half is the one that matters (b384) and it is printed as a CHAIN, not
+            // a single number, so a sequence of these across five builds answers the question the
+            // planner asked: does the ambient walk DOWN switch after switch — which would be the
+            // device bug cornered — or does it sit still while only the depth factor moves?
+            //   base/authored ≈ 1 on every line  → the restore is complete; any live difference
+            //                                      is the depth scale doing its job.
+            //   base/authored falling each line  → the restore is partial and it compounds.
+            float authoredSky = _sky.grayscale;
+            float baseSky = DepthAtmosphere.BaseSkyGray;
+            float liveSky = RenderSettings.ambientSkyColor.grayscale;
+            float restore = authoredSky > 0f ? baseSky / authoredSky : -1f;
+
             return $"[Atmos] drift #{buildNumber}: authored {_fogStart:F0}..{_fogEnd:F0} " +
                    $"live {liveStart:F0}..{liveEnd:F0} " +
                    $"factor near={fStart:F4} far={fEnd:F4} " +
                    $"· {(rounds < 0 ? "not shrinking" : rounds + " more rounds to a 500u wall")} " +
-                   $"· ambSky={RenderSettings.ambientSkyColor.grayscale:F3}";
+                   $"· AMB authored={authoredSky:F3} base={baseSky:F3} live={liveSky:F3} " +
+                   $"soft={DepthAtmosphere.SoftGray:F3} restore={restore:F3} " +
+                   $"depth={DepthAtmosphere.LastDepth:F1}u";
         }
 
         public static string StateLine()

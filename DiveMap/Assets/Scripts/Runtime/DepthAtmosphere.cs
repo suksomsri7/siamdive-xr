@@ -33,6 +33,36 @@ namespace DiveMap.Runtime
         private Color _wroteSky, _wroteEquator, _wroteGround, _wroteFog;
         private float _wroteFogStart, _wroteFogEnd;
 
+        // ── measurement surface (WO-MERGE DARK) ─────────────────────────────────
+        //
+        // 🔴 CI b384 finally reproduced the bug: with the reset suppressed the next map inherited
+        // ambient 0.167 against an authored 0.450. But the FIXED pass came back 0.369, not 0.450 —
+        // 82% — and there are two completely different reasons that could be true: this component
+        // legitimately scaling the ambient down for the camera's depth, or the restore genuinely
+        // putting back only part of it. Those have opposite fixes, so the chain is published here
+        // and the answer is read off a log instead of argued:
+        //
+        //     authored ──(SceneAtmosphere restore)──▶ base ──(× soft, depth)──▶ wrote ──▶ live
+        //                                                                  (UnderwaterShading raise)
+        //
+        // Each arrow is separately visible, so an 18% gap can be attributed to the arrow that ate
+        // it rather than to whichever explanation sounds better.
+
+        /// <summary>The surface baseline this component is scaling FROM (grayscale). -1 = none.</summary>
+        public static float BaseSkyGray { get; private set; } = -1f;
+
+        /// <summary>The depth factor it last applied to the ambient (grayscale of <c>soft</c>).</summary>
+        public static float SoftGray { get; private set; } = 1f;
+
+        /// <summary>What it last WROTE into RenderSettings (grayscale) — base × soft.</summary>
+        public static float WroteSkyGray { get; private set; } = -1f;
+
+        /// <summary>Camera depth below the surface, in world units, at that moment.</summary>
+        public static float LastDepth { get; private set; }
+
+        /// <summary>True when the last pass was skipped because the app is in daylight mode.</summary>
+        public static bool SkippedForDaylight { get; private set; }
+
         public static void Configure(float waterLevel)
         {
             if (_instance == null)
@@ -88,10 +118,16 @@ namespace DiveMap.Runtime
             }
             _haveBase = true;
 
+            // Published even when nothing else runs below, so a reader can always tell "the base
+            // is wrong" from "the base is right and the depth scale moved it".
+            BaseSkyGray = _baseSky.grayscale;
+
             // In air none of this applies — the web's daylight mode is a view from a boat.
-            if (EnvMode.Daylight) return;
+            if (EnvMode.Daylight) { SkippedForDaylight = true; return; }
+            SkippedForDaylight = false;
 
             float depth = _waterLevel - _cam.transform.position.y;
+            LastDepth = depth;
             DepthLight.Attenuation(depth, out float r, out float g, out float b);
             var tint = new Color(r, g, b, 1f);
 
@@ -101,6 +137,7 @@ namespace DiveMap.Runtime
             // too dark" on a build that had already been brightened once. The depth cue lives
             // mostly in the fog and the colour shift, which is where the eye reads it anyway.
             Color soft = Color.Lerp(Color.white, tint, 0.5f);
+            SoftGray = soft.grayscale;
             RenderSettings.ambientSkyColor = _baseSky * soft;
             RenderSettings.ambientEquatorColor = _baseEquator * soft;
             RenderSettings.ambientGroundColor = _baseGround * soft;
@@ -129,6 +166,7 @@ namespace DiveMap.Runtime
             RenderSettings.fogStartDistance = _baseFogStart * vis;
             RenderSettings.fogEndDistance = _baseFogEnd * vis;
 
+            WroteSkyGray = RenderSettings.ambientSkyColor.grayscale;
             _wroteSky = RenderSettings.ambientSkyColor;
             _wroteEquator = RenderSettings.ambientEquatorColor;
             _wroteGround = RenderSettings.ambientGroundColor;

@@ -209,6 +209,31 @@ namespace DiveMap.Tests
         // ── the narrowed claim, after luminance was proved blind ─────────────────
 
         [Test]
+        public void TheAssertionMustBeDepthIndependent_orItIsMeaningless()
+        {
+            // 🔴 The lesson of b384, as a test. That run read authored=0.450 before=0.167
+            // after=0.369 and reported FAIL — but 0.369 was the ambient LIVE in RenderSettings,
+            // which is downstream of a depth scale that legitimately varies with wherever the
+            // camera is sitting when the shot is taken. An assertion whose expected value depends
+            // on camera position is not an assertion; it passes or fails by luck.
+            //
+            // The verdict therefore takes the BASELINE, which is depth-independent. These two
+            // cases are the same map restored correctly, photographed at two different depths:
+            // both must pass, because the restore is what is being judged.
+            const double authored = 0.450;
+            const double tourBase = 0.167;   // the stale baseline the bug leaves behind
+
+            Assert.IsTrue(QcBlank.AtmospherePassed(tourBase, authored, authored),
+                          "shallow camera: soft ≈ 1");
+            Assert.IsTrue(QcBlank.AtmospherePassed(tourBase, authored, authored),
+                          "deep camera: soft ≈ 0.82 — the baseline is the same either way");
+
+            // And the failure it must still catch: a baseline that did not come back.
+            Assert.IsFalse(QcBlank.AtmospherePassed(tourBase, 0.369, authored),
+                           "a baseline stuck at 82% is a real, incomplete restore");
+        }
+
+        [Test]
         public void AmbientDriftReproducedThenRestored_Passes()
         {
             // The real numbers from CI b383's trace: with the reset suppressed the next map

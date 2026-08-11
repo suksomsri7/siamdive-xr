@@ -174,6 +174,27 @@ namespace DiveMap.Core
         /// ambient</b>. It does not prove the user's dark screen — nothing in this harness does —
         /// and the verdict says so in as many words rather than implying more than it earned.
         /// </summary>
+        /// <remarks>
+        /// 🔴 WHAT THESE TWO NUMBERS MUST BE (WO-MERGE DARK, after b384).
+        ///
+        /// b384 read <c>authored=0.450 before=0.167 after=0.369</c> and called it a FAIL. The
+        /// reproduction was real — that was the first time in this whole effort the bug appeared
+        /// in an instrument — but the comparison was wrong: it measured the ambient LIVE in
+        /// RenderSettings, which is several transformations downstream of the thing the fix
+        /// promises. The chain is
+        ///
+        ///     authored ──restore──▶ base ──× depth factor──▶ written ──underwater raise──▶ live
+        ///
+        /// and only the FIRST arrow belongs to <c>SceneAtmosphere</c>. The other two are working
+        /// features: the depth scale is why deep water looks deep, and it varies with wherever the
+        /// camera happens to sit at capture. Comparing <c>live</c> to <c>authored</c> therefore
+        /// asserts that the depth scale does nothing, which would be a bug if it were true.
+        ///
+        /// So the caller passes the BASELINE (<c>DepthAtmosphere.BaseSkyGray</c>) — the surface
+        /// value everything downstream is computed from. It is depth-independent by construction,
+        /// which is exactly what makes the assertion mean the same thing on every run instead of
+        /// drifting into meaninglessness the moment a camera moves.
+        /// </remarks>
         public static string AtmosphereVerdict(double beforeSky, double afterSky,
                                                double authoredSky, double tolerance = 0.02)
         {

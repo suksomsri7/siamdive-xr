@@ -395,10 +395,31 @@ namespace DiveMap.Runtime
             // trace showed ArenaEntry auto-play putting the drone back out between T4 and T5,
             // which dims the ambient again for a perfectly legitimate reason and would make the
             // "after" pass look like a failure.
+            //
+            // 🔴 …and it is the BASELINE that is compared, not the live value (b384). The live
+            // ambient is three transformations downstream — restore, depth scale, underwater
+            // raise — and only the first belongs to the fix. b384 read live=0.369 against
+            // authored=0.450 and reported FAIL; the whole chain is now printed so an 18% gap is
+            // attributed to the arrow that ate it instead of to whichever story sounds better.
+            // DepthAtmosphere.Configure runs near the end of the build and clears its baseline;
+            // the baseline is not re-read until its next LateUpdate. Three frames so the number
+            // measured here belongs to the map that just finished, not to the one before it.
+            for (int i = 0; i < 3; i++) yield return null;
+
+            float baseSky = DepthAtmosphere.BaseSkyGray;
             float sky = SceneAtmosphere.LiveSky;
-            if (suppressFix) _beforeSky = sky; else _afterSky = sky;
-            Debug.Log($"[QcBlank] {tag}: ambient sky at build-complete = {sky:F3} " +
-                      $"(authored {SceneAtmosphere.AuthoredSky:F3})");
+            float authored = SceneAtmosphere.AuthoredSky;
+            float soft = DepthAtmosphere.SoftGray;
+            float wrote = DepthAtmosphere.WroteSkyGray;
+
+            if (suppressFix) _beforeSky = baseSky; else _afterSky = baseSky;
+
+            Debug.Log($"[QcBlank] {tag}: AMBIENT CHAIN authored={authored:F3} → base={baseSky:F3} " +
+                      $"→ ×soft({soft:F3}) = wrote={wrote:F3} → live={sky:F3} " +
+                      $"· depth={DepthAtmosphere.LastDepth:F1}u daylight={DepthAtmosphere.SkippedForDaylight} " +
+                      $"· expected-if-depth-only={(authored * soft):F3} " +
+                      $"· restore gap={(authored > 0f ? baseSky / authored : -1f):F3} " +
+                      $"· downstream gap={(wrote > 0f ? sky / wrote : -1f):F3}");
             if (Overdue(tag, deadline, started, onBudgetBroken)) yield break;
 
             // Give the newly built map a few frames to draw before judging it. Six, not twelve:
