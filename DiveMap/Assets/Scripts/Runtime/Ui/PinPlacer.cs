@@ -94,7 +94,8 @@ namespace DiveMap.Runtime.Ui
         private void Update()
         {
             if (_active != this) return;
-            if (ModeManager.Current != AppMode.View) { Cancel(); return; }
+            // WO-N — View *or* Edit; see ModeRules.AllowsEditTools.
+            if (!ModeRules.AllowsEditTools(ModeManager.Current)) { Cancel(); return; }
 
             bool down;
             Vector2 pos;

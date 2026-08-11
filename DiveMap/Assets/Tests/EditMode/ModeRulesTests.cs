@@ -93,6 +93,62 @@ namespace DiveMap.Tests
         }
 
         [Test]
+        public void AllowsEditTools_TheBuilderRunsInTheModeNamedAfterIt()
+        {
+            // 🔴 The 9005 regression, pinned. Four tools tested `Current != AppMode.View`, WO-L
+            // introduced the only code path that enters Edit, and the result shipped: with the
+            // palette open, sculpt/rope/pin closed themselves one frame after being opened and
+            // the gizmo dropped its selection — all silently.
+            Assert.IsTrue(ModeRules.AllowsEditTools(AppMode.Edit), "the regression");
+            Assert.IsTrue(ModeRules.AllowsEditTools(AppMode.View));
+
+            // A gizmo drag during a tour would fight the joystick for the same finger.
+            foreach (AppMode m in new[] { AppMode.Tour, AppMode.Game, AppMode.Ar })
+                Assert.IsFalse(ModeRules.AllowsEditTools(m), m.ToString());
+        }
+
+        [Test]
+        public void AllowsEditTools_MatchesTheModesThatKeepTheMenuAndTheOrbit()
+        {
+            // Edit is View with the palette up, not a different place. If these three rules ever
+            // disagree the app gets a mode where you can see the tools but not use them, which is
+            // exactly the shape of the bug above.
+            foreach (AppMode m in System.Enum.GetValues(typeof(AppMode)) as AppMode[])
+            {
+                Assert.AreEqual(ModeRules.AllowsOrbit(m), ModeRules.AllowsEditTools(m), m.ToString());
+                Assert.AreEqual(ModeRules.AllowsMenu(m), ModeRules.AllowsEditTools(m), m.ToString());
+            }
+        }
+
+        [Test]
+        public void SelectsOnTap_TheAuthorGetsTheGizmoAndEveryoneElseGetsTheCard()
+        {
+            // WO-N item 6. Whoever can act on the tap owns it.
+            Assert.IsTrue(ModeRules.SelectsOnTap(AppMode.Edit, canEdit: true));
+            Assert.IsTrue(ModeRules.SelectsOnTap(AppMode.View, canEdit: true));
+
+            // A tour is for looking, even on your own map — the card is the point of tapping.
+            Assert.IsFalse(ModeRules.SelectsOnTap(AppMode.Tour, canEdit: true));
+            Assert.IsFalse(ModeRules.SelectsOnTap(AppMode.Game, canEdit: true));
+            Assert.IsFalse(ModeRules.SelectsOnTap(AppMode.Ar, canEdit: true));
+
+            // No rights → nothing to select, so the card is all a tap can do.
+            foreach (AppMode m in System.Enum.GetValues(typeof(AppMode)) as AppMode[])
+                Assert.IsFalse(ModeRules.SelectsOnTap(m, canEdit: false), m.ToString());
+        }
+
+        [Test]
+        public void ShowsInfoCard_IsExactlyTheComplementOfSelectsOnTap()
+        {
+            // Two rules that can drift are how you end up with a card AND a gizmo on one tap, or
+            // neither — the second of which looks like the app ignoring the user.
+            foreach (AppMode m in System.Enum.GetValues(typeof(AppMode)) as AppMode[])
+                foreach (bool canEdit in new[] { true, false })
+                    Assert.AreNotEqual(ModeRules.SelectsOnTap(m, canEdit),
+                                       ModeRules.ShowsInfoCard(m, canEdit), $"{m}/{canEdit}");
+        }
+
+        [Test]
         public void EditPlayback_IsTheBuildersPlayButtonAndOnlyAffectsEdit()
         {
             // WO-L. ▶ in the palette header is the web's playMode: the author's "let me see it

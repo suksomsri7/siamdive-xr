@@ -178,6 +178,11 @@ namespace DiveMap.Runtime.Ui
             // Destroyed without going through Close() (a map reload tears the layer down) —
             // the HUD must still come back, or the player lands in a tour with no controls.
             TourHud.SetChromeVisible(true);
+            // 🔴 WO-N: …and so must the MODE. Without this the app is left in AppMode.Edit with
+            // no palette on screen and no way to leave it, which before AllowsEditTools meant
+            // every editing tool was dead until some other mode change happened to occur.
+            if (_enteredEdit && ModeManager.Instance != null && ModeManager.Current == AppMode.Edit)
+                ModeManager.Instance.Exit();
         }
 
         // ── build ────────────────────────────────────────────────────────────────

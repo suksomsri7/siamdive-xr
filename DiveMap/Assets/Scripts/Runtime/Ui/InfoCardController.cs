@@ -286,6 +286,30 @@ namespace DiveMap.Runtime.Ui
             string key = ItemPicker.PickBest(ray.origin, ray.direction, targets, maxT);
             if (key == null || !byKey.TryGetValue(key, out GameObject hit)) { Hide(); return; }
 
+            // 🔴 WO-N item 6 — in an editing context the tap belongs to the GIZMO, not to a read
+            // card. The web has no card at all: pointerup → select(rootOf(hit)) (builder.html
+            // :3060-3096). On 9005 an author who tapped a rock to move it got an animal fact
+            // sheet instead, and had to find the ✎ inside it to reach the tools — one extra step
+            // the reference product does not have, on the interaction an author performs most.
+            //
+            // The rule lives in ModeRules.SelectsOnTap so this and the card can never disagree:
+            // whoever can act on the tap owns it. A viewer, or anyone in a tour, still gets the
+            // card, because for them a tap has nothing else to do.
+            // It also fixes something nobody had reported because it looked like nothing at all:
+            // ShowFor bails out for every non-marine object (the 7 Aug rule — only animals have a
+            // story to tell), so tapping a ROCK used to do literally nothing. Rocks were only
+            // selectable through the 📋 list. Now every object answers a tap.
+            var boot = FindFirstObjectByType<AppBoot>();
+            if (ModeRules.SelectsOnTap(ModeManager.Current, boot != null && boot.CanEditCurrent) &&
+                ItemPicker.ParseItemName(hit.name, out string tapId, out _) &&
+                !string.IsNullOrEmpty(tapId))
+            {
+                Hide();
+                GizmoController.Select(tapId);
+                Debug.Log("[UI] tap → select " + tapId);
+                return;
+            }
+
             ShowFor(hit, mapRoot);
         }
 

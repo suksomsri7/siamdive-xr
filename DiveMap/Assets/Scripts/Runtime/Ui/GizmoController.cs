@@ -127,8 +127,10 @@ namespace DiveMap.Runtime.Ui
 
         private void Update()
         {
-            // Editing belongs to the map view, exactly as on the web.
-            if (ModeManager.Current != AppMode.View)
+            // Editing belongs to the modes that look at the map from outside — View and Edit.
+            // 🔴 WO-N: this used to be `!= AppMode.View`, which meant the 🛒 palette (the only
+            // thing that enters Edit) silently deselected whatever the author had picked.
+            if (!ModeRules.AllowsEditTools(ModeManager.Current))
             {
                 if (_id != null) { SelectionToolbar.Hide(); Deselect(); }
                 return;

@@ -72,6 +72,43 @@ namespace DiveMap.Core
         /// </summary>
         public static bool EditPlayback { get; set; }
 
+        /// <summary>
+        /// May the builder's tools run — gizmo, sculpt, rope, pin?
+        ///
+        /// 🔴 WO-N, and the reason this is a named rule rather than four copies of
+        /// `Current != AppMode.View`. Those four copies are what every tool used to test, from
+        /// back when the map view was the only place editing happened. WO-L then introduced the
+        /// 🛒 button, which is the first thing in the app's history to enter <see cref="AppMode.Edit"/>
+        /// — and so made the mode literally named "the builder" the one mode in which no builder
+        /// tool would run. On build 9005 that shipped: with the palette open, ☰ → sculpt/rope/pin
+        /// opened a panel that closed itself one frame later with no message, and any selected
+        /// object was silently dropped by GizmoController's per-frame deselect.
+        ///
+        /// Both modes qualify because both look at the map from outside and both allow the menu
+        /// (<see cref="AllowsOrbit"/>, <see cref="AllowsMenu"/>) — Edit is View with the palette
+        /// up, not a different place. The first-person and AR modes still refuse: a gizmo drag
+        /// during a tour would fight the joystick for the same finger.
+        /// </summary>
+        public static bool AllowsEditTools(AppMode mode) => mode == AppMode.View || mode == AppMode.Edit;
+
+        /// <summary>
+        /// Does a tap on an object SELECT it (gizmo) rather than open the read card?
+        ///
+        /// The web has no info card at all: `canvas pointerup` → `select(rootOf(hit))`
+        /// (builder.html:3060-3096) attaches TransformControls and shows #seltool, full stop.
+        /// Ours grew a card because the app is also a viewer — but an author who taps a rock to
+        /// move it does not want an animal fact sheet in the way, which is exactly what the user
+        /// reported on 9005.
+        ///
+        /// So the tap is owned by whoever can act on it: an account that may edit this map, in a
+        /// mode where the tools run, gets the gizmo. Everyone else — every viewer, and everyone
+        /// in a tour — keeps the card, because for them a tap has nothing else to do.
+        /// </summary>
+        public static bool SelectsOnTap(AppMode mode, bool canEdit) => canEdit && AllowsEditTools(mode);
+
+        /// <summary>The other side of <see cref="SelectsOnTap"/>; the two must never both be true.</summary>
+        public static bool ShowsInfoCard(AppMode mode, bool canEdit) => !SelectsOnTap(mode, canEdit);
+
         /// <summary>Where "exit" lands from <paramref name="mode"/>. Always somewhere usable.</summary>
         public static AppMode ExitTarget(AppMode mode) => AppMode.View;
 

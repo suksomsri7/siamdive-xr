@@ -251,7 +251,9 @@ namespace DiveMap.Runtime.Ui
 
         private void Update()
         {
-            if (ModeManager.Current != AppMode.View) { Close(); return; }
+            // WO-N — View *or* Edit; see ModeRules.AllowsEditTools. Under the old `!= View`
+            // test this sheet closed itself one frame after ☰ opened it from inside the palette.
+            if (!ModeRules.AllowsEditTools(ModeManager.Current)) { Close(); return; }
 
             bool down, held, up;
             Vector2 pos;
