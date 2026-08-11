@@ -666,7 +666,10 @@ jobs:
     # ~5k ตัวกิน ~60 นาที) — 4 ส.ค. แก้ DM_FishWaveDetail อีกรอบ + QC โตขึ้น (7 แมพ + โมเดลเพิ่ม
     # ฉลามวาฬ/แมนตา + QcAnimShot + ดาวน์โหลด CDN ใหม่หลัง dilation ทั้งคลัง) → 90 โดนตัดที่
     # นาทีสุดท้ายพอดี (run 30887364898) และการโดนตัดก่อน cache เซฟ = รอบถัดไปแตกซ้ำ วนไม่จบ
-    timeout-minutes: 150
+    # 180 ไม่ใช่ 150: 11 ส.ค. -qcblank (positive control หมอกค้าง WO-K) เพิ่มเข้า job นี้ แล้ว
+    # run 31442231470 โดนตัดที่ 155 นาที (build เย็น ~90 + qc ~56) — harness ถูกรีดงบลงแล้ว
+    # (แมพเล็ก/640×360/ฟิวส์ 360s) เหลือหัวข้อเดียวคือเคส Library cache แตก จึงขยายเพดานแทน
+    timeout-minutes: 180
     steps:
       - name: Free disk space
         uses: jlumbroso/free-disk-space@main
