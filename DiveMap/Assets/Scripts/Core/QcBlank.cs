@@ -98,10 +98,10 @@ namespace DiveMap.Core
             string a = $"after  mean={after.MeanLuminance:F1} sd={after.StdDev:F1} px={after.Pixels}";
 
             if (before.Pixels == 0 || after.Pixels == 0)
-                return $"CONTROL-BROKEN no capture · {b} · {a}";
+                return $"{ControlBroken} no capture · {b} · {a}";
 
             if (!IsBlank(before))
-                return $"CONTROL-BROKEN the bug did not reproduce, so the fix is unproven · {b} · {a}";
+                return $"{ControlBroken} the bug did not reproduce, so the fix is unproven · {b} · {a}";
 
             if (IsBlank(after))
                 return $"FAIL the map is still a fog wall after the reset · {b} · {a}";
@@ -112,5 +112,24 @@ namespace DiveMap.Core
         /// <summary>True only for the one outcome that means "fixed, and proved fixed".</summary>
         public static bool Passed(Frame before, Frame after)
             => before.Pixels > 0 && after.Pixels > 0 && IsBlank(before) && !IsBlank(after);
+
+        /// <summary>
+        /// Every verdict that is not a real answer starts with this, so one grep finds them all.
+        /// </summary>
+        public const string ControlBroken = "CONTROL-BROKEN";
+
+        /// <summary>
+        /// The verdict when a pass ran out of wall clock (WO-MERGE P1f).
+        ///
+        /// 🔴 A control that HANGS is a blind instrument, and by this project's own rule a blind
+        /// instrument is worse than a red light: CI run 31442231470 was cancelled at 155 minutes
+        /// with no verdict at all, and it took the unrelated palette screenshots in the same job
+        /// down with it. So the budget is not a safety net around the harness, it is part of the
+        /// harness: when it expires the run says so, in the same file and the same format as every
+        /// other outcome, and stops. Red and legible beats green and absent — and beats hung.
+        /// </summary>
+        public static string BudgetVerdict(string pass, float seconds)
+            => $"{ControlBroken} pass '{pass}' exceeded its {seconds:F0}s budget — " +
+               "no frame was measured, so nothing is proven either way";
     }
 }

@@ -30,16 +30,43 @@ namespace DiveMap.Runtime
     /// </summary>
     public static class QcBlankShot
     {
-        /// <summary>Htms Chang — the reef the report was filed against (QcMapShot.MapIds).</summary>
-        private const string MapA = "wl6zwxh1tdgn";
+        // ── which maps, and why these two (WO-MERGE P1f) ────────────────────────────────────
+        //
+        // 🔴 The first version used Htms Chang → Posidon because those are the maps the user was
+        // moving between. That is the wrong instinct here. What is being proven is a property of
+        // GLOBAL RENDER STATE — does a new build inherit the previous mode's fog and ambient —
+        // and that property has nothing whatever to do with how many models a map contains. The
+        // only thing map size bought was four heavy loads on llvmpipe (135-300 ms/frame in this
+        // project's own measurements), which blew the QC job's 150-minute budget, produced NO
+        // verdict, and took the unrelated palette screenshots in the same job down with it.
+        //
+        // Weight measured against the live API rather than guessed (items / unique assets /
+        // schools / msh heroes):
+        //     Atlantis    103 / 27 / 17 / 25      T-13        494 / 10 /  0 / 3
+        //     Posidon      90 / 14 /  2 / 14      Harddeep     14 /  9 /  5 / 4
+        //     Htms Chang   14 /  6 / 10 /  1  ← 14 items but TEN fish species to fetch and
+        //                                        template: the most expensive map per item here
+        //     Hanuman      13 /  9 /  0 /  1
+        //     Tu-1          1 /  1 /  0 /  0
+        //
+        // So: the lightest map that can host a tour, switching into the lightest map that still
+        // has something to look at.
 
         /// <summary>
-        /// A different map to switch INTO — Posidon, one of the two the user was moving between.
-        /// The bug is about what map B inherits from map A, so the two must not be the same id:
-        /// <c>LoadMap</c> would still reload, but <c>SwitchMapFromHost</c> short-circuits on
-        /// equality and the sequence would stop resembling what the user did.
+        /// Dive Site Tu-1 — one item, one asset, no schools. Its only job is to exist while the
+        /// drone's lights-off atmosphere is applied to the scene-wide RenderSettings.
         /// </summary>
-        private const string MapB = "w63m4h7u4vi5";
+        private const string MapA = "oy3hlklgnkmy";
+
+        /// <summary>
+        /// Hanuman — 13 items from 9 assets and NO fish schools (the expensive part of a load).
+        /// This is the map that gets measured, so it is the one that must be unmistakably
+        /// non-uniform when the atmosphere is healthy: it has real scenery and one hero animal,
+        /// on top of the seabed and the backdrop gradient every map draws.
+        ///
+        /// Must differ from <see cref="MapA"/> — the bug is about what B inherits from A.
+        /// </summary>
+        private const string MapB = "yh7hbkdmzur8";
 
         /// <summary>
         /// 🔴 The harness must NOT run on the AppBoot GameObject. <c>LoadMap</c> ends in
@@ -57,11 +84,42 @@ namespace DiveMap.Runtime
             go.AddComponent<Runner>().StartCoroutine(Run(dir, boot));
         }
 
-        private const int Width = 1280;
-        private const int Height = 720;
+        /// <summary>
+        /// Capture size. 640×360 because the measurement is a MEAN and a STANDARD DEVIATION over
+        /// the whole frame — 230,400 pixels is a preposterously large sample for two scalars, and
+        /// on software GL every pixel is CPU work. Four times cheaper than 720p per capture, and
+        /// the numbers it produces are the same to well inside the thresholds.
+        /// </summary>
+        private const int Width = 640;
+        private const int Height = 360;
 
-        /// <summary>How long one map load may take on CI's software GL before we give up on it.</summary>
-        private const float LoadTimeoutSeconds = 240f;
+        // ── budgets: the harness must fail, never hang (WO-MERGE P1f) ───────────────────────
+        //
+        // 🔴 These are not safety nets bolted on around the harness, they are part of it. A
+        // control that hangs is a blind instrument, and it does not fail alone — it takes its
+        // whole CI job with it. Every one of them is wall clock, checked between yields, and every
+        // one of them ends in a written verdict rather than a stall.
+        //
+        // Sized so the worst case is bounded and legible rather than generous: 2 passes × 2 loads,
+        // both maps deliberately tiny. The shell `timeout` in the workflow is set ABOVE
+        // WholeRunSeconds on purpose, so the harness's own budget expires first and there is a
+        // verdict.txt to read; the shell timeout is the backstop for a hang below this code.
+
+        /// <summary>
+        /// One map load. QcMapShot allows 150 s, but that is sized for 90-item Posidon; these two
+        /// maps carry 1 and 13 items, and two of these still fit inside a pass with room over.
+        /// </summary>
+        private const float LoadTimeoutSeconds = 60f;
+
+        /// <summary>One whole pass: two loads (2×60 s), a tour, and a capture.</summary>
+        private const float PassBudgetSeconds = 140f;
+
+        /// <summary>
+        /// Both passes plus the verdict — and 60 s under the workflow's 360 s shell timeout, on
+        /// purpose, so THIS budget is the one that expires and a verdict always gets written.
+        /// 2 × 140 leaves 20 s of slack; the run deadline caps a pass that tries to overrun it.
+        /// </summary>
+        private const float WholeRunSeconds = 300f;
 
         private static IEnumerator Run(string dir, AppBoot boot)
         {
@@ -71,18 +129,31 @@ namespace DiveMap.Runtime
             var rt = new RenderTexture(Width, Height, 24, RenderTextureFormat.ARGB32) { name = "QcBlankRT" };
             var readback = new Texture2D(Width, Height, TextureFormat.RGB24, false);
 
+            // 🔴 Written NOW, before anything can go slowly. If this process is killed from the
+            // outside — the shell timeout, the job's own budget — the file it leaves behind still
+            // says what happened instead of not existing, which is what the last run produced.
+            // Every exit below overwrites it with the real answer.
+            string verdictPath = Path.Combine(dir, "verdict.txt");
+            Write(verdictPath, QcBlank.ControlBroken + " the harness was killed before it finished " +
+                               "— no pass completed");
+
             QcBlank.Frame before = default, after = default;
+            float runDeadline = Time.realtimeSinceStartup + WholeRunSeconds;
+            string budgetBroke = null;
 
             // ── pass 1: the bug, with the fix held back ──────────────────────────────
-            yield return OnePass(dir, boot, rt, readback, suppressFix: true, f => before = f);
+            yield return OnePass(dir, boot, rt, readback, suppressFix: true, runDeadline,
+                                 f => before = f, s => budgetBroke = s);
 
             // ── pass 2: the same sequence, shipped behaviour ─────────────────────────
-            yield return OnePass(dir, boot, rt, readback, suppressFix: false, f => after = f);
+            if (budgetBroke == null)
+                yield return OnePass(dir, boot, rt, readback, suppressFix: false, runDeadline,
+                                     f => after = f, s => budgetBroke = s);
 
-            string verdict = QcBlank.Verdict(before, after);
-            bool ok = QcBlank.Passed(before, after);
+            string verdict = budgetBroke ?? QcBlank.Verdict(before, after);
+            bool ok = budgetBroke == null && QcBlank.Passed(before, after);
 
-            File.WriteAllText(Path.Combine(dir, "verdict.txt"), verdict + "\n");
+            Write(verdictPath, verdict);
             if (ok) Debug.Log("[QcBlank] " + verdict);
             else Debug.LogError("[QcBlank] " + verdict);
 
@@ -92,41 +163,60 @@ namespace DiveMap.Runtime
             Application.Quit(ok ? 0 : 1);
         }
 
+        /// <summary>Never let a failure to write the verdict be the thing that hides the verdict.</summary>
+        private static void Write(string path, string text)
+        {
+            try { File.WriteAllText(path, text + "\n"); }
+            catch (System.Exception e) { Debug.LogError("[QcBlank] verdict not written: " + e.Message); }
+        }
+
         /// <summary>
         /// map A → tour → light off → (nothing: this IS the swipe-back) → map B → measure.
         /// </summary>
         private static IEnumerator OnePass(string dir, AppBoot boot, RenderTexture rt,
-                                           Texture2D readback, bool suppressFix,
-                                           System.Action<QcBlank.Frame> onFrame)
+                                           Texture2D readback, bool suppressFix, float runDeadline,
+                                           System.Action<QcBlank.Frame> onFrame,
+                                           System.Action<string> onBudgetBroken)
         {
             string tag = suppressFix ? "before" : "after";
-            Debug.Log($"[QcBlank] ── pass '{tag}' (reset {(suppressFix ? "SUPPRESSED" : "on")}) ──");
+            float started = Time.realtimeSinceStartup;
+            // Whichever runs out first: this pass's share, or what is left of the whole run.
+            float deadline = Mathf.Min(started + PassBudgetSeconds, runDeadline);
+            Debug.Log($"[QcBlank] ── pass '{tag}' (reset {(suppressFix ? "SUPPRESSED" : "on")}) " +
+                      $"budget {deadline - started:F0}s ──");
 
             // Start each pass from a clean map A. The reset always runs for THIS load — the pass is
             // about what map B inherits, and beginning pass 2 inside pass 1's wreckage would test
             // recovery rather than prevention.
             SceneAtmosphere.SuppressResetForQc = false;
-            yield return LoadAndSettle(boot, MapA);
+            yield return LoadAndSettle(boot, MapA, deadline);
+            if (Overdue(tag, deadline, started, onBudgetBroken)) yield break;
 
             // Into the tour, and turn the light off: that is the state whose atmosphere is
             // near-black by design (DiveLightMath.For(false) → fog 70-200, ambient ×0.32).
-            if (!TourController.Start())
+            //
+            // A false from Start() is not automatically a failure: ArenaEntry auto-plays world
+            // maps, so the drone may already be out — and Request(Tour→Tour) answers false. Ask
+            // the mode, not the return value.
+            TourController.Start();
+            for (int i = 0; i < 6; i++) yield return null;   // let Begin() build the drone
+            if (!ModeRules.IsFirstPerson(ModeManager.Current))
             {
                 Debug.LogError("[QcBlank] could not enter the tour — the control cannot run");
-                onFrame(default);
+                onBudgetBroken(QcBlank.ControlBroken + $" pass '{tag}' never reached the tour, " +
+                                                       "so the dark atmosphere was never applied");
                 yield break;
             }
-            for (int i = 0; i < 10; i++) yield return null;   // let Begin() build the drone
 
             DroneLights lights = Object.FindFirstObjectByType<DroneLights>();
             if (lights == null)
             {
                 Debug.LogError("[QcBlank] no DroneLights after entering the tour");
-                onFrame(default);
+                onBudgetBroken(QcBlank.ControlBroken + $" pass '{tag}' found no DroneLights");
                 yield break;
             }
             lights.Set(false);
-            for (int i = 0; i < 5; i++) yield return null;
+            for (int i = 0; i < 3; i++) yield return null;
             Debug.Log($"[QcBlank] tour atmosphere armed — {SceneAtmosphere.StateLine()} " +
                       $"mode={ModeManager.Current}");
 
@@ -134,10 +224,13 @@ namespace DiveMap.Runtime
             // native message. iOS just stops giving Unity frames, and the next thing that happens
             // is the user picking another map.
             SceneAtmosphere.SuppressResetForQc = suppressFix;
-            yield return LoadAndSettle(boot, MapB);
+            yield return LoadAndSettle(boot, MapB, deadline);
+            if (Overdue(tag, deadline, started, onBudgetBroken)) yield break;
 
-            // Give the newly built map a few frames to draw before judging it.
-            for (int i = 0; i < 12; i++) yield return null;
+            // Give the newly built map a few frames to draw before judging it. Six, not twelve:
+            // on llvmpipe every one of these is up to 300 ms, and nothing in the scene animates
+            // into or out of existence — the build is already finished.
+            for (int i = 0; i < 6; i++) yield return null;
 
             byte[] rgb = null;
             yield return Capture(rt, readback, Path.Combine(dir, tag + ".png"), b => rgb = b);
@@ -149,19 +242,39 @@ namespace DiveMap.Runtime
             SceneAtmosphere.SuppressResetForQc = false;
         }
 
-        /// <summary>Ask for a map and wait until the build is finished (or the budget is gone).</summary>
-        private static IEnumerator LoadAndSettle(AppBoot boot, string shortId)
+        /// <summary>
+        /// Did this pass run out of time? Reports it as a verdict rather than letting the harness
+        /// carry on measuring a scene that never finished assembling.
+        /// </summary>
+        private static bool Overdue(string tag, float deadline, float started,
+                                    System.Action<string> onBudgetBroken)
+        {
+            if (Time.realtimeSinceStartup <= deadline) return false;
+            string v = QcBlank.BudgetVerdict(tag, Time.realtimeSinceStartup - started);
+            Debug.LogError("[QcBlank] " + v);
+            onBudgetBroken(v);
+            return true;
+        }
+
+        /// <summary>
+        /// Ask for a map and wait until the build is finished — bounded by BOTH this map's own
+        /// allowance and the pass deadline, whichever comes first. Returns either way; the caller
+        /// checks the clock, because "the map did not finish" and "the pass is over" are different
+        /// facts and only the second one ends the run.
+        /// </summary>
+        private static IEnumerator LoadAndSettle(AppBoot boot, string shortId, float passDeadline)
         {
             boot.LoadMap(shortId);
             // One frame for Retry to start the coroutine before IsBuilding can mean anything.
             yield return null;
 
-            float deadline = Time.realtimeSinceStartup + LoadTimeoutSeconds;
+            float deadline = Mathf.Min(Time.realtimeSinceStartup + LoadTimeoutSeconds, passDeadline);
             while (boot.IsBuilding)
             {
                 if (Time.realtimeSinceStartup > deadline)
                 {
-                    Debug.LogWarning("[QcBlank] map " + shortId + " did not finish inside the budget");
+                    Debug.LogWarning($"[QcBlank] map {shortId} did not finish inside its " +
+                                     $"{LoadTimeoutSeconds:F0}s allowance — measuring what there is");
                     yield break;
                 }
                 yield return null;

@@ -142,6 +142,34 @@ namespace DiveMap.Tests
         }
 
         [Test]
+        public void ABlownBudgetIsABrokenControl_NotAPassAndNotAHang()
+        {
+            // 🔴 The lesson from CI run 31442231470: the harness overran, the job was cancelled at
+            // 155 minutes, and there was no verdict of any kind — plus it took the unrelated
+            // palette screenshots in the same job with it. A control that runs out of time has to
+            // SAY so, in the same file and the same shape as every other outcome.
+            string v = QcBlank.BudgetVerdict("before", 140f);
+            StringAssert.StartsWith(QcBlank.ControlBroken, v);
+            StringAssert.Contains("before", v);
+            StringAssert.Contains("140s", v);
+        }
+
+        [Test]
+        public void EveryNonAnswerSharesOnePrefix()
+        {
+            // One grep finds them all, in a log nobody wrote a parser for.
+            Assert.AreEqual("CONTROL-BROKEN", QcBlank.ControlBroken);
+            foreach (string v in new[]
+                     {
+                         QcBlank.BudgetVerdict("after", 12f),
+                         QcBlank.Verdict(default, default),
+                         QcBlank.Verdict(QcBlank.Measure(TwoTone(30, 190)),
+                                         QcBlank.Measure(TwoTone(30, 190))),
+                     })
+                StringAssert.StartsWith(QcBlank.ControlBroken, v);
+        }
+
+        [Test]
         public void TheVerdictCarriesBothSetsOfNumbers()
         {
             // The line goes into verdict.txt and into the CI log, and it is what a human reads to

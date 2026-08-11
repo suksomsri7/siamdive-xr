@@ -851,6 +851,20 @@ jobs:
       # Both mean-luminance numbers land in verdict.txt and in the log, so the
       # planner can see how close to the thresholds the run actually was rather
       # than just which way it fell. Not `|| true`: this one is allowed to be red.
+      #
+      # 🔴 BUDGET, learned the expensive way. The first version of this step used the
+      # two maps from the bug report (Chang → Posidon) at 720p and a 900 s timeout.
+      # Four heavy loads on llvmpipe overran the JOB's 150-minute budget, run
+      # 31442231470 was cancelled with no verdict at all, and it took the unrelated
+      # palette screenshots in this same job down with it. What is being proven is a
+      # property of global render state, so map size was never relevant — it now uses
+      # the two lightest maps in the catalogue (Tu-1, 1 item → Hanuman, 13 items, no
+      # fish schools) at 640×360.
+      #
+      # The shell timeout is set ABOVE the harness's own 300 s budget on purpose: the
+      # harness is meant to expire first and WRITE a verdict; `timeout` here is only
+      # the backstop for a hang underneath it. Either way the job moves on, and the
+      # artifact upload below is if: always().
       # ────────────────────────────────────────────────────────────────────────
       - name: Positive control — a map switch must not inherit the tour's fog
         run: |
@@ -858,8 +872,8 @@ jobs:
           echo "BIN=$BIN"; chmod +x "$BIN"
           mkdir -p qc_blank
           set +e
-          timeout 900 xvfb-run -a -s "-screen 0 1280x720x24" \
-            "$BIN" -qcblank "$PWD/qc_blank" -screen-width 1280 -screen-height 720 -force-glcore
+          timeout 360 xvfb-run -a -s "-screen 0 640x360x24" \
+            "$BIN" -qcblank "$PWD/qc_blank" -screen-width 640 -screen-height 360 -force-glcore
           RC=$?
           set -e
           find ~/.config/unity3d -name Player.log -exec cp {} qc_blank/player.log \; 2>/dev/null || true
