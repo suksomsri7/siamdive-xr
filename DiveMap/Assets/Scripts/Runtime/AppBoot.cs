@@ -389,6 +389,20 @@ namespace DiveMap.Runtime
         /// <summary>How many maps this process has built — the x-axis of the drift measurement.</summary>
         private int _builds;
 
+        /// <summary>This map's trash-game preload plan, decided once the fetch lands (WO-P).</summary>
+        private Core.GamePreload.When _preload;
+
+        /// <summary>
+        /// Kick the trash-game template load. Parented to the ModeManager object — the same one
+        /// <c>TourController</c> hangs the game off — so the templates outlive the map root and a
+        /// second visit does not pay for them again.
+        /// </summary>
+        private static void PreloadGameModels()
+        {
+            Transform parent = ModeManager.Instance != null ? ModeManager.Instance.transform : null;
+            TrashGameSystem.PreloadTemplates(parent);
+        }
+
         /// <summary>The map root, live (the diagnostic needs to tell "inactive" from "missing").</summary>
         public GameObject MapRootObject => _mapRoot;
 
@@ -659,6 +673,32 @@ namespace DiveMap.Runtime
             Debug.Log($"[AppBoot] map {_shortId} rev={CurrentRev} canEdit={CanEditCurrent} " +
                       $"policy={scene.Root["editPolicy"]}");
 
+            // ── trash-game models, started BEFORE the build when they cost nothing (WO-P) ──
+            //
+            // 🔴 The gap: the templates only began loading when the tour began, and the tour seeds
+            // three pieces of litter and a coin cycle in its very first frame — so the first thing
+            // the player ever sees of the game is a white sphere and a flat brown disc. On an
+            // auto-play world map that is 0.6 s after this line, which is nowhere near enough.
+            //
+            // Everything needed to decide is already known here — the fetch has landed, so the
+            // map's owner and this device's edit rights are in hand — and this is SECONDS before
+            // the build finishes, which is the whole point: a local read has that long to finish.
+            // The flags are read, deliberately NOT cleared; the block further down still owns
+            // clearing them, so a cancelled warp cannot be consumed twice.
+            _preload = Core.GamePreload.Decide(
+                autoPlay: Core.ArenaEntry.ShouldAutoPlay(
+                    accountId: (string)scene.Root["accountId"],
+                    canEdit: CanEditCurrent,
+                    arenaPlay: TourController.ArenaPlay,
+                    arrivedByWarp: TourController.ArrivingByWarp,
+                    online: Application.internetReachability != NetworkReachability.NotReachable,
+                    arMode: ArSession.Active),
+                cachedOnDisk: TrashGameSystem.AllTemplatesCached(),
+                online: Application.internetReachability != NetworkReachability.NotReachable);
+
+            Debug.Log($"[Game] preload plan = {_preload} (cached={TrashGameSystem.AllTemplatesCached()})");
+            if (Core.GamePreload.AtBuildStart(_preload)) PreloadGameModels();
+
             // Start (or switch) the editing session. Undo history is per map: undoing across two
             // maps would write one map's items into the other.
             MapEditor.Begin(_shortId, SceneEdit.Items(scene));
@@ -733,6 +773,12 @@ namespace DiveMap.Runtime
             // player backed out of must not hijack the next map they open.
             TourController.ArrivingByWarp = false;
             TourController.ArenaPlay = false;
+
+            // The download half of the preload (WO-P). Held back until here on purpose: 26 MB
+            // fetched alongside the map's own GLBs would slow every map load to fix a placeholder
+            // that shows on some. After the build it competes with nothing, and it still gets the
+            // auto-tour's 0.6 s head start before the first piece is seeded.
+            if (Core.GamePreload.AtBuildEnd(_preload)) PreloadGameModels();
 
             // 🔴 …except in -qcshot mode, where the tour is what broke the evidence.
             //
