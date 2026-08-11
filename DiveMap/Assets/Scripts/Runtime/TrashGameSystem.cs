@@ -359,9 +359,66 @@ namespace DiveMap.Runtime
             });
         }
 
+        /// <summary>
+        /// Are all six models already in the on-disk cache? (WO-P)
+        ///
+        /// This is what decides whether the preload may run DURING the map build: a local read
+        /// costs no bandwidth and cannot slow the map down, while a 26 MB download in parallel
+        /// with the map's own GLBs certainly could. <c>AssetCacheStore.Resolve</c> returns the
+        /// url unchanged when there is no local copy, which is the same test
+        /// <c>SceneBuilder.CachedUri</c> makes before deciding to download.
+        ///
+        /// All six, not any: a partial cache still means a download, and the point of the early
+        /// path is that it is free.
+        /// </summary>
+        public static bool AllTemplatesCached()
+        {
+            foreach (KeyValuePair<string, string> kv in ModelFiles)
+            {
+                string url = ModelCdn + kv.Value;
+                if (AssetCacheStore.Resolve(url) == url) return false;
+            }
+            return true;
+        }
+
+        /// <summary>
+        /// Start fetching the templates before the tour asks for them (WO-P).
+        ///
+        /// 🔴 The gap this closes: <see cref="Begin"/> is the only thing that used to call
+        /// <see cref="LoadTemplates"/>, and Begin also seeds three pieces of litter and a coin
+        /// cycle in the SAME frame. So the first pieces of every game were primitives by
+        /// construction — a white sphere and a flat brown disc, at the exact moment the player is
+        /// looking hardest, which is what the user photographed.
+        ///
+        /// Only called when <c>GamePreload</c> says the tour is certain, so this never spends
+        /// memory on a map nobody is going to play. Safe to call more than once and safe to call
+        /// alongside Begin — see the in-flight guard on LoadTemplates.
+        /// </summary>
+        public static void PreloadTemplates(Transform parent)
+        {
+            TrashGameSystem g = Ensure(parent);
+            if (g == null) return;
+            g.LoadTemplates();
+        }
+
+        /// <summary>
+        /// One template load at a time, whoever asks (WO-P).
+        ///
+        /// 🔴 Without this, a preload in flight plus <see cref="Begin"/> a second later would each
+        /// see an empty <c>_templates</c> and start their own download of all six models: 52 MB
+        /// over the wire, two GltfImports per model, and the loser's copy leaked because only one
+        /// can win the dictionary. The existing per-key check cannot catch it — a model that is
+        /// still downloading is not in the dictionary yet.
+        /// </summary>
+        private bool _loadingTemplates;
+
         /// <summary>โหลดแม่แบบโมเดลจริงเบื้องหลัง — สำเร็จเมื่อไหร่ ชิ้นที่เกิดใหม่ใช้ทันที.</summary>
         private async void LoadTemplates()
         {
+            if (_loadingTemplates) return;
+            _loadingTemplates = true;
+            try
+            {
             foreach (string key in LoadOrder)
             {
                 if (!ModelFiles.TryGetValue(key, out string file)) continue;
@@ -390,6 +447,13 @@ namespace DiveMap.Runtime
                 _templates[kv.Key] = holder;
                 Debug.Log($"[Game] template {kv.Key} ready");
                 UpgradePieces(kv.Key);
+            }
+            }
+            finally
+            {
+                // Released whatever happened, including the `this == null` teardown path above —
+                // a stuck flag would mean the templates never load again for the rest of the run.
+                _loadingTemplates = false;
             }
         }
 
