@@ -1,4 +1,3 @@
-using System.Collections;
 using Newtonsoft.Json.Linq;
 using UnityEngine;
 using DiveMap.Core;
@@ -67,10 +66,24 @@ namespace DiveMap.Runtime.Ui
         }
 
         /// <summary>
-        /// Put the object in the water: record it against this map, then rebuild the map so it is
-        /// built by the same pipeline as every other item. The rebuild costs a few seconds and
-        /// drops the player out of the tour, which is why the toast says so plainly rather than
-        /// letting the screen go quiet on them.
+        /// Put the object in the water — in place, now, with no round trip.
+        ///
+        /// 🔴 WO-N item 7. This used to end in <c>ReloadCurrentMap()</c>, which is
+        /// <c>AppBoot.Retry()</c> — a full re-FETCH from the server that throws the in-memory
+        /// scene away and redraws the last saved copy. That is what the user saw and reported as
+        /// "เลือกของแล้วระบบรีเฟรชใหม่ โหลดใหม่ ทำงานไม่ได้จริง": pick a card, the map blanks and
+        /// reloads for several seconds, and it also called <c>ModeManager.Exit()</c> so the
+        /// builder was torn down under them. On a map the account cannot write to — which is most
+        /// of them, since admin worlds are <c>editPolicy: "none"</c> — the save 403s first, so the
+        /// reload was pure cost: seconds of black screen to end up where you started.
+        ///
+        /// The web does none of that. <c>tryPlace()</c> deducts coins and calls <c>addAsset(a)</c>,
+        /// which builds the object into the live scene and sets <c>dirty=true</c>; the 1.3 s
+        /// autosave tick writes it later, invisibly (builder.html:3391-3403). We now do exactly
+        /// that: mutate the scene in memory, hand it to <see cref="MapEditor.RecordAndApply"/> —
+        /// which pushes an undo snapshot, marks the map dirty for the same autosave every other
+        /// edit uses, and rebuilds FROM MEMORY — and return. No fetch, no mode change, and the
+        /// placement is undoable, which it never was before.
         /// </summary>
         public static bool Release(string assetId)
         {
@@ -98,64 +111,40 @@ namespace DiveMap.Runtime.Ui
 
             // Local first, always. The server write can fail (no rights, no signal) and the
             // player has already been charged — the on-device copy is what guarantees they keep
-            // what they paid for.
+            // what they paid for. Keeping it even when the autosave later succeeds is safe:
+            // ShopStock.Inject skips ids the scene already has (ShopStock.cs:79-107).
             ShopStock.Add(boot.CurrentMapId, item);
-            Debug.Log($"[Shop] released {assetId} at ({x:F0},{y:F0},{z:F0}) on map {boot.CurrentMapId}");
 
-            boot.StartCoroutine(SaveThenReload(boot, item));
-            return true;
-        }
-
-        /// <summary>
-        /// Try to make the placement permanent, then rebuild the map.
-        ///
-        /// This is the difference between "you can see your fish" and "everyone can": the web
-        /// autosaves into the map, this app could only keep purchases on the device (ShopStock's
-        /// own comment records that as a limitation). Now it attempts the real write and falls
-        /// back to the device copy — which is the correct outcome on an admin world map, where
-        /// editPolicy is "none" and a 403 is the server working as intended, not an error.
-        /// </summary>
-        private static IEnumerator SaveThenReload(AppBoot boot, JObject item)
-        {
             SceneData scene = boot.CurrentScene;
-            bool saved = false;
-
-            // Don't spend a round trip to be told 403: the GET already said whether this account
-            // may write here. Most maps a player dives into are admin worlds (editPolicy "none").
-            if (!boot.CanEditCurrent)
+            if (scene == null)
             {
-                Toast.ShowTr("แมพนี้แก้ไม่ได้ — เก็บไว้ในเครื่องนี้แทน");
+                Toast.ShowTr("ซื้อแล้ว");
+                Debug.LogWarning("[Shop] no scene in memory — stored on the device for the next load");
+                return false;
             }
-            else if (scene != null && scene.Root["items"] is JArray items)
+
+            // The web's addAsset(): it is in the world the moment you pick it. Inject creates the
+            // items array if a brand-new map has none, and dedupes by id.
+            ShopStock.Inject(scene, new[] { item });
+            Debug.Log($"[Shop] released {assetId} at ({x:F0},{y:F0},{z:F0}) on map {boot.CurrentMapId} " +
+                      $"canEdit={boot.CanEditCurrent}");
+
+            if (boot.CanEditCurrent && scene.Root["items"] is JArray items)
             {
-                // The scene already carries this item (ShopStock injected it on the last load, or
-                // Inject will on the next); add it here too so the array we send is complete.
-                ShopStock.Inject(scene, new[] { item });
-
-                MapSaveClient.Result result = default;
-                yield return MapSaveClient.SaveItems(boot.CurrentMapId, items, boot.CurrentRev,
-                                                     r => result = r);
-                saved = result.Ok;
-
-                if (saved)
-                {
-                    // It lives in the map now; a second copy on the device would show up twice
-                    // for this player and nobody else.
-                    ShopStock.Remove(boot.CurrentMapId, (string)item["id"]);
-                    Toast.ShowTr("บันทึกลงแมพแล้ว");
-                }
-                else if (result.Conflict) Toast.ShowTr("มีคนแก้แมพนี้ก่อน — เก็บไว้ในเครื่องนี้แทน");
-                else if (result.Forbidden) Toast.ShowTr("แมพนี้แก้ไม่ได้ — เก็บไว้ในเครื่องนี้แทน");
-                else Toast.ShowTr("บันทึกไม่สำเร็จ — เก็บไว้ในเครื่องนี้แทน");
+                // Undo snapshot + dirty + rebuild-from-memory, the same three things a move, a
+                // delete and a recolour do. The PATCH is the autosave's job, not ours.
+                MapEditor.RecordAndApply(items);
+                Toast.ShowTr("วางลงแมพแล้ว");
             }
             else
             {
-                Toast.ShowTr("ปล่อยลงแมพแล้ว — กำลังโหลดใหม่");
+                // No write rights: the piece is theirs on this device only, and ShopStock.Inject
+                // will put it back on every future load of this map. Still rebuild so they can
+                // see it immediately — the old code made them wait for a reload to find out.
+                boot.RebuildFromMemory();
+                Toast.ShowTr("แมพนี้แก้ไม่ได้ — เก็บไว้ในเครื่องนี้แทน");
             }
-
-            Debug.Log($"[Shop] placement saved to server={saved}");
-            if (ModeManager.Instance != null) ModeManager.Instance.Exit();
-            boot.ReloadCurrentMap();
+            return true;
         }
     }
 }
