@@ -153,6 +153,57 @@ namespace DiveMap.Core
         /// harness: when it expires the run says so, in the same file and the same format as every
         /// other outcome, and stops. Red and legible beats green and absent — and beats hung.
         /// </summary>
+        /// <summary>
+        /// The claim this control can actually make (WO-MERGE DARK).
+        ///
+        /// 🔴 Mean-frame luminance turned out to be blind here, and the harness proved it on
+        /// itself. CI b383's dark probe forced the drone's full lights-off atmosphere straight
+        /// into RenderSettings and photographed it: <c>mean=181.6</c>, against a healthy frame's
+        /// <c>186.9</c>. Five parts in 255. The frame is dominated by something fog and ambient do
+        /// not touch — the unlit screen-space backdrop quad — so no threshold over that number
+        /// could ever have separated a dark world from a bright one, however faithful the sequence
+        /// leading up to it.
+        ///
+        /// The same run measured the thing that IS real, on the same frames: with the reset
+        /// suppressed the tour's dimmed ambient survived into the next map (sky 41.8), and with it
+        /// running the next map got the authored value back (sky 93.7). That is precisely what
+        /// <c>SceneAtmosphere</c> promises, it is a factor of 2.2, and it is measurable without a
+        /// camera at all.
+        ///
+        /// So the claim is narrowed on purpose: <b>a new map's build restores the authored
+        /// ambient</b>. It does not prove the user's dark screen — nothing in this harness does —
+        /// and the verdict says so in as many words rather than implying more than it earned.
+        /// </summary>
+        public static string AtmosphereVerdict(double beforeSky, double afterSky,
+                                               double authoredSky, double tolerance = 0.02)
+        {
+            string n = $"authored={authoredSky:F3} before={beforeSky:F3} after={afterSky:F3}";
+
+            if (authoredSky <= 0.0)
+                return $"{ControlBroken} no authored snapshot to compare against · {n}";
+
+            bool beforeDrifted = System.Math.Abs(beforeSky - authoredSky) > tolerance;
+            bool afterRestored = System.Math.Abs(afterSky - authoredSky) <= tolerance;
+
+            if (!beforeDrifted)
+                return $"{ControlBroken} the suppressed pass did not drift, so the fix is " +
+                       $"unproven · {n}";
+
+            if (!afterRestored)
+                return $"FAIL the build did not restore the authored ambient · {n}";
+
+            return $"PASS ambient drift reproduced, then restored by the build · {n} " +
+                   "(claim: a build restores the authored ambient — NOT that the device's dark " +
+                   "screen is fixed)";
+        }
+
+        /// <summary>True only when the narrowed claim is both reproduced and fixed.</summary>
+        public static bool AtmospherePassed(double beforeSky, double afterSky, double authoredSky,
+                                            double tolerance = 0.02)
+            => authoredSky > 0.0 &&
+               System.Math.Abs(beforeSky - authoredSky) > tolerance &&
+               System.Math.Abs(afterSky - authoredSky) <= tolerance;
+
         public static string BudgetVerdict(string pass, float seconds)
             => $"{ControlBroken} pass '{pass}' exceeded its {seconds:F0}s budget — " +
                "no frame was measured, so nothing is proven either way";

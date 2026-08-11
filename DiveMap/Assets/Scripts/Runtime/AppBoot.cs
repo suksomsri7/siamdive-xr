@@ -386,6 +386,12 @@ namespace DiveMap.Runtime
         /// <summary>A host map switch that arrived too early to act on, or "" for none.</summary>
         private string _pendingShortId;
 
+        /// <summary>How many maps this process has built — the x-axis of the drift measurement.</summary>
+        private int _builds;
+
+        /// <summary>The map root, live (the diagnostic needs to tell "inactive" from "missing").</summary>
+        public GameObject MapRootObject => _mapRoot;
+
         /// <summary>
         /// <see cref="Boot"/> with a flag around it, and a place for a queued map switch to run
         /// (WO-MERGE P1).
@@ -700,6 +706,15 @@ namespace DiveMap.Runtime
             // object underwater is never lit by less than the water it is standing in.
             UnderwaterShading.Configure(result.WaterLevel);
             Ui.PerfHud.Apply();   // A7 — rebuild the readout if the player left it on
+
+            // ── the two instruments this map switch is being watched with (WO-MERGE DARK) ──
+            // The drift line is the sequence that answers "does the fog scale compound across
+            // switches?"; DarkTrace is what tells a missing map root from an inactive one from a
+            // backdrop drawn in front of the world. Both are one line each and both go into any
+            // device log the user sends, which is the only place this bug has ever been visible.
+            _builds++;
+            Debug.Log(SceneAtmosphere.DriftLine(_builds));
+            DarkTrace.Log("build#" + _builds + " complete");
 
             // D9/E8 — a diver who left through a warp gate lands IN the destination, at a random
             // point, rather than being handed the map screen. Flag cleared on use, so cancelling a

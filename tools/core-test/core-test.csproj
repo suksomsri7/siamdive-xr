@@ -93,6 +93,9 @@
          control. The pixels come from CI; the judgement — including what to do when the bug
          fails to reproduce — is settled here. -->
     <Compile Include="../../DiveMap/Assets/Scripts/Core/QcBlank.cs" />
+    <!-- WO-MERGE DARK. Which baseline a depth scaler may refresh. Pure, and the reason it is
+         here is a number off the user's own screen: authored fog 500..9000, live 489..8797. -->
+    <Compile Include="../../DiveMap/Assets/Scripts/Core/AtmosphereBaseline.cs" />
     <!-- P1h: the blank gate is pinned against the drone's REAL lights-off fog colour, so it can
          never again be set below the very thing it exists to detect. -->
     <Compile Include="../../DiveMap/Assets/Scripts/Core/DiveLightMath.cs" />
@@ -152,6 +155,7 @@
     <Compile Include="../../DiveMap/Assets/Tests/EditMode/MemoryReliefTests.cs" />
     <Compile Include="../../DiveMap/Assets/Tests/EditMode/SiteRequestTests.cs" />
     <Compile Include="../../DiveMap/Assets/Tests/EditMode/QcBlankTests.cs" />
+    <Compile Include="../../DiveMap/Assets/Tests/EditMode/AtmosphereBaselineTests.cs" />
     <Compile Include="../../DiveMap/Assets/Tests/EditMode/ArenaEntryTests.cs" />
     <Compile Include="../../DiveMap/Assets/Tests/EditMode/ShopTests.cs" />
     <Compile Include="../../DiveMap/Assets/Tests/EditMode/PaletteAdminTests.cs" />

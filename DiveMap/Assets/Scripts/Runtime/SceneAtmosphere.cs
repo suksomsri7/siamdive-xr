@@ -54,6 +54,19 @@ namespace DiveMap.Runtime
         public static bool HasDefaults => _have;
 
         /// <summary>
+        /// The authored ambient sky as a single number, and the live one beside it — what the
+        /// narrowed positive control compares (WO-MERGE DARK). Ambient rather than fog distance
+        /// because CI b383 showed the build re-authors the fog distances by itself
+        /// (<c>ApplyViewRange</c>) while the ambient is exactly what a stale mode leaves behind:
+        /// with the reset suppressed the next map inherited sky 41.8, with it running it got 93.7.
+        /// -1 when nothing has been captured yet.
+        /// </summary>
+        public static float AuthoredSky => _have ? _sky.grayscale : -1f;
+
+        /// <summary>The ambient sky the scene is actually rendering with right now.</summary>
+        public static float LiveSky => RenderSettings.ambientSkyColor.grayscale;
+
+        /// <summary>
         /// Remember the authored atmosphere. Called at the end of <c>AppBoot.SetupLighting</c>,
         /// which is the only code that writes these values from constants rather than from
         /// something it read a moment earlier.
@@ -175,6 +188,40 @@ namespace DiveMap.Runtime
         /// Deliberately terse: it has to be readable in a phone screenshot taken by a user who is
         /// not looking for it.
         /// </summary>
+        /// <summary>
+        /// Authored versus live, with the drift factor spelled out (WO-MERGE DARK).
+        ///
+        /// 🔴 The number the user's badge photograph handed us: authored 500..9000, live
+        /// 489..8797 — both ends down by 0.9774. One application of the depth visibility scale is
+        /// the feature; a second one is a feedback loop, and a loop that runs per frame walks the
+        /// fog in until the world is a flat wall of fog colour.
+        ///
+        /// So the drift is now MEASURED at the end of every map build and printed as a factor and
+        /// as a count: "how many more rounds like this until the far plane is inside the map?"
+        /// A sequence of these across several switches answers "does it compound?" without anyone
+        /// having to reason about script execution order — which is exactly what could not be
+        /// settled by reading the code.
+        /// </summary>
+        public static string DriftLine(int buildNumber)
+        {
+            if (!_have) return $"[Atmos] drift #{buildNumber}: no authored snapshot yet";
+
+            float liveStart = RenderSettings.fogStartDistance;
+            float liveEnd = RenderSettings.fogEndDistance;
+            double fStart = _fogStart > 0f ? liveStart / (double)_fogStart : 1.0;
+            double fEnd = _fogEnd > 0f ? liveEnd / (double)_fogEnd : 1.0;
+
+            // A wall is when the far plane no longer reaches the content. 500 units is roughly a
+            // map's own footprint, so it is a fair "you cannot see the map any more" mark.
+            int rounds = AtmosphereBaseline.RoundsToReach(_fogEnd, fEnd, 500.0);
+
+            return $"[Atmos] drift #{buildNumber}: authored {_fogStart:F0}..{_fogEnd:F0} " +
+                   $"live {liveStart:F0}..{liveEnd:F0} " +
+                   $"factor near={fStart:F4} far={fEnd:F4} " +
+                   $"· {(rounds < 0 ? "not shrinking" : rounds + " more rounds to a 500u wall")} " +
+                   $"· ambSky={RenderSettings.ambientSkyColor.grayscale:F3}";
+        }
+
         public static string StateLine()
         {
             return $"fog {(RenderSettings.fog ? "on" : "off")} " +

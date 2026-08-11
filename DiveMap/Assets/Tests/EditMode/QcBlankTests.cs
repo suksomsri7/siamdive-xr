@@ -206,6 +206,62 @@ namespace DiveMap.Tests
                 StringAssert.StartsWith(QcBlank.ControlBroken, v);
         }
 
+        // ── the narrowed claim, after luminance was proved blind ─────────────────
+
+        [Test]
+        public void AmbientDriftReproducedThenRestored_Passes()
+        {
+            // The real numbers from CI b383's trace: with the reset suppressed the next map
+            // inherited the tour's dimmed ambient (sky 0.164 grayscale ≈ 41.8/255), with it
+            // running the map got the authored value back (0.367 ≈ 93.7/255).
+            Assert.IsTrue(QcBlank.AtmospherePassed(0.164, 0.367, 0.367));
+            StringAssert.StartsWith("PASS", QcBlank.AtmosphereVerdict(0.164, 0.367, 0.367));
+        }
+
+        [Test]
+        public void TheNarrowedVerdictSaysWhatItDoesNotProve()
+        {
+            // 🔴 A narrower claim is only worth more than a broad one if it is honest about its
+            // own edges. Anyone reading a green tick must not come away thinking the user's dark
+            // screen has been proved fixed, because it has not.
+            string v = QcBlank.AtmosphereVerdict(0.164, 0.367, 0.367);
+            StringAssert.Contains("NOT that the device's dark screen is fixed", v);
+        }
+
+        [Test]
+        public void NoDriftInTheSuppressedPass_IsABrokenControl()
+        {
+            // Same rule as before: if the bug does not reproduce, the instrument is blind and
+            // must say so instead of passing.
+            Assert.IsFalse(QcBlank.AtmospherePassed(0.367, 0.367, 0.367));
+            StringAssert.StartsWith(QcBlank.ControlBroken,
+                                    QcBlank.AtmosphereVerdict(0.367, 0.367, 0.367));
+        }
+
+        [Test]
+        public void DriftThatSurvivesTheFix_Fails()
+        {
+            Assert.IsFalse(QcBlank.AtmospherePassed(0.164, 0.164, 0.367));
+            StringAssert.StartsWith("FAIL", QcBlank.AtmosphereVerdict(0.164, 0.164, 0.367));
+        }
+
+        [Test]
+        public void WithNoAuthoredSnapshot_NothingCanBeConcluded()
+        {
+            StringAssert.StartsWith(QcBlank.ControlBroken,
+                                    QcBlank.AtmosphereVerdict(0.164, 0.367, -1.0));
+            Assert.IsFalse(QcBlank.AtmospherePassed(0.164, 0.367, -1.0));
+        }
+
+        [Test]
+        public void TheToleranceAdmitsFloatNoiseButNotARealChange()
+        {
+            // Restoring a colour through Unity's float channels is not bit-exact.
+            Assert.IsTrue(QcBlank.AtmospherePassed(0.164, 0.3672, 0.367));
+            // …but half the brightness is not noise.
+            Assert.IsFalse(QcBlank.AtmospherePassed(0.164, 0.20, 0.367));
+        }
+
         [Test]
         public void TheVerdictCarriesBothSetsOfNumbers()
         {

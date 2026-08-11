@@ -84,6 +84,15 @@ namespace DiveMap.Runtime
             return true;
         }
 
+        /// <summary>
+        /// The gradient quad itself, for diagnostics only (WO-MERGE DARK). This thing sits about
+        /// two units in front of the camera in the Background queue, and whether it writes depth
+        /// there — which would hide the entire world behind a flat gradient — depends on a shader
+        /// property that may or may not exist (see <c>MakeGradientMaterial</c>). Nothing off-device
+        /// can answer that; <see cref="DarkTrace"/> reads it at runtime instead.
+        /// </summary>
+        public Transform Quad => _quad;
+
         /// <summary>Hide the gradient (daylight mode uses a flat sky, like the web).</summary>
         public void SetVisible(bool visible)
         {
