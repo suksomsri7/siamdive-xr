@@ -116,6 +116,10 @@
          that matter are the ugly ones — malformed JSON, an id in both sources, a clock that went
          backwards — and none of them may empty the palette. -->
     <Compile Include="../../DiveMap/Assets/Scripts/Core/AssetCatalog.cs" />
+    <!-- WO-N item 4. Who counts as the admin. Believing the wrong evidence is silent and costs
+         real coins in one direction and gives away a whole category in the other, and the rule
+         is pure — Account itself needs PlayerPrefs and stays CI-only. -->
+    <Compile Include="../../DiveMap/Assets/Scripts/Core/AdminIdentity.cs" />
   </ItemGroup>
 
   <ItemGroup Label="EditMode tests for exactly those files">
@@ -160,6 +164,7 @@
     <Compile Include="../../DiveMap/Assets/Tests/EditMode/ShopTests.cs" />
     <Compile Include="../../DiveMap/Assets/Tests/EditMode/PaletteAdminTests.cs" />
     <Compile Include="../../DiveMap/Assets/Tests/EditMode/AssetCatalogTests.cs" />
+    <Compile Include="../../DiveMap/Assets/Tests/EditMode/AdminIdentityTests.cs" />
     <Compile Include="Runner.cs" />
   </ItemGroup>
 </Project>

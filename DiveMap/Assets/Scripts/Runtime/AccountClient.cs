@@ -42,8 +42,17 @@ namespace DiveMap.Runtime
             public bool Linked;
             public string Email;
             public string Name;
-            public bool Admin;
+            /// <summary>
+            /// null when the response had no <c>admin</c> field — an older server. NOT the same
+            /// as false: see AdminIdentity. This used to be a plain bool that was logged and
+            /// then dropped on the floor (WO-N item 4).
+            /// </summary>
+            public bool? Admin;
         }
+
+        /// <summary>The <c>admin</c> field if the response carried one, else null ("not told").</summary>
+        private static bool? ReadAdmin(JObject o)
+            => o != null && o["admin"] != null ? (bool?)(bool)o["admin"] : null;
 
         // ── identity ─────────────────────────────────────────────────────────────
 
@@ -65,10 +74,17 @@ namespace DiveMap.Runtime
                 Linked = Read(o, "linked") == "True" || (o["linked"] != null && (bool)o["linked"]),
                 Email = Read(o, "email"),
                 Name = Read(o, "name"),
-                Admin = o["admin"] != null && (bool)o["admin"],
+                Admin = o["admin"] != null ? (bool?)(bool)o["admin"] : null,
             };
-            bool changed = Account.Apply(me.Linked ? me.Email : null, me.Name);
-            Debug.Log($"[Account] me linked={me.Linked} name='{me.Name}' admin={me.Admin} changed={changed}");
+            // 🔴 The flag now REACHES Account (WO-N item 4). The web is `_isAdmin = !!j.admin`
+            // (builder.html:4374); we were comparing the email string instead, so an admin the
+            // server recognised by account row rather than by address was charged for animals
+            // the web gives them free.
+            bool changed = Account.Apply(me.Linked ? me.Email : null, me.Name,
+                                         me.Linked ? me.Admin : null);
+            Debug.Log($"[Account] me linked={me.Linked} name='{me.Name}' " +
+                      $"admin={(me.Admin.HasValue ? me.Admin.Value.ToString() : "unset")} " +
+                      $"isAdmin={Account.IsAdmin} changed={changed}");
             onDone?.Invoke(me, changed);
         }
 
@@ -101,7 +117,7 @@ namespace DiveMap.Runtime
 
             bool needName = res["needName"] != null && (bool)res["needName"];
             string name = Read(res, "name");
-            Account.Apply(Read(res, "email") ?? mail, name);
+            Account.Apply(Read(res, "email") ?? mail, name, ReadAdmin(res));
             Debug.Log($"[Account] verified needName={needName} name='{name}'");
             onDone?.Invoke(needName, null);
         }
@@ -120,7 +136,7 @@ namespace DiveMap.Runtime
             yield return Post(Base + "/api/account/set-username", body, r => res = r, e => err = e);
 
             if (err != null || res == null) { onDone?.Invoke(err ?? "name_failed"); yield break; }
-            Account.Apply((email ?? "").Trim(), Read(res, "name"));
+            Account.Apply((email ?? "").Trim(), Read(res, "name"), ReadAdmin(res));
             onDone?.Invoke(null);
         }
 
@@ -132,7 +148,9 @@ namespace DiveMap.Runtime
             yield return Post(Base + "/api/account/admin-login", body, r => res = r, e => err = e);
 
             if (err != null || res == null) { onDone?.Invoke(err ?? "login_failed"); yield break; }
-            Account.Apply(Read(res, "email") ?? Account.AdminEmail, Read(res, "name"));
+            // The passcode route only answers to the admin, so success IS the flag — no need to
+            // wait for the next /me to find out what we already know.
+            Account.Apply(Read(res, "email") ?? Account.AdminEmail, Read(res, "name"), true);
             onDone?.Invoke(null);
         }
 

@@ -220,8 +220,12 @@ namespace DiveMap.Runtime
         {
             StartCoroutine(AccountClient.FetchMe((me, changed) =>
             {
+                // me.Admin is nullable now (WO-N item 4): "unset" means the server sent no
+                // admin field, which is not the same as false — an empty {} in a log would
+                // read as "denied" and send the next reader looking in the wrong place.
                 Debug.Log($"[Native] identity re-checked for the host: linked={me.Linked} " +
-                          $"admin={me.Admin} changed={changed}");
+                          $"admin={(me.Admin.HasValue ? me.Admin.Value.ToString() : "unset")} " +
+                          $"isAdmin={Core.Account.IsAdmin} changed={changed}");
                 // A different account than last time invalidates anything the UI drew from the old
                 // one. The hub is not open in library mode, so this is only the shell's own chrome.
                 if (changed && Ui.UiShell.Instance != null) Ui.UiShell.Instance.ApplyHostMode();

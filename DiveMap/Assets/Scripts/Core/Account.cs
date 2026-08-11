@@ -25,6 +25,8 @@ namespace DiveMap.Core
     public static class Account
     {
         public const string EmailKey = "sd_auth_email";
+        /// <summary>Tri-state (<see cref="AdminIdentity"/>): the server's admin flag, or "never told".</summary>
+        public const string AdminKey = "sd_auth_admin";
         public const string NameKey = "sd_auth_name";
         public const string ScopeKey = "sd_acct_scope";
 
@@ -101,31 +103,56 @@ namespace DiveMap.Core
         public static bool IsSignedIn => !string.IsNullOrEmpty(Email);
         public static string Email => PlayerPrefs.GetString(EmailKey, "");
         public static string Name => PlayerPrefs.GetString(NameKey, "");
-        public static bool IsAdmin => IsAdminEmail(Email);
+        /// <summary>
+        /// 🔴 The SERVER decides (WO-N item 4) — see <see cref="AdminIdentity"/>. The
+        /// <see cref="AdminEmail"/> match below it is a fallback for a response that carried no
+        /// <c>admin</c> field, not the rule.
+        /// </summary>
+        public static bool IsAdmin =>
+            AdminIdentity.Resolve(AdminIdentity.FromStored(PlayerPrefs.GetInt(AdminKey, AdminIdentity.Unknown)),
+                                  Email, AdminEmail);
+
+        /// <summary>
+        /// Raised whenever <see cref="Apply"/> writes an identity — including one that only
+        /// changed the admin flag. Screens that decided something from <see cref="IsAdmin"/>
+        /// while /me was still in flight subscribe to this rather than re-polling: the palette
+        /// opened on a cold start used to show a coin count instead of ∞, and no 🌀 Warp chip,
+        /// until it was closed and reopened.
+        /// </summary>
+        public static event Action IdentityChanged;
 
         /// <summary>
         /// Record what the server said. Returns true when the ACCOUNT changed (including a
         /// logout), which is the caller's cue to drop anything scoped to the old one — the RN
         /// app's syncAcctScope, and the reason another account's maps never show as "by You".
         /// </summary>
-        public static bool Apply(string email, string name)
+        public static bool Apply(string email, string name, bool? admin = null)
         {
             string next = (email ?? "").Trim();
             string prev = Email;
+            bool prevAdmin = IsAdmin;
 
             if (string.IsNullOrEmpty(next))
             {
                 PlayerPrefs.DeleteKey(EmailKey);
                 PlayerPrefs.DeleteKey(NameKey);
+                // A signed-out device has no admin flag to remember; leaving the old one behind
+                // would make the NEXT account inherit it until /me answered for them.
+                PlayerPrefs.DeleteKey(AdminKey);
             }
             else
             {
                 PlayerPrefs.SetString(EmailKey, next);
                 PlayerPrefs.SetString(NameKey, name ?? "");
+                // Only write what we were told. A caller with no opinion (a path that does not
+                // read the field) must not erase what /me established a moment ago.
+                if (admin.HasValue) PlayerPrefs.SetInt(AdminKey, AdminIdentity.ToStored(admin));
             }
             PlayerPrefs.Save();
 
-            return !string.Equals(prev, next, StringComparison.OrdinalIgnoreCase);
+            bool accountChanged = !string.Equals(prev, next, StringComparison.OrdinalIgnoreCase);
+            if (accountChanged || prevAdmin != IsAdmin) IdentityChanged?.Invoke();
+            return accountChanged;
         }
 
         public static void SignOut() => Apply(null, null);

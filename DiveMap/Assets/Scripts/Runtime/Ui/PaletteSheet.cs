@@ -59,6 +59,7 @@ namespace DiveMap.Runtime.Ui
         private static readonly Color PlayOnBg = new Color(0.070f, 0.596f, 0.600f, 0.96f);
 
         private RectTransform _root;
+        private RectTransform _sheetRect;
         private RectTransform _chipRow;
         private ScrollRect _chipScroll;
         private RectTransform _grid;
@@ -171,8 +172,29 @@ namespace DiveMap.Runtime.Ui
                 ModeManager.Instance.Exit();
         }
 
+        private void OnIdentityChanged()
+        {
+            if (_open != this || _sheetRect == null) return;
+            Debug.Log($"[Palette] identity changed → rebuilding chips (admin={Account.IsAdmin})");
+
+            // Rebuild the catalogue and the chip strip in place. The grid is re-filled by
+            // ShowKind below, so nothing here has to know what was on screen a moment ago.
+            _byKind = BuildCatalogue();
+            _chipKinds.Clear();
+            _chipKinds.AddRange(Palette.ChipKinds(_byKind));
+
+            _chipBg.Clear();
+            if (_chipRow != null)
+                for (int i = _chipRow.childCount - 1; i >= 0; i--) Destroy(_chipRow.GetChild(i).gameObject);
+
+            BuildChipButtons();
+            ShowKind(_chipKinds.Count > 0 ? _chipKinds[0] : null);
+            Refresh();
+        }
+
         private void OnDestroy()
         {
+            Account.IdentityChanged -= OnIdentityChanged;
             if (_open != this) return;
             _open = null;
             // Destroyed without going through Close() (a map reload tears the layer down) —
@@ -222,8 +244,16 @@ namespace DiveMap.Runtime.Ui
             grt.sizeDelta = new Vector2(UiKit.Css(42f), UiKit.Css(4f));
             grt.anchoredPosition = new Vector2(0f, -UiKit.Css(10f));
 
+            _sheetRect = prt;
             BuildChips(prt);
             BuildGrid(prt);
+
+            // /me can land AFTER the sheet is open — it is one HTTP round trip started at boot,
+            // and on a cold start the user can easily beat it here. Everything admin-shaped on
+            // this screen is decided at build time (∞ on the pill, the 🌀 Warp chip), so without
+            // this the first palette of a session showed a coin count and one chip too few until
+            // it was closed and reopened. WO-N item 4.
+            Account.IdentityChanged += OnIdentityChanged;
 
             // First chip open, like the web's firstKind().
             ShowKind(_chipKinds.Count > 0 ? _chipKinds[0] : null);
@@ -334,6 +364,16 @@ namespace DiveMap.Runtime.Ui
             vp.sizeDelta = new Vector2(vp.sizeDelta.x, UiKit.Css(ChipH));
             vp.anchoredPosition = new Vector2(0f, -UiKit.Css(26f));
 
+            BuildChipButtons();
+        }
+
+        /// <summary>
+        /// Fill the strip. Split out of <see cref="BuildChips"/> so the chips can be rebuilt
+        /// without rebuilding the ScrollRect around them — which is what happens when /me
+        /// answers late and the 🌀 Warp chip has to appear (WO-N item 4).
+        /// </summary>
+        private void BuildChipButtons()
+        {
             float x = 0f, w = UiKit.Css(ChipMinW), gap = UiKit.Css(ChipGap);
 
             for (int i = 0; i < _chipKinds.Count; i++)
