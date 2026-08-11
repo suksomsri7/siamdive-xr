@@ -401,12 +401,23 @@ namespace DiveMap.Runtime
             // raise — and only the first belongs to the fix. b384 read live=0.369 against
             // authored=0.450 and reported FAIL; the whole chain is now printed so an 18% gap is
             // attributed to the arrow that ate it instead of to whichever story sounds better.
-            // DepthAtmosphere.Configure runs near the end of the build and clears its baseline;
-            // the baseline is not re-read until its next LateUpdate. Three frames so the number
-            // measured here belongs to the map that just finished, not to the one before it.
+            // 🔴 Read the baseline TWICE and require the two to agree (b385). A single sample of a
+            // quantity that is still settling reports whichever frame it happened to land on, and
+            // that is indistinguishable from a real answer — which is exactly how b385 produced a
+            // FAIL against an app whose restore was, in fact, complete. If they disagree the
+            // verdict says the measurement point is wrong rather than blaming the app.
             for (int i = 0; i < 3; i++) yield return null;
-
+            float baseFirst = DepthAtmosphere.BaseSkyGray;
+            for (int i = 0; i < 5; i++) yield return null;
             float baseSky = DepthAtmosphere.BaseSkyGray;
+
+            if (!QcBlank.Settled(baseFirst, baseSky))
+            {
+                string v = QcBlank.UnsettledVerdict(tag, baseFirst, baseSky);
+                Debug.LogError("[QcBlank] " + v);
+                onBudgetBroken(v);
+                yield break;
+            }
             float sky = SceneAtmosphere.LiveSky;
             float authored = SceneAtmosphere.AuthoredSky;
             float soft = DepthAtmosphere.SoftGray;

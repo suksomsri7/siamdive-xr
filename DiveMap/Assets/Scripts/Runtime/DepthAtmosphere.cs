@@ -71,7 +71,70 @@ namespace DiveMap.Runtime
                 _instance = go.AddComponent<DepthAtmosphere>();
             }
             _instance._waterLevel = waterLevel;
-            _instance._haveBase = false;   // new map, new baseline
+            _instance.AdoptNewMapBaseline();
+        }
+
+        /// <summary>
+        /// Take the baseline for a freshly built map (WO-MERGE DARK).
+        ///
+        /// 🔴 This used to be one line — <c>_haveBase = false</c> — which meant "re-read
+        /// everything from RenderSettings on the next LateUpdate". That is a read-back of THIS
+        /// COMPONENT'S OWN OUTPUT: a build spans many frames and this class writes
+        /// <c>base × depthFactor</c> on every one of them, so what is live when a build finishes
+        /// is the previous map's baseline already scaled down. Adopting it made the new map's
+        /// "surface" 19% darker than authored, and which value won was decided purely by whether
+        /// the re-read happened before or after <c>SceneAtmosphere</c>'s restore that frame
+        /// (b385: 0.450 vs 0.369, same build, same depth, three frames apart).
+        ///
+        /// Now the three groups are taken from where each one's truth actually lives:
+        ///
+        ///   AMBIENT + FOG COLOUR  ← the authored snapshot, handed over directly. Nothing
+        ///                           per-map authors these, so the surface value is always the
+        ///                           one AppBoot.SetupLighting wrote, and no read-back can
+        ///                           launder it. This is the fix.
+        ///   FOG DISTANCES         ← still read back, and that is correct: ApplyViewRange
+        ///                           (AppBoot:693) sizes them to THIS map's footprint a few lines
+        ///                           before Configure is called, so the live values are freshly
+        ///                           authored for this map and the snapshot's are not.
+        ///
+        /// The watch-and-adopt behaviour in LateUpdate is untouched: a headlamp or daylight change
+        /// still becomes the new surface, which is what this class is for.
+        /// </summary>
+        private void AdoptNewMapBaseline()
+        {
+            if (!SceneAtmosphere.TryGetAuthoredAmbient(out Color sky, out Color equator,
+                                                       out Color ground, out Color fogColor))
+            {
+                // First boot, before SetupLighting has captured anything — the old behaviour is
+                // the only one available, and at that point nothing has been laundered yet.
+                _haveBase = false;
+                return;
+            }
+
+            _baseSky = sky;
+            _baseEquator = equator;
+            _baseGround = ground;
+            _baseFog = fogColor;
+            // Per-map, authored moments ago by ApplyViewRange — read these back on purpose.
+            _baseFogStart = RenderSettings.fogStartDistance;
+            _baseFogEnd = RenderSettings.fogEndDistance;
+            _haveBase = true;
+            BaseSkyGray = _baseSky.grayscale;
+
+            // 🔴 Also arm the change-detector with what is CURRENTLY live, not with what was just
+            // adopted. Otherwise the next LateUpdate sees live ≠ _wrote*, concludes "somebody else
+            // changed the baseline", and re-reads the laundered values straight back in — undoing
+            // this in a single frame.
+            _wroteSky = RenderSettings.ambientSkyColor;
+            _wroteEquator = RenderSettings.ambientEquatorColor;
+            _wroteGround = RenderSettings.ambientGroundColor;
+            _wroteFog = RenderSettings.fogColor;
+            _wroteFogStart = RenderSettings.fogStartDistance;
+            _wroteFogEnd = RenderSettings.fogEndDistance;
+
+            Debug.Log($"[Depth] new-map baseline taken from the authored snapshot — " +
+                      $"sky={BaseSkyGray:F3} (live was {RenderSettings.ambientSkyColor.grayscale:F3}) " +
+                      $"fog={_baseFogStart:F0}..{_baseFogEnd:F0} (per-map, read back)");
         }
 
         private void LateUpdate()

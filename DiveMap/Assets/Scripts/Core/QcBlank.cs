@@ -225,6 +225,24 @@ namespace DiveMap.Core
                System.Math.Abs(beforeSky - authoredSky) > tolerance &&
                System.Math.Abs(afterSky - authoredSky) <= tolerance;
 
+        /// <summary>
+        /// Have two readings of the same quantity, taken a few frames apart, agreed?
+        ///
+        /// 🔴 b385 sampled the ambient baseline once and got 0.369, while the drift log printed
+        /// 0.450 for the same build at the same depth three frames earlier. Both readings were
+        /// honest; the value was still moving. A control that samples a settling quantity ONCE
+        /// reports whichever moment it happened to catch, and that is indistinguishable from a
+        /// real result — the worst kind of measurement. So the harness now reads twice and refuses
+        /// to conclude anything unless the two agree.
+        /// </summary>
+        public static bool Settled(double first, double second, double tolerance = 0.005)
+            => first >= 0.0 && second >= 0.0 && System.Math.Abs(first - second) <= tolerance;
+
+        /// <summary>The verdict when a reading never stopped moving.</summary>
+        public static string UnsettledVerdict(string pass, double first, double second)
+            => $"{ControlBroken} pass '{pass}' sampled a baseline that was still moving " +
+               $"({first:F3} → {second:F3}) — the measurement point is wrong, not the app";
+
         public static string BudgetVerdict(string pass, float seconds)
             => $"{ControlBroken} pass '{pass}' exceeded its {seconds:F0}s budget — " +
                "no frame was measured, so nothing is proven either way";

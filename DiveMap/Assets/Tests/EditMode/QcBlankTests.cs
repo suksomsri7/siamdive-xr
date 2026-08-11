@@ -234,6 +234,36 @@ namespace DiveMap.Tests
         }
 
         [Test]
+        public void AMidBuildSampleCannotPass()
+        {
+            // 🔴 b385, as a test. The baseline was sampled while it was still settling: the drift
+            // log said 0.450 and the harness said 0.369 for the SAME build, three frames apart.
+            // Both readings were honest and one of them produced a FAIL against an app whose
+            // restore was complete. A single sample of a moving quantity must never be allowed to
+            // become a verdict.
+            const double settled = 0.450;
+            const double midBuild = 0.369;   // 0.450 × 0.808, the laundered value in flight
+
+            Assert.IsFalse(QcBlank.Settled(midBuild, settled),
+                           "a reading that moved by 0.08 has not settled");
+            StringAssert.StartsWith(QcBlank.ControlBroken,
+                                    QcBlank.UnsettledVerdict("after", midBuild, settled));
+
+            // …and the settled case is accepted, including ordinary float noise.
+            Assert.IsTrue(QcBlank.Settled(settled, settled));
+            Assert.IsTrue(QcBlank.Settled(settled, settled + 0.001));
+        }
+
+        [Test]
+        public void ASampleThatNeverHappenedIsNotSettled()
+        {
+            // -1 is the "no baseline captured" sentinel; two of them agree numerically and must
+            // still not count as a measurement.
+            Assert.IsFalse(QcBlank.Settled(-1.0, -1.0));
+            Assert.IsFalse(QcBlank.Settled(-1.0, 0.450));
+        }
+
+        [Test]
         public void AmbientDriftReproducedThenRestored_Passes()
         {
             // The real numbers from CI b383's trace: with the reset suppressed the next map

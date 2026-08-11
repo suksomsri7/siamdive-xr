@@ -67,6 +67,39 @@ namespace DiveMap.Runtime
         public static float LiveSky => RenderSettings.ambientSkyColor.grayscale;
 
         /// <summary>
+        /// Hand the authored surface atmosphere to a system that needs a baseline, INSTEAD of it
+        /// reading RenderSettings back (WO-MERGE DARK).
+        ///
+        /// 🔴 Why this exists rather than "just read the live values, they were restored a moment
+        /// ago". A map build spans many frames, and <c>DepthAtmosphere</c> writes
+        /// <c>base × depthFactor</c> into RenderSettings on every one of them. So by the time the
+        /// build finishes, what is live is not the authored ambient — it is the PREVIOUS map's
+        /// baseline already multiplied by a depth factor. A component that re-reads at that moment
+        /// adopts its own output as the new truth, and the scene is left roughly 19% dark for the
+        /// whole life of that map (b385: authored 0.450, re-read baseline 0.369 = 0.450 × 0.808).
+        ///
+        /// Measured, not deduced: b385's own log printed the two side by side for the same build,
+        /// the same depth and the same factor — <c>[Atmos] drift #4 base=0.450</c> against
+        /// <c>[QcBlank] after: base=0.369</c>, three frames apart. The difference was WHEN each
+        /// one looked, which means the correct value was being decided by frame ordering. That is
+        /// the class of bug this project keeps getting burned by, and the answer is never a bigger
+        /// wait — it is to stop the read-back happening at all.
+        ///
+        /// Returns false when nothing has been captured yet (the very first boot, before
+        /// <see cref="CaptureDefaults"/>), in which case the caller must fall back to its old
+        /// behaviour rather than adopt zeroes.
+        /// </summary>
+        public static bool TryGetAuthoredAmbient(out Color sky, out Color equator, out Color ground,
+                                                 out Color fogColor)
+        {
+            sky = _sky;
+            equator = _equator;
+            ground = _ground;
+            fogColor = _fogColor;
+            return _have;
+        }
+
+        /// <summary>
         /// Remember the authored atmosphere. Called at the end of <c>AppBoot.SetupLighting</c>,
         /// which is the only code that writes these values from constants rather than from
         /// something it read a moment earlier.
@@ -225,6 +258,18 @@ namespace DiveMap.Runtime
             float authoredSky = _sky.grayscale;
             float baseSky = DepthAtmosphere.BaseSkyGray;
             float liveSky = RenderSettings.ambientSkyColor.grayscale;
+
+            // The very first boot reaches here before DepthAtmosphere has ever run a frame, so its
+            // baseline is the -1 sentinel. Printing "base=-1.000 restore=-2.222" made the first
+            // line of every log look like a failure to whoever greps it next; say what is actually
+            // true instead (b385 review).
+            if (baseSky < 0f)
+                return $"[Atmos] drift #{buildNumber}: authored {_fogStart:F0}..{_fogEnd:F0} " +
+                       $"live {liveStart:F0}..{liveEnd:F0} " +
+                       $"factor near={fStart:F4} far={fEnd:F4} " +
+                       $"· AMB authored={authoredSky:F3} live={liveSky:F3} " +
+                       "base=(baseline not captured yet — first build of the process)";
+
             float restore = authoredSky > 0f ? baseSky / authoredSky : -1f;
 
             return $"[Atmos] drift #{buildNumber}: authored {_fogStart:F0}..{_fogEnd:F0} " +
