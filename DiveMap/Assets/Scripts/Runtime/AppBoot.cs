@@ -78,6 +78,11 @@ namespace DiveMap.Runtime
             string clipMap = GetArg("-clipmap");
             if (!string.IsNullOrEmpty(clipMap)) _shortId = clipMap;
 
+            // The flat-navy control picks its own maps for weight (WO-MERGE P1f). Without this it
+            // would first pay for a full load of the DEFAULT map — Htms Chang, ten fish species,
+            // the most expensive map there is — before its first line ever ran.
+            if (!string.IsNullOrEmpty(GetArg("-qcblank"))) _shortId = QcBlankShot.FirstMap;
+
             // QC only: film the three "ปลาไถลข้าง" candidates in one CI round so the user chooses
             // from footage instead of from a diagram. off = the old build, full = nose follows.
             string mode = GetArg("-clipmode");
@@ -768,6 +773,12 @@ namespace DiveMap.Runtime
             // unless the first pass reproduces the bug AND the second one does not. Checked before
             // -qcshot because it drives map loads of its own and the two would fight over the
             // camera; it ends in Application.Quit like the other harnesses.
+            //
+            // 🔴 Boot() runs on EVERY map load, and this harness loads four maps — so reaching
+            // this line again is normal and expected. QcBlankShot.Begin is one-shot for exactly
+            // that reason; run 31451758156 spawned thirteen runners before that guard existed and
+            // they tore each other's map builds apart. Any harness started from here that drives
+            // LoadMap needs the same guard.
             string blankDir = GetArg("-qcblank");
             if (!string.IsNullOrEmpty(blankDir))
             {

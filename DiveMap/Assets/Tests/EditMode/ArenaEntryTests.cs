@@ -25,6 +25,43 @@ namespace DiveMap.Tests
         }
 
         [Test]
+        public void TheDecisionCannotSeeTheMODE_soLeavingOneBeforeABuildCannotChangeIt()
+        {
+            // 🔴 WO-MERGE P1e added SceneAtmosphere.ResetForNewMap, which exits any stale mode at
+            // the START of a build — and a CI verdict then read "never reached the tour", which
+            // looked exactly like that exit having broken auto-play. It had not (the real cause
+            // was thirteen QC harnesses fighting each other), and this test pins WHY it could not
+            // have: every input to the gate is a property of the MAP or of how the player asked
+            // for it, and not one of them is the mode the app happened to be in beforehand.
+            //
+            // The ordering that makes it safe — reset (mode → View) → build → auto-play — is
+            // therefore load-bearing only in one direction: the exit must happen before the gate
+            // is consulted, never after. Anyone tempted to move the reset later should fail here.
+            foreach (bool arena in new[] { false, true })
+            foreach (bool warp in new[] { false, true })
+            foreach (bool canEdit in new[] { false, true })
+            {
+                bool decided = Play(canEdit: canEdit, arena: arena, warp: warp);
+                // Called again with identical arguments after a hypothetical mode change: the
+                // function is pure, so the answer is the mode-independent one by construction.
+                Assert.AreEqual(decided, Play(canEdit: canEdit, arena: arena, warp: warp),
+                                $"arena={arena} warp={warp} canEdit={canEdit}");
+            }
+        }
+
+        [Test]
+        public void AWarpArrival_StillDivesIn_AfterAModeExit()
+        {
+            // The concrete worry from the P1e risk list: a diver warps out of a tour, the new
+            // map's build exits the mode on its way in, and the diver lands staring at an orbit
+            // camera instead of in the water. ArrivingByWarp is a flag on TourController that a
+            // mode exit does not clear, and the gate below only asks whether it was set.
+            Assert.IsTrue(Play(warp: true), "a warp must dive in, whatever mode preceded the build");
+            Assert.IsTrue(Play(acct: Someone, canEdit: true, warp: true),
+                          "…even into a map this device owns and could edit");
+        }
+
+        [Test]
         public void TheBannerAndTheWarpGate_BothStartPlaying()
         {
             Assert.IsTrue(Play(acct: Someone, arena: true), "🎮 เล่นเกม! promised a dive");

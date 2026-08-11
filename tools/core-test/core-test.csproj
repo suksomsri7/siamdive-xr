@@ -93,6 +93,11 @@
          control. The pixels come from CI; the judgement — including what to do when the bug
          fails to reproduce — is settled here. -->
     <Compile Include="../../DiveMap/Assets/Scripts/Core/QcBlank.cs" />
+    <!-- WO-MERGE P1g. The auto-play gate, added here so the ordering rule that P1e depends on
+         (exit any stale mode BEFORE the gate is consulted, never after) is pinned on this
+         machine instead of only on CI. Both files are UnityEngine-free. -->
+    <Compile Include="../../DiveMap/Assets/Scripts/Core/MapDirectory.cs" />
+    <Compile Include="../../DiveMap/Assets/Scripts/Core/ArenaEntry.cs" />
     <!-- WO-L. The palette IS the shop (placing = buying), so its rules are the ones where being
          wrong costs a player real coins: who pays (Shop.ShouldCharge — the admin never does),
          which chips exist (the 🌀 Warp category is admin-only), and what the coin pill says.
@@ -144,6 +149,7 @@
     <Compile Include="../../DiveMap/Assets/Tests/EditMode/MemoryReliefTests.cs" />
     <Compile Include="../../DiveMap/Assets/Tests/EditMode/SiteRequestTests.cs" />
     <Compile Include="../../DiveMap/Assets/Tests/EditMode/QcBlankTests.cs" />
+    <Compile Include="../../DiveMap/Assets/Tests/EditMode/ArenaEntryTests.cs" />
     <Compile Include="../../DiveMap/Assets/Tests/EditMode/ShopTests.cs" />
     <Compile Include="../../DiveMap/Assets/Tests/EditMode/PaletteAdminTests.cs" />
     <Compile Include="../../DiveMap/Assets/Tests/EditMode/AssetCatalogTests.cs" />

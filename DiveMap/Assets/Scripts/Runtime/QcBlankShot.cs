@@ -76,9 +76,39 @@ namespace DiveMap.Runtime
         /// </summary>
         private sealed class Runner : MonoBehaviour { }
 
-        /// <summary>Entry point from <c>AppBoot</c>: starts the control on its own object.</summary>
+        /// <summary>
+        /// The map the player should boot straight into when <c>-qcblank</c> is present.
+        ///
+        /// Without this the harness pays for a full load of the DEFAULT map (Htms Chang, ten fish
+        /// species) before it even starts — the single most expensive map in the catalogue, and
+        /// exactly the load P1f moved heaven and earth to avoid.
+        /// </summary>
+        public const string FirstMap = MapA;
+
+        /// <summary>
+        /// 🔴 ONE runner per process, and this guard is the whole lesson of CI run 31451758156.
+        ///
+        /// <see cref="Begin"/> is called from the tail of <c>AppBoot.Boot</c> — and Boot runs on
+        /// EVERY map load, not just the first. The harness loads four maps. So the first runner
+        /// spawned a second, which spawned a third, and the run ended with THIRTEEN of them alive
+        /// at once: each calling LoadMap, each LoadMap calling Retry, each Retry calling
+        /// StopAllCoroutines and aborting the others' builds. Nothing ever finished loading
+        /// ("map oy3hlklgnkmy did not finish inside its 60s allowance", seven times), one runner's
+        /// atmosphere reset kept exiting the tour another had just entered, and the verdict blamed
+        /// the shipped code — "pass 'after' never reached the tour" — for damage the instrument was
+        /// doing to itself.
+        ///
+        /// A static bool rather than a search for an existing Runner: the recursion happens inside
+        /// a single frame, before any GameObject the previous call created has been through Awake.
+        /// </summary>
+        private static bool _started;
+
+        /// <summary>Entry point from <c>AppBoot</c>: starts the control on its own object, once.</summary>
         public static void Begin(string dir, AppBoot boot)
         {
+            if (_started) return;
+            _started = true;
+
             var go = new GameObject("QcBlankRunner");
             Object.DontDestroyOnLoad(go);
             go.AddComponent<Runner>().StartCoroutine(Run(dir, boot));
@@ -199,7 +229,15 @@ namespace DiveMap.Runtime
             // maps, so the drone may already be out — and Request(Tour→Tour) answers false. Ask
             // the mode, not the return value.
             TourController.Start();
-            for (int i = 0; i < 6; i++) yield return null;   // let Begin() build the drone
+            // Bounded wait, not a fixed frame count: Request is synchronous so the mode is set at
+            // once, but ArenaEntry's auto-play arrives 0.6 s later and on llvmpipe that can be a
+            // single frame or five. Waiting for the ANSWER rather than for a number of frames also
+            // means this reports honestly when the answer never comes.
+            float tourBy = Mathf.Min(Time.realtimeSinceStartup + 5f, deadline);
+            while (!ModeRules.IsFirstPerson(ModeManager.Current) &&
+                   Time.realtimeSinceStartup < tourBy)
+                yield return null;
+
             if (!ModeRules.IsFirstPerson(ModeManager.Current))
             {
                 Debug.LogError("[QcBlank] could not enter the tour — the control cannot run");
