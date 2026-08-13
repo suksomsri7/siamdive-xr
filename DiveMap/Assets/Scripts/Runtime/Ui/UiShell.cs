@@ -1385,6 +1385,10 @@ namespace DiveMap.Runtime.Ui
                               $"askedX={GizmoController.QcLastWroteX:F2} " +
                               $"readBackX={GizmoController.QcLastReadBackX:F2} " +
                               $"xImmediate={xImmediate:F2} " +
+                              $"· startX={GizmoController.QcLastStartX:F2} " +
+                              $"builtX={GizmoController.QcLastBuiltX:F2} " +
+                              $"itemsHash={GizmoController.QcLastItemsHash}/" +
+                              $"{DiveMap.Core.SceneEdit.Items(eb.CurrentScene).GetHashCode()} " +
                               $"z {zBefore:F2}→{zAfter:F2} (must be unchanged) " +
                               $"x {xBefore:F2}→{xAfter:F2} (must differ)");
                     MapEditor.Undo();

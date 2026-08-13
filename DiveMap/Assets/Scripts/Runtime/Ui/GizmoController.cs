@@ -186,6 +186,19 @@ namespace DiveMap.Runtime.Ui
         public static bool QcLastMoveWrote { get; private set; }
         public static double QcLastReadBackX { get; private set; }
 
+        /// <summary>
+        /// QC — WHERE THE GESTURE THINKS THE OBJECT IS, and which array it read that from.
+        ///
+        /// 🔴 b392: the solve was right (along=4.689) and the write asked for x=-0.18, which is
+        /// only possible if the press read the object at x=-4.87 — while the QC pass, reading the
+        /// same id through <c>AppBoot.CurrentScene</c> in the same seconds, saw -0.18. One of the
+        /// two is looking at a stale items array, and the hash says which: two different numbers
+        /// are two different arrays, and then the drag is moving an object nobody is watching.
+        /// </summary>
+        public static double QcLastStartX { get; private set; }
+        public static double QcLastBuiltX { get; private set; }
+        public static int QcLastItemsHash { get; private set; }
+
         // ── input ────────────────────────────────────────────────────────────────
 
         private void Update()
@@ -317,6 +330,10 @@ namespace DiveMap.Runtime.Ui
             // ourselves resizing would make it drift.
             _armed = true;
             _target = FindBuilt(_id);
+            QcLastStartX = _startPos[0];
+            QcLastBuiltX = _target != null ? _target.position.x : double.NaN;
+            JArray pressItems = Items();
+            QcLastItemsHash = pressItems != null ? pressItems.GetHashCode() : 0;
             _scaleUnit = 1f;
             if (_target != null)
             {
