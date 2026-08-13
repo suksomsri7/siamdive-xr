@@ -19,6 +19,15 @@ on:
         description: 'Build UnityFramework.framework for the React Native app (macOS runner — unsigned, no TestFlight).'
         type: boolean
         default: false
+      ui_only:
+        # 🔴 Measured before it was written, because the obvious guess was wrong. One QC round
+        # (b392) breaks down as: Unity build 89 min · model/map/clip captures 16 min · the UI pass
+        # 6 min · the positive control under a minute. So this saves the 16, not the 89 — worth
+        # having when a round is being spent on ONE line of the UI log, and honest about its size.
+        # The build is the real cost and no flag here can skip it.
+        description: 'QC: run the -qcui pass only (skips the model/map/clip captures, ~16 min). The Unity build still runs.'
+        type: boolean
+        default: false
 
 concurrency:
   # Split by EVENT, not just by ref. With one group per ref, pushing anything — a doc, a fix for
@@ -705,7 +714,18 @@ jobs:
           buildMethod: DiveMap.EditorTools.CIBuild.BuildLinux
           allowDirtyBuild: true
 
+      # 🔴 Its own step because the UI pass needs xvfb too, and the capture step below can now be
+      # skipped. Installing it here keeps "which steps run" and "what is installed" independent —
+      # the ui_only lane died on its first run without this, with xvfb-run: command not found.
+      - name: Headless GL for the capture passes
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq xvfb mesa-utils libgl1 > /dev/null
+          sudo chown -R "$USER:$USER" . || true
+
       - name: Run app headless and capture screenshot
+        # ui_only skips this: it is the model/map/clip half of the QC (16 min) and a round spent
+        # on the UI log does not need it. On push it is empty, i.e. everything runs as before.
+        if: ${{ !inputs.ui_only }}
         run: |
           sudo apt-get update -qq && sudo apt-get install -y -qq xvfb mesa-utils libgl1 > /dev/null
           sudo chown -R "$USER:$USER" . || true
@@ -849,27 +869,17 @@ jobs:
           #
           # Missing lines are red too. "The witness never ran" and "the witness passed" must not
           # look the same from out here — that equivalence is the whole bug being fixed.
+          # 🔴 PRINTED HERE, JUDGED LATER (see the verdict step at the end of this job).
+          #
+          # The first version of this failed the step on the spot, which killed the run before the
+          # positive control below had run at all: three rounds in a row (b390-392) produced no
+          # light-meter reading, because an unrelated instrument had already said no. A CI round
+          # here costs an hour and a half, so a round must hand back EVERY instrument's answer,
+          # not just the first refusal.
           echo "── shot proofs ──"
           grep -F '[QcShot]' qc_ui_player.log || true
           grep -F '[QcDrag]' qc_ui_player.log || true
           grep -F '[QC] X arrow aim' qc_ui_player.log || true
-          if grep -qF 'INVALID SHOT' qc_ui_player.log 2>/dev/null; then
-            echo "::error::a QC shot did not photograph what it claims — see the [QcShot] lines above"
-            grep -F '[UI] qcui gizmo' qc_ui_player.log || true
-            grep -F '[Tour] auto-play' qc_ui_player.log || true
-            exit 1
-          fi
-          if ! grep -qF '[QcShot]' qc_ui_player.log 2>/dev/null; then
-            echo "::error::no [QcShot] proof lines — the gizmo shots were never checked, so they prove nothing"
-            tail -40 qc_ui_player.log || true
-            exit 1
-          fi
-          # The arrows being DRAWN and the arrows CONSTRAINING a drag are two different claims,
-          # and only the first one has a picture. This is the second one's line.
-          if ! grep -qF '[QcDrag]' qc_ui_player.log 2>/dev/null; then
-            echo "::error::no [QcDrag] line — the axis constraint was never exercised on a real screen"
-            exit 1
-          fi
 
       # ────────────────────────────────────────────────────────────────────────
       # POSITIVE CONTROL — "enter map A, leave mid-tour, open map B, the world is
@@ -937,6 +947,43 @@ jobs:
             exit 1
           fi
           echo "$(cat qc_blank/verdict.txt)"
+
+      # ────────────────────────────────────────────────────────────────────────
+      # THE VERDICT ON THE UI SHOTS — last, so every other instrument in this job has already
+      # run and reported. A screenshot call cannot fail (it writes whatever is on the screen and
+      # a wrong screen is still a valid PNG), so this is where "do not believe this picture"
+      # becomes a red build: run 31513452365 filed two photographs of the DRONE TOUR HUD as
+      # evidence for the three axis arrows and nothing objected.
+      #
+      # Missing lines are red too — "the witness never ran" and "the witness passed" must not
+      # look the same from out here, which is the whole bug being fixed.
+      # ────────────────────────────────────────────────────────────────────────
+      - name: Verdict — did the UI shots prove themselves?
+        if: always()
+        run: |
+          if [ ! -s qc_ui_player.log ]; then
+            echo "::error::no qc_ui_player.log — the UI pass produced no evidence at all"
+            exit 1
+          fi
+          if grep -qF 'INVALID SHOT' qc_ui_player.log; then
+            echo "::error::a QC shot did not photograph what it claims — see the [QcShot]/[QcDrag] lines above"
+            grep -F 'INVALID SHOT' qc_ui_player.log || true
+            grep -F '[UI] qcui gizmo' qc_ui_player.log || true
+            grep -F '[Tour] auto-play' qc_ui_player.log || true
+            exit 1
+          fi
+          if ! grep -qF '[QcShot]' qc_ui_player.log; then
+            echo "::error::no [QcShot] proof lines — the gizmo shots were never checked, so they prove nothing"
+            tail -40 qc_ui_player.log || true
+            exit 1
+          fi
+          # The arrows being DRAWN and the arrows CONSTRAINING a drag are two different claims,
+          # and only the first one has a picture. This is the second one's line.
+          if ! grep -qF '[QcDrag]' qc_ui_player.log; then
+            echo "::error::no [QcDrag] line — the axis constraint was never exercised on a real screen"
+            exit 1
+          fi
+          echo "both gizmo shots proved themselves, and the axis constraint held"
 
       - name: Upload QC artifacts
         if: always()

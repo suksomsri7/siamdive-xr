@@ -1350,6 +1350,23 @@ namespace DiveMap.Runtime.Ui
                                   $"found={aimed} visible={GizmoHandles.Visible} " +
                                   $"selected={GizmoController.Selected} · scan{scan}");
                     }
+                    // 🔴 Read the object ONE STATEMENT before the press.
+                    //
+                    // The "before" value above (b4) is read earlier — before the 15-point aim scan
+                    // and before the witness's two renders — and this pass has already been caught
+                    // once treating a reading from a second ago as a reading from now (b385, the
+                    // settling baseline). If the object is at -4.87 here and -0.18 up there, then
+                    // nothing is stale and nothing is broken: the drag moved it and my "before"
+                    // was simply out of date, which is a QC bug and not an app bug.
+                    AppBoot liveBoot = FindFirstObjectByType<AppBoot>();
+                    Newtonsoft.Json.Linq.JObject atPress =
+                        DiveMap.Core.SceneEdit.Find(DiveMap.Core.SceneEdit.Items(eb.CurrentScene), pick);
+                    double xAtPress = atPress != null && atPress["p"] != null
+                                    ? (double)atPress["p"][0] : double.NaN;
+                    int boots = FindObjectsByType<AppBoot>(FindObjectsSortMode.None).Length;
+                    bool sameBoot = ReferenceEquals(liveBoot, eb);
+                    bool sameScene = liveBoot != null && ReferenceEquals(liveBoot.CurrentScene, eb.CurrentScene);
+
                     GizmoController.QcDrag(SelectionToolbar.Mode.Translate,
                                            onX, onX + new Vector2(70f, 40f));
 
@@ -1385,7 +1402,9 @@ namespace DiveMap.Runtime.Ui
                               $"askedX={GizmoController.QcLastWroteX:F2} " +
                               $"readBackX={GizmoController.QcLastReadBackX:F2} " +
                               $"xImmediate={xImmediate:F2} " +
-                              $"· startX={GizmoController.QcLastStartX:F2} " +
+                              $"· xAtPress={xAtPress:F2} boots={boots} " +
+                              $"sameBoot={sameBoot} sameScene={sameScene} " +
+                              $"startX={GizmoController.QcLastStartX:F2} " +
                               $"builtX={GizmoController.QcLastBuiltX:F2} " +
                               $"itemsHash={GizmoController.QcLastItemsHash}/" +
                               $"{DiveMap.Core.SceneEdit.Items(eb.CurrentScene).GetHashCode()} " +
