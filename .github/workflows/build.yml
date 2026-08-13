@@ -851,6 +851,8 @@ jobs:
           # look the same from out here — that equivalence is the whole bug being fixed.
           echo "── shot proofs ──"
           grep -F '[QcShot]' qc_ui_player.log || true
+          grep -F '[QcDrag]' qc_ui_player.log || true
+          grep -F '[QC] X arrow aim' qc_ui_player.log || true
           if grep -qF 'INVALID SHOT' qc_ui_player.log 2>/dev/null; then
             echo "::error::a QC shot did not photograph what it claims — see the [QcShot] lines above"
             grep -F '[UI] qcui gizmo' qc_ui_player.log || true
@@ -860,6 +862,12 @@ jobs:
           if ! grep -qF '[QcShot]' qc_ui_player.log 2>/dev/null; then
             echo "::error::no [QcShot] proof lines — the gizmo shots were never checked, so they prove nothing"
             tail -40 qc_ui_player.log || true
+            exit 1
+          fi
+          # The arrows being DRAWN and the arrows CONSTRAINING a drag are two different claims,
+          # and only the first one has a picture. This is the second one's line.
+          if ! grep -qF '[QcDrag]' qc_ui_player.log 2>/dev/null; then
+            echo "::error::no [QcDrag] line — the axis constraint was never exercised on a real screen"
             exit 1
           fi
 

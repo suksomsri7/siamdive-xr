@@ -151,6 +151,21 @@ namespace DiveMap.Runtime.Ui
         public static GizmoMath.Handle QcGrabbed =>
             _instance != null ? _instance._handle : GizmoMath.Handle.None;
 
+        /// <summary>
+        /// QC — what the LAST press grabbed, kept after the gesture ends.
+        ///
+        /// 🔴 <see cref="QcGrabbed"/> cannot answer this question after the fact:
+        /// <see cref="Release"/> clears <c>_handle</c>, which is correct for the app and useless
+        /// for evidence. Re-picking at the press point afterwards is worse than useless — a
+        /// SUCCESSFUL constrained drag moves the object, and the handles move with it, so the
+        /// arrow is no longer under the old coordinate and the re-pick returns None. b389 read
+        /// exactly that None and it was indistinguishable from "the press missed".
+        /// </summary>
+        public static GizmoMath.Handle QcLastPressed { get; private set; }
+
+        /// <summary>QC — the last press never reached the gizmo at all (the UI ate it).</summary>
+        public static bool QcLastPressBlockedByUi { get; private set; }
+
         // ── input ────────────────────────────────────────────────────────────────
 
         private void Update()
@@ -209,8 +224,15 @@ namespace DiveMap.Runtime.Ui
             _dragging = false;
             _pressPos = pos;
             _finger = finger;
+            QcLastPressed = GizmoMath.Handle.None;
+            QcLastPressBlockedByUi = false;
 
-            if (UiShell.PointerOverUi()) return;   // a drag that starts on the toolbar is a button press
+            if (UiShell.PointerOverUi())
+            {
+                // a drag that starts on the toolbar is a button press
+                QcLastPressBlockedByUi = true;
+                return;
+            }
 
             JObject item = CurrentItem();
             if (item == null) return;
@@ -239,6 +261,7 @@ namespace DiveMap.Runtime.Ui
                     ? GizmoHandles.Current.PickAt(pos)
                     : GizmoMath.Handle.None;
             GizmoHandles.Current?.SetHot(_handle);
+            QcLastPressed = _handle;   // …and it survives Release, unlike _handle itself
 
             // Grab offset: keep the object under the same part of the finger it was grabbed by,
             // instead of snapping its centre to the touch point.
@@ -258,6 +281,7 @@ namespace DiveMap.Runtime.Ui
                 GizmoMath.AxisOf(_handle, out double ux, out double uy, out double uz);
                 _grabT = AxisAt(pos, p, ux, uy, uz, out bool okT) ? _axisT : 0.0;
                 if (!okT) _handle = GizmoMath.Handle.None;   // edge-on: refuse rather than fling
+                QcLastPressed = _handle;                     // …including the refusal
             }
             else if (GizmoMath.IsPlane(_handle))
             {

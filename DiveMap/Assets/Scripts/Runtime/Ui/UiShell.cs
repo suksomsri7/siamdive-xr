@@ -1320,23 +1320,56 @@ namespace DiveMap.Runtime.Ui
                     // right" then lands on empty water. A press that misses is not a failed
                     // constraint, it is a test that never grabbed anything — and it reports
                     // grabbed=None either way, which is indistinguishable from the real bug.
+                    //
+                    // 🔴 …and b389 says computing the point is still not enough: it reported
+                    // grabbed=None with the arrows demonstrably on screen (the witness found all
+                    // three, 24 samples out of 24). Projection arithmetic and the app's own picker
+                    // disagreeing is exactly the kind of gap a QC pass must not paper over — so
+                    // the finger now asks the PICKER where the arrow is, walking out along the
+                    // projected shaft until the app itself says "this press would grab X". If no
+                    // point on its own arrow grabs it, that is a real defect and the scan below is
+                    // the evidence for it, instead of one silent None.
                     Vector2 onX = originPx + new Vector2(GizmoHandles.AxisPixels * 0.34f, 0f);
+                    var scan = new System.Text.StringBuilder();
+                    bool aimed = false;
                     if (GizmoHandles.Current != null &&
                         GizmoHandles.Current.QcScreenAxes(out Vector2 gOrigin, out Vector2 gXTip,
                                                           out _, out _) &&
                         !float.IsNaN(gOrigin.x) && !float.IsNaN(gXTip.x))
                     {
                         originPx = gOrigin;
-                        onX = gOrigin + (gXTip - gOrigin) * 0.34f;
+                        for (float t = 0.20f; t <= 0.90f; t += 0.05f)
+                        {
+                            Vector2 p = gOrigin + (gXTip - gOrigin) * t;
+                            GizmoMath.Handle got = GizmoController.QcHandleAt(p);
+                            scan.Append(' ').Append(t.ToString("0.00")).Append('=').Append(got);
+                            if (!aimed && got == GizmoMath.Handle.X) { onX = p; aimed = true; }
+                        }
+                        Debug.Log($"[QC] X arrow aim origin=({gOrigin.x:F0},{gOrigin.y:F0}) " +
+                                  $"tip=({gXTip.x:F0},{gXTip.y:F0}) press=({onX.x:F0},{onX.y:F0}) " +
+                                  $"found={aimed} visible={GizmoHandles.Visible} " +
+                                  $"selected={GizmoController.Selected} · scan{scan}");
                     }
                     GizmoController.QcDrag(SelectionToolbar.Mode.Translate,
                                            onX, onX + new Vector2(70f, 40f));
                     yield return new WaitForSecondsRealtime(1.6f);
                     Newtonsoft.Json.Linq.JObject aft =
                         DiveMap.Core.SceneEdit.Find(DiveMap.Core.SceneEdit.Items(eb.CurrentScene), pick);
-                    Debug.Log($"[QC] axis-constrained drag grabbed={GizmoController.QcHandleAt(onX)} " +
-                              $"z {zBefore:F2}→{(double)aft["p"][2]:F2} (must be unchanged) " +
-                              $"x {(double)b4["p"][0]:F2}→{(double)aft["p"][0]:F2} (must differ)");
+
+                    // The verdict, in a line CI can fail on. Three things have to be true together
+                    // and each one has been false on its own: the press grabbed the X handle, Z
+                    // did not move, and X did. "Two of three" is a broken constraint, and a shot
+                    // of an unmoved object is what it looks like from the outside either way.
+                    double zAfter = (double)aft["p"][2], xBefore = (double)b4["p"][0];
+                    double xAfter = (double)aft["p"][0];
+                    bool grabbedX = GizmoController.QcLastPressed == GizmoMath.Handle.X;
+                    bool zHeld = System.Math.Abs(zAfter - zBefore) < 0.001;
+                    bool xMoved = System.Math.Abs(xAfter - xBefore) > 0.001;
+                    Debug.Log($"[QcDrag] axis-constraint {(grabbedX && zHeld && xMoved ? "proved" : "INVALID SHOT")} " +
+                              $"grabbed={GizmoController.QcLastPressed} (must be X) " +
+                              $"pressBlockedByUi={GizmoController.QcLastPressBlockedByUi} " +
+                              $"z {zBefore:F2}→{zAfter:F2} (must be unchanged) " +
+                              $"x {xBefore:F2}→{xAfter:F2} (must differ)");
                     MapEditor.Undo();
                     yield return new WaitForSecondsRealtime(1.0f);
                 }
