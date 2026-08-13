@@ -1313,7 +1313,22 @@ namespace DiveMap.Runtime.Ui
                         : new Vector2(640f, 400f);
                     // Aim a third of the way along the X arrow — comfortably inside the 26 px
                     // shaft tolerance, and clear of the plane quads near the origin.
+                    //
+                    // 🔴 Along the arrow AS IT IS DRAWN, not along screen +X. World X only points
+                    // right on screen when the camera happens to be looking down world −Z; at the
+                    // builder's own yaw of 45° it runs diagonally, and "origin + 30 px to the
+                    // right" then lands on empty water. A press that misses is not a failed
+                    // constraint, it is a test that never grabbed anything — and it reports
+                    // grabbed=None either way, which is indistinguishable from the real bug.
                     Vector2 onX = originPx + new Vector2(GizmoHandles.AxisPixels * 0.34f, 0f);
+                    if (GizmoHandles.Current != null &&
+                        GizmoHandles.Current.QcScreenAxes(out Vector2 gOrigin, out Vector2 gXTip,
+                                                          out _, out _) &&
+                        !float.IsNaN(gOrigin.x) && !float.IsNaN(gXTip.x))
+                    {
+                        originPx = gOrigin;
+                        onX = gOrigin + (gXTip - gOrigin) * 0.34f;
+                    }
                     GizmoController.QcDrag(SelectionToolbar.Mode.Translate,
                                            onX, onX + new Vector2(70f, 40f));
                     yield return new WaitForSecondsRealtime(1.6f);
@@ -1341,8 +1356,20 @@ namespace DiveMap.Runtime.Ui
                 yield return QcGizmoWitness.Prove("gizmo", pick, prefix + "_gizmo_proof.png");
                 yield return new WaitForSecondsRealtime(1.0f);
 
+                // The FREE drag — no handle, the whole-screen behaviour the app has always had.
+                // 🔴 It has to start clear of the arrows now that the camera is aimed at the
+                // object: the handles sit within 90 px of the origin, and a press that lands on
+                // one turns this into a constrained drag along that axis, which would make
+                // "moved=False" a perfectly correct answer to the wrong question.
+                Vector2 freeFrom = new Vector2(640f, 400f);
+                if (GizmoHandles.Current != null &&
+                    GizmoHandles.Current.QcScreenAxes(out Vector2 fOrigin, out _, out _, out _) &&
+                    !float.IsNaN(fOrigin.x))
+                    freeFrom = fOrigin + new Vector2(0f, -(GizmoHandles.AxisPixels + 70f));
+                Debug.Log($"[QC] free drag from ({freeFrom.x:F0},{freeFrom.y:F0}) " +
+                          $"grabs={GizmoController.QcHandleAt(freeFrom)} (must be None)");
                 GizmoController.QcDrag(SelectionToolbar.Mode.Translate,
-                                       new Vector2(640f, 400f), new Vector2(760f, 470f));
+                                       freeFrom, freeFrom + new Vector2(120f, 70f));
                 yield return new WaitForSecondsRealtime(2.5f);
 
                 Newtonsoft.Json.Linq.JObject after1 =
