@@ -1368,6 +1368,10 @@ namespace DiveMap.Runtime.Ui
                     Debug.Log($"[QcDrag] axis-constraint {(grabbedX && zHeld && xMoved ? "proved" : "INVALID SHOT")} " +
                               $"grabbed={GizmoController.QcLastPressed} (must be X) " +
                               $"pressBlockedByUi={GizmoController.QcLastPressBlockedByUi} " +
+                              $"· axisOk={GizmoController.QcLastAxisOk} " +
+                              $"grabT={GizmoController.QcLastGrabT:F3} " +
+                              $"axisT={GizmoController.QcLastAxisT:F3} " +
+                              $"along={GizmoController.QcLastAlong:F3} " +
                               $"z {zBefore:F2}→{zAfter:F2} (must be unchanged) " +
                               $"x {xBefore:F2}→{xAfter:F2} (must differ)");
                     MapEditor.Undo();

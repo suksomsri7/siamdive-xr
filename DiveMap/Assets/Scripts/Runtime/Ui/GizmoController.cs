@@ -166,6 +166,20 @@ namespace DiveMap.Runtime.Ui
         /// <summary>QC — the last press never reached the gizmo at all (the UI ate it).</summary>
         public static bool QcLastPressBlockedByUi { get; private set; }
 
+        /// <summary>
+        /// QC — the arithmetic of the last constrained move, in the order it happens:
+        /// where along the axis the finger grabbed, where it is now, the difference that is
+        /// applied to the object, and whether the closest-approach solve was usable at all.
+        ///
+        /// 🔴 b390 needed these: the press grabbed X (proved), the gesture committed (proved), and
+        /// the object did not move by a millimetre. Every remaining explanation lives in these
+        /// four numbers, and none of them is visible from outside.
+        /// </summary>
+        public static double QcLastGrabT { get; private set; }
+        public static double QcLastAxisT { get; private set; }
+        public static double QcLastAlong { get; private set; }
+        public static bool QcLastAxisOk { get; private set; }
+
         // ── input ────────────────────────────────────────────────────────────────
 
         private void Update()
@@ -346,7 +360,12 @@ namespace DiveMap.Runtime.Ui
                         // had when the finger went down. This is the difference between a real
                         // axis handle and an arrow that is only decoration.
                         GizmoMath.AxisOf(_handle, out double ux, out double uy, out double uz);
-                        if (AxisAt(pos, _startPos, ux, uy, uz, out bool ok) && ok)
+                        bool solved = AxisAt(pos, _startPos, ux, uy, uz, out bool ok) && ok;
+                        QcLastAxisOk = solved;
+                        QcLastGrabT = _grabT;
+                        QcLastAxisT = _axisT;
+                        QcLastAlong = solved ? _axisT - _grabT : 0.0;
+                        if (solved)
                         {
                             double along = _axisT - _grabT;
                             SceneEdit.Move(items, _id,
