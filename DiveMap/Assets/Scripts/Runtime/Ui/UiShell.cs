@@ -1352,6 +1352,15 @@ namespace DiveMap.Runtime.Ui
                     }
                     GizmoController.QcDrag(SelectionToolbar.Mode.Translate,
                                            onX, onX + new Vector2(70f, 40f));
+
+                    // 🔴 Read it in the SAME frame the gesture ended, before anything else can run.
+                    // b391 proved the distance is computed correctly (along=4.689) and the object
+                    // is where it started 1.6 s later; those two facts leave exactly two suspects,
+                    // and this line tells them apart.
+                    Newtonsoft.Json.Linq.JObject now =
+                        DiveMap.Core.SceneEdit.Find(DiveMap.Core.SceneEdit.Items(eb.CurrentScene), pick);
+                    double xImmediate = now != null && now["p"] != null ? (double)now["p"][0] : double.NaN;
+
                     yield return new WaitForSecondsRealtime(1.6f);
                     Newtonsoft.Json.Linq.JObject aft =
                         DiveMap.Core.SceneEdit.Find(DiveMap.Core.SceneEdit.Items(eb.CurrentScene), pick);
@@ -1372,6 +1381,10 @@ namespace DiveMap.Runtime.Ui
                               $"grabT={GizmoController.QcLastGrabT:F3} " +
                               $"axisT={GizmoController.QcLastAxisT:F3} " +
                               $"along={GizmoController.QcLastAlong:F3} " +
+                              $"wrote={GizmoController.QcLastMoveWrote} " +
+                              $"askedX={GizmoController.QcLastWroteX:F2} " +
+                              $"readBackX={GizmoController.QcLastReadBackX:F2} " +
+                              $"xImmediate={xImmediate:F2} " +
                               $"z {zBefore:F2}→{zAfter:F2} (must be unchanged) " +
                               $"x {xBefore:F2}→{xAfter:F2} (must differ)");
                     MapEditor.Undo();

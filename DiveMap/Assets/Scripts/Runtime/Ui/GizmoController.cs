@@ -180,6 +180,12 @@ namespace DiveMap.Runtime.Ui
         public static double QcLastAlong { get; private set; }
         public static bool QcLastAxisOk { get; private set; }
 
+        /// <summary>QC — the write itself: what was asked for, whether the array accepted it, and
+        /// what the array said one line later.</summary>
+        public static double QcLastWroteX { get; private set; }
+        public static bool QcLastMoveWrote { get; private set; }
+        public static double QcLastReadBackX { get; private set; }
+
         // ── input ────────────────────────────────────────────────────────────────
 
         private void Update()
@@ -368,10 +374,19 @@ namespace DiveMap.Runtime.Ui
                         if (solved)
                         {
                             double along = _axisT - _grabT;
-                            SceneEdit.Move(items, _id,
-                                           _startPos[0] + ux * along,
-                                           _startPos[1] + uy * along,
-                                           _startPos[2] + uz * along);
+                            QcLastWroteX = _startPos[0] + ux * along;
+                            QcLastMoveWrote = SceneEdit.Move(items, _id,
+                                                             _startPos[0] + ux * along,
+                                                             _startPos[1] + uy * along,
+                                                             _startPos[2] + uz * along);
+                            // What the array says IMMEDIATELY after the write. If this is the new
+                            // value and the scene has the old one a second later, something after
+                            // the gesture is putting it back — a different question entirely from
+                            // "the write never happened", and the two are indistinguishable from
+                            // outside (b391: along=4.689 computed, object unmoved).
+                            JObject back = SceneEdit.Find(items, _id);
+                            QcLastReadBackX = back != null && back["p"] != null
+                                            ? (double)back["p"][0] : double.NaN;
                         }
                         // !ok = the axis is within half a degree of edge-on. Hold the last good
                         // position: a pixel of movement there would fling the object off the map.
