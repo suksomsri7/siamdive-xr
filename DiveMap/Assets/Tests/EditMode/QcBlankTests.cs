@@ -255,6 +255,21 @@ namespace DiveMap.Tests
         }
 
         [Test]
+        public void OnlyThePassThatCLAIMSToBeFixedHasToHoldStill()
+        {
+            // 🔴 b388: the same settle rule applied to BOTH passes ended the run CONTROL-BROKEN
+            // twice over. The suppressed pass has the fix held back, and the bug it reproduces is
+            // a baseline re-read from its own scaled output every frame — a walk, by definition.
+            // Requiring the bug to sit still is requiring it to behave like the fix.
+            Assert.IsTrue(QcBlank.MustSettle(false), "the FIXED pass must still hold still (b385)");
+            Assert.IsFalse(QcBlank.MustSettle(true), "the SUPPRESSED pass is allowed to drift — that is the bug");
+
+            // …and a drifting suppressed pass is exactly what makes a verdict possible: the
+            // second reading is far from authored, which is the reproduction the control needs.
+            StringAssert.StartsWith("PASS", QcBlank.AtmosphereVerdict(0.167, 0.450, 0.450));
+        }
+
+        [Test]
         public void ASampleThatNeverHappenedIsNotSettled()
         {
             // -1 is the "no baseline captured" sentinel; two of them agree numerically and must

@@ -180,16 +180,23 @@ namespace DiveMap.Runtime
         /// undone by a stale relative restore arriving one frame later.
         /// </summary>
         /// <summary>
-        /// QC ONLY — hold the reset back so the harness can photograph the bug it fixes
+        /// QC ONLY — hold the FIX back so the harness can photograph the bug it fixes
         /// (<see cref="QcBlankShot"/>). Never set outside a <c>-qcblank</c> run; there is no
         /// command-line flag and no setting that reaches it, and it is reset to false by the
         /// harness itself after each pass.
+        ///
+        /// 🔴 It suppresses TWO things, because the bug had two homes and a control that only
+        /// disables one of them cannot reproduce anything: this reset, and
+        /// <c>DepthAtmosphere.AdoptNewMapBaseline</c>'s authored-snapshot baseline. b388 is what
+        /// that costs — the suppressed pass measured 0.450, the same as the fixed pass, and the
+        /// run ended CONTROL-BROKEN with the app in perfect health. Renamed from
+        /// <c>SuppressResetForQc</c> so the name says what it does now.
         /// </summary>
-        public static bool SuppressResetForQc { get; set; }
+        public static bool SuppressFixForQc { get; set; }
 
         public static void ResetForNewMap()
         {
-            if (SuppressResetForQc)
+            if (SuppressFixForQc)
             {
                 Debug.LogWarning("[Atmos] reset SUPPRESSED (-qcblank control pass) — " +
                                  "this build is deliberately reproducing the bug");

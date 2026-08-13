@@ -238,6 +238,18 @@ namespace DiveMap.Core
         public static bool Settled(double first, double second, double tolerance = 0.005)
             => first >= 0.0 && second >= 0.0 && System.Math.Abs(first - second) <= tolerance;
 
+        /// <summary>
+        /// Which pass is allowed to still be moving.
+        ///
+        /// 🔴 The suppressed pass is the one with the fix held back, and the bug it reproduces IS
+        /// a compounding walk (<c>AtmosphereBaseline.Decay</c>): the baseline re-read from its own
+        /// scaled output, every frame. Demanding that it hold still demands that the bug behave
+        /// like the fix, which is how b388 ended CONTROL-BROKEN against a perfectly healthy build.
+        /// The b385 rule — a settling quantity proves nothing — is kept exactly where it was
+        /// learned: on the pass that claims to be fixed.
+        /// </summary>
+        public static bool MustSettle(bool suppressedPass) => !suppressedPass;
+
         /// <summary>The verdict when a reading never stopped moving.</summary>
         public static string UnsettledVerdict(string pass, double first, double second)
             => $"{ControlBroken} pass '{pass}' sampled a baseline that was still moving " +

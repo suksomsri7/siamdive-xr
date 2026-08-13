@@ -335,7 +335,7 @@ namespace DiveMap.Runtime
             // Start each pass from a clean map A. The reset always runs for THIS load — the pass is
             // about what map B inherits, and beginning pass 2 inside pass 1's wreckage would test
             // recovery rather than prevention.
-            SceneAtmosphere.SuppressResetForQc = false;
+            SceneAtmosphere.SuppressFixForQc = false;
             yield return LoadAndSettle(boot, MapA, deadline);
             if (Overdue(tag, deadline, started, onBudgetBroken)) yield break;
 
@@ -385,7 +385,7 @@ namespace DiveMap.Runtime
             // 🔴 The swipe-back. Deliberately NOTHING here: no ExitToHost, no ModeManager.Exit, no
             // native message. iOS just stops giving Unity frames, and the next thing that happens
             // is the user picking another map.
-            SceneAtmosphere.SuppressResetForQc = suppressFix;
+            SceneAtmosphere.SuppressFixForQc = suppressFix;
             Trace(tag, "T3-before-loading-map-B");
             yield return LoadAndSettle(boot, MapB, deadline);
             Trace(tag, "T4-map-B-build-complete");
@@ -411,12 +411,35 @@ namespace DiveMap.Runtime
             for (int i = 0; i < 5; i++) yield return null;
             float baseSky = DepthAtmosphere.BaseSkyGray;
 
-            if (!QcBlank.Settled(baseFirst, baseSky))
+            // 🔴 And "no baseline was ever captured" (-1) must not slip through the relaxed rule
+            // below: −1 is miles from authored, so a suppressed pass that measured NOTHING would
+            // read as a textbook reproduction and hand out a PASS. The sentinel is not a number.
+            if (baseSky < 0f || baseFirst < 0f)
             {
-                string v = QcBlank.UnsettledVerdict(tag, baseFirst, baseSky);
+                string v = QcBlank.ControlBroken + $" pass '{tag}' captured no ambient baseline " +
+                           $"at all ({baseFirst:F3} → {baseSky:F3}) — nothing was measured";
                 Debug.LogError("[QcBlank] " + v);
                 onBudgetBroken(v);
                 yield break;
+            }
+
+            if (!QcBlank.Settled(baseFirst, baseSky))
+            {
+                // 🔴 …but only the FIXED pass has to hold still. In the suppressed pass the
+                // baseline is re-read from this component's own scaled output every frame — that
+                // compounding walk IS the bug being reproduced (AtmosphereBaseline.Decay), and
+                // calling it "the measurement point is wrong" would throw away the one pass that
+                // is supposed to be broken. The b385 lesson stands where it was learned: a
+                // SETTLING quantity in the pass that claims to be fixed proves nothing.
+                if (QcBlank.MustSettle(suppressFix))
+                {
+                    string v = QcBlank.UnsettledVerdict(tag, baseFirst, baseSky);
+                    Debug.LogError("[QcBlank] " + v);
+                    onBudgetBroken(v);
+                    yield break;
+                }
+                Debug.Log($"[QcBlank] {tag}: baseline still moving ({baseFirst:F3} → {baseSky:F3}) " +
+                          "— in the SUPPRESSED pass that is the drift itself, not a bad sample");
             }
             float sky = SceneAtmosphere.LiveSky;
             float authored = SceneAtmosphere.AuthoredSky;
@@ -450,7 +473,7 @@ namespace DiveMap.Runtime
             // Costs no map load and answers "can a dark atmosphere darken this frame AT ALL".
             if (suppressFix) yield return DarkProbe(dir, rt, readback);
 
-            SceneAtmosphere.SuppressResetForQc = false;
+            SceneAtmosphere.SuppressFixForQc = false;
         }
 
         /// <summary>

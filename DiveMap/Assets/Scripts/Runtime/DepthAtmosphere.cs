@@ -102,6 +102,28 @@ namespace DiveMap.Runtime
         /// </summary>
         private void AdoptNewMapBaseline()
         {
+            // 🔴 THE CONTROL PASS HAS TO BE ABLE TO REPRODUCE THE BUG, and by b388 it could not.
+            //
+            // -qcblank works by holding the fix back and checking the bug comes back; a pass it
+            // cannot reproduce proves nothing about the pass it can. The bug lived in TWO places
+            // and only one of them was reachable from the harness: with the reset suppressed,
+            // b388's log reads "baseline taken from the authored snapshot — sky=0.450 (live was
+            // 0.167)". The tour's dark ambient WAS live and the line below refused it — correctly
+            // for a player, fatally for a control. The measured quantity (the baseline) therefore
+            // read 0.450 in both passes and the verdict was CONTROL-BROKEN: not a failure of the
+            // app, a failure of the instrument to have anything to measure.
+            //
+            // So the switch suppresses the fix at BOTH sites. `_haveBase = false` is the exact
+            // pre-WO-MERGE-DARK line: re-read everything from RenderSettings next LateUpdate,
+            // i.e. adopt this component's own laundered output as the new surface value.
+            if (SceneAtmosphere.SuppressFixForQc)
+            {
+                _haveBase = false;
+                Debug.LogWarning("[Depth] baseline fix SUPPRESSED (-qcblank control pass) — " +
+                                 "re-reading the live values on purpose, which is the bug");
+                return;
+            }
+
             if (!SceneAtmosphere.TryGetAuthoredAmbient(out Color sky, out Color equator,
                                                        out Color ground, out Color fogColor))
             {
