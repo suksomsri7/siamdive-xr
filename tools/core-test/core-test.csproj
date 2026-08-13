@@ -184,6 +184,10 @@
     <Compile Include="../../DiveMap/Assets/Tests/EditMode/AssetCatalogTests.cs" />
     <Compile Include="../../DiveMap/Assets/Tests/EditMode/AdminIdentityTests.cs" />
     <Compile Include="../../DiveMap/Assets/Tests/EditMode/GizmoHandleTests.cs" />
+    <!-- SceneEdit is the JSON that gets PATCHed to the server, and it was already compiled here
+         for the gizmo maths. Its tests were not — including the one that would have caught the
+         instrument bug behind b390-b393 in two seconds instead of four CI rounds. -->
+    <Compile Include="../../DiveMap/Assets/Tests/EditMode/SceneEditTests.cs" />
     <Compile Include="../../DiveMap/Assets/Tests/EditMode/QcAutoPlayTests.cs" />
     <Compile Include="../../DiveMap/Assets/Tests/EditMode/QcShotProofTests.cs" />
     <Compile Include="Runner.cs" />

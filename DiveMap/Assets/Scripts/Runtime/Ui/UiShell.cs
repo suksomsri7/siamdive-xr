@@ -1304,9 +1304,17 @@ namespace DiveMap.Runtime.Ui
                 // …and prove the constraint is real, not decorative: drag the X arrow and check
                 // that Z did NOT move. A screenshot cannot tell those two apart; this log can.
                 {
+                    // 🔴 SNAPSHOT, NOT A REFERENCE — and this line is the whole reason b390-b393
+                    // existed. `b4` is a live JObject inside the scene: SceneEdit.Move replaces
+                    // its "p", so reading b4["p"][0] AFTER the drag hands back the value the drag
+                    // just wrote. The old code captured z as a double here and read x from the
+                    // reference at verdict time, so the comparison was "after versus after" and
+                    // the constraint could not pass however well it worked. Four CI rounds and
+                    // ~6 hours were spent looking for that in the app.
                     Newtonsoft.Json.Linq.JObject b4 =
                         DiveMap.Core.SceneEdit.Find(DiveMap.Core.SceneEdit.Items(eb.CurrentScene), pick);
                     double zBefore = (double)b4["p"][2];
+                    double xBeforeSnapshot = (double)b4["p"][0];
                     Camera c = Camera.main;
                     Vector2 originPx = c != null && GizmoHandles.Current != null
                         ? (Vector2)c.WorldToScreenPoint(GizmoHandles.Current.Origin)
@@ -1386,7 +1394,10 @@ namespace DiveMap.Runtime.Ui
                     // and each one has been false on its own: the press grabbed the X handle, Z
                     // did not move, and X did. "Two of three" is a broken constraint, and a shot
                     // of an unmoved object is what it looks like from the outside either way.
-                    double zAfter = (double)aft["p"][2], xBefore = (double)b4["p"][0];
+                    // …and the "before" values here are the SNAPSHOTS taken above and one
+                    // statement before the press — never the live reference.
+                    double zAfter = (double)aft["p"][2];
+                    double xBefore = double.IsNaN(xAtPress) ? xBeforeSnapshot : xAtPress;
                     double xAfter = (double)aft["p"][0];
                     bool grabbedX = GizmoController.QcLastPressed == GizmoMath.Handle.X;
                     bool zHeld = System.Math.Abs(zAfter - zBefore) < 0.001;

@@ -247,5 +247,31 @@ namespace DiveMap.Tests
             for (int i = 0; i < 500; i++)
                 Assert.IsTrue(seen.Add(SceneEdit.NewId(42)), "duplicate id after " + i + " calls");
         }
-    }
+    
+        [Test]
+        public void AReadThroughALiveItemIsNotABeforeValue()
+        {
+            // 🔴 THE INSTRUMENT TRAP, pinned. Move() replaces the item's "p", and a JObject held
+            // from before the move resolves "p" again on every read — so a QC pass that keeps the
+            // OBJECT as its "before" and reads a coordinate off it at verdict time is comparing
+            // the value to itself. That is not hypothetical: it is what made b390-b393 report
+            // "the axis constraint moved nothing" for four CI rounds and ~6 hours, against an app
+            // that was moving the object correctly the whole time (startX=-4.87 → -0.18, exactly
+            // the 4.689 the solve asked for).
+            //
+            // The rule the QC pass now follows: capture the NUMBER before the gesture, never the
+            // node it lives in.
+            JArray items = JArray.Parse(@"[{""id"":""a"",""p"":[-4.87,1.0,128.0]}]");
+            JObject live = SceneEdit.Find(items, "a");
+
+            double snapshot = (double)live["p"][0];      // the honest "before"
+            Assert.IsTrue(SceneEdit.Move(items, "a", -0.18, 1.0, 128.0));
+
+            Assert.AreEqual(-4.87, snapshot, 1e-9, "a captured number stays put");
+            Assert.AreEqual(-0.18, (double)live["p"][0], 1e-9,
+                            "…while the same read through the live node returns what was just written");
+            // …which is why "before == after" proves nothing when 'before' is a reference.
+            Assert.AreEqual((double)live["p"][0], -0.18, 1e-9);
+        }
+}
 }
