@@ -839,6 +839,30 @@ jobs:
           find ~/.config/unity3d -name Player.log -exec cp {} qc_ui_player.log \; 2>/dev/null || true
           test -s qc_ui_player.log || echo "::warning::no Player.log found — QC log evidence missing"
 
+          # ── the shots that have to prove themselves (WO-Q) ────────────────────
+          #
+          # 🔴 Run 31513452365 filed two photographs of the DRONE TOUR HUD as evidence for the
+          # three axis arrows. Nothing in CI objected, because a screenshot call cannot fail: it
+          # writes whatever is on the screen and a wrong screen is still a valid PNG. The gizmo
+          # shots now carry their own verdict (QcGizmoWitness → [QcShot] lines), and this is where
+          # a verdict of "do not believe this picture" becomes a red build.
+          #
+          # Missing lines are red too. "The witness never ran" and "the witness passed" must not
+          # look the same from out here — that equivalence is the whole bug being fixed.
+          echo "── shot proofs ──"
+          grep -F '[QcShot]' qc_ui_player.log || true
+          if grep -qF 'INVALID SHOT' qc_ui_player.log 2>/dev/null; then
+            echo "::error::a QC shot did not photograph what it claims — see the [QcShot] lines above"
+            grep -F '[UI] qcui gizmo' qc_ui_player.log || true
+            grep -F '[Tour] auto-play' qc_ui_player.log || true
+            exit 1
+          fi
+          if ! grep -qF '[QcShot]' qc_ui_player.log 2>/dev/null; then
+            echo "::error::no [QcShot] proof lines — the gizmo shots were never checked, so they prove nothing"
+            tail -40 qc_ui_player.log || true
+            exit 1
+          fi
+
       # ────────────────────────────────────────────────────────────────────────
       # POSITIVE CONTROL — "enter map A, leave mid-tour, open map B, the world is
       # one flat navy colour while the HUD keeps working" (WO-MERGE P1e).

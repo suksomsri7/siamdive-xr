@@ -1269,6 +1269,20 @@ namespace DiveMap.Runtime.Ui
 
                 GizmoController.Select(pick);
 
+                // 🔴 AIM AT THE OBJECT BEFORE PHOTOGRAPHING IT. The camera arrives here from the
+                // top-down shot (1b), i.e. pitched straight down at whatever the map's centre is —
+                // an angle at which the green Y arrow projects to a dot and the selected item may
+                // not be in shot at all. Frame() is the builder's own three-quarter pose (yaw 45°,
+                // pitch 35°), which is both what the user's web screenshot shows and the only pose
+                // in which all three arrows have a length to be measured along.
+                GizmoController.QcLayOutHandles();
+                OrbitCamera gizmoCam = Camera.main != null ? Camera.main.GetComponent<OrbitCamera>() : null;
+                if (gizmoCam != null && GizmoHandles.Current != null)
+                {
+                    gizmoCam.Frame(GizmoHandles.Current.Origin, 12f);
+                    yield return new WaitForSecondsRealtime(0.6f);
+                }
+
                 // WO-O — the arrows. Laid out explicitly because Update() would not run until
                 // the next frame and the shot below happens in this one. This is the frame the
                 // planner compares against the user's photo of the web build: three axis arrows
@@ -1279,6 +1293,12 @@ namespace DiveMap.Runtime.Ui
                           $"origin={(GizmoHandles.Current != null ? GizmoHandles.Current.Origin.ToString("F1") : "-")}");
                 ScreenCapture.CaptureScreenshot(prefix + "_gizmo_axes.png");
                 Debug.Log("[UI] qcui shot -> " + prefix + "_gizmo_axes.png");
+
+                // 🔴 …and now the shot proves itself, because the last one did not. b386 filed a
+                // photograph of the drone tour under this name and nothing objected. The witness
+                // renders this camera twice in one frame — handles on, handles off — and fails the
+                // build if the difference is not three arrows where the projection says they are.
+                yield return QcGizmoWitness.Prove("gizmo_axes", pick, prefix + "_gizmo_axes_proof.png");
                 yield return new WaitForSecondsRealtime(1.0f);
 
                 // …and prove the constraint is real, not decorative: drag the X arrow and check
@@ -1315,6 +1335,10 @@ namespace DiveMap.Runtime.Ui
                           $"canRedo={MapEditor.CanRedo} mode={ModeManager.Current}");
                 ScreenCapture.CaptureScreenshot(prefix + "_gizmo.png");
                 Debug.Log("[UI] qcui shot -> " + prefix + "_gizmo.png");
+                // The frame the user compares against their photo of the web builder — so this is
+                // the one where "it was taken in the wrong mode" must never again be something a
+                // human has to notice by looking at it.
+                yield return QcGizmoWitness.Prove("gizmo", pick, prefix + "_gizmo_proof.png");
                 yield return new WaitForSecondsRealtime(1.0f);
 
                 GizmoController.QcDrag(SelectionToolbar.Mode.Translate,

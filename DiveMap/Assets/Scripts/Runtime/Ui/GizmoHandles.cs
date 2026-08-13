@@ -348,6 +348,38 @@ namespace DiveMap.Runtime.Ui
                                   q0.x, q0.y, q1.x, q1.y, q2.x, q2.y);
         }
 
+        // ── QC: the shot has to be able to prove it photographed these ───────────
+
+        /// <summary>
+        /// QC — draw or hide the handles WITHOUT touching the selection.
+        ///
+        /// The witness renders the same camera twice inside one frame, once each way, and the
+        /// pixels that differ are the handles. <see cref="Deselect"/> would also clear the toolbar
+        /// and the selection, i.e. change the thing being photographed, which is the opposite of
+        /// what a control frame is for.
+        /// </summary>
+        public void QcSetShown(bool on) => SetShown(on);
+
+        /// <summary>
+        /// QC — where the origin and the three arrow tips land on screen, in the same bottom-up
+        /// pixel space a readback uses. False when there is no camera; NaN components mean that
+        /// handle is behind the lens, which <c>Core.QcShotProof</c> reads as "not measurable"
+        /// rather than sampling the mirrored point on the wrong side of the screen.
+        /// </summary>
+        public bool QcScreenAxes(out Vector2 origin, out Vector2 xTip, out Vector2 yTip, out Vector2 zTip)
+        {
+            origin = xTip = yTip = zTip = new Vector2(float.NaN, float.NaN);
+            Camera cam = Camera.main;
+            if (cam == null || _root == null) return false;
+
+            float tip = TipLocal();
+            origin = Project(cam, Origin);
+            xTip = Project(cam, _axis[0].TransformPoint(new Vector3(0f, tip, 0f)));
+            yTip = Project(cam, _axis[1].TransformPoint(new Vector3(0f, tip, 0f)));
+            zTip = Project(cam, _axis[2].TransformPoint(new Vector3(0f, tip, 0f)));
+            return true;
+        }
+
         /// <summary>Tip of an arrow in its parent's local space (shaft + head).</summary>
         private float TipLocal()
         {

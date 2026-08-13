@@ -780,24 +780,35 @@ namespace DiveMap.Runtime
             // auto-tour's 0.6 s head start before the first piece is seeded.
             if (Core.GamePreload.AtBuildEnd(_preload)) PreloadGameModels();
 
-            // 🔴 …except in -qcshot mode, where the tour is what broke the evidence.
+            // 🔴 …except under a QC harness, where the tour is what broke the evidence.
             //
-            // The QC map belongs to SIAMDIVE and cannot be edited, so ArenaEntry drops the player
+            // The QC maps belong to SIAMDIVE and cannot be edited, so ArenaEntry drops the player
             // into the tour 600 ms after the map loads and the drone re-drives Camera.main every
             // frame from then on. QcShot below disables the ORBIT rig before aiming the camera, but
             // nothing stopped the drone: both screenshots were therefore taken from the drone's
             // pose, into open water, and came out as the same gradient — byte-identical files that
-            // were read for weeks as "two angles of the map". UiShell's -qcui pass had already hit
-            // this and leaves the tour explicitly (UiShell:812); this is the same fix at the source.
-            // -qcui is untouched, so its shots keep their current behaviour.
-            if (autoPlay && string.IsNullOrEmpty(GetArg("-qcshot")))
+            // were read for weeks as "two angles of the map".
+            //
+            // 🔴 That first fix named ONE switch, and run 31513452365 was the bill for the ones it
+            // left out. The same 600 ms timer walked into two more instruments in a single build:
+            // -qcui photographed the drone HUD and filed it as the three axis arrows (the gizmo
+            // deselects itself outside View, so there was nothing on the screen to photograph),
+            // and -qcblank caught the tour's ambient factor between its two baseline samples —
+            // 0.450 → 0.324 is 0.450 × 0.72 — and reported its own control broken. One cause, two
+            // blind instruments, and neither of them said "a mode change happened to me".
+            //
+            // So the list lives in Core.QcAutoPlay with a test on it, and every harness that wants
+            // the tour asks for it itself (UiShell's tour shot, QcBlankShot's dark pass).
+            string qcRun = Core.QcAutoPlay.SuppressedBy(Environment.GetCommandLineArgs());
+            if (autoPlay && qcRun == null)
             {
                 Debug.Log($"[Tour] auto-play (arena={arena} warp={warped}) → tour at a random spawn");
                 StartCoroutine(StartTourAfterDelay());
             }
             else if (autoPlay)
             {
-                Debug.Log("[Tour] auto-play suppressed — -qcshot needs a camera nobody else is flying");
+                Debug.Log($"[Tour] auto-play suppressed — {qcRun} needs a camera nobody else is " +
+                          "flying and a mode nobody else changes");
             }
 
             // ── Sun shafts (WO-XR-04.3) ─────────────────────────────────────────────

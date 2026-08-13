@@ -130,6 +130,13 @@
     <Compile Include="../../DiveMap/Assets/Scripts/Core/SceneData.cs" />
     <Compile Include="../../DiveMap/Assets/Scripts/Core/SceneEdit.cs" />
     <Compile Include="../../DiveMap/Assets/Scripts/Core/GizmoMath.cs" />
+    <!-- WO-Q. The two halves of "a QC shot has to prove it photographed its own subject": which
+         runs the auto-tour may not hijack (it hijacked two instruments in one build), and the
+         difference-frame arithmetic behind the arrows. Both are UnityEngine-free, and the case
+         worth having on this machine is the negative one — an instrument that cannot say NO is
+         how a picture of open water passed as a picture of three axis arrows. -->
+    <Compile Include="../../DiveMap/Assets/Scripts/Core/QcAutoPlay.cs" />
+    <Compile Include="../../DiveMap/Assets/Scripts/Core/QcShotProof.cs" />
   </ItemGroup>
 
   <ItemGroup Label="EditMode tests for exactly those files">
@@ -177,6 +184,8 @@
     <Compile Include="../../DiveMap/Assets/Tests/EditMode/AssetCatalogTests.cs" />
     <Compile Include="../../DiveMap/Assets/Tests/EditMode/AdminIdentityTests.cs" />
     <Compile Include="../../DiveMap/Assets/Tests/EditMode/GizmoHandleTests.cs" />
+    <Compile Include="../../DiveMap/Assets/Tests/EditMode/QcAutoPlayTests.cs" />
+    <Compile Include="../../DiveMap/Assets/Tests/EditMode/QcShotProofTests.cs" />
     <Compile Include="Runner.cs" />
   </ItemGroup>
 </Project>
