@@ -452,6 +452,7 @@ namespace DiveMap.Runtime.Ui
             _actions.gameObject.SetActive(open);
             UiKit.SetIcon(_menuToggleBtn, open ? "close" : "menu");
             if (CompassWidget.Instance != null) CompassWidget.Instance.SetVisible(!open);
+            UndoBar.SetSuppressed(open);   // ↺↻ share these squares with the action column
         }
 
         public void CloseActions()
@@ -460,6 +461,7 @@ namespace DiveMap.Runtime.Ui
             _actions.gameObject.SetActive(false);
             UiKit.SetIcon(_menuToggleBtn, "menu");
             if (CompassWidget.Instance != null) CompassWidget.Instance.SetVisible(true);
+            UndoBar.SetSuppressed(false);
         }
 
         // (The slide-in menu panel from WO-XR-05.1 is gone: the web has no menu panel, it has the
@@ -1161,6 +1163,22 @@ namespace DiveMap.Runtime.Ui
             ScreenCapture.CaptureScreenshot(prefix + "_card.png");
             Debug.Log("[UI] qcui shot -> " + prefix + "_card.png");
             yield return new WaitForSecondsRealtime(1.5f);
+
+            // 🔴 THE "จอมืด" REGRESSION, as a permanent check (QC_PLAN rule ②).
+            //
+            // The card owns a 3D preview camera. When the card went away it destroyed the render
+            // texture that camera drew into and left the camera itself alive on a DontDestroyOnLoad
+            // stage — and a camera with no target texture renders TO THE SCREEN, clearing it to its
+            // own solid colour. That is the flat navy the user photographed: (13,31,51) at every
+            // pixel, which is this camera's background exactly, with the HUD still drawn on top
+            // because overlay canvases come after every camera.
+            //
+            // So: close the card, then ask the scene the only question that matters — is any camera
+            // besides the main one enabled and pointed at the screen?
+            if (_card != null) _card.Hide();
+            yield return new WaitForSecondsRealtime(0.6f);
+            QcCameraProbe.Report("after-card-closed");
+            yield return new WaitForSecondsRealtime(0.3f);
 
             // 6) settings (WO-XR-05.4)
             OpenSettings();

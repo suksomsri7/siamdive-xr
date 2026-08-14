@@ -133,10 +133,27 @@ namespace DiveMap.Runtime.Ui
         /// </summary>
         private void Update() => Refresh();
 
+        /// <summary>
+        /// The ☰ column is open, so stand down.
+        ///
+        /// 🔴 Both stacks are anchored bottom-right and both count slots upward from the ☰: the
+        /// action buttons from BuildActions, ↺↻ from Build above. Open the column and they land in
+        /// the same squares — the user's screenshot shows ↺ drawn straight on top of the 🤿 tour
+        /// button, two glyphs in one circle. The compass already steps aside for the column
+        /// (UiShell.ToggleActions); this is the same rule for the same reason.
+        /// </summary>
+        public static void SetSuppressed(bool suppressed)
+        {
+            _suppressed = suppressed;
+            if (_instance != null) _instance.Refresh();
+        }
+
+        private static bool _suppressed;
+
         private void Refresh()
         {
             var boot = FindFirstObjectByType<AppBoot>();
-            bool show = boot != null && boot.CanEditCurrent &&
+            bool show = !_suppressed && boot != null && boot.CanEditCurrent &&
                         ModeRules.AllowsEditTools(ModeManager.Current);
 
             if (_group != null)

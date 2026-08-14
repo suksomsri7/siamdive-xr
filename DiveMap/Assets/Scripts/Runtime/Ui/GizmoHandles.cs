@@ -16,13 +16,14 @@ namespace DiveMap.Runtime.Ui
     ///
     /// TWO PROPERTIES THAT MAKE A GIZMO USABLE, both easy to get wrong:
     ///
-    ///  • **Constant size on screen.** Rebuilt every frame from
-    ///    <see cref="GizmoMath.WorldPerPixel"/>, so an arrow asked to be 90 px long is 90 px long
-    ///    whether the rock is under the camera or across the map. A fixed world size would give
-    ///    a distant object arrows too small to hit and a near one arrows that swallow the screen.
-    ///    The web does the same thing through TransformControls' own scaling, turned up 35 % for
-    ///    touch (<c>tc.size = 1.35</c>, builder.html:532) — this uses a touch-sized 90 px to the
-    ///    same end.
+    ///  • **Sized to the OBJECT, in screen space.** Rebuilt every frame from
+    ///    <see cref="GizmoMath.WorldPerPixel"/> so distance never changes the apparent size — but
+    ///    the length itself comes from the selected object's own bounds
+    ///    (<see cref="RadiusReach"/>), clamped between <see cref="MinAxisPixels"/> and
+    ///    <see cref="MaxAxisPixels"/>. 🔴 It was a flat 90 px in build 9008 and the user's report
+    ///    was immediate: "ขนาดเล็กไม่ตามวัตถุ" — 90 px on a 60 m wreck is a pin stuck in a hull,
+    ///    and their reference shot of the web shows a gizmo enclosing the whole thing. The clamps
+    ///    are what keep a coin grabbable and a wreck's gizmo inside the viewport.
     ///
     ///  • **Always visible.** The handles render on top of everything with depth testing off and
     ///    an overlay queue. A gizmo that disappears inside the rock it is attached to is worse
@@ -42,6 +43,14 @@ namespace DiveMap.Runtime.Ui
         /// <summary>Cone head length / width, screen px.</summary>
         private const float HeadPixels = 22f;
         private const float HeadWidthPixels = 9f;
+        /// <summary>How far past the object's own radius the arrows reach.</summary>
+        public const float RadiusReach = 1.15f;
+        /// <summary>Screen-space floor: below this a handle is not reliably hittable (26 px
+        /// grab tolerance + a thumb).</summary>
+        public const float MinAxisPixels = 70f;
+        /// <summary>…and the ceiling, so a wreck's gizmo cannot swallow the viewport.</summary>
+        public const float MaxAxisPixels = 260f;
+
         /// <summary>Plane quad size and how far along each axis its centre sits, screen px.</summary>
         private const float QuadPixels = 20f;
         private const float QuadOffsetPixels = 30f;
@@ -239,7 +248,19 @@ namespace DiveMap.Runtime.Ui
         public void Hide() => SetShown(false);
 
         /// <summary>Put the handles on <paramref name="worldPos"/> and size them for the camera.</summary>
-        public void ShowAt(Vector3 worldPos)
+        public void ShowAt(Vector3 worldPos) => ShowAt(worldPos, 0f);
+
+        /// <summary>
+        /// Put the handles on <paramref name="worldPos"/>, sized to an object of
+        /// <paramref name="worldRadius"/> (0 = the old fixed screen size).
+        ///
+        /// 🔴 THE SIZE RULE, corrected after build 9008. A flat 90 screen px is right for a coin
+        /// and absurd for a 60 m wreck — the user's words were "ขนาดเล็กไม่ตามวัตถุ", and their
+        /// reference shot of the web shows a gizmo that encloses the whole hull. So the arrows now
+        /// reach just past the object's own bounds, with two screen-space guards that keep the
+        /// extremes usable: never smaller than a thumb can hit, never so large it owns the screen.
+        /// </summary>
+        public void ShowAt(Vector3 worldPos, float worldRadius)
         {
             Camera cam = Camera.main;
             if (cam == null) { SetShown(false); return; }
@@ -259,11 +280,19 @@ namespace DiveMap.Runtime.Ui
             if (wpp <= 0f) { SetShown(false); return; }
 
             float len = AxisPixels * wpp;
-            float shaft = ShaftPixels * wpp;
-            float head = HeadPixels * wpp;
-            float headW = HeadWidthPixels * wpp;
-            float quad = QuadPixels * wpp;
-            float off = QuadOffsetPixels * wpp;
+            if (worldRadius > 0f)
+                len = Mathf.Clamp(worldRadius * RadiusReach,
+                                  MinAxisPixels * wpp, MaxAxisPixels * wpp);
+            // Everything else is a fraction OF THE ARROW, not of the screen: a gizmo that grows
+            // with the object but keeps a 22 px arrowhead looks like a pin stuck in a wreck.
+            // The fractions are the old constants' ratios at the old 90 px length, so a small
+            // object still gets exactly the gizmo it had before.
+            float k = len / (AxisPixels * wpp);
+            float shaft = ShaftPixels * wpp * k;
+            float head = HeadPixels * wpp * k;
+            float headW = HeadWidthPixels * wpp * k;
+            float quad = QuadPixels * wpp * k;
+            float off = QuadOffsetPixels * wpp * k;
 
             for (int i = 0; i < 3; i++)
             {

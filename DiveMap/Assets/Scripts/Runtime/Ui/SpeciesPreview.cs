@@ -25,9 +25,26 @@ namespace DiveMap.Runtime.Ui
         private const int Rt = 512;
         private const float DegPerPx = 0.5f;
 
-        private Camera _cam;
-        private RenderTexture _rt;
-        private Transform _stage;      // parent of the loaded model
+        // 🔴 ONE PER PROCESS, AND THAT IS THE FIX FOR "จอมืด".
+        //
+        // These were instance fields on a component that lives on the CARD's RawImage, while the
+        // stage they build is DontDestroyOnLoad. Every time the shell rebuilt the card — which is
+        // every map switch — three things happened at once:
+        //
+        //   1. OnDestroy destroyed the RenderTexture this camera draws into;
+        //   2. the camera itself survived on the undying stage, still enabled;
+        //   3. a camera with no target texture RENDERS TO THE SCREEN, and this one clears to a
+        //      solid (0.05, 0.12, 0.20) — the flat navy the user photographed, measured off their
+        //      screenshot as (13,31,51) at every single pixel, no gradient anywhere;
+        //
+        // …and the next Ensure() built ANOTHER stage and camera, because these fields were null on
+        // the new component. The HUD kept working through all of it because overlay canvases draw
+        // after every camera, which is exactly what the reports said: live HUD over a dead world.
+        //
+        // Static means the stage is built once and reused, so there is nothing to orphan.
+        private static Camera _cam;
+        private static RenderTexture _rt;
+        private static Transform _stage;      // parent of the loaded model
         private GltfImport _import;
         private string _loadedUrl;
         private RawImage _view;
@@ -54,7 +71,12 @@ namespace DiveMap.Runtime.Ui
                 _rt = new RenderTexture(Rt, Rt, 16, RenderTextureFormat.ARGB32);
                 _rt.Create();
             }
+            // iOS releases render texture CONTENTS when the app is suspended; the object survives
+            // but stops being usable, and re-binding a released texture is how a camera ends up
+            // with nothing to draw into while still enabled.
+            if (!_rt.IsCreated()) _rt.Create();
             view.texture = _rt;
+            if (_cam != null) _cam.targetTexture = _rt;
 
             if (_stage == null)
             {
@@ -72,7 +94,10 @@ namespace DiveMap.Runtime.Ui
                 _cam.targetTexture = _rt;
                 _cam.nearClipPlane = 0.05f;
                 _cam.farClipPlane = 200f;
-                _cam.enabled = true;
+                // Off until LateUpdate confirms there is a live texture AND a visible card.
+                // A preview camera that is enabled by default is one destroyed RawImage away
+                // from owning the screen.
+                _cam.enabled = false;
 
                 // Its own key light, aimed with the camera — the stage is far from every map
                 // light and the card must not depend on whichever map is loaded.
@@ -172,9 +197,37 @@ namespace DiveMap.Runtime.Ui
 
         private void OnDestroy()
         {
+            // 🔴 The card is going away; the STAGE is not. Do not destroy the shared render
+            // texture here — that is precisely what turned this camera loose on the screen. Park
+            // the camera instead: a disabled camera cannot clear anything.
             Clear();
-            if (_rt != null) { _rt.Release(); Destroy(_rt); }
+            if (_cam != null) _cam.enabled = false;
             if (_instance == this) _instance = null;
+        }
+
+        /// <summary>
+        /// The camera may draw ONLY into its own texture, and only while a card is up.
+        ///
+        /// 🔴 Belt and braces on purpose. The ownership fix above removes the known route to a
+        /// screen-clearing preview camera; this closes every route, including ones nobody has
+        /// thought of yet — a released texture after an iOS suspend, a future caller that destroys
+        /// the RawImage by another path. The cost of being wrong here is the whole screen, and the
+        /// check is two comparisons a frame.
+        /// </summary>
+        /// <summary>Card hidden (not destroyed) — LateUpdate stops running, so park it here too.</summary>
+        private void OnDisable()
+        {
+            if (_cam != null) _cam.enabled = false;
+        }
+
+        private void LateUpdate()
+        {
+            if (_cam == null) return;
+            if (_rt != null && !_rt.IsCreated()) _rt.Create();
+            if (_cam.targetTexture != _rt) _cam.targetTexture = _rt;
+            bool usable = _rt != null && _rt.IsCreated() && _cam.targetTexture != null;
+            bool shown = _view != null && _view.isActiveAndEnabled;
+            if (_cam.enabled != (usable && shown)) _cam.enabled = usable && shown;
         }
     }
 }

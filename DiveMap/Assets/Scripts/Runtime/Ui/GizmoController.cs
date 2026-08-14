@@ -244,8 +244,57 @@ namespace DiveMap.Runtime.Ui
 
             Transform t = _dragging && _target != null ? _target : FindBuilt(_id);
             if (t == null) { h.Hide(); return; }
-            h.ShowAt(t.position);
+
+            // 🔴 ON the object and AS BIG AS the object — the user's report of build 9008, in their
+            // words: "ไม่ตรงตำแหน่งวัตถุและขนาดเล็กไม่ตามวัตถุ".
+            //
+            // Both come from using the transform: `t.position` is a GLB's authored pivot, which for
+            // a wreck sits at one corner of a 60 m hull, and the handles were a flat 90 screen px
+            // whatever they were attached to. So on anything large the gizmo appeared off to one
+            // side and far too small to mean "this object is selected". The web sizes its gizmo to
+            // the object (their screenshot: rings that enclose the whole wreck), which is what the
+            // bounds give us.
+            if (TargetBounds(t, out Vector3 centre, out float radius)) h.ShowAt(centre, radius);
+            else h.ShowAt(t.position);
         }
+
+        /// <summary>
+        /// World centre and radius of what is actually DRAWN for this object.
+        ///
+        /// The renderer list is cached per target: <c>GetComponentsInChildren</c> allocates and a
+        /// wreck has dozens of parts, and this runs every frame while something is selected. The
+        /// bounds themselves are re-read each frame on purpose — they have to follow a drag, a
+        /// rotation and a scale as they happen.
+        /// </summary>
+        private bool TargetBounds(Transform t, out Vector3 centre, out float radius)
+        {
+            centre = t.position;
+            radius = 0f;
+            if (_rendsFor != t)
+            {
+                _rends = t.GetComponentsInChildren<Renderer>(false);
+                _rendsFor = t;
+            }
+            if (_rends == null || _rends.Length == 0) return false;
+
+            bool any = false;
+            Bounds b = default;
+            for (int i = 0; i < _rends.Length; i++)
+            {
+                Renderer r = _rends[i];
+                if (r == null || !r.enabled || !r.gameObject.activeInHierarchy) continue;
+                if (!any) { b = r.bounds; any = true; }
+                else b.Encapsulate(r.bounds);
+            }
+            if (!any) return false;
+
+            centre = b.center;
+            radius = b.extents.magnitude;
+            return true;
+        }
+
+        private Renderer[] _rends;
+        private Transform _rendsFor;
 
         private void Press(Vector2 pos, int finger)
         {

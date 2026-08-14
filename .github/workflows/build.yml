@@ -879,6 +879,7 @@ jobs:
           echo "── shot proofs ──"
           grep -F '[QcShot]' qc_ui_player.log || true
           grep -F '[QcDrag]' qc_ui_player.log || true
+          grep -F '[QcCam]' qc_ui_player.log || true
           grep -F '[QC] X arrow aim' qc_ui_player.log || true
 
       # ────────────────────────────────────────────────────────────────────────
@@ -981,6 +982,17 @@ jobs:
           # and only the first one has a picture. This is the second one's line.
           if ! grep -qF '[QcDrag]' qc_ui_player.log; then
             echo "::error::no [QcDrag] line — the axis constraint was never exercised on a real screen"
+            exit 1
+          fi
+          # 🔴 "จอมืด": a camera with no target texture is a full-screen eraser. Six device rounds
+          # and two wrong hypotheses were spent on this; it never comes back silently.
+          if grep -qF 'SCREEN-CLEARING CAMERA' qc_ui_player.log; then
+            echo "::error::a camera other than the main one is drawing straight to the screen — see [QcCam] above"
+            grep -F '[QcCam]' qc_ui_player.log || true
+            exit 1
+          fi
+          if ! grep -qF '[QcCam]' qc_ui_player.log; then
+            echo "::error::no [QcCam] line — nobody checked for a screen-clearing camera"
             exit 1
           fi
           echo "both gizmo shots proved themselves, and the axis constraint held"
