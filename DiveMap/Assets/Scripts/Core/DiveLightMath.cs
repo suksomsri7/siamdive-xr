@@ -59,10 +59,10 @@ namespace DiveMap.Core
         /// 150 u (25 m) was still "far too bright" on the phone: a torch that reaches a quarter of
         /// the map lights the whole scene by reflection. 90 u = 15 m, which is what a real dive
         /// light gives you before the beam is lost in the water.
-        // 15 ส.ค. 2026 — user: "ลดระยะความสว่างตอนเปิดไฟ" ⇒ 90 → 62
+        // 15 ส.ค. 2026 — user ขอลดสองรอบ: 90 → 62 → 50
         // ลำแสงที่ยิงไกลเกินทำให้พื้นทั้งผืนสว่างเท่ากันหมด มิติความลึกหายไป และของที่อยู่ไกล
         // ดูเหมือนอยู่ใกล้ — ระยะสั้นลงคืน "ขอบของแสง" ซึ่งเป็นสิ่งที่ทำให้รู้สึกว่ากำลังดำน้ำ
-        public const float LampRange = 62f;
+        public const float LampRange = 50f;
 
         /// <summary>Headlight OFF: 0x08303f, near 70, far 200, ambient ×0.55, dive light 0.5.</summary>
         /// <remarks>

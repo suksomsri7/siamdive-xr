@@ -179,7 +179,7 @@ namespace DiveMap.Tests
             // 🔴 ตัวเดียวในไฟล์นี้ที่ไม่ใช่ค่าเว็บอีกต่อไป: user สั่งลด 9 ส.ค. ("โดรนเคลื่อนที่
             // ช้าลงอีกนิด") · ค่าเว็บคือ 30 ส่วนที่ใช้จริงคือ 24 = 80% · เลขอื่นทุกตัวในเทสนี้
             // ยังตรึงกับ builder.html เหมือนเดิม
-            Assert.AreEqual(18f, DroneFlight.Speed, 1e-6f, "user 15 ส.ค. — เว็บ 3770 SP=30 × 0.6 (ขอช้าลงรอบสอง)");
+            Assert.AreEqual(15f, DroneFlight.Speed, 1e-6f, "user 15 ส.ค. — เว็บ 3770 SP=30 × 0.5 (ขอช้าลงรอบสาม)");
             Assert.AreEqual(1f, DroneFlight.StrafeRatio, 1e-6f, "builder.html:3770 — strafe=rx");
             Assert.AreEqual(0.72f, DroneFlight.AscendRatio, 1e-6f, "builder.html:3771");
             Assert.AreEqual(0.72f, DroneFlight.DescendRatio, 1e-6f, "builder.html:3771 — one factor");
@@ -202,19 +202,19 @@ namespace DiveMap.Tests
             Assert.AreEqual(6.0, ItemPicker.UnitsPerMetre, 1e-9,
                             "the whole conversion hangs off this — see builder.html U_PER_M");
 
-            // 5.00 → 4.00 (user 9 ส.ค.) → 3.00 m/s (user 15 ส.ค. "โดรนเคลื่อนที่เร็วไป" รอบสอง)
+            // 5.00 → 4.00 (9 ส.ค.) → 3.00 → 2.50 m/s (15 ส.ค. user ขอช้าลงอีกสองรอบ)
             // อัตราส่วนขึ้น/ลง/สไลด์ยังเป็นของเว็บทั้งหมด — ลดเฉพาะความเร็วฐาน
-            Assert.AreEqual(3.0f, DroneFlight.MetresPerSecond(DroneFlight.Speed), 0.01f);
-            Assert.AreEqual(3.0f, DroneFlight.MetresPerSecond(DroneFlight.Speed * DroneFlight.StrafeRatio), 0.01f);
-            Assert.AreEqual(2.16f, DroneFlight.MetresPerSecond(DroneFlight.Speed * DroneFlight.AscendRatio), 0.01f);
-            Assert.AreEqual(2.16f, DroneFlight.MetresPerSecond(DroneFlight.Speed * DroneFlight.DescendRatio), 0.01f);
+            Assert.AreEqual(2.5f, DroneFlight.MetresPerSecond(DroneFlight.Speed), 0.01f);
+            Assert.AreEqual(2.5f, DroneFlight.MetresPerSecond(DroneFlight.Speed * DroneFlight.StrafeRatio), 0.01f);
+            Assert.AreEqual(1.80f, DroneFlight.MetresPerSecond(DroneFlight.Speed * DroneFlight.AscendRatio), 0.01f);
+            Assert.AreEqual(1.80f, DroneFlight.MetresPerSecond(DroneFlight.Speed * DroneFlight.DescendRatio), 0.01f);
 
             // And the preset that carries build 261's drone forward for anyone who preferred it.
             // 0.30 is SettingsStore.CalmSpeedScale, inlined: SettingsStore needs PlayerPrefs and so
             // cannot be compiled into tools/test.sh's harness.
             // 0.375 = SettingsStore.CalmSpeedScale (inline: SettingsStore ต้องใช้ PlayerPrefs
             // จึงคอมไพล์เข้า harness ของ tools/test.sh ไม่ได้) — ยังเท่ากับโดรน build 261 พอดี
-            Assert.AreEqual(1.125f, DroneFlight.MetresPerSecond(DroneFlight.Speed * 0.375f), 0.01f);
+            Assert.AreEqual(0.9375f, DroneFlight.MetresPerSecond(DroneFlight.Speed * 0.375f), 0.01f);
         }
 
         /// <summary>

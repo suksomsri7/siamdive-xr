@@ -153,8 +153,27 @@ namespace DiveMap.Core
                 double p = PanicLevel(predatorDistance, PredatorPanicRadius(spreadR, fishLen));
                 if (p > 0.0) return p;
             }
+
+            // 🔴 15 ส.ค. 2026 — user: "หากบินโดรนไปชนสัตว์ต้องให้สัตว์ว่ายเร็วขึ้นมาก ๆ เป็น
+            // พฤติกรรมตกใจ"
+            //
+            // เกณฑ์เดิมตกใจเฉพาะเมื่อนักดำน้ำ "ว่ายเร็วพอ" ⇒ ลอยนิ่ง ๆ เข้าไปจ่อกลางฝูงแล้วฝูง
+            // ไม่สนใจเลย ซึ่งผิดธรรมชาติ (ของจริงปลาหลบทุกอย่างที่เข้ามาประชิด ไม่ว่าจะเร็วแค่ไหน)
+            // และเป็นเหตุผลที่ user รู้สึกว่าโดรน "ทะลุ" ตัวปลา — ปลาไม่เคยพยายามหลบเลย
+            //
+            // ระยะประชิด = หนึ่งช่วงตัวปลาจากขอบฝูง: ใกล้กว่านั้นถือว่าชน ⇒ ตกใจเต็มพิกัด (1.0)
+            // ไม่ว่าจะเคลื่อนที่อยู่หรือไม่ · เกินระยะนั้นกลับไปใช้กฎเดิมทุกประการ
+            if (diverActive && diverDistance <= ContactRadius(spreadR, fishLen)) return 1.0;
+
             return nowThreatening ? PanicLevel(diverDistance, DiverPanicRadius(spreadR, fishLen)) : 0.0;
         }
+
+        /// <summary>
+        /// ระยะที่ถือว่า "โดนตัว" — ขอบฝูงบวกหนึ่งช่วงตัวปลา. ตกใจเต็มพิกัดในระยะนี้เสมอ
+        /// แม้นักดำน้ำจะลอยนิ่ง เพราะของจริงปลาหลบสิ่งที่เข้ามาประชิดทุกกรณี
+        /// </summary>
+        public static double ContactRadius(double spreadR, double fishLen)
+            => spreadR + Math.Max(fishLen, 0.5);
 
         /// <summary>
         /// The shoal's panic this frame. A real predator wins over the diver — the web checks the

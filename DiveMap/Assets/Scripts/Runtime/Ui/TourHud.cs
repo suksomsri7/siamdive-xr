@@ -309,6 +309,19 @@ namespace DiveMap.Runtime.Ui
 
         private static void ExitTour()
         {
+            // 🔴 15 ส.ค. 2026 — user: "อยู่โหมดโดรน เมื่อคลิกปุ่ม × ให้กลับมาหน้าที่มี pull up
+            // ขึ้นมาให้เลือก ดูแมพ / ar / โดรน"
+            //
+            // ในแอปรวม "หน้าที่มีตัวเลือกสามโหมด" คือหน้าแผนที่ของแอป ไม่ใช่โหมด View ของ Unity
+            // ⇒ ออกจาก Unity ไปเลย แล้วให้ฝั่งแอปเปิดแผ่นตัวเลือกของหมุดนั้นซ้ำ (ทำที่ RN)
+            //
+            // บิลด์เดี่ยวไม่มีแอปข้างนอกให้กลับไป จึงคงพฤติกรรมเดิม: ออกจากทัวร์มาที่โหมดดูแมพ
+            // — และนั่นทำให้ QC ของ CI ซึ่งรันบิลด์เดี่ยวยังเดินเส้นทางเดิมทุกประการ
+            if (NativeBridge.EmbeddedInHost)
+            {
+                NativeBridge.RequestExit();
+                return;
+            }
             if (ModeManager.Instance != null) ModeManager.Instance.Exit();
         }
 

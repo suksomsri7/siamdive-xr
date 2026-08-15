@@ -425,6 +425,19 @@ namespace DiveMap.Runtime
                 {
                     // E8: a portal, not a model — the web builds its gate from primitives too
                     // (builder.html:2525) and it is not in the asset manifest.
+                    //
+                    // 🔴 15 ส.ค. 2026 — user: "โหมดโดรนและ preview ไม่ต้องแสดงจุด warp แต่จะแสดง
+                    // เฉพาะ user ที่เป็น admin เท่านั้น" · ประตูวาร์ปเป็นเครื่องมือจัดฉากของทีม
+                    // (ใช้เดินระหว่างแมพตอนทำคอนเทนต์) ไม่ใช่ของที่นักดำน้ำทั่วไปควรเจอกลางทะเล
+                    //
+                    // ซ่อนตั้งแต่ตอน "สร้าง" ไม่ใช่แค่ปิดการมองเห็น: ประตูที่ยังอยู่ในฉากยังกิน
+                    // แรมกับ draw call และยังชนกับโดรนได้ — ซึ่งขัดกับเหตุผลที่ซ่อนมันตั้งแต่ต้น
+                    if (!Core.Account.IsAdmin)
+                    {
+                        Destroy(itemGo);
+                        _loaded++;
+                        continue;
+                    }
                     WarpGate.Attach(itemGo.transform);
                     _loaded++;
                     continue;

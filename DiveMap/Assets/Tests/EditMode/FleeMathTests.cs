@@ -316,5 +316,49 @@ namespace DiveMap.Tests
             Assert.Greater(FleeMath.ShelterIntervalSeconds, FleeMath.SenseIntervalSeconds,
                            "cover does not move; predators do");
         }
-    }
+    
+        /// <summary>
+        /// 15 ส.ค. 2026 — user: "โดรนต้องไม่บินทะลุตัวสัตว์ · ชนแล้วสัตว์ต้องว่ายเร็วขึ้นมาก ๆ"
+        ///
+        /// สิ่งที่ตรึงไว้คือกฎเดียว: **ประชิด = ตกใจเต็มพิกัด ไม่ว่าจะเคลื่อนที่อยู่หรือไม่**
+        /// ก่อนหน้านี้ฝูงสนใจเฉพาะนักดำน้ำที่ว่ายเร็วพอ ⇒ ลอยนิ่งจ่อกลางฝูงแล้วปลาไม่หลบเลย
+        /// ซึ่งเป็นเหตุผลที่มันดูเหมือนโดรน "ทะลุ" ตัวปลา
+        /// </summary>
+        [Test]
+        public void TouchingTheShoal_PanicsEvenWhenTheDiverIsStill()
+        {
+            const double spreadR = 12.0, fishLen = 1.9;
+            double contact = FleeMath.ContactRadius(spreadR, fishLen);
+
+            // ลอยนิ่งสนิท (ความเร็ว 0) แต่เข้าไปจ่อในระยะประชิด
+            double panic = FleeMath.SchoolPanic(
+                predatorDistance: 999, hasPredator: false,
+                diverDistance: contact - 0.01, diverSpeed: 0.0, diverActive: true,
+                spreadR: spreadR, fishLen: fishLen,
+                wasThreatening: false, out bool _);
+            Assert.AreEqual(1.0, panic, 1e-9, "ประชิด = ตกใจเต็มพิกัด แม้นักดำน้ำจะไม่ขยับ");
+        }
+
+        /// <summary>พ้นระยะประชิดแล้วต้องกลับไปใช้กฎเดิมเป๊ะ — ไม่ใช่ตกใจตลอดเวลา.</summary>
+        [Test]
+        public void OutsideContact_TheOldRuleStillDecides()
+        {
+            const double spreadR = 12.0, fishLen = 1.9;
+            double justOutside = FleeMath.ContactRadius(spreadR, fishLen) + 0.5;
+
+            double still = FleeMath.SchoolPanic(
+                predatorDistance: 999, hasPredator: false,
+                diverDistance: justOutside, diverSpeed: 0.0, diverActive: true,
+                spreadR: spreadR, fishLen: fishLen,
+                wasThreatening: false, out bool _);
+            Assert.AreEqual(0.0, still, 1e-9, "นอกระยะประชิด + ลอยนิ่ง = ไม่ตกใจ (กฎเดิม)");
+
+            double fast = FleeMath.SchoolPanic(
+                predatorDistance: 999, hasPredator: false,
+                diverDistance: justOutside, diverSpeed: FleeMath.DiverPanicSpeed + 1.0, diverActive: true,
+                spreadR: spreadR, fishLen: fishLen,
+                wasThreatening: false, out bool _);
+            Assert.Greater(fast, 0.0, "นอกระยะประชิดแต่ว่ายเร็ว = ตกใจตามกฎเดิม");
+        }
+}
 }
