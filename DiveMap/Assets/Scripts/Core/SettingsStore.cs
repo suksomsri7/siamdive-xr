@@ -44,7 +44,12 @@ namespace DiveMap.Core
         /// พรีเซ็ตนี้มีความหมายว่า "โดรนของ build 261" = 9 u/s = 1.50 m/s ซึ่งเป็นหมุดจริงที่
         /// user เคยเลือก — ถ้าปล่อยไว้ที่ 0.30 มันจะกลายเป็น 7.2 u/s แล้วความหมายหาย
         /// (เทส SettingsStoreTests.EverySpeedPreset_IsAMultipleOfTheWebsFlightModel ตรึงไว้)
-        public const float CalmSpeedScale = 0.375f;
+        // 🔴 ค่านี้ไม่ใช่ตัวเลขอิสระ — มันคือ "9 u/s หารด้วยความเร็วฐานปัจจุบัน" เพื่อให้พรีเซ็ต
+        // "ช้า" ยังเท่ากับโดรนของ build 261 เป๊ะตามที่สัญญาไว้กับคนที่ชอบจังหวะนั้น
+        // ⇒ **ทุกครั้งที่ DroneFlight.Speed เปลี่ยน ต้องคำนวณตัวนี้ใหม่** (มีเทสคุมทั้งใน CI และ
+        // ใน tools/test.sh แล้ว — รอบ 15 ส.ค. พลาดเพราะเทสเดิมอยู่แต่ใน CI)
+        // 15 ส.ค. 2026: Speed 24 → 15 ⇒ 0.375 → 0.6 (15 × 0.6 = 9)
+        public const float CalmSpeedScale = 0.6f;
 
         /// <summary>
         /// 1.25 × 30 u/s = 37.5 u/s = 6.25 m/s — for crossing a big site. Cut from 1.45 with the

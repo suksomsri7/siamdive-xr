@@ -212,9 +212,11 @@ namespace DiveMap.Tests
             // And the preset that carries build 261's drone forward for anyone who preferred it.
             // 0.30 is SettingsStore.CalmSpeedScale, inlined: SettingsStore needs PlayerPrefs and so
             // cannot be compiled into tools/test.sh's harness.
-            // 0.375 = SettingsStore.CalmSpeedScale (inline: SettingsStore ต้องใช้ PlayerPrefs
-            // จึงคอมไพล์เข้า harness ของ tools/test.sh ไม่ได้) — ยังเท่ากับโดรน build 261 พอดี
-            Assert.AreEqual(0.9375f, DroneFlight.MetresPerSecond(DroneFlight.Speed * 0.375f), 0.01f);
+            // 0.6 = SettingsStore.CalmSpeedScale (inline: SettingsStore ต้องใช้ PlayerPrefs จึง
+            // คอมไพล์เข้า harness ของ tools/test.sh ไม่ได้) — ยังเท่ากับโดรน build 261 พอดี
+            // 🔴 เทสนี้คือด่านที่ควรจับได้ตั้งแต่บนเครื่อง: 15 ส.ค. ลดความเร็วฐานแล้วลืมขยับสเกลนี้
+            // CI จับได้ (SettingsStoreTests) แต่เครื่องนี้ไม่จับ เพราะเทสตัวนั้นอยู่แต่ใน CI
+            Assert.AreEqual(1.5f, DroneFlight.MetresPerSecond(DroneFlight.Speed * 0.6f), 0.01f);
         }
 
         /// <summary>
@@ -544,5 +546,22 @@ namespace DiveMap.Tests
         }
 
         private static float Mathf90() => (float)(System.Math.PI / 2.0);
-    }
+    
+        /// <summary>
+        /// 🔴 ด่านที่ 15 ส.ค. 2026 ควรจับได้ตั้งแต่บนเครื่อง แต่ไม่จับ (เทสตัวจริงอยู่แต่ใน CI
+        /// เพราะ SettingsStore ต้องใช้ PlayerPrefs) ⇒ เสียรอบ CI ไปสองรอบกับความพลาดเดียว
+        ///
+        /// สัญญาที่ตรึงไว้: พรีเซ็ต "ช้า" ต้องยังเท่ากับโดรนของ build 261 (9 u/s) เป๊ะ ⇒ สเกลของมัน
+        /// ไม่ใช่ตัวเลขอิสระ แต่คือ 9 ÷ ความเร็วฐาน · ทุกครั้งที่ลดความเร็วฐาน ต้องขยับตาม
+        /// (ค่าจริงอยู่ที่ SettingsStore.CalmSpeedScale — ที่นี่เขียนซ้ำเพราะคอมไพล์ตัวนั้นไม่ได้)
+        /// </summary>
+        [Test]
+        public void CalmPreset_StillReproducesBuild261()
+        {
+            const float calmScale = 0.6f;      // = SettingsStore.CalmSpeedScale
+            const float build261Speed = 9f;    // u/s — โดรนที่ user เคยเลือกไว้
+            Assert.AreEqual(build261Speed, DroneFlight.Speed * calmScale, 0.05f,
+                            "ลดความเร็วฐานแล้วลืมขยับ CalmSpeedScale — 'ช้า' จะไม่ใช่ build 261 อีกต่อไป");
+        }
+}
 }
