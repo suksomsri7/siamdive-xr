@@ -495,7 +495,9 @@ namespace DiveMap.Runtime
             // own fetch is authoritative and this answer is about a map nobody is looking at.
             if (fresh == null || !string.Equals(want, _shortId, StringComparison.Ordinal)) yield break;
 
-            bool can = fresh.Root["canEdit"] != null && (bool)fresh.Root["canEdit"];
+            bool can = Core.EditAccess.MapEditingAllowed(
+                fresh.Root["canEdit"] != null && (bool)fresh.Root["canEdit"],
+                NativeBridge.EmbeddedInHost);
             if (can == CanEditCurrent)
             {
                 Debug.Log($"[AppBoot] rights re-check: canEdit={can} (unchanged)");
@@ -669,7 +671,10 @@ namespace DiveMap.Runtime
             // Keep a copy of every map that loads. "Maps you have opened" and "maps you can open
             // offline" are then the same set — there is no download step to forget.
             if (!_offline) OfflineStore.Save(_shortId, scene);
-            CanEditCurrent = scene.Root["canEdit"] != null && (bool)scene.Root["canEdit"];
+            // WO-PIVOT — การแก้ไขย้ายไปอยู่บนเว็บทั้งหมดเมื่อ Unity เป็นจอในแอปอื่น (ดู EditAccess)
+            CanEditCurrent = Core.EditAccess.MapEditingAllowed(
+                scene.Root["canEdit"] != null && (bool)scene.Root["canEdit"],
+                NativeBridge.EmbeddedInHost);
             Debug.Log($"[AppBoot] map {_shortId} rev={CurrentRev} canEdit={CanEditCurrent} " +
                       $"policy={scene.Root["editPolicy"]}");
 

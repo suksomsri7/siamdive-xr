@@ -341,6 +341,16 @@ namespace DiveMap.Runtime.Ui
                 if (!ArSession.Start()) Toast.ShowTr("เข้า AR ตอนนี้ไม่ได้");
             });
 
+            // ── เครื่องมือแก้ไข — ไม่สร้างเลยเมื่อเป็นจอในแอปอื่น (WO-PIVOT) ─────────────
+            //
+            // การแก้แมพย้ายไปอยู่บนเว็บทั้งหมด ⇒ ในแอปรวม ปุ่มเจ็ดตัวข้างล่างนี้ไม่มีวันกดผ่าน
+            // (CanEditCurrent เป็น false ตายตัว ดู Core.EditAccess) การปล่อยให้มันโผล่แล้วขึ้น
+            // "แมพนี้แก้ไม่ได้" ทุกครั้งคือการโยนความสับสนใส่ผู้ใช้แทนที่จะบอกอะไรเขาได้เลย
+            //
+            // 🔴 ไม่ลบโค้ด: บิลด์เดี่ยว (DiveMap บน TestFlight) ยังสร้างปุ่มครบเหมือนเดิม เพราะ
+            // ด่านตรวจภาพของ CI ทั้งชุด — ลากลูกศร · ตะกร้า · ปั้นพื้น — กดปุ่มเหล่านี้จริง
+            if (Core.EditAccess.ShowsEditTools(NativeBridge.EmbeddedInHost))
+            {
             // 📋 objects — only useful on a map this account can write to, and the button is
             // built once at startup when that is not yet known, so it decides at TAP time.
             ActionButton(5, "objects", () =>
@@ -407,6 +417,11 @@ namespace DiveMap.Runtime.Ui
             // eleven tools keep the positions a user has already learned. Gated exactly like its
             // neighbours, at tap time, because edit rights arrive from the server after the menu
             // is built.
+            // 🔴 ตะกร้า = ทั้ง "เลือกของไปวาง" และ "ซื้อสัตว์ทะเลด้วยเหรียญ" อยู่ในแผ่นเดียวกัน
+            // (PaletteSheet มีป้ายราคา/เหรียญ และการซื้อเกิดตอนวางของ — PlaceItem.Buy) ⇒ พอปิด
+            // การแก้ไข ระบบซื้อสัตว์ก็หยุดไปด้วยโดยปริยาย เพราะ "ซื้อ" ในระบบเดิมแปลว่า "วางลง
+            // บนแมพ" ซึ่งคือการแก้แมพ. เก็บเหรียญยังทำงานปกติ (เกมเก็บขยะ) แต่ยังใช้ไม่ได้จนกว่า
+            // จะออกแบบที่ทางของสัตว์ที่ซื้อใหม่ — รายงาน user แล้ว รอเคาะ ห้ามเดาแทน
             ActionButton(12, "cart", () =>
             {
                 var boot = FindFirstObjectByType<AppBoot>();
@@ -414,6 +429,8 @@ namespace DiveMap.Runtime.Ui
                 CloseActions();
                 PaletteSheet.Open(_thumbs);
             });
+            }   // end of edit-tools block (WO-PIVOT)
+
             _actions.gameObject.SetActive(false);
         }
 
