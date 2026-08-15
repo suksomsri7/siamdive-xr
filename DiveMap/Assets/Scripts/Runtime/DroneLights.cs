@@ -165,8 +165,10 @@ namespace DiveMap.Runtime
             DiveLightMath.Atmosphere a = DiveLightMath.For(_on);
 
             _dive.intensity = a.DiveLight;
-            _lampA.intensity = _on ? 2.6f : 0f;
-            _lampB.intensity = _on ? 2.6f : 0f;
+            // 15 ส.ค. 2026 — user: "ปรับความสว่างของไฟให้ลดลง" ⇒ 2.6 → 1.7 ต่อดวง (สองดวงรวมกัน
+            // จึงยังสว่างกว่าไฟหนึ่งดวงของเว็บ) · ค่านี้คู่กับระยะที่ลดลงใน DiveLightMath.LampRange
+            _lampA.intensity = _on ? 1.7f : 0f;
+            _lampB.intensity = _on ? 1.7f : 0f;
             _poolA.gameObject.SetActive(_on);
             _poolB.gameObject.SetActive(_on);
             _beamA.gameObject.SetActive(_on);

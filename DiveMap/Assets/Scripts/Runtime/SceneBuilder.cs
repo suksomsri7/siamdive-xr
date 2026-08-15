@@ -263,6 +263,23 @@ namespace DiveMap.Runtime
             _loadState.Reset();
             ReleaseImports();   // the previous map's meshes — its objects are already destroyed
 
+            // 🔴 คืนหน่วยความจำของแมพเก่าให้ "จริง" ก่อนเริ่มโหลดแมพใหม่ (WO-PIVOT, 15 ส.ค. 2026)
+            //
+            // หลักฐานจากเครื่อง user (ตัวเลขบนจอ 4 แมพติดกัน): 1.2 → 1.3 → 1.3 → 1.3 GB · เหลือ
+            // 1.7 GB คงที่ ⇒ **ไม่ใช่การรั่วสะสม** แต่แมพหนัก (Chang) ต้องการเพิ่มเกินที่เหลือ
+            // แล้วโดนระบบฆ่าทันทีที่โหลด
+            //
+            // ReleaseImports ข้างบน "ปล่อยการอ้างอิง" เท่านั้น — หน่วยความจำจริงยังอยู่จนกว่า
+            // Unity จะเก็บกวาด ซึ่งปกติเกิดหลังจากนั้นนานมาก ⇒ ระหว่างนั้นเราเริ่มโหลดของใหม่แล้ว
+            // ยอดสูงสุด = ของเก่า + ของใหม่ ซึ่งเป็นตัวเลขที่ฆ่าแอป ไม่ใช่ยอดของแมพใหม่เอง
+            //
+            // GC ก่อน UnloadUnusedAssets เสมอ: ตัวหลังปล่อยเฉพาะของที่ "ไม่มีใครอ้างถึงแล้ว"
+            // ถ้ายังมี reference ค้างใน managed heap มันจะข้ามไปเงียบ ๆ (เหตุผลเดียวกับใน
+            // MemoryWatch) · yield รอให้จบจริงก่อนไปต่อ — การไม่รอคือเหตุผลทั้งหมดที่มันไม่ช่วย
+            System.GC.Collect();
+            AsyncOperation unload = Resources.UnloadUnusedAssets();
+            while (unload != null && !unload.isDone) yield return null;
+
             var root = new GameObject("Map");
             // Publish it immediately. A build is a long async job (every GLB is a download), and
             // the caller is allowed to cancel one — StopCoroutine simply stops running the method,
