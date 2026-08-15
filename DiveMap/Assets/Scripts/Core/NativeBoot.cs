@@ -50,6 +50,13 @@ namespace DiveMap.Core
         /// of the merged app — see the note where it is consumed in <c>SceneBuilder</c>.
         /// </summary>
         public bool? Eco;
+
+        /// <summary>
+        /// โหมดที่เจ้าบ้านอยากให้เปิดค้างไว้เมื่อแมพขึ้น: "preview" | "ar" | "tour" (WO-PIVOT).
+        /// ค่าว่าง/ไม่รู้จัก = ไม่สั่งอะไร — พฤติกรรมเดิมทั้งหมด. ตัวแปลค่าอยู่ที่
+        /// <see cref="BootMode.Parse"/> ซึ่งมีเทสของตัวเอง
+        /// </summary>
+        public string Mode;
     }
 
     /// <summary>
@@ -204,6 +211,12 @@ namespace DiveMap.Core
             if (args.Badge.HasValue) next.Badge = args.Badge;
             if (args.Eco.HasValue) next.Eco = args.Eco;
 
+            // 🔴 โหมดถูก MERGE เหมือนช่องอื่น แต่ความหมายต่างกันหนึ่งอย่างที่ต้องรู้: เจ้าบ้านส่ง
+            // mode มาคู่กับ shortId ทุกครั้งที่ผู้ใช้แตะหมุด ⇒ ค่าที่ค้างอยู่คือ "โหมดที่ผู้ใช้เลือก
+            // ครั้งล่าสุด" ซึ่งถูกต้องแล้วสำหรับการโหลดแมพรอบถัดไป. ถ้าวันหนึ่งเจ้าบ้านอยากกลับไป
+            // ใช้พฤติกรรมเดิม ให้ส่ง "" มา ไม่ใช่ละช่องนี้ไว้เฉย ๆ
+            if (!string.IsNullOrEmpty(args.Mode)) next.Mode = args.Mode;
+
             Current = next;
             Received = true;
             LibraryMode = next.LibraryMode ?? false;
@@ -211,7 +224,14 @@ namespace DiveMap.Core
             AuthToken = next.AuthToken ?? "";
             BadgeForced = next.Badge ?? false;
             EcoMode = next.Eco ?? false;
+            HostMode = BootMode.Parse(next.Mode);
         }
+
+        /// <summary>
+        /// โหมดที่เจ้าบ้านสั่งไว้ล่าสุด (WO-PIVOT). <see cref="BootMode.Requested.None"/> ในบิลด์
+        /// เดี่ยว ซึ่งไม่มีใครส่งข้อความนี้เลย — พฤติกรรมเดิมจึงเป็นค่าตั้งต้น ไม่ใช่ทางแยกที่สอง
+        /// </summary>
+        public static BootMode.Requested HostMode { get; private set; }
 
         /// <summary>Back to "no host has spoken" — the standalone build's state, and every test's.</summary>
         public static void Reset()
@@ -223,6 +243,7 @@ namespace DiveMap.Core
             AuthToken = "";
             BadgeForced = false;
             EcoMode = false;
+            HostMode = BootMode.Requested.None;
         }
 
         /// <summary>
@@ -258,6 +279,7 @@ namespace DiveMap.Core
             args.LibraryMode = Flag(root["libraryMode"]);
             args.Badge = Flag(root["badge"]);
             args.Eco = Flag(root["eco"]);
+            args.Mode = Text(root["mode"]);
             return true;
         }
 

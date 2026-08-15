@@ -799,6 +799,20 @@ namespace DiveMap.Runtime
             //
             // So the list lives in Core.QcAutoPlay with a test on it, and every harness that wants
             // the tour asks for it itself (UiShell's tour shot, QcBlankShot's dark pass).
+            // 🔴 WO-PIVOT — เจ้าบ้านสั่งโหมดมา คำสั่งนั้นชนะ auto-play เสมอ
+            //
+            // ผู้ใช้แตะหมุดบนแผนที่ในแอปแล้วเลือกเองว่าจะ ดู / ส่อง AR / ทัวร์ ⇒ Unity ต้องเข้า
+            // โหมดนั้นตั้งแต่แมพขึ้น. ถ้าปล่อยให้ ArenaEntry ตัดสินต่อ คนที่กด "ดูแมพ" จะเห็นแมพ
+            // ครึ่งวินาทีแล้วถูกลากเข้าทัวร์เอง — และเงื่อนไขของ auto-play ขึ้นกับสิทธิ์แก้ไข/
+            // ออนไลน์/เจ้าของแมพ จึงจะดูเหมือนบั๊กสุ่มที่ไล่ยากมาก
+            Core.BootMode.Requested hostMode = Core.NativeBoot.HostMode;
+            if (Core.BootMode.OverridesAutoPlay(hostMode))
+            {
+                autoPlay = false;
+                Debug.Log($"[Native] host asked for {hostMode} — auto-play stands down");
+                StartCoroutine(EnterHostMode(hostMode));
+            }
+
             string qcRun = Core.QcAutoPlay.SuppressedBy(Environment.GetCommandLineArgs());
             if (autoPlay && qcRun == null)
             {
@@ -1389,6 +1403,43 @@ namespace DiveMap.Runtime
             yield return new WaitForSeconds(Core.ArenaEntry.StartDelaySeconds);
             if (this == null || _mapRoot == null) yield break;   // player left while we waited
             TourController.Start(randomStart: true);
+        }
+
+        /// <summary>
+        /// เข้าโหมดที่แอปเจ้าบ้านสั่งมา หลังแมพขึ้นแล้ว (WO-PIVOT).
+        ///
+        /// หน่วงเท่ากับ auto-play ด้วยเหตุผลเดียวกันเป๊ะ (GLB ชิ้นท้าย ๆ ยังทยอยมาถึงตอนแมพ
+        /// "เสร็จ") และเช็ค <c>_mapRoot</c> ด้วยเหตุผลเดียวกัน — ผู้ใช้กดออกระหว่างรอได้
+        ///
+        /// 🔴 ทุกโหมดเข้าทาง "ประตูเดียวกับปุ่มในแอป" ไม่ใช่ทางลัดที่เขียนใหม่ตรงนี้
+        /// (<c>TourController.Start</c> / <c>ArSession.Start</c>) — ประตูพวกนั้นมีเงื่อนไข
+        /// ของมันเอง (ARKit ใช้ได้ไหม มีแมพให้บินหรือยัง) ซึ่งถ้าเลี่ยงไป จะได้โหมดที่เข้าไปแล้ว
+        /// ค้างครึ่งทาง. Preview ไม่ต้องทำอะไรเพราะ View คือค่าตั้งต้นอยู่แล้ว — สิ่งที่ Preview
+        /// "ทำ" คือการปิด auto-play ที่ฝั่งผู้เรียก
+        /// </summary>
+        private System.Collections.IEnumerator EnterHostMode(Core.BootMode.Requested mode)
+        {
+            yield return new WaitForSeconds(Core.ArenaEntry.StartDelaySeconds);
+            if (this == null || _mapRoot == null) yield break;
+
+            switch (mode)
+            {
+                case Core.BootMode.Requested.Tour:
+                    if (!TourController.Start(randomStart: true))
+                        Debug.LogWarning("[Native] host asked for tour but the tour would not start");
+                    break;
+                case Core.BootMode.Requested.Game:
+                    TourController.ArenaPlay = true;
+                    if (!TourController.Start(randomStart: true))
+                        Debug.LogWarning("[Native] host asked for game but the tour would not start");
+                    break;
+                case Core.BootMode.Requested.Ar:
+                    if (!ArSession.Start())
+                        Debug.LogWarning("[Native] host asked for AR but this device would not start it");
+                    break;
+                default:
+                    break;   // Preview = View = ที่ที่แมพขึ้นมาอยู่แล้ว
+            }
         }
 
         private void SetLoadSummary(string title, int loaded, int failed)

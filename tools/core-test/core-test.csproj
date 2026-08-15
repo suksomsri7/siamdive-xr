@@ -86,6 +86,8 @@
          throttle rule is the part that can be wrong (answering a burst four times over is a
          freeze added to a phone that was only nearly out of memory) and it is pure. -->
     <Compile Include="../../DiveMap/Assets/Scripts/Core/MemoryRelief.cs" />
+    <Compile Include="../../DiveMap/Assets/Scripts/Core/MemoryReading.cs" />
+    <Compile Include="../../DiveMap/Assets/Scripts/Core/BootMode.cs" />
     <!-- WO-MERGE P1d. The dive-site GET URL. Pure, and the reason it is here is that a missing
          ?deviceId= on it made every map read-only for its own owner in both products. -->
     <Compile Include="../../DiveMap/Assets/Scripts/Core/SiteRequest.cs" />
@@ -141,6 +143,8 @@
 
   <ItemGroup Label="EditMode tests for exactly those files">
     <Compile Include="../../DiveMap/Assets/Tests/EditMode/WebCoordTests.cs" />
+    <Compile Include="../../DiveMap/Assets/Tests/EditMode/MemoryReadingTests.cs" />
+    <Compile Include="../../DiveMap/Assets/Tests/EditMode/BootModeTests.cs" />
     <Compile Include="../../DiveMap/Assets/Tests/EditMode/SculptCoordTests.cs" />
     <Compile Include="../../DiveMap/Assets/Tests/EditMode/MarineMathTests.cs" />
     <Compile Include="../../DiveMap/Assets/Tests/EditMode/FleeMathTests.cs" />

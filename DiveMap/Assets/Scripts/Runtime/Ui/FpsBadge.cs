@@ -32,6 +32,22 @@ namespace DiveMap.Runtime.Ui
         public static bool Visible =>
             !NativeBridge.EmbeddedInHost || DiveMap.Core.NativeBoot.BadgeForced;
 
+        /// <summary>
+        /// 🔴 ชั่วคราว — ปิดเมื่อปิดคดี "แอปดับตอนสลับแมพ" (เปิด 14 ส.ค. 2026)
+        ///
+        /// บรรทัดแรมโชว์แม้ตอนฝังในแอป ทั้งที่ user เคยสั่งให้ซ่อนตัวเลขมุมจอในโหมดนั้น — เพราะ
+        /// อาการที่กำลังไล่อยู่ *ไม่ทิ้งหลักฐานไว้เลย* (ไม่มีไฟล์รายงานทั้งในเครื่องและใน TestFlight
+        /// = ลายเซ็นของ jetsam) เครื่องมือที่ต้องรอดจากการตายจึงใช้ไม่ได้ทั้งหมด เหลือทางเดียวคือ
+        /// ตัวเลขที่ตอบก่อนตาย แล้วอ่านจากรูปถ่ายของ user — วิธีเดียวกับที่เลข fps เคยปิดคดี
+        /// "ปลาสั่น" มาแล้วทั้งคดี
+        ///
+        /// ตั้งเป็น const ตัวเดียวเพื่อให้ปิดคืนได้ด้วยการแก้บรรทัดเดียว ไม่ต้องรื้อโครงป้าย
+        /// </summary>
+        public const bool HuntingMemoryBug = true;
+
+        /// <summary>บรรทัดแรมควรอยู่บนจอไหม — เห็นเสมอระหว่างล่าบั๊ก, ไม่งั้นตามกฎเดิมของป้าย.</summary>
+        public static bool MemoryLineVisible => HuntingMemoryBug || Visible;
+
         public static void Ensure()
         {
             if (Object.FindFirstObjectByType<FpsBadge>() != null) return;
@@ -56,7 +72,7 @@ namespace DiveMap.Runtime.Ui
         {
             // The object stays alive and keeps counting: a debug switch that turned the badge back
             // on should show the fps of the last half second, not start from zero.
-            if (!Visible) return;
+            if (!Visible && !MemoryLineVisible) return;
 
             if (_style == null)
             {
@@ -79,9 +95,31 @@ namespace DiveMap.Runtime.Ui
             string build = Core.BuildStamp.Suffix;   // คืนมาเป็น " · bNNN" อยู่แล้ว
             int tot = Marine.FishSchoolSystem.TotalSchools;
             string fish = tot > 0 ? $" · ปลา {Marine.FishSchoolSystem.GlbSchools}/{tot}" : "";
-            GUI.Label(new Rect(0, Screen.height - Screen.height * 0.06f,
-                               Screen.width - Screen.height * 0.012f, Screen.height * 0.05f),
-                      $"{_fps:0} fps{build}{fish}", _style);
+
+            // แถวล่างสุด = ของเดิม (fps) · เมื่อฝังในแอปแถวนี้ถูกซ่อนตามคำสั่ง user แล้วบรรทัดแรม
+            // จะเลื่อนลงมาแทนที่ ไม่ใช่ลอยค้างเว้นช่องว่างไว้ให้สงสัยว่ามีอะไรหายไป
+            float bottomY = Screen.height - Screen.height * 0.06f;
+            float lineH = Screen.height * 0.05f;
+            float rightPad = Screen.height * 0.012f;
+
+            if (Visible)
+            {
+                GUI.Label(new Rect(0, bottomY, Screen.width - rightPad, lineH),
+                          $"{_fps:0} fps{build}{fish}", _style);
+            }
+
+            if (!MemoryLineVisible) return;
+
+            // 🔴 สีของบรรทัดนี้คือส่วนที่อ่านได้เร็วกว่าตัวเลข: ในรูปถ่ายมือถือของ user เลขสี่หลัก
+            // มุมจออ่านยาก แต่ "แถบล่างเปลี่ยนเป็นแดง" เห็นทันทีว่าเครื่องใกล้ฆ่าแอปแล้ว
+            var pressure = MemoryMeter.Pressure;
+            _style.normal.textColor =
+                pressure == Core.MemoryReading.Pressure.Critical ? new Color(1f, 0.35f, 0.3f, 0.95f)
+              : pressure == Core.MemoryReading.Pressure.Warning ? new Color(1f, 0.85f, 0.3f, 0.9f)
+                                                                : new Color(1f, 1f, 1f, 0.55f);
+            float memY = Visible ? bottomY - lineH * 0.85f : bottomY;
+            GUI.Label(new Rect(0, memY, Screen.width - rightPad, lineH),
+                      MemoryMeter.Line, _style);
         }
     }
 }
