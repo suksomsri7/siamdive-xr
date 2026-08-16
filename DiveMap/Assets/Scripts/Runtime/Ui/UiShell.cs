@@ -310,9 +310,12 @@ namespace DiveMap.Runtime.Ui
             Button host = UiKit.MakeIconButton(_safe, "HostBackButton", "back", ExitToHost,
                                                false, UiKit.Css(48f));
             _hostBackButton = host.gameObject;
+            // 🔴 16 ส.ค. 2026 — user: "โหมด preview ตรง icon ‹ ทำให้ต่ำลงมา"
+            // เหตุผลเดียวกับ ✕ ของ AR: ในแอปรวม _safe = เต็มจอโดยตั้งใจ ⇒ ระยะ 16 px วัดจาก
+            // ขอบกระจกจริง ปุ่มเลยไปเบียดแถบสถานะ · ตัวเลขที่ใช้อยู่ที่ Core.ChromeInset ซึ่งมีเทส
             UiKit.Anchor(host.GetComponent<RectTransform>(), new Vector2(0f, 1f),
                          new Vector2(UiKit.Css(48f), UiKit.Css(48f)),
-                         new Vector2(UiKit.Css(12f), -UiKit.Css(16f)));
+                         new Vector2(UiKit.Css(12f), -HostBackTop()));
             // Asked, not assumed false: if the host's payload arrived before the shell bootstrapped
             // (AfterSceneLoad), library mode is already on and no later event would switch this on
             // by itself. From here it is maintained by OnStackChanged / SetChromeVisible / ApplyHostMode.
@@ -321,6 +324,10 @@ namespace DiveMap.Runtime.Ui
 
         /// <summary>Top-left exit, library mode only. Never visible at the same time as <c>#backBtn</c>.</summary>
         private GameObject _hostBackButton;
+
+        /// <summary>ระยะจากขอบบนถึงปุ่ม ‹ (ตัวเลขอยู่ใน <see cref="Core.ChromeInset"/> ซึ่งมีเทส)</summary>
+        private static float HostBackTop()
+            => UiKit.Css(Core.ChromeInset.BackButtonTop(NativeBridge.EmbeddedInHost, Screen.height >= Screen.width));
 
         /// <summary>
         /// มุมล่างขวามีปุ่มเดียวเสมอ: ☰ ในบิลด์เดี่ยว · กลางวัน/ใต้น้ำ ในแอปรวม.

@@ -23,6 +23,24 @@ namespace DiveMap.Core
         /// <summary>แนวนอน: แค่ไม่ให้ชนขอบโค้ง</summary>
         public const float LandscapeStatusBar = 6f;
 
+        /// <summary>ระยะปกติของปุ่มลอยจากขอบบน (บิลด์เดี่ยวใช้ค่านี้ตรงๆ)</summary>
+        public const float FloatingMargin = 16f;
+
+        /// <summary>
+        /// ระยะจากขอบบนถึงปุ่มย้อนกลับมุมบนซ้ายของโหมดดู (css px).
+        ///
+        /// user 16 ส.ค. 2026: "โหมด preview ตรง icon ‹ ทำให้ต่ำลงมา" — ในแอปรวมมันเกาะขอบบน
+        /// สุดจริง ๆ เพราะพื้นที่ปลอดภัยถูกตั้งเป็นเต็มจอ ⇒ นอกจากหลบแถบสถานะแล้ว ยังเผื่อระยะ
+        /// ให้มันดูเป็นปุ่มลอยในกรอบ ไม่ใช่ปุ่มที่ค้างอยู่บนขอบ
+        /// </summary>
+        public static float BackButtonTop(bool embeddedInHost, bool portrait)
+        {
+            if (!embeddedInHost) return FloatingMargin;
+            // แนวนอนไม่มีแถบสถานะให้หลบมากนัก แต่ยังต้องต่ำลงตามที่ผู้ใช้ขอ ⇒ ระยะขั้นต่ำ 44
+            float wanted = FloatingMargin + Top(true, portrait);
+            return wanted > 44f ? wanted : 44f;
+        }
+
         /// <summary>
         /// ต้องเว้นเท่าไร (css px) สำหรับปุ่มที่เกาะขอบบน.
         /// <paramref name="embeddedInHost"/> = เป็นจอในแอปอื่นไหม — บิลด์เดี่ยวคืน 0 เสมอ

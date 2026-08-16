@@ -118,6 +118,16 @@ namespace DiveMap.Runtime
         {
             ArSession s = Ensure();
             if (s == null || ModeManager.Instance == null) return false;
+
+            // 🔴 ขออีกครั้งทั้งที่ยังอยู่ใน AR = ไม่มีอะไรเกิดขึ้นเลย (ModeManager ไม่ยิงเหตุการณ์
+            // เปลี่ยนโหมดเมื่อโหมดเดิมกับใหม่เท่ากัน) ⇒ กล้องยังอยู่ในริกของแมพก่อนหน้า แมพใหม่
+            // ยังถูกสั่งซ่อน = จอดำ (user 16 ส.ค.: "AR แมพแรกไม่มีปัญหา พอแมพที่ 2 จอดำ")
+            // เจอกรณีนี้เมื่อไร ให้รื้อของเก่าทิ้งก่อน แล้วเข้าใหม่ให้ครบทุกขั้น
+            if (ModeManager.Current == AppMode.Ar)
+            {
+                Debug.Log("[AR] already in AR — restarting the session for the current map");
+                ModeManager.Instance.Exit();
+            }
             return ModeManager.Instance.Request(AppMode.Ar);
         }
 

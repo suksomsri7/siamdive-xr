@@ -187,6 +187,29 @@ namespace DiveMap.Runtime.Ui
             else ArKitSession.Confirm();
         }
 
+        /// <summary>
+        /// ทางออกของ AR.
+        ///
+        /// 🔴 16 ส.ค. 2026 — user: "โหมด AR ตอนกดปุ่ม x ต้องให้กลับมาหน้า Map ครับ ตอนนี้ผิด
+        /// กลับไปหน้า preview" · ในแอปรวม โหมดถูกเลือกมาจากแผ่นของหมุด (ดู / AR / ทัวร์) ⇒ การ
+        /// ออกจาก AR แล้วไปโผล่โหมดดูแมพคือการพาผู้ใช้ไปที่ที่เขาไม่ได้ขอ และไม่มีทางกลับไป
+        /// แผนที่นอกจากกดย้อนอีกที ⇒ ออกจาก Unity ไปเลย ให้แอปพากลับแผนที่ (ท่าเดียวกับปุ่มออก
+        /// ของทัวร์ TourHud.ExitTour)
+        ///
+        /// บิลด์เดี่ยวไม่มีแอปข้างนอก จึงคงพฤติกรรมเดิม — และ QC ของ CI ที่รันบิลด์เดี่ยวไม่ขยับ
+        /// </summary>
+        private static void ExitAr()
+        {
+            // 🔴 ออกจากโหมดก่อนเสมอ แล้วค่อยบอกเจ้าบ้าน — ลำดับนี้สำคัญ ไม่ใช่รสนิยม:
+            // Unity ไม่ถูกยกออกจากหน่วยความจำเมื่อผู้ใช้กลับไปหน้าแผนที่ (เจ้าบ้านแค่ซ่อนจอไว้)
+            // ถ้าปิดจอทั้งที่โหมดยังเป็น AR อยู่ เซสชัน ARKit เดิมจะค้าง กล้องยังถูกยืมไปอยู่ในริก
+            // ที่ถูกสเกล และแมพยังถูกสั่งซ่อน ⇒ พอเปิด AR แมพถัดไป ModeManager เห็นว่า "อยู่ AR
+            // อยู่แล้ว" เลยไม่ยิงเหตุการณ์เปลี่ยนโหมด Begin() จึงไม่ทำงาน = จอดำพร้อมข้อความ
+            // ค้างจากเซสชันก่อน (ตรงกับรูปที่ user ส่งมา 16 ส.ค.)
+            if (ModeManager.Instance != null) ModeManager.Instance.Exit();
+            if (NativeBridge.EmbeddedInHost) NativeBridge.RequestExit();
+        }
+
         /// <summary>ระยะเว้นแถบสถานะเป็นหน่วยแคนวาส (ตัวเลขอยู่ใน <see cref="Core.ChromeInset"/> ซึ่งมีเทส)</summary>
         private static float TopInset()
             => UiKit.Css(Core.ChromeInset.Top(NativeBridge.EmbeddedInHost, Screen.height >= Screen.width));
@@ -209,8 +232,7 @@ namespace DiveMap.Runtime.Ui
             // "close" is the web's own path (M6 6l12 12 M18 6 6 18) rasterised at runtime, so it
             // cannot silently go missing.
             Button exit = UiKit.MakeButton(root, "ExitAr", null,
-                                           UiKit.CssFont(14f), UiKit.Glass, UiKit.TextMain,
-                                           () => { if (ModeManager.Instance != null) ModeManager.Instance.Exit(); });
+                                           UiKit.CssFont(14f), UiKit.Glass, UiKit.TextMain, ExitAr);
             RectTransform ert = exit.GetComponent<RectTransform>();
             ert.anchorMin = new Vector2(0f, 1f);
             ert.anchorMax = new Vector2(0f, 1f);

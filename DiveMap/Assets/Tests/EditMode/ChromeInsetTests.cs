@@ -29,6 +29,18 @@ namespace DiveMap.Tests
         }
 
         [Test]
+        public void TheBackButtonSitsLowerInsideTheApp()
+        {
+            // user 16 ส.ค.: "โหมด preview ตรง icon ‹ ทำให้ต่ำลงมา" — ในแอปต้องต่ำกว่าบิลด์เดี่ยว
+            // ทั้งสองแนว และแนวตั้งต้องพ้นแถบสถานะ (16 + 44) ไม่ใช่แค่ค่าขั้นต่ำ
+            Assert.AreEqual(ChromeInset.FloatingMargin, ChromeInset.BackButtonTop(false, true));
+            Assert.GreaterOrEqual(ChromeInset.BackButtonTop(true, false), 44f);
+            Assert.Greater(ChromeInset.BackButtonTop(true, false), ChromeInset.BackButtonTop(false, false));
+            Assert.AreEqual(ChromeInset.FloatingMargin + ChromeInset.PortraitStatusBar,
+                            ChromeInset.BackButtonTop(true, true));
+        }
+
+        [Test]
         public void EmbeddedLandscapeStaysNearTheEdge()
         {
             // แนวนอนแถบสถานะเกือบไม่มี — เว้นเท่าแนวตั้งจะดันปุ่มลงมาโดยไม่มีเหตุผล
