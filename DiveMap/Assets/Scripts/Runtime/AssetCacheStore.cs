@@ -182,7 +182,26 @@ namespace DiveMap.Runtime
         /// out-of-date bytes would defeat the generation check silently and look exactly like the
         /// bug not being fixed. We only reach this method when we already want the network.
         /// </summary>
-        public static Task<byte[]> Download(string url)
+        /// <summary>
+        /// โหลดไฟล์ พร้อมลองซ้ำหนึ่งครั้ง.
+        ///
+        /// 🔴 16 ส.ค. 2026 — user: "บางครั้งเข้า Unity แต่โมเดลมาไม่ครบ" · คำว่า "บางครั้ง" คือ
+        /// ลายเซ็นของการสะดุดชั่วคราว ไม่ใช่ไฟล์หาย: แมพหนึ่งอันยิงขอไฟล์หลายสิบก้อนพร้อมกันบน
+        /// เน็ตมือถือ พลาดก้อนหนึ่ง = ของชิ้นนั้นกลายเป็นกล่องเทาทั้งรอบ และไม่มีอะไรลองใหม่ให้
+        /// ⇒ ลองซ้ำหนึ่งครั้งหลังเว้นจังหวะสั้น ๆ (ครั้งเดียวพอ: ถ้าล้มสองครั้งติดมักคือไม่มีเน็ตจริง
+        /// ซึ่งมีทางลงอยู่แล้ว — ใช้สำเนาเก่าในเครื่อง)
+        /// </summary>
+        public static async Task<byte[]> Download(string url)
+        {
+            byte[] first = await DownloadOnce(url);
+            if (first != null) return first;
+            await Task.Delay(700);
+            byte[] second = await DownloadOnce(url);
+            if (second == null) Debug.Log("[Cache] ยังโหลดไม่ได้หลังลองซ้ำ: " + url);
+            return second;
+        }
+
+        private static Task<byte[]> DownloadOnce(string url)
         {
             var tcs = new TaskCompletionSource<byte[]>();
             try
