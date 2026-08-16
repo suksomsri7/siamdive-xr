@@ -212,6 +212,10 @@ namespace DiveMap.Runtime
             // The random-start flag is consumed on ENTRY, whatever the map turns out to contain:
             // leaving it set because a warp gate answered first would drop the player somewhere
             // random the next time they opened the drone on a map with no gates.
+            //
+            // 🔴 16 ส.ค. 2026 — ธงนี้ไม่ใช่เงื่อนไขของการสุ่มอีกแล้ว (user: "map ที่ไม่มี warp ให้
+            // สุ่มเกิด") ⇒ แมพที่ไม่มีประตู = สุ่มทุกครั้ง ไม่ว่าจะเข้ามาทางไหน · ยังต้องล้างค่าที่นี่
+            // เหมือนเดิม ไม่งั้นมันจะค้างข้ามรอบ
             bool wantRandom = _randomSpawn;
             _randomSpawn = false;
 
@@ -222,10 +226,13 @@ namespace DiveMap.Runtime
             // Maps with no gate keep D9 exactly as it was.
             bool atWarp = TryWarpSpawn(ref start, ref startYaw);
 
-            // D9 — a player who arrived by "play", or through a warp gate, is dropped somewhere
-            // random instead (the web's enterTour(randomStart), builder.html:3722) so the same map
-            // is not the same dive twice. The two draws come from here so the maths stays pure.
-            if (!atWarp && wantRandom)
+            // D9 — ไม่มีประตูในแมพนี้ = สุ่มจุดเกิดเสมอ (user 16 ส.ค. 2026: "map ที่ไม่มี warp ให้
+            // สุ่มเกิดได้เลย") เดิมสุ่มเฉพาะตอนเข้ามาแบบ "เล่น" หรือมาจากการวาป ทางอื่นได้จุดเริ่ม
+            // ตายตัวจุดเดียวคือถอยหลังออกมามองกองของ ⇒ ดำแมพเดิมสิบรอบก็เห็นภาพเปิดเดิมสิบรอบ
+            //
+            // แมพที่มีประตูไม่เปลี่ยน: ที่นั่นกฎ E8 (เกิดข้างประตู) ยังมีความหมาย เพราะประตูคือ
+            // สิ่งเดียวในแมพที่แปลว่า "มาถึงแล้ว" — และตอนนี้ประตูโผล่เฉพาะแอดมินอยู่แล้ว
+            if (!atWarp)
             {
                 float mapR = SeabedGeom.SandRadius * Mathf.Max(_scaleX, _scaleZ);
                 var centre = new DroneFlight.Vec3(_homeCenter.x, _homeCenter.y, _homeCenter.z);
@@ -240,15 +247,12 @@ namespace DiveMap.Runtime
                 at.y = Mathf.Min(at.y, _waterLevel - 8f);
                 start = at;
                 startYaw = DroneFlight.YawToward(new DroneFlight.Vec3(at.x, at.y, at.z), centre);
-                Debug.Log($"[Tour] random spawn at ({at.x:F0},{at.y:F0},{at.z:F0}) mapR={mapR:F0}");
+                Debug.Log($"[Tour] random spawn at ({at.x:F0},{at.y:F0},{at.z:F0}) mapR={mapR:F0} " +
+                          $"askedRandom={wantRandom}");
                 Debug.Log($"[Tour] spawn=default mode=random " +
                           $"pos=({start.x:F1},{start.y:F1},{start.z:F1})");
             }
-            else if (!atWarp)
-            {
-                Debug.Log($"[Tour] spawn=default mode=fixed " +
-                          $"pos=({start.x:F1},{start.y:F1},{start.z:F1})");
-            }
+
 
             _state = new DroneFlight.State
             {
@@ -667,6 +671,11 @@ namespace DiveMap.Runtime
                 if (d < WarpGate.TriggerRadius && _warpArmed)
                 {
                     _warpArmed = false;
+                    // 🔴 โมดัลเลือกปลายทาง = ของแอดมินเท่านั้น (user 16 ส.ค. 2026)
+                    // ปกติผู้เล่นทั่วไปไม่มีทางมาถึงบรรทัดนี้ เพราะประตูไม่ถูกสร้างให้เขาเลย
+                    // (SceneBuilder) — ด่านนี้เป็นชั้นสอง เผื่อวันหนึ่งประตูกลับมาโผล่ให้ทุกคน
+                    // แล้วไม่มีใครนึกถึงว่าโมดัลนี้พาไปหน้าคลังแมพของทีม
+                    if (!Core.Account.IsAdmin) return;
                     AudioBank.PlaySfx("click");
                     Ui.Toast.ShowTr("ประตูวาป — เลือกแมพปลายทาง");
                     if (Ui.UiShell.Instance != null) Ui.UiShell.Instance.OpenWarpPicker();
