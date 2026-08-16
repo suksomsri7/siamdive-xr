@@ -8,10 +8,10 @@ namespace DiveMap.Tests
     /// The sculpted floor, in the terms a user sees it: "the trench I dug beside the wreck has
     /// to still be beside the wreck when the app draws it."
     ///
-    /// Scope note: these tests cover the NUMBERING only. The suspected angular mirror
-    /// (app segment j vs web segment seg−j, and the sign of areaSlopeZ) is documented on
-    /// SculptCoord and deliberately NOT implemented — no independent picture of the sand has
-    /// been taken that shows it, and a floor is not reshaped on an argument alone.
+    /// 🔴 16 ส.ค. 2026 — การสะท้อนเชิงมุมถูกแก้แล้ว (เจ้าของงานรายงาน "ปรับระดับในเว็บ เปิดใน
+    /// Unity กลับหัวกลับหาง" ซึ่งตรงกับที่คำนวณค้างไว้) ⇒ เทสชุดนี้ครอบทั้ง "เลขดัชนี" และ
+    /// "ทิศ" แล้ว · ส่วนเครื่องหมายของ areaSlopeZ อยู่ที่ SceneBuilder (คนละไฟล์ ตั้งใจให้
+    /// หมายเหตุชี้หากันไว้ เพราะแก้อันเดียวจะได้ร่องถูกที่แต่พื้นเอียงผิดทาง)
     /// </summary>
     public class SculptCoordTests
     {
@@ -37,11 +37,11 @@ namespace DiveMap.Tests
         }
 
         /// <summary>
-        /// A pit keeps its ring AND its segment — it must not slide around the compass, and it
-        /// must not move in or out from the middle of the map.
+        /// หลุมต้องอยู่วงเดิม (ระยะจากกลางแมพเท่าเดิม) และไปอยู่เซกเมนต์ที่ "สะท้อน" ของมัน —
+        /// เพราะ Unity z = −(web z) ⇒ มุม θ ของเว็บ = มุม −θ ของ Unity
         /// </summary>
         [Test]
-        public void APitKeepsItsRingAndSegment()
+        public void APitKeepsItsRingAndLandsOnTheMirroredSegment()
         {
             foreach (int ring in new[] { 1, 7, 14, 27, 28 })
             {
@@ -61,8 +61,9 @@ namespace DiveMap.Tests
                     }
                     Assert.AreNotEqual(-1, found, $"the pit at web ring {ring} seg {s} vanished");
                     Assert.AreEqual(-97f, app[found], 1e-6f);
-                    Assert.AreEqual(App(ring, s), found,
-                        $"web ring {ring} seg {s} must land on the app's ring {ring} seg {s}");
+                    int mirrored = SculptCoord.MirrorSeg(s, Seg);
+                    Assert.AreEqual(App(ring, mirrored), found,
+                        $"web ring {ring} seg {s} must land on the app's ring {ring} seg {mirrored}");
                 }
             }
         }
@@ -81,12 +82,26 @@ namespace DiveMap.Tests
             // raw: the app's index 0 (ring 1, seg 0) picked up the CENTRE's height
             Assert.AreEqual(-50f, web[App(1, 0)], 1e-6f, "raw read hands ring1/seg0 the centre value");
 
-            // fixed: it picks up ring 1 segment 0, as it should
+            // fixed: ring 1 segment 0 คือจุดบนแกน +x ซึ่งเป็นจุดเดียวที่การสะท้อนไม่ขยับ (seg 0)
             float[] app = SculptCoord.WebToApp(web, Rings, Seg);
             Assert.AreEqual(-97f, app[App(1, 0)], 1e-6f);
 
-            // and the shift is exactly one slot, all the way along
-            for (int i = 0; i < 200; i++) Assert.AreEqual(web[i + 1], app[i], 1e-6f, "sample " + i);
+            // ทุกช่องอ่านจากช่องที่สะท้อนแล้ว — ไม่ใช่เลื่อนหนึ่งช่องเฉยๆ อีกต่อไป
+            for (int r = 1; r <= 3; r++)
+                for (int j = 0; j < Seg; j++)
+                    Assert.AreEqual(web[Web(r, SculptCoord.MirrorSeg(j, Seg))], app[App(r, j)], 1e-6f,
+                                    $"ring {r} seg {j}");
+        }
+
+        /// <summary>การสะท้อนต้องเป็นฟังก์ชันที่สลับกลับตัวเองได้ ไม่งั้นเซฟแล้วเปิดใหม่จะเพี้ยนสะสม</summary>
+        [Test]
+        public void MirroringTwiceIsTheIdentity()
+        {
+            for (int j = 0; j < Seg; j++)
+                Assert.AreEqual(j, SculptCoord.MirrorSeg(SculptCoord.MirrorSeg(j, Seg), Seg));
+            Assert.AreEqual(0, SculptCoord.MirrorSeg(0, Seg), "เซกเมนต์ 0 อยู่บนแกน +x — สะท้อนแล้วอยู่ที่เดิม");
+            Assert.AreEqual(Seg / 2, SculptCoord.MirrorSeg(Seg / 2, Seg), "ครึ่งวง (แกน −x) ก็อยู่ที่เดิม");
+            Assert.AreEqual(Seg - 1, SculptCoord.MirrorSeg(1, Seg));
         }
 
         [Test]

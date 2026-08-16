@@ -1649,11 +1649,15 @@ namespace DiveMap.Runtime
             float scaleX = env != null ? (float)env.AreaScaleX : 1f;
             float scaleZ = env != null ? (float)env.AreaScaleZ : 1f;
             float slopeX = env != null ? (float)env.AreaSlopeX : 0f;
-            // 🟡 Read raw, on purpose. On paper this wants its sign flipped (the floor is built
-            // on Unity's z while items are placed at Unity z = −web z — see the remark on
-            // SculptCoord), but no picture of the sand has been taken that shows it, so the
-            // seabed's shape is left exactly as it shipped until one has.
-            float slopeZ = env != null ? (float)env.AreaSlopeZ : 0f;
+            // 🔴 กลับเครื่องหมาย (16 ส.ค. 2026) — คู่กับการสะท้อนเซกเมนต์ใน Core.SculptCoord
+            //
+            // พื้นถูกสร้างบนแกน z ของ Unity แต่ของทุกชิ้นถูกวางที่ Unity z = −(web z)
+            // (WebCoord.PositionToUnity) ⇒ ถ้าใช้ค่าความชันดิบ พื้นจะเอียงกลับด้านกับแมพที่วางอยู่
+            // บนมัน เจ้าของงานรายงานอาการนี้ตรงๆ ว่า "ปรับระดับในเว็บ เปิดใน Unity กลับหัวกลับหาง"
+            //
+            // ⚠️ สองที่นี้ต้องแก้พร้อมกันเสมอ: ร่อง (sculpt) กับความเอียง (slope) มาจากตัวเลข
+            // คนละชุด ถ้าแก้อันเดียว ร่องจะถูกที่แต่พื้นเอียงผิดทาง ซึ่งอ่านจากภาพยากกว่าเดิม
+            float slopeZ = env != null ? -(float)env.AreaSlopeZ : 0f;
             float waterLevel = env != null ? (float)env.WaterLevel : 4f;
             _waterLevel = waterLevel;
 

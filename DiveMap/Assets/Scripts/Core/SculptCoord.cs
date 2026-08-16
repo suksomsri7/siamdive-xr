@@ -18,15 +18,21 @@ namespace DiveMap.Core
     /// segment 0, when the web had written the CENTRE of the floor there — so every dune and
     /// trench came out one segment (3.75°) around from where it was dug.
     ///
-    /// 🟡 KNOWN, DELIBERATELY NOT FIXED HERE — the angular direction. This app builds its polar
-    /// grid on UNITY's z (SceneBuilder.BuildPolarGrid: <c>bz = sin(ang)</c>) while items are
-    /// placed at Unity z = −web z (WebCoord.PositionToUnity), which on paper means the app's
-    /// segment j holds the web's segment (seg − j), and that <c>env.areaSlopeZ</c> would need
-    /// its sign flipped too. Reading both files says so — but no independent picture of the SAND
-    /// has been taken that shows it, and a seabed is not something to reshape on an argument
-    /// alone. What would settle it: a render (or a depth ray) of the app's floor against the
-    /// web's on a map with a deep sculpt — Atlantis has a 97-unit trench and is the map for it.
-    /// Until then this converter changes the NUMBERING only, never the geometry.
+    /// ── 🔴 16 ส.ค. 2026: การกลับด้านเชิงมุม — แก้แล้ว ────────────────────────────────
+    /// เดิมจดไว้ว่า "รู้ว่าน่าจะกลับด้าน แต่ยังไม่แก้เพราะไม่มีภาพยืนยัน" · ตอนนี้เจ้าของงาน
+    /// รายงานอาการตรงกับที่คำนวณไว้เป๊ะ: "พื้นทรายปรับระดับในเว็บ พอเปิดใน Unity กลับหัวกลับหาง"
+    ///
+    /// ที่มา: แอปสร้างวงกริดบน z ของ **Unity** (<c>SceneBuilder.BuildPolarGrid: bz = sin(ang)</c>)
+    /// แต่ของทุกชิ้นในแมพถูกวางที่ Unity z = −(web z) (<c>WebCoord.PositionToUnity</c>) ⇒ จุดที่
+    /// ดัชนีเดียวกันของสองฝั่งอยู่คนละซีกของแกน X = พื้นทรายถูกสะท้อนกระจกเทียบกับซากเรือที่วาง
+    /// อยู่บนมัน · ร่องที่ขุดไว้ทางเหนือของแมพจึงไปโผล่ทางใต้
+    ///
+    /// แก้ที่ "การแปลงเลขดัชนี" ที่เดียว: app segment j ↔ web segment (seg − j) mod seg
+    /// (สลับกลับไปกลับมาได้ในตัว — ใช้สูตรเดียวกันทั้งขาเข้าและขาออก)
+    ///
+    /// 🔴 ความชันของพื้น (<c>env.areaSlopeZ</c>) ต้องกลับเครื่องหมายด้วยเหตุผลเดียวกัน และมันอยู่
+    /// คนละที่ (SceneBuilder อ่าน env) — สองอย่างนี้ต้องมาคู่กันเสมอ ไม่งั้นพื้นเอียงผิดทาง
+    /// ทั้งที่ร่องถูกที่
     /// </summary>
     public static class SculptCoord
     {
@@ -53,9 +59,31 @@ namespace DiveMap.Core
             if (web == null || rings <= 0 || seg <= 0) return web;
 
             var app = new float[AppLength(rings, seg)];
-            int from = IsWebLayout(web, rings, seg) ? 1 : 0;   // skip the web's centre slot
-            for (int i = 0; i < app.Length && i + from < web.Length; i++) app[i] = web[i + from];
+            bool fromWeb = IsWebLayout(web, rings, seg);
+            int from = fromWeb ? 1 : 0;   // skip the web's centre slot
+            for (int r = 1; r <= rings; r++)
+            {
+                for (int j = 0; j < seg; j++)
+                {
+                    // 🔴 สะท้อนเฉพาะของที่มาจาก "เว็บ" เท่านั้น · อาร์เรย์สั้น = งานที่ปั้นในแอปรุ่นเก่า
+                    // ซึ่งเขียนด้วยพิกัดของแอปอยู่แล้ว การสะท้อนมันคือการย้ายพื้นของคนที่ไม่ได้ขอ
+                    int src = from + (r - 1) * seg + (fromWeb ? MirrorSeg(j, seg) : j);
+                    if (src < web.Length) app[(r - 1) * seg + j] = web[src];
+                }
+            }
             return app;
+        }
+
+        /// <summary>
+        /// ดัชนีเซกเมนต์ของอีกฝั่ง — สะท้อนรอบแกน X เพราะ Unity z = −(web z).
+        /// เป็นฟังก์ชันที่สลับกลับตัวเองได้ (<c>Mirror(Mirror(j)) == j</c>) ⇒ ใช้ตัวเดียวกันทั้ง
+        /// ขาเข้าและขาออก ไม่มีทางที่สองทิศจะหลุดจากกัน
+        /// </summary>
+        public static int MirrorSeg(int j, int seg)
+        {
+            if (seg <= 0) return j;
+            int m = (seg - (j % seg)) % seg;
+            return m < 0 ? m + seg : m;
         }
 
         /// <summary>
@@ -70,7 +98,15 @@ namespace DiveMap.Core
 
             var web = new float[WebLength(rings, seg)];
             web[0] = app.Length > 0 ? app[0] : 0f;
-            for (int i = 0; i < app.Length && i + 1 < web.Length; i++) web[i + 1] = app[i];
+            for (int r = 1; r <= rings; r++)
+            {
+                for (int j = 0; j < seg; j++)
+                {
+                    int from = (r - 1) * seg + j;
+                    int to = 1 + (r - 1) * seg + MirrorSeg(j, seg);
+                    if (from < app.Length && to < web.Length) web[to] = app[from];
+                }
+            }
             return web;
         }
     }
