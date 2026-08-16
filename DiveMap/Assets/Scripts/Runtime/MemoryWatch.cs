@@ -53,6 +53,28 @@ namespace DiveMap.Runtime
 
         private void OnEnable() => Application.lowMemory += OnLowMemory;
 
+        /// <summary>
+        /// 🔴 16 ส.ค. 2026 — คืนแรมทันทีที่แอปถูกย่อลงไปอยู่เบื้องหลัง
+        ///
+        /// user รายงานอาการที่ปิดคดีนี้ได้: "หลุดตอนย่อแอปแล้วไปเข้าแอปอื่น พอกดกลับมาจะหลุด"
+        /// นั่นไม่ใช่การพัง แต่คือ iOS **เก็บกวาดแอปที่กินแรมมากที่สุด** เมื่อแอปอื่นต้องการแรม
+        /// — และเราคือเป้าหมายแรกเสมอ เพราะเครื่องยนต์ 3D ค้างอยู่ราว 1.3 GB แม้ผู้ใช้ไม่ได้ดู
+        ///
+        /// ก่อนหน้านี้ไม่มีใครคืนแรมตอนถูกย่อเลย · การคืนตอนนี้ไม่มีข้อเสียใด ๆ กับผู้ใช้:
+        /// จอไม่ได้แสดงอยู่แล้ว การเสียเวลาเก็บกวาดจึงไม่มีใครเห็น และของที่ถูกปล่อยคือของที่
+        /// ไม่มีใครอ้างถึงแล้วเท่านั้น (Unity จะโหลดกลับเองเมื่อจำเป็น)
+        ///
+        /// ⚠️ นี่คือ "ครึ่งแรก" ของการแก้ — ลดโอกาสถูกฆ่า แต่ไม่รับประกัน ถ้ายังไม่พอ ขั้นต่อไป
+        /// คือปล่อยแมพทั้งก้อนเมื่ออยู่เบื้องหลังนานเกินกำหนด แล้วโหลดใหม่ตอนกลับมา (มีราคาคือ
+        /// เวลาโหลด จึงต้องให้ user ตัดสินก่อน)
+        /// </summary>
+        private void OnApplicationPause(bool paused)
+        {
+            if (!paused) return;
+            Debug.LogWarning("[Memory] app backgrounded → relief pass (กันโดนระบบเก็บกวาด)");
+            Relieve();
+        }
+
         private void OnDisable() => Application.lowMemory -= OnLowMemory;
 
         private void OnDestroy()
@@ -89,11 +111,20 @@ namespace DiveMap.Runtime
                                  $"{MemoryRelief.MinGapSeconds}s quiet period — relief skipped");
                 return;
             }
-            _lastReliefAt = now;
+            Relieve();
+        }
 
-            // GC first: Resources.UnloadUnusedAssets only frees what nothing references any more,
-            // and a texture whose last managed reference is uncollected garbage is still "used".
-            // Doing it the other way round is the classic way to make this call look useless.
+        /// <summary>
+        /// คืนแรมหนึ่งรอบ. ใช้ร่วมกันระหว่าง "ระบบเตือนว่าแรมใกล้หมด" กับ "แอปถูกย่อลงเบื้องหลัง"
+        /// — งานเหมือนกันเป๊ะ ต่างกันแค่ใครเป็นคนเรียก
+        ///
+        /// 🔴 GC ก่อนเสมอ: UnloadUnusedAssets ปล่อยเฉพาะของที่ไม่มีใครอ้างถึงแล้ว และเท็กซ์เจอร์
+        /// ที่ผู้อ้างอิงตัวสุดท้ายยังเป็นขยะที่ยังไม่ถูกเก็บ ก็ยังนับว่า "ถูกใช้อยู่" — สลับลำดับกัน
+        /// คือวิธีคลาสสิกที่ทำให้การเรียกนี้ดูเหมือนไม่ได้ผลอะไรเลย
+        /// </summary>
+        private void Relieve()
+        {
+            _lastReliefAt = Time.realtimeSinceStartup;
             System.GC.Collect();
             System.GC.WaitForPendingFinalizers();
             AsyncOperation op = Resources.UnloadUnusedAssets();
