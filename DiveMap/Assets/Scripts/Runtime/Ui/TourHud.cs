@@ -179,6 +179,16 @@ namespace DiveMap.Runtime.Ui
             UiKit.Stretch(miniRim.rectTransform);
             MinimapWidget.Attach(mrt);
 
+            // 🔴 16 ส.ค. 2026 — ค่าเริ่มต้น _radarOn=false ไม่เคยมีผล เพราะมินิแมพถูกสร้างมาแบบ
+            // เปิดอยู่ และไม่มีใครสั่งซ่อนจนกว่าผู้ใช้จะกดปุ่มเอง ⇒ ต้องบังคับสภาพเริ่มต้นตรงนี้
+            // (ตัวแปรที่ไม่ได้ถูก "ใช้" ก็เป็นแค่ความตั้งใจ ไม่ใช่พฤติกรรม)
+            _minimap.SetActive(_radarOn);
+            if (_radar != null)
+            {
+                var rcg = _radar.GetComponent<CanvasGroup>() ?? _radar.gameObject.AddComponent<CanvasGroup>();
+                rcg.alpha = _radarOn ? 1f : 0.45f;
+            }
+
             Debug.Log($"[UI] tour hud css-laid-out dpr={UiKit.DevicePixelRatio:F2} " +
                       $"canvasScale={UiKit.CanvasScale:F3} 48css={UiKit.Css(48f):F0}u " +
                       $"stick={stick:F0}u");

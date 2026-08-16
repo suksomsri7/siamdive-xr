@@ -400,6 +400,9 @@ namespace DiveMap.Runtime
         private static void PreloadGameModels()
         {
             Transform parent = ModeManager.Instance != null ? ModeManager.Instance.transform : null;
+            // ระบบเกมปิดอยู่ ⇒ ไม่ต้องโหลดโมเดลขยะ (~26 MB ต่อแมพ) — ช่วยลดยอดใช้แรมตอนโหลด
+            // ซึ่งเป็นเรื่องเดียวกับที่ทำให้แอปถูกระบบฆ่าตอนเข้าแมพหนัก
+            if (!Core.GameFeature.Enabled) return;
             TrashGameSystem.PreloadTemplates(parent);
         }
 

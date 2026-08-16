@@ -57,6 +57,8 @@ namespace DiveMap.Runtime.Ui
 
         public static void Show(int coins)
         {
+            // ระบบเกมปิดอยู่ (user สั่ง 16 ส.ค. — ปิด ไม่ลบ) ⇒ ป้ายเหรียญกลางจอบนไม่ต้องขึ้น
+            if (!DiveMap.Core.GameFeature.Enabled) { Hide(); return; }
             CoinCounter c = Ensure();
             if (c == null) return;
             c._rt.gameObject.SetActive(true);

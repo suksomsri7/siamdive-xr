@@ -264,8 +264,11 @@ namespace DiveMap.Runtime
                                        _miniSolids, _miniSchools, _animals);
             if (_lights == null) _lights = DroneLights.Attach(transform);
             _lights.gameObject.SetActive(true);
-            _lights.Set(true);
-            if (_hud != null) _hud.SetHeadlight(true);
+            // 🔴 16 ส.ค. 2026 — user: "เริ่มเกมส์ เรด้ากับไฟ ปิดไว้ก่อน" (สั่งซ้ำรอบสอง)
+            // รอบแรกผมแก้แค่ค่าเริ่มต้นใน DroneLights แต่บรรทัดนี้สั่งเปิดทับทุกครั้งที่เข้าทัวร์
+            // ⇒ ค่าเริ่มต้นไม่เคยมีผลเลย · บทเรียน: ตั้งค่าเริ่มต้นแล้วต้องไล่ดูว่ามีใครสั่งทับไหม
+            _lights.Set(false);
+            if (_hud != null) _hud.SetHeadlight(false);
             _reef = UnityEngine.Object.FindFirstObjectByType<FishSchoolSystem>();
             InputRig.Clear();
             _active = true;
@@ -278,7 +281,9 @@ namespace DiveMap.Runtime
 
             // The clean-up game runs inside the tour only — the web is emphatic that litter must
             // not rain onto a map you are looking at or editing.
-            TrashGameSystem.Ensure(transform).Begin(_homeCenter, _waterLevel, _scaleX, _scaleZ, _solidGroups);
+            // ระบบเกมปิดอยู่ (Core.GameFeature) — ไม่เริ่มสร้างขยะและไม่โชว์ป้ายเหรียญ
+            if (Core.GameFeature.Enabled)
+                TrashGameSystem.Ensure(transform).Begin(_homeCenter, _waterLevel, _scaleX, _scaleZ, _solidGroups);
 
             // No toast here: the HUD's own hint line (#tourHud) says this permanently, and the web
             // does not double up. A toast on entry also fought the hint for the same screen space.
@@ -510,7 +515,7 @@ namespace DiveMap.Runtime
                 _lights.gameObject.SetActive(false);
             }
             AudioBank.StopAmbience();
-            TrashGameSystem.Ensure(transform).End();
+            if (Core.GameFeature.Enabled) TrashGameSystem.Ensure(transform).End();
             // The reef goes back to ignoring us.
             if (_reef != null) _reef.SetRepulsor(Vector3.zero, 0f);
             if (_orbit != null)
