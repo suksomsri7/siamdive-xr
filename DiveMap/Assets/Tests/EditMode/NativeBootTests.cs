@@ -48,6 +48,30 @@ namespace DiveMap.Tests
             Assert.AreEqual(true, a.LibraryMode);
         }
 
+        /// <summary>
+        /// ไฟล์ที่เจ้าบ้านโหลดไว้แล้ว ต้องเดินทางมาถึง Unity ครบ — นี่คือเส้นทางที่ทำให้ปุ่ม
+        /// "เก็บไว้ใช้ตอนไม่มีสัญญาณ" ในแอปมีความหมายกับจอ 3D (ก่อนหน้านี้สองฝั่งเก็บของแยกกัน)
+        /// </summary>
+        [Test]
+        public void HostAssetsArriveAsAMap()
+        {
+            string json = "{\"shortId\":\"abc\",\"assets\":{" +
+                          "\"/models/wreck/chang.glb\":\"/var/x/chang.glb\"," +
+                          "\"/models/coral/a.glb\":\"/var/x/a.glb\"}}";
+            Assert.IsTrue(NativeBoot.TryParse(json, out NativeBootArgs a));
+            Assert.IsNotNull(a.HostAssets);
+            Assert.AreEqual(2, a.HostAssets.Count);
+            Assert.AreEqual("/var/x/chang.glb", a.HostAssets["/models/wreck/chang.glb"]);
+        }
+
+        /// <summary>payload ที่ไม่มี assets ต้องไม่ล้างของเดิมทิ้ง (แมพที่สองมักส่งมาแค่ shortId)</summary>
+        [Test]
+        public void AbsentAssetsMeanNoNews_NotAnEmptyList()
+        {
+            Assert.IsTrue(NativeBoot.TryParse("{\"shortId\":\"abc\"}", out NativeBootArgs a));
+            Assert.IsNull(a.HostAssets);
+        }
+
         [Test]
         public void AuthToken_IsCarriedEvenThoughNothingConsumesItYet()
         {

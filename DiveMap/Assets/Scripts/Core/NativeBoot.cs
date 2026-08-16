@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using Newtonsoft.Json.Linq;
 
 namespace DiveMap.Core
@@ -57,6 +58,16 @@ namespace DiveMap.Core
         /// <see cref="BootMode.Parse"/> ซึ่งมีเทสของตัวเอง
         /// </summary>
         public string Mode;
+
+        /// <summary>
+        /// ไฟล์โมเดลที่ "เจ้าบ้านโหลดเก็บไว้แล้ว": { urlบนเซิร์ฟเวอร์ → path ในเครื่อง }
+        ///
+        /// 🔴 16 ส.ค. 2026 — ปิดช่องว่างที่ทำให้ผู้ใช้เจอ "กดเก็บลงเครื่องแล้ว แต่โมเดลยังไม่ครบ":
+        /// แอปกับ Unity ต่างมีคลังไฟล์ของตัวเองและไม่รู้จักกัน ⇒ ของที่ผู้ใช้อุตส่าห์ดาวน์โหลด
+        /// ตอนมีเน็ตไม่เคยถูกใช้เลย · รายการนี้ทำให้ Unity หยิบไฟล์ที่มีอยู่แล้วมาใช้ก่อนเสมอ
+        /// ว่าง = ไม่มีอะไรเปลี่ยน (ยังโหลดเองเหมือนเดิม)
+        /// </summary>
+        public Dictionary<string, string> HostAssets;
     }
 
     /// <summary>
@@ -225,6 +236,8 @@ namespace DiveMap.Core
             BadgeForced = next.Badge ?? false;
             EcoMode = next.Eco ?? false;
             HostMode = BootMode.Parse(next.Mode);
+            // payload ที่ไม่ได้ส่ง assets มา = ไม่มีข้อมูลใหม่ ⇒ เก็บของเดิมไว้ (อย่าล้างทิ้ง)
+            if (next.HostAssets != null) HostAssets = next.HostAssets;
         }
 
         /// <summary>
@@ -232,6 +245,16 @@ namespace DiveMap.Core
         /// เดี่ยว ซึ่งไม่มีใครส่งข้อความนี้เลย — พฤติกรรมเดิมจึงเป็นค่าตั้งต้น ไม่ใช่ทางแยกที่สอง
         /// </summary>
         public static BootMode.Requested HostMode { get; private set; }
+
+        /// <summary>ไฟล์ที่เจ้าบ้านมีอยู่แล้ว (ดู <see cref="NativeBootArgs.HostAssets"/>) — ว่างเสมอในบิลด์เดี่ยว</summary>
+        public static IReadOnlyDictionary<string, string> HostAssets { get; private set; }
+
+        /// <summary>path ในเครื่องของ url นี้ ถ้าเจ้าบ้านบอกมาว่ามี — ไม่งั้น null</summary>
+        public static string HostAsset(string url)
+        {
+            if (HostAssets == null || string.IsNullOrEmpty(url)) return null;
+            return HostAssets.TryGetValue(url, out string p) ? p : null;
+        }
 
         /// <summary>Back to "no host has spoken" — the standalone build's state, and every test's.</summary>
         public static void Reset()
@@ -244,6 +267,7 @@ namespace DiveMap.Core
             BadgeForced = false;
             EcoMode = false;
             HostMode = BootMode.Requested.None;
+            HostAssets = null;
         }
 
         /// <summary>
@@ -280,7 +304,21 @@ namespace DiveMap.Core
             args.Badge = Flag(root["badge"]);
             args.Eco = Flag(root["eco"]);
             args.Mode = Text(root["mode"]);
+            args.HostAssets = Map(root["assets"]);
             return true;
+        }
+
+        /// <summary>ออบเจ็กต์ JSON → พจนานุกรมสตริง (คีย์/ค่าที่ไม่ใช่สตริงถูกข้าม)</summary>
+        private static Dictionary<string, string> Map(JToken token)
+        {
+            if (!(token is JObject obj)) return null;
+            var d = new Dictionary<string, string>(StringComparer.Ordinal);
+            foreach (var kv in obj)
+            {
+                string v = Text(kv.Value);
+                if (!string.IsNullOrEmpty(kv.Key) && !string.IsNullOrEmpty(v)) d[kv.Key] = v;
+            }
+            return d.Count > 0 ? d : null;
         }
 
         /// <summary>

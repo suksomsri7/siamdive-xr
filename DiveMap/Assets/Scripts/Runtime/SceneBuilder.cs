@@ -732,6 +732,14 @@ namespace DiveMap.Runtime
         {
             if (!DiveMap.Core.AssetCache.IsCacheable(url)) return url;
 
+            // 🔴 ของที่เจ้าบ้านโหลดเก็บไว้ให้แล้ว มาก่อนเสมอ (16 ส.ค. 2026)
+            // ผู้ใช้กด "เก็บไว้ใช้ตอนไม่มีสัญญาณ" ในแอป = ไฟล์อยู่ในเครื่องแล้ว การให้ Unity
+            // ไปโหลดซ้ำเองคือการทำให้ปุ่มนั้นไม่มีความหมาย และเป็นเหตุที่ผู้ใช้เจอ "โหลดแล้ว
+            // แต่โมเดลไม่ครบ" ซ้ำ ๆ เมื่อเน็ตไม่ดี
+            string fromHost = DiveMap.Core.NativeBoot.HostAsset(url);
+            if (!string.IsNullOrEmpty(fromHost))
+                return fromHost.StartsWith("file://", StringComparison.Ordinal) ? fromHost : "file://" + fromHost;
+
             string local = AssetCacheStore.Resolve(url);
             if (!ReferenceEquals(local, url) && local != url) return local;   // current copy on the device
 
