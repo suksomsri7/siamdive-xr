@@ -52,6 +52,15 @@ namespace DiveMap.Runtime.Ui
         // 16 ส.ค. 2026 — user: "เริ่มเกมส์ เรด้ากับไฟ ปิดไว้ก่อน"
         // เว็บเปิดมินิแมพไว้ตั้งแต่ต้น แต่บนมือถือมันกินกลางจอล่างซึ่งเป็นที่ที่คนมองฉากมากที่สุด
         private bool _radarOn = false;
+
+        /// <summary>
+        /// เรดาร์ (ปุ่ม + มินิแมพ) — ปิดชั่วคราว (user 16 ส.ค. 2026: "โหมดโดรนทัวร์ เอา icon
+        /// เรดาห์ ออกชั่วคราว แต่ให้ย้าย icon เข็มทิศมาแทน")
+        ///
+        /// 🔴 ปิดด้วยสวิตช์ ไม่ลบโค้ด — แบบเดียวกับระบบเหรียญ/ขยะ (Core.GameFeature): ผู้ใช้บอกว่า
+        /// "ชั่วคราว" และมินิแมพผูกกับ MinimapWidget ที่มีเทสอยู่ การลบทิ้งแล้วเขียนใหม่แพงกว่า
+        /// การปล่อยให้คอมไพล์ต่อไปมาก · เปิดคืน = เปลี่ยนค่านี้เป็น true ที่เดียว
+        private const bool RadarEnabled = false;
         private Image _vignette;
 
         /// <summary>
@@ -147,8 +156,10 @@ namespace DiveMap.Runtime.Ui
             // the web declares _muteFloat and never builds it, so there is no web position to
             // match — it goes in the next slot down rather than displacing a control the diver
             // may already know where to find.
-            _radar = RoundButton(root, "TourRadar", "radar", Chrome, 56f, 2.5f, new Vector2(0f, 1f),
-                                 new Vector2(UiKit.Css(14f), -UiKit.Css(174f)), ToggleRadar);
+            // ช่องนี้ตอนนี้เป็นของ **เข็มทิศ** (ดู CompassWidget.SetTourLayout) — เรดาร์ปิดชั่วคราว
+            if (RadarEnabled)
+                _radar = RoundButton(root, "TourRadar", "radar", Chrome, 56f, 2.5f, new Vector2(0f, 1f),
+                                     new Vector2(UiKit.Css(14f), -UiKit.Css(174f)), ToggleRadar);
 
             // ── camera: RIGHT 14 / TOP 104 (#tourCam; #tourRec cut from v1) ─────
             RoundButton(root, "TourShot", "camera", Chrome, 56f, 2.5f, new Vector2(1f, 1f),
@@ -165,29 +176,32 @@ namespace DiveMap.Runtime.Ui
             RenderMute();
 
             // ── minimap: bottom 16, centred, 118 px ─────────────────────────────
-            Image mini = UiKit.MakeCircle(root, "Minimap", Chrome);
-            mini.raycastTarget = false;
-            _minimap = mini.gameObject;
-            RectTransform mrt = mini.rectTransform;
-            mrt.anchorMin = new Vector2(0.5f, 0f);
-            mrt.anchorMax = new Vector2(0.5f, 0f);
-            mrt.pivot = new Vector2(0.5f, 0f);
-            mrt.sizeDelta = new Vector2(UiKit.Css(118f), UiKit.Css(118f));
-            mrt.anchoredPosition = new Vector2(0f, UiKit.Css(16f));
-            Image miniRim = UiKit.MakeCircle(mrt, "Rim", MiniRim, 0.03f);
-            miniRim.raycastTarget = false;
-            UiKit.Stretch(miniRim.rectTransform);
-            MinimapWidget.Attach(mrt);
-
-            // 🔴 16 ส.ค. 2026 — ค่าเริ่มต้น _radarOn=false ไม่เคยมีผล เพราะมินิแมพถูกสร้างมาแบบ
-            // เปิดอยู่ และไม่มีใครสั่งซ่อนจนกว่าผู้ใช้จะกดปุ่มเอง ⇒ ต้องบังคับสภาพเริ่มต้นตรงนี้
-            // (ตัวแปรที่ไม่ได้ถูก "ใช้" ก็เป็นแค่ความตั้งใจ ไม่ใช่พฤติกรรม)
-            _minimap.SetActive(_radarOn);
-            if (_radar != null)
+            if (RadarEnabled)
             {
-                var rcg = _radar.GetComponent<CanvasGroup>() ?? _radar.gameObject.AddComponent<CanvasGroup>();
-                rcg.alpha = _radarOn ? 1f : 0.45f;
-            }
+                Image mini = UiKit.MakeCircle(root, "Minimap", Chrome);
+                mini.raycastTarget = false;
+                _minimap = mini.gameObject;
+                RectTransform mrt = mini.rectTransform;
+                mrt.anchorMin = new Vector2(0.5f, 0f);
+                mrt.anchorMax = new Vector2(0.5f, 0f);
+                mrt.pivot = new Vector2(0.5f, 0f);
+                mrt.sizeDelta = new Vector2(UiKit.Css(118f), UiKit.Css(118f));
+                mrt.anchoredPosition = new Vector2(0f, UiKit.Css(16f));
+                Image miniRim = UiKit.MakeCircle(mrt, "Rim", MiniRim, 0.03f);
+                miniRim.raycastTarget = false;
+                UiKit.Stretch(miniRim.rectTransform);
+                MinimapWidget.Attach(mrt);
+
+                // 🔴 16 ส.ค. 2026 — ค่าเริ่มต้น _radarOn=false ไม่เคยมีผล เพราะมินิแมพถูกสร้างมาแบบ
+                // เปิดอยู่ และไม่มีใครสั่งซ่อนจนกว่าผู้ใช้จะกดปุ่มเอง ⇒ ต้องบังคับสภาพเริ่มต้นตรงนี้
+                // (ตัวแปรที่ไม่ได้ถูก "ใช้" ก็เป็นแค่ความตั้งใจ ไม่ใช่พฤติกรรม)
+                _minimap.SetActive(_radarOn);
+                if (_radar != null)
+                {
+                    var rcg = _radar.GetComponent<CanvasGroup>() ?? _radar.gameObject.AddComponent<CanvasGroup>();
+                    rcg.alpha = _radarOn ? 1f : 0.45f;
+                }
+            }   // end RadarEnabled
 
             Debug.Log($"[UI] tour hud css-laid-out dpr={UiKit.DevicePixelRatio:F2} " +
                       $"canvasScale={UiKit.CanvasScale:F3} 48css={UiKit.Css(48f):F0}u " +

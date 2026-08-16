@@ -103,21 +103,27 @@ namespace DiveMap.Runtime.Ui
 
         /// <summary>
         /// The web does NOT hide the compass in the tour — it MOVES it (builder.html:234):
-        /// <c>body.tour #compass{right:138px; top:max(15px,safe); 44×44; bg rgba(7,26,42,.5);
-        /// border:2px rgba(255,255,255,.8)}</c>, i.e. up beside the depth pill, 138 px in from the
-        /// right so it clears it. In the map view it sits at right 12 / bottom 80 at 48 px.
+        /// <c>body.tour #compass{right:138px; top:max(15px,safe)}</c>, up beside the depth pill.
+        ///
+        /// 🔴 16 ส.ค. 2026 — เราไม่ตามเว็บตรงนี้แล้ว. user: "โหมดโดรนทัวร์ เอา icon เรดาห์ ออก
+        /// ชั่วคราว แต่ให้ย้าย icon เข็มทิศมาแทน" ⇒ เข็มทิศไปอยู่ **ช่องของเรดาร์** คือรางซ้าย
+        /// 14 / บน 174 ขนาด 56 px ต่อจากปุ่มออก (14/14) และปุ่มไฟ (14/104) พอดี
+        ///
+        /// ทำไมถึงดีกว่าที่เดิม: ที่เดิมมันลอยเดี่ยวๆ ข้างป้ายความลึกมุมบนขวา ซึ่งเป็นมุมที่
+        /// ไม่มีอะไรให้กดเลย ส่วนรางซ้ายคือที่ที่นิ้วโป้งอยู่แล้วตอนบังคับจอย — และช่องนั้นกำลัง
+        /// ว่างพอดีเพราะเรดาร์ถูกปิด (ดู TourHud.RadarEnabled) จึงไม่มีอะไรต้องขยับหนี
         /// </summary>
         public void SetTourLayout(bool tour)
         {
             if (_rt == null) return;
 
-            float size = UiKit.Css(tour ? 44f : 48f);
+            float size = UiKit.Css(tour ? 56f : 48f);   // 56 = ขนาดปุ่มในรางซ้ายของทัวร์
             _rt.sizeDelta = new Vector2(size, size);
 
             if (tour)
             {
-                _rt.anchorMin = _rt.anchorMax = _rt.pivot = new Vector2(1f, 1f);
-                _rt.anchoredPosition = new Vector2(-UiKit.Css(138f), -UiKit.Css(15f));
+                _rt.anchorMin = _rt.anchorMax = _rt.pivot = new Vector2(0f, 1f);
+                _rt.anchoredPosition = new Vector2(UiKit.Css(14f), -UiKit.Css(174f));
             }
             else
             {
@@ -135,7 +141,7 @@ namespace DiveMap.Runtime.Ui
             }
             if (_needle != null)
             {
-                float n = UiKit.Css(tour ? 27f : 30f);
+                float n = UiKit.Css(tour ? 34f : 30f);   // เข็มโตตามหน้าปัดที่ใหญ่ขึ้นเป็น 56
                 _needle.sizeDelta = new Vector2(n, n);
             }
         }
