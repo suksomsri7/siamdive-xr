@@ -186,7 +186,15 @@ namespace DiveMap.Runtime
 
         private static bool InitialiseXr()
         {
-            if (_manager != null && _manager.activeLoader != null) return true;
+            if (_manager != null && _manager.activeLoader != null)
+            {
+                // 🔴 16 ส.ค. 2026 — รอบสองเป็นต้นไปมาทางนี้ และเดิม "คืน true เฉย ๆ"
+                // ซึ่งแปลว่า subsystem ที่ถูกหยุดไปตอนออกจาก AR ไม่เคยถูกสตาร์ทกลับ
+                // ⇒ เซสชันใหม่ไม่มีกล้อง ไม่มี tracking = จอดำ (user รายงานซ้ำสองรอบ)
+                _manager.StartSubsystems();
+                Debug.Log("[ARKit] XR already loaded — subsystems restarted");
+                return true;
+            }
 
             // Path 1 — the settings asset, if Unity managed to deliver one through Preloaded
             // Assets (CIBuild.PreloadXrSettings puts it there). Its XRGeneralSettings.Awake sets
@@ -317,7 +325,12 @@ namespace DiveMap.Runtime
 
         private void BuildRig()
         {
-            _session = gameObject.AddComponent<ARSession>();
+            // ARSession เป็น [DisallowMultipleComponent] เช่นกัน และตัวเดิมถูก Destroy ไปตอนออก
+            // (Destroy เลื่อนไปปลายเฟรม) ⇒ ถ้าเข้า AR ซ้ำเร็วพอ AddComponent จะเงียบ ๆ ไม่สำเร็จ
+            // แล้วเราจะถือ reference ที่เป็น null · หยิบของเดิมมาใช้ก่อนเสมอจึงปลอดภัยกว่า
+            _session = gameObject.GetComponent<ARSession>();
+            if (_session == null) _session = gameObject.AddComponent<ARSession>();
+            else _session.enabled = true;
 
             // 🔴 ARInputManager is [DisallowMultipleComponent], and this used to add one every
             // time without ever removing it. That single line is what "the first time is right,
@@ -823,20 +836,28 @@ namespace DiveMap.Runtime
 
             if (_origin != null) Destroy(_origin.gameObject);
             if (_session != null) Destroy(_session);
-            if (_input != null) Destroy(_input);
+            // 🔴 ไม่ทำลาย ARInputManager: มันเป็น [DisallowMultipleComponent] และ OnEnable ของมัน
+            // คือจังหวะเดียวที่จะไปหยิบ input subsystem มาถือ — ทำลายแล้วสร้างใหม่ในรอบถัดไป
+            // เคยทำให้ท่ากล้องค้าง (ดูหมายเหตุยาวใน BuildRig) · ปิดไว้เฉย ๆ แล้วเปิดใหม่ปลอดภัยกว่า
+            if (_input != null) _input.enabled = false;
 
             // Every field that held a component of the rig, cleared. A destroyed Unity object
             // compares equal to null, so leaving them set is survivable — but the ONE that was not
             // destroyed was invisible precisely because everything else in this list was, and the
             // next person reading it could not tell the difference.
             _session = null; _origin = null; _planes = null; _raycast = null;
-            _anchors = null; _input = null; _background = null;
+            _anchors = null; _background = null;   // _input ถูกเก็บไว้ใช้ต่อ (ดูด้านบน)
 
-            if (_manager != null && _manager.activeLoader != null)
-            {
-                _manager.StopSubsystems();
-                _manager.DeinitializeLoader();
-            }
+            // 🔴 หยุด subsystem ได้ แต่ **ห้าม DeinitializeLoader** (16 ส.ค. 2026)
+            //
+            // อาการที่ทำให้ต้องเปลี่ยน: ออกจาก AR ของแมพแรก แล้วเปิดแมพที่สอง — ไม่ว่าจะเข้า AR
+            // หรือแม้แต่โหมดดูธรรมดา ก็จอดำ และโหมดโดรนก็ค้างขยับไม่ได้ทั้งจอ ⇒ ไม่ใช่แค่ AR พัง
+            // แต่ทั้งเครื่องเล่นพังหลังจากถอนแล้วโหลด loader ใหม่ในโปรเซสเดียวกัน ซึ่งเป็นท่าที่
+            // ARKit ไม่รองรับจริงจัง (เอกสารของ Unity เองก็เตือนเรื่อง initialize ซ้ำ)
+            //
+            // ราคาที่จ่ายแทน: ARKit ยังถูกโหลดค้างในหน่วยความจำหลังใช้ครั้งแรก — ยอมรับได้ เพราะ
+            // subsystem ถูกหยุดแล้ว (ไม่กินกล้อง ไม่กินแบต) และผู้ใช้ที่เข้า AR หนึ่งครั้งมักเข้าอีก
+            if (_manager != null && _manager.activeLoader != null) _manager.StopSubsystems();
             Debug.Log($"[ARKit] end step={_step}");
             _step = ArStep.Searching;
         }
