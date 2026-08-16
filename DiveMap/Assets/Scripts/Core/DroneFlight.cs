@@ -87,10 +87,10 @@ namespace DiveMap.Core
         /// โดยอัตโนมัติ — เกณฑ์ "ว่ายเร็วพอจะทำให้ฝูงตกใจ" ยังเป็นสัดส่วนเดิมของความเร็วเต็ม
         /// ซึ่งเป็นสิ่งที่ตั้งใจตั้งแต่แรก (ดูคอมเมนต์บน DiverPanicSpeed)
         /// </summary>
-        // 15 ส.ค. 2026 — user ขอช้าลงสามรอบ: 30 (เว็บ) → 24 → 18 → 15 u/s = 2.50 m/s
-        // ⚠️ FleeMath.DiverPanicSpeed = 11/30 ของค่านี้ จึงเลื่อนตามเป็น 5.5 u/s โดยอัตโนมัติ
+        // ส.ค. 2026 — user ขอช้าลงสี่รอบ: 30 (เว็บ) → 24 → 18 → 15 → 12 u/s = 2.00 m/s
+        // ⚠️ FleeMath.DiverPanicSpeed = 11/30 ของค่านี้ จึงเลื่อนตามเป็น 4.4 u/s โดยอัตโนมัติ
         // (เกณฑ์ "ว่ายเร็วจนฝูงปลาตกใจ" ยังเป็นสัดส่วนเดิมของความเร็วเต็ม — ตั้งใจตั้งแต่แรก)
-        public const float Speed = 15f;         // u/s = 2.50 m/s (เว็บ 3770 = 30; user ขอช้าลง 3 รอบ)
+        public const float Speed = 12f;         // u/s = 2.00 m/s (เว็บ 3770 = 30; user ขอช้าลง 4 รอบ)
         public const float StrafeRatio = 1f;    // the web strafes at SP   — builder.html:3770-3771
         public const float AscendRatio = 0.72f; // builder.html:3771 — ty = lift·SP·0.72
         public const float DescendRatio = 0.72f;// …the same factor both ways; the web has one term

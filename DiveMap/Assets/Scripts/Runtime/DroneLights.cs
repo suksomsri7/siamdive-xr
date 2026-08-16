@@ -27,7 +27,10 @@ namespace DiveMap.Runtime
         private Light _lampA, _lampB;
         private Transform _poolA, _poolB;
         private Transform _beamA, _beamB;
-        private bool _on = true;
+        // 16 ส.ค. 2026 — user: "เริ่มเกมส์ เรด้ากับไฟ ปิดไว้ก่อน"
+        // เริ่มด้วยไฟดับ = เห็นแสงธรรมชาติใต้น้ำก่อน แล้วค่อยเปิดไฟเองเมื่ออยากส่องของใกล้ ๆ
+        // (ไฟที่ติดมาแต่แรกทำให้ทุกแมพเปิดมาหน้าตาเหมือนกันหมด)
+        private bool _on = false;
 
         // Scene atmosphere as it was before the tour.
         private bool _savedFog;
@@ -165,10 +168,10 @@ namespace DiveMap.Runtime
             DiveLightMath.Atmosphere a = DiveLightMath.For(_on);
 
             _dive.intensity = a.DiveLight;
-            // 15 ส.ค. 2026 — user ขอลดสองรอบ: 2.6 → 1.7 → 1.5 ต่อดวง (สองดวงรวมกัน
+            // ส.ค. 2026 — user ขอลดสามรอบ: 2.6 → 1.7 → 1.5 → 1.3 ต่อดวง (สองดวงรวมกัน
             // จึงยังสว่างกว่าไฟหนึ่งดวงของเว็บ) · ค่านี้คู่กับระยะที่ลดลงใน DiveLightMath.LampRange
-            _lampA.intensity = _on ? 1.5f : 0f;
-            _lampB.intensity = _on ? 1.5f : 0f;
+            _lampA.intensity = _on ? 1.3f : 0f;
+            _lampB.intensity = _on ? 1.3f : 0f;
             _poolA.gameObject.SetActive(_on);
             _poolB.gameObject.SetActive(_on);
             _beamA.gameObject.SetActive(_on);

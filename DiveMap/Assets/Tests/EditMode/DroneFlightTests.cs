@@ -179,7 +179,7 @@ namespace DiveMap.Tests
             // 🔴 ตัวเดียวในไฟล์นี้ที่ไม่ใช่ค่าเว็บอีกต่อไป: user สั่งลด 9 ส.ค. ("โดรนเคลื่อนที่
             // ช้าลงอีกนิด") · ค่าเว็บคือ 30 ส่วนที่ใช้จริงคือ 24 = 80% · เลขอื่นทุกตัวในเทสนี้
             // ยังตรึงกับ builder.html เหมือนเดิม
-            Assert.AreEqual(15f, DroneFlight.Speed, 1e-6f, "user 15 ส.ค. — เว็บ 3770 SP=30 × 0.5 (ขอช้าลงรอบสาม)");
+            Assert.AreEqual(12f, DroneFlight.Speed, 1e-6f, "user 16 ส.ค. — เว็บ 3770 SP=30 × 0.4 (ขอช้าลงรอบสี่)");
             Assert.AreEqual(1f, DroneFlight.StrafeRatio, 1e-6f, "builder.html:3770 — strafe=rx");
             Assert.AreEqual(0.72f, DroneFlight.AscendRatio, 1e-6f, "builder.html:3771");
             Assert.AreEqual(0.72f, DroneFlight.DescendRatio, 1e-6f, "builder.html:3771 — one factor");
@@ -202,21 +202,22 @@ namespace DiveMap.Tests
             Assert.AreEqual(6.0, ItemPicker.UnitsPerMetre, 1e-9,
                             "the whole conversion hangs off this — see builder.html U_PER_M");
 
-            // 5.00 → 4.00 (9 ส.ค.) → 3.00 → 2.50 m/s (15 ส.ค. user ขอช้าลงอีกสองรอบ)
+            // 5.00 → 4.00 (9 ส.ค.) → 3.00 → 2.50 → 2.00 m/s (15-16 ส.ค. user ขอช้าลงอีกสามรอบ)
             // อัตราส่วนขึ้น/ลง/สไลด์ยังเป็นของเว็บทั้งหมด — ลดเฉพาะความเร็วฐาน
-            Assert.AreEqual(2.5f, DroneFlight.MetresPerSecond(DroneFlight.Speed), 0.01f);
-            Assert.AreEqual(2.5f, DroneFlight.MetresPerSecond(DroneFlight.Speed * DroneFlight.StrafeRatio), 0.01f);
-            Assert.AreEqual(1.80f, DroneFlight.MetresPerSecond(DroneFlight.Speed * DroneFlight.AscendRatio), 0.01f);
-            Assert.AreEqual(1.80f, DroneFlight.MetresPerSecond(DroneFlight.Speed * DroneFlight.DescendRatio), 0.01f);
+            Assert.AreEqual(2.0f, DroneFlight.MetresPerSecond(DroneFlight.Speed), 0.01f);
+            Assert.AreEqual(2.0f, DroneFlight.MetresPerSecond(DroneFlight.Speed * DroneFlight.StrafeRatio), 0.01f);
+            Assert.AreEqual(1.44f, DroneFlight.MetresPerSecond(DroneFlight.Speed * DroneFlight.AscendRatio), 0.01f);
+            Assert.AreEqual(1.44f, DroneFlight.MetresPerSecond(DroneFlight.Speed * DroneFlight.DescendRatio), 0.01f);
 
             // And the preset that carries build 261's drone forward for anyone who preferred it.
             // 0.30 is SettingsStore.CalmSpeedScale, inlined: SettingsStore needs PlayerPrefs and so
             // cannot be compiled into tools/test.sh's harness.
             // 0.6 = SettingsStore.CalmSpeedScale (inline: SettingsStore ต้องใช้ PlayerPrefs จึง
             // คอมไพล์เข้า harness ของ tools/test.sh ไม่ได้) — ยังเท่ากับโดรน build 261 พอดี
-            // 🔴 เทสนี้คือด่านที่ควรจับได้ตั้งแต่บนเครื่อง: 15 ส.ค. ลดความเร็วฐานแล้วลืมขยับสเกลนี้
-            // CI จับได้ (SettingsStoreTests) แต่เครื่องนี้ไม่จับ เพราะเทสตัวนั้นอยู่แต่ใน CI
-            Assert.AreEqual(1.5f, DroneFlight.MetresPerSecond(DroneFlight.Speed * 0.6f), 0.01f);
+            // 🔴 ด่านที่ควรจับได้ตั้งแต่บนเครื่อง: 15 ส.ค. ลดความเร็วฐานแล้วลืมขยับสเกลนี้ · CI จับได้
+            // (SettingsStoreTests) แต่เครื่องนี้ไม่จับ เพราะเทสตัวนั้นอยู่แต่ใน CI
+            // 16 ส.ค.: ฐาน 12 × 0.6 = 7.2 u/s = 1.20 m/s (เลิกผูกกับ build 261 แล้ว — ดู SettingsStore)
+            Assert.AreEqual(1.2f, DroneFlight.MetresPerSecond(DroneFlight.Speed * 0.6f), 0.01f);
         }
 
         /// <summary>
@@ -548,20 +549,24 @@ namespace DiveMap.Tests
         private static float Mathf90() => (float)(System.Math.PI / 2.0);
     
         /// <summary>
-        /// 🔴 ด่านที่ 15 ส.ค. 2026 ควรจับได้ตั้งแต่บนเครื่อง แต่ไม่จับ (เทสตัวจริงอยู่แต่ใน CI
-        /// เพราะ SettingsStore ต้องใช้ PlayerPrefs) ⇒ เสียรอบ CI ไปสองรอบกับความพลาดเดียว
+        /// พรีเซ็ตความเร็วต้องต่างกันพอให้ "รู้สึกได้" — ด่านที่ 15 ส.ค. 2026 ควรจับได้ตั้งแต่บน
+        /// เครื่องแต่ไม่จับ (เทสตัวจริงอยู่แต่ใน CI เพราะ SettingsStore ต้องใช้ PlayerPrefs)
+        /// ⇒ เสียรอบ CI ไปสองรอบกับความพลาดเดียว จึงมีฝาแฝดตัวนี้ไว้ที่นี่
         ///
-        /// สัญญาที่ตรึงไว้: พรีเซ็ต "ช้า" ต้องยังเท่ากับโดรนของ build 261 (9 u/s) เป๊ะ ⇒ สเกลของมัน
-        /// ไม่ใช่ตัวเลขอิสระ แต่คือ 9 ÷ ความเร็วฐาน · ทุกครั้งที่ลดความเร็วฐาน ต้องขยับตาม
-        /// (ค่าจริงอยู่ที่ SettingsStore.CalmSpeedScale — ที่นี่เขียนซ้ำเพราะคอมไพล์ตัวนั้นไม่ได้)
+        /// 🔴 สัญญาเดิม "ช้า = โดรนของ build 261 (9 u/s) เป๊ะ" หมดอายุแล้วเมื่อ user ขอลดความเร็ว
+        /// ฐานลงจนเหลือ 12 u/s (ห่างจาก 9 แค่ 25% ⇒ พรีเซ็ตจะไม่มีความหมาย) · ที่ยังต้องจริงคือ
+        /// "ช้า" ช้ากว่า "ปกติ" อย่างรู้สึกได้ และไม่ช้าจนข้ามไซต์ไม่ไหว
         /// </summary>
         [Test]
-        public void CalmPreset_StillReproducesBuild261()
+        public void CalmPreset_IsClearlySlower_ButStillUsable()
         {
             const float calmScale = 0.6f;      // = SettingsStore.CalmSpeedScale
-            const float build261Speed = 9f;    // u/s — โดรนที่ user เคยเลือกไว้
-            Assert.AreEqual(build261Speed, DroneFlight.Speed * calmScale, 0.05f,
-                            "ลดความเร็วฐานแล้วลืมขยับ CalmSpeedScale — 'ช้า' จะไม่ใช่ build 261 อีกต่อไป");
+            float calm = DroneFlight.MetresPerSecond(DroneFlight.Speed * calmScale);
+            float normal = DroneFlight.MetresPerSecond(DroneFlight.Speed);
+
+            Assert.Less(calmScale, 0.75f, "ถ้า 'ช้า' ไม่ช้ากว่าชัดเจน การตั้งค่านี้ก็ไม่มีประโยชน์");
+            Assert.Less(calm, normal);
+            Assert.Greater(calm, 0.5f, "ช้าจนข้ามไซต์ไม่ไหว = ปัญหาอีกด้านที่เคยโดนรายงานมาแล้ว");
         }
 }
 }

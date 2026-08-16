@@ -49,7 +49,9 @@ namespace DiveMap.Runtime.Ui
         private Button _mute;
         private Button _radar;
         private GameObject _minimap;
-        private bool _radarOn = true;   // the web starts with the minimap visible in a tour
+        // 16 ส.ค. 2026 — user: "เริ่มเกมส์ เรด้ากับไฟ ปิดไว้ก่อน"
+        // เว็บเปิดมินิแมพไว้ตั้งแต่ต้น แต่บนมือถือมันกินกลางจอล่างซึ่งเป็นที่ที่คนมองฉากมากที่สุด
+        private bool _radarOn = false;
         private Image _vignette;
 
         /// <summary>

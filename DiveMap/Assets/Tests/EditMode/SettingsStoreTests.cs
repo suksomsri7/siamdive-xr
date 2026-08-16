@@ -217,13 +217,11 @@ namespace DiveMap.Tests
             Assert.Less(calmScale, 0.75f, "if 'ช้า' is not clearly slower, the setting does nothing");
             Assert.Greater(fastScale, 1.05f, "…and the same for 'เร็ว'");
 
-            // 🔴 The migration promise, from SettingsStore.CalmSpeedScale: "ช้า" reproduces the
-            // drone of build 261 EXACTLY, so the person who liked that pace still has it. 9 u/s is
-            // the old DroneFlight.Speed, quoted as the historical constant it is.
-            const float build261Speed = 9f;   // u/s — DroneFlight.Speed before 2026-08-04
-            Assert.AreEqual(build261Speed, DroneFlight.Speed * calmScale, 0.05f,
-                            "🔴 'ช้า' must keep reproducing build 261's drone");
-            Assert.AreEqual(DroneFlight.MetresPerSecond(build261Speed), calm, 0.02f);
+            // 🔴 16 ส.ค. 2026 — คำสัญญาเดิม ("ช้า" = โดรนของ build 261 คือ 9 u/s เป๊ะ) ถูกปลดแล้ว
+            // โดยเจตนา: user ขอลดความเร็วฐานสี่รอบจนเหลือ 12 u/s ซึ่งห่างจาก 9 เพียง 25% ⇒ ถ้ายัง
+            // ตรึงไว้ พรีเซ็ต "ช้า" จะแทบไม่ต่างจาก "ปกติ" และการตั้งค่าก็ไร้ความหมาย
+            // ที่ยังต้องจริงคือความสัมพันธ์ ไม่ใช่ตัวเลขในอดีต — ตรึงไว้ข้างบนแล้ว (ordered + ชัดเจน)
+            Assert.Less(calm, normal * 0.8f, "'ช้า' ต้องช้ากว่า 'ปกติ' อย่างรู้สึกได้");
 
             // Nothing may be so slow that crossing a site is a chore — the failure mode at the
             // other end, and the one that produced the 2026-08-04 report.
