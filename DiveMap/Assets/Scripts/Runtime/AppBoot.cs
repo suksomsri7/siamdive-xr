@@ -1084,6 +1084,48 @@ namespace DiveMap.Runtime
         /// <summary>The map on screen right now (E5 stores purchases against it).</summary>
         public string CurrentMapId => _shortId;
 
+        // ── ปล่อยแมพเมื่อแอปถูกย่อ แล้วโหลดใหม่ตอนกลับมา (WO-PIVOT, 16 ส.ค. 2026) ──────────
+        //
+        // 🔴 อาการที่ user ให้มาปิดคดีนี้: "หลุดตอนย่อแอปแล้วไปเข้าแอปอื่น พอกดกลับมาจะหลุด"
+        // = iOS เก็บกวาดแอปที่กินแรมมากที่สุดเมื่อแอปอื่นต้องการแรม และเราคือเป้าหมายแรกเสมอ
+        // เพราะฉากใต้น้ำทั้งฉากค้างอยู่ราว 1.3 GB แม้ผู้ใช้ไม่ได้ดู
+        //
+        // การคืน "ของที่ไม่มีใครใช้" อย่างเดียว (MemoryWatch) ช่วยได้แต่ไม่พอ — ก้อนใหญ่คือฉาก
+        // ที่ยัง "ถูกใช้อยู่" ตามนิยาม ⇒ ต้องปล่อยฉากทิ้งจริง ๆ แล้วสร้างใหม่ตอนกลับมา
+        //
+        // ราคาที่ยอมจ่าย (user เคาะแล้ว): กลับมาต้องรอโหลดแมพใหม่ และจะอยู่ที่โหมดดูแมพ ไม่ใช่
+        // กลางทัวร์ที่ค้างไว้ — แลกกับการที่ทั้งแอปไม่ถูกปิดทิ้งทั้งดุ้น
+        //
+        // ⚠️ ทำงานเฉพาะเมื่อฝังในแอปจริง: บิลด์เดี่ยวคือเครื่องมือ QC ที่ CI ใช้ถ่ายภาพ การปล่อย
+        // ฉากกลางคันที่นั่นจะทำให้ทุก harness ถ่ายจอว่าง
+        private bool _mapReleasedInBackground;
+
+        private void OnApplicationPause(bool paused)
+        {
+            if (!NativeBridge.EmbeddedInHost) return;
+
+            if (paused)
+            {
+                if (_mapRoot == null || _booting) return;
+                Debug.LogWarning("[Memory] app backgrounded → ปล่อยฉากทั้งก้อน (จะโหลดใหม่ตอนกลับมา)");
+                SceneBuilder.RetireRoot(_mapRoot);
+                _mapRoot = null;
+                if (_builder != null) _builder.DiscardInFlight();
+                _mapReleasedInBackground = true;
+                // ปล่อย mesh/texture ของ GLB ที่เพิ่งหลุดการอ้างอิงไปพร้อมกับฉาก — ไม่มี yield
+                // ที่นี่โดยตั้งใจ: ระหว่างถูกย่อ coroutine ไม่เดิน สิ่งที่ต้องเกิดต้องเกิดตรงนี้เลย
+                System.GC.Collect();
+                Resources.UnloadUnusedAssets();
+                return;
+            }
+
+            if (!_mapReleasedInBackground) return;
+            _mapReleasedInBackground = false;
+            Debug.LogWarning("[Memory] app foregrounded → โหลดแมพ " + _shortId + " กลับมา");
+            // เส้นเดียวกับการสลับแมพทุกครั้ง ไม่มีทางโหลดที่สร้างขึ้นใหม่เฉพาะกรณีนี้
+            Retry();
+        }
+
         /// <summary>
         /// The asset registry, once the boot sequence has read it. Static because the palette
         /// outlives any one map load and must not re-download StreamingAssets to draw a grid.
