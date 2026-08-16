@@ -49,6 +49,10 @@ namespace DiveMap.Runtime.Ui
         private GameObject _hamburger;
         private GameObject _backButton;
         private Button _menuToggleBtn;
+
+        /// <summary>ปุ่มกลางวัน/ใต้น้ำที่ยืนแทน ☰ ในแอปรวม — ไม่มีวันโผล่พร้อม ☰ (ดู SetCornerButton)</summary>
+        private GameObject _envButton;
+        private Button _envButtonBtn;
         private RectTransform _actions;
         private GameObject _mapsLayer;
         private MapListScreen _mapList;
@@ -242,6 +246,30 @@ namespace DiveMap.Runtime.Ui
             _menuToggleBtn = btn;
             BuildActions();
 
+            // ── มุมล่างขวาในแอปรวม: เหลือสองอย่าง (user 16 ส.ค. 2026) ──────────────────
+            // "โหมด preview ปรับให้ icon มุมล่างขวาเหลือแค่ เข็มทิศ กับ icon กลางวันกลางคืน"
+            //
+            // เหตุผลเชิงระบบตรงกับที่ user ขีดฆ่ามา: โหมดถูกเลือกไปแล้วตั้งแต่ในแอป (ดู / AR /
+            // ทัวร์) ⇒ ปุ่ม AR·ทัวร์ ในคอลัมน์นี้เป็นประตูซ้ำ · ตั้งค่า·ความลึก เป็นเครื่องมือของ
+            // คนทำแมพ · และทางออกย้ายไป ‹ มุมบนซ้ายตั้งแต่รอบก่อน ⇒ ☰ ที่เหลือไว้เปิดของพวกนี้
+            // จึงไม่มีอะไรให้เปิดอีก
+            //
+            // วางปุ่มกลางวัน/ใต้น้ำ **ในช่องเดียวกับ ☰** (ขวา 12 · ล่าง 20) แล้วเข็มทิศที่อยู่
+            // เหนือมันพอดี (ขวา 12 · ล่าง 80) จะโผล่ถาวร เพราะไม่มีเมนูมาซ่อนมันอีกแล้ว
+            // ⇒ ได้สองไอคอนเรียงกันตามที่สั่ง โดยไม่ต้องขยับพิกัดของเดิมสักตัว
+            Button env = UiKit.MakeIconButton(_safe, "EnvButton",
+                                              EnvMode.Daylight ? "wave" : "sun", ToggleEnv,
+                                              accent: false, size: UiKit.Css(48f));
+            _envButton = env.gameObject;
+            UiKit.Anchor(env.GetComponent<RectTransform>(), new Vector2(1f, 0f),
+                         new Vector2(UiKit.Css(48f), UiKit.Css(48f)),
+                         new Vector2(-UiKit.Css(12f), UiKit.Css(20f)));
+            _envButtonBtn = env;
+            _envButton.SetActive(false);
+            // ถามสถานะเดี๋ยวนี้ ไม่ใช่รอ ApplyHostMode: ถ้า payload ของเจ้าบ้านมาถึง**ก่อน**จอถูก
+            // สร้าง (บูตเร็ว) จะไม่มีเหตุการณ์ไหนมาสลับให้อีกเลย แล้ว ☰ จะค้างอยู่ทั้งรอบ
+            SetCornerButton(true);
+
             // ↺ ↻ stacked above the ☰ (WO-N item 3). Built here rather than inside the action
             // column because undo has to be reachable at the speed of the mistake, not two taps
             // deep — see UndoBar's header for why we depart from the web on that one point.
@@ -293,6 +321,20 @@ namespace DiveMap.Runtime.Ui
 
         /// <summary>Top-left exit, library mode only. Never visible at the same time as <c>#backBtn</c>.</summary>
         private GameObject _hostBackButton;
+
+        /// <summary>
+        /// มุมล่างขวามีปุ่มเดียวเสมอ: ☰ ในบิลด์เดี่ยว · กลางวัน/ใต้น้ำ ในแอปรวม.
+        ///
+        /// รวมไว้ที่เดียวเพราะสองที่ที่เคยสั่ง <c>_hamburger.SetActive</c> (สแตกเปลี่ยน · ซ่อน
+        /// chrome ตอนเข้าโหมดมุมมองบุคคลที่หนึ่ง) ต้องตัดสินเรื่องเดียวกัน ถ้าปล่อยให้แต่ละที่
+        /// จำเอง วันหนึ่งจะมีที่หนึ่งที่ลืม แล้วปุ่มจะค้างบนจอทัวร์
+        /// </summary>
+        private void SetCornerButton(bool visible)
+        {
+            bool lib = NativeBoot.LibraryMode;
+            if (_hamburger != null) _hamburger.SetActive(visible && !lib);
+            if (_envButton != null) _envButton.SetActive(visible && lib);
+        }
 
         /// <summary>
         /// Should the top-left exit be on screen right now? Library mode, nothing open on top of
@@ -594,6 +636,9 @@ namespace DiveMap.Runtime.Ui
             bool daylight = EnvMode.Toggle();
             Button b = _actions != null ? _actions.Find("Action_wave")?.GetComponent<Button>() : null;
             if (b != null) UiKit.SetIcon(b, daylight ? "wave" : "sun");
+            // ปุ่มเดียวกันในแอปรวมอยู่คนละที่ (ช่องของ ☰) — ต้องเปลี่ยนไอคอนด้วย ไม่งั้นปุ่มจะ
+            // โกหกว่าการกดครั้งหน้าให้ผลอะไร ซึ่งเป็นทั้งหมดที่ไอคอนนี้ทำหน้าที่
+            if (_envButtonBtn != null) UiKit.SetIcon(_envButtonBtn, daylight ? "wave" : "sun");
             Toast.ShowTr(daylight ? "โหมดกลางวัน" : "โหมดใต้น้ำ");
         }
 
@@ -765,6 +810,10 @@ namespace DiveMap.Runtime.Ui
 
             if (_hostBackButton != null) _hostBackButton.SetActive(HostBackWanted);
 
+            // แอปรวม: เก็บ ☰ + คอลัมน์เครื่องมือ แล้วให้เหลือกลางวัน/ใต้น้ำ + เข็มทิศ (user 16 ส.ค.)
+            CloseActions();
+            SetCornerButton(_chromeVisible && (_nav == null || _nav.Count == 0));
+
             Debug.Log($"[UI] host mode applied — hub button={!NativeBoot.LibraryMode} " +
                       $"buildTag={(_buildTag != null && FpsBadge.Visible)} exitTopLeft={HostBackWanted}");
         }
@@ -887,7 +936,7 @@ namespace DiveMap.Runtime.Ui
         {
             // Hide the ☰ affordance while a screen owns the display (or while a mode hides it),
             // and show the web's back chevron in its place.
-            if (_hamburger != null) _hamburger.SetActive(depth == 0 && _chromeVisible);
+            SetCornerButton(depth == 0 && _chromeVisible);
             if (_backButton != null) _backButton.SetActive(depth > 0 && _chromeVisible);
             // The two share the top-left slot and swap: nothing open ⇒ back means "leave the 3D
             // screen"; something open ⇒ back means "close it" (WO-MERGE P1d).
@@ -937,7 +986,7 @@ namespace DiveMap.Runtime.Ui
                 // over both joysticks.
                 if (_card != null) _card.Hide();
             }
-            if (_hamburger != null) _hamburger.SetActive(visible && (_nav == null || _nav.Count == 0));
+            SetCornerButton(visible && (_nav == null || _nav.Count == 0));
             if (_backButton != null) _backButton.SetActive(visible && _nav != null && _nav.Count > 0);
             _chromeVisible = visible;
             // After _chromeVisible, because HostBackWanted reads it. A first-person mode owns the

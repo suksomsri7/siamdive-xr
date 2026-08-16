@@ -187,13 +187,21 @@ namespace DiveMap.Runtime.Ui
             else ArKitSession.Confirm();
         }
 
+        /// <summary>ระยะเว้นแถบสถานะเป็นหน่วยแคนวาส (ตัวเลขอยู่ใน <see cref="Core.ChromeInset"/> ซึ่งมีเทส)</summary>
+        private static float TopInset()
+            => UiKit.Css(Core.ChromeInset.Top(NativeBridge.EmbeddedInHost, Screen.height >= Screen.width));
+
         private void Build(RectTransform root)
         {
-            // ✕ — top-right, as a plain close button. Asked for directly, and it is the right
-            // shape: AR fills the screen with the room, so the one piece of chrome that dismisses
-            // it should be where every phone puts "close" and should cost as little of the view as
-            // possible. The old wide "✕ ออก AR" pill sat top-left over the very surface the user
-            // is trying to aim at.
+            // ✕ — top-LEFT (user, 16 ส.ค. 2026: "โหมด AR ปุ่ม x อยู่สูงไปคลิกไม่ได้ ย้ายมามุมบนซ้าย").
+            //
+            // มันเคยอยู่บนขวา และนั่นใช้ได้ตอน Unity เป็นเจ้าของจอ เพราะ _safe ถูกหดตามพื้นที่
+            // ปลอดภัยจริง แต่ในแอปรวมเราตั้ง _safe = เต็มจอโดยตั้งใจ (UiShell.ApplySafeArea) ⇒
+            // ปุ่มที่ห่างขอบบน 12 px ไปนั่งทับแถบสถานะ ซึ่งบนขวาคือโซนที่ iOS กินสัมผัสไปเอง
+            // (ศูนย์ควบคุม) ⇒ "กดไม่ได้" แบบที่ user เจอ ไม่ใช่แค่ดูแน่น
+            //
+            // แก้สองชั้น: ย้ายไปบนซ้ายตามที่สั่ง **และ** เว้นระยะแถบสถานะเอง (TopInset) เพราะ
+            // ลำพังการย้ายข้างยังทับนาฬิกาอยู่ดี
             //
             // 🔴 The glyph is DRAWN, not typed. NotoSansThai has no U+2715, so the old label
             // rendered as bare "ออก AR" on the device — visible in the user's screenshot and
@@ -204,11 +212,11 @@ namespace DiveMap.Runtime.Ui
                                            UiKit.CssFont(14f), UiKit.Glass, UiKit.TextMain,
                                            () => { if (ModeManager.Instance != null) ModeManager.Instance.Exit(); });
             RectTransform ert = exit.GetComponent<RectTransform>();
-            ert.anchorMin = new Vector2(1f, 1f);
-            ert.anchorMax = new Vector2(1f, 1f);
-            ert.pivot = new Vector2(1f, 1f);
+            ert.anchorMin = new Vector2(0f, 1f);
+            ert.anchorMax = new Vector2(0f, 1f);
+            ert.pivot = new Vector2(0f, 1f);
             ert.sizeDelta = new Vector2(UiKit.Css(44f), UiKit.Css(44f));
-            ert.anchoredPosition = new Vector2(-UiKit.Css(12f), -UiKit.Css(12f));
+            ert.anchoredPosition = new Vector2(UiKit.Css(12f), -(UiKit.Css(12f) + TopInset()));
             Image exitBg = exit.GetComponent<Image>();
             if (exitBg != null)
             {
@@ -229,18 +237,19 @@ namespace DiveMap.Runtime.Ui
             gimg.color = UiKit.TextMain;
             gimg.raycastTarget = false;
 
-            // ── the size readout, top-LEFT, where the exit pill used to be ───────
+            // ── the size readout, top-RIGHT — the corner the ✕ just vacated ──────
             // In metres, because that is the unit the table is in. It sits away from the fingers:
             // a number under a pinch is a number covered by a hand exactly when it is being read.
+            // ตัวเลขทับแถบสถานะได้ไม่เป็นไร (ไม่มีอะไรให้กด) แต่เว้นระยะเดียวกันไว้เพื่อให้อ่านออก
             _size = UiKit.MakeLine(root, "ArSize", "", UiKit.CssFont(15f),
-                                   TextAnchor.UpperLeft, UiKit.TextMain);
+                                   TextAnchor.UpperRight, UiKit.TextMain);
             RectTransform srt = _size.rectTransform;
-            srt.anchorMin = new Vector2(0f, 1f);
-            srt.anchorMax = new Vector2(0f, 1f);
-            srt.pivot = new Vector2(0f, 1f);
+            srt.anchorMin = new Vector2(1f, 1f);
+            srt.anchorMax = new Vector2(1f, 1f);
+            srt.pivot = new Vector2(1f, 1f);
 
             srt.sizeDelta = new Vector2(UiKit.Css(120f), UiKit.RowHeight(UiKit.CssFont(15f), 1));
-            srt.anchoredPosition = new Vector2(UiKit.Css(12f), -UiKit.Css(12f));
+            srt.anchoredPosition = new Vector2(-UiKit.Css(12f), -(UiKit.Css(12f) + TopInset()));
             _size.gameObject.SetActive(false);
 
             // ── the action button, bottom centre where the size bar used to be ───
