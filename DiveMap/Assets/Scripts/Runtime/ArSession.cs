@@ -594,6 +594,25 @@ namespace DiveMap.Runtime
                 _cam.nearClipPlane = _near;
                 _cam.farClipPlane = _far;
                 _cam.transform.SetPositionAndRotation(_camPos, _camRot);
+
+                // 🔴 17 ส.ค. 2026 — user: "เข้าโหมด AR แล้วออกมา ไม่ว่าจะเข้าโหมดอะไรก็เสีย
+                // ใช้งานไม่ได้" · ค่าที่คืนข้างบนเป็น "ค่าที่เราหยิบยืมไปเอง" แต่ ARKit ยัง
+                // **เขียนทับของอื่นบนกล้องตัวเดียวกัน**ระหว่างเซสชัน แล้วไม่มีใครคืนให้:
+                //
+                //   • projectionMatrix — ARCameraManager ยัดเมทริกซ์ของกล้องจริงใส่ทุกเฟรม
+                //     และค่านั้น "ติดค้าง" จนกว่าจะสั่ง Reset ⇒ พอออกจาก AR ฉากถูกวาดด้วย
+                //     เลนส์ของกล้องมือถือ ไม่ใช่ของเกม = ภาพเพี้ยน/ดำทั้งจอในทุกโหมดถัดไป
+                //   • usePhysicalProperties / targetTexture / rect — ตระกูลเดียวกัน: ตั้งง่าย
+                //     ลืมคืนง่าย และอาการที่ได้คือ "จอดำ" เหมือนกันหมดจนแยกไม่ออก
+                //
+                // คืนให้ครบทีเดียวตรงนี้ ถูกกว่าการไล่เดาว่าตัวไหนเป็นตัวที่พังในรอบหน้า
+                _cam.ResetProjectionMatrix();
+                _cam.ResetWorldToCameraMatrix();
+                _cam.ResetAspect();
+                _cam.usePhysicalProperties = false;
+                _cam.targetTexture = null;
+                _cam.rect = new Rect(0f, 0f, 1f, 1f);
+                _cam.enabled = true;
             }
 
             bool usedOrbitFallback = !_gyro;   // AR borrowed the orbit rig only when there was no sensor
@@ -618,7 +637,9 @@ namespace DiveMap.Runtime
 
             if (Ui.CompassWidget.Instance != null) Ui.CompassWidget.Instance.SetVisible(true);
 
-            Debug.Log($"[AR] exit — scene restored ({restoredParts} underwater part(s) put back)");
+            Debug.Log($"[AR] exit — scene restored ({restoredParts} underwater part(s) put back) " +
+                      $"cam=({(_cam != null ? _cam.name : "none")} fov={(_cam != null ? _cam.fieldOfView : 0f):F1} " +
+                      $"rect={(_cam != null ? _cam.rect.width : 0f):F2} enabled={(_cam != null && _cam.enabled)})");
         }
 
         private void StopFeed()
