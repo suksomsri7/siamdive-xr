@@ -384,6 +384,33 @@ namespace DiveMap.Runtime
         /// at 3 fps on CI and 60 on a phone (HANDOFF §4 rule 13), and distance is the only trigger
         /// that means the same thing on both.
         /// </summary>
+        /// <summary>
+        /// ดันโดรนออกจากตัวสัตว์ที่ใหญ่พอจะกันทาง.
+        ///
+        /// วนทุกตัวในทะเบียนสัตว์เดี่ยว (แมพหนึ่งมีหลักสิบ ไม่ใช่หลักพัน — ฝูงปลาอยู่คนละระบบ
+        /// และตั้งใจให้ว่ายผ่านตัวได้) · ทำหลัง Step เสมอ เพื่อให้กฎของพื้นทราย/ผิวน้ำถูกบังคับ
+        /// ก่อน แล้วค่อยแก้เรื่องสัตว์ — ไม่งั้นการดันออกจากวาฬอาจดันเราทะลุพื้น
+        /// </summary>
+        private void PushOutOfAnimals()
+        {
+            int n = Marine.SoloAnimalRegistry.Count;
+            if (n <= 0) return;
+
+            double x = _state.Pos.X, y = _state.Pos.Y, z = _state.Pos.Z;
+            bool moved = false;
+            for (int i = 0; i < n; i++)
+            {
+                if (!Marine.SoloAnimalRegistry.TryGet(i, out Marine.SoloAnimalRegistry.Entry a)) continue;
+                if (AnimalSolids.PushOut(a.Pos.x, a.Pos.y, a.Pos.z, a.ObsR, ref x, ref y, ref z))
+                    moved = true;
+            }
+            if (!moved) return;
+
+            _state.Pos = new DroneFlight.Vec3((float)x, (float)y, (float)z);
+            // หยุดความเร็วที่พาเราเข้าไป ไม่งั้นเฟรมหน้าจะดันเข้าไปใหม่ทันที = อาการสั่นติดตัวสัตว์
+            _state.Vel = new DroneFlight.Vec3(0f, 0f, 0f);
+        }
+
         private void RefreshSolids(Vector3 at, bool force)
         {
             if (!force && _solidsPicked)
@@ -513,6 +540,8 @@ namespace DiveMap.Runtime
         {
             _active = false;
             InputRig.Clear();
+            // ออกจากทัวร์แล้วไม่มีนักดำน้ำในน้ำอีก — ถ้าไม่ล้าง สัตว์จะตกใจตำแหน่งค้างตลอดไป
+            Marine.SoloAnimalRegistry.ClearDiver();
             if (_lights != null)
             {
                 _lights.RestoreScene();
@@ -616,6 +645,14 @@ namespace DiveMap.Runtime
             _state = DroneFlight.Step(_state, sticks, dt, seabedY, _waterLevel,
                                       _solids, _scaleX, _scaleZ, SettingsStore.SpeedScale);
 
+            // 🔴 17 ส.ค. 2026 — สัตว์ตัวใหญ่กันทาง (user: "บินโดรนทะลุตัวสัตว์ใหญ่ได้อยู่เลย")
+            //
+            // แยกจาก DroneFlight.Step โดยตั้งใจ: รายการสิ่งกีดขวางของ Step เป็นกล่องนิ่งที่คัดไว้
+            // เป็นระยะ ๆ (RefreshSolids) ซึ่งเหมาะกับซากเรือ แต่สัตว์ว่ายทุกเฟรม การยัดเข้าไปใน
+            // ชุดเดิมแปลว่าต้องคำนวณกล่องใหม่ทั้งชุดทุกเฟรม ⇒ ที่นี่ใช้ทรงกลมเคลื่อนที่แทน
+            // (Core.AnimalSolids — คณิตศาสตร์ล้วน มีเทส) และคิดเฉพาะตัวใหญ่ ปลาเล็กว่ายผ่านได้
+            PushOutOfAnimals();
+
             var pos = new Vector3(_state.Pos.X, _state.Pos.Y, _state.Pos.Z);
             DroneFlight.Vec3 look = DroneFlight.LookTarget(_state);
             _cam.transform.position = pos;
@@ -624,6 +661,11 @@ namespace DiveMap.Runtime
             if (_hud != null) _hud.SetDepth(DroneFlight.DepthMetres(pos.y, _waterLevel));
             if (_lights != null) _lights.Track(pos, _state.Yaw, SeabedY(pos + _cam.transform.forward * DiveLightMath.Reach));
             if (_reef != null) _reef.SetRepulsor(pos, DiveLightMath.FishBubble * 2f);
+            // บอกสัตว์เดี่ยวว่าเราอยู่ตรงไหนและมาเร็วแค่ไหน — ระบบตกใจของมันอ่านจากตรงนี้
+            // (ฝูงปลาใช้ SetRepulsor ข้างบนอยู่แล้ว คนละทางแต่เจตนาเดียวกัน)
+            Marine.SoloAnimalRegistry.SetDiver(
+                pos, Mathf.Sqrt(_state.Vel.X * _state.Vel.X + _state.Vel.Y * _state.Vel.Y +
+                                _state.Vel.Z * _state.Vel.Z));
             AudioBank.ProximityTick(pos, _animals, _animalIds);
             CheckWarpGates(pos);
 

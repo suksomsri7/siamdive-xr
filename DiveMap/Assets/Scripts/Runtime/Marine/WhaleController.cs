@@ -690,11 +690,30 @@ namespace DiveMap.Runtime.Marine
                 bool hunted = false;
                 float fleeR = (float)FleeMath.FleeRadius(me.ObsR);
                 float hunterD = 0f;
+                Vector3 threat = me.Hunter;
                 if (me.HasHunter)
                 {
                     float hx = here.x - me.Hunter.x, hz = here.z - me.Hunter.z;
                     hunterD = Mathf.Sqrt(hx * hx + hz * hz);
                     hunted = hunterD < fleeR;
+                }
+
+                // 🔴 นักดำน้ำก็เป็นภัยได้ (17 ส.ค. 2026 — user: สัตว์ยังไม่ตกใจ)
+                // ใช้ทางหนีเส้นเดียวกับตอนโดนสัตว์อื่นไล่ ไม่เขียนพฤติกรรมชุดที่สอง: สิ่งที่
+                // ต่างกันคือ "ใครคือภัย" ไม่ใช่ "หนียังไง" · ถ้าทั้งคนและผู้ล่าอยู่ใกล้พร้อมกัน
+                // ให้ตัวที่ใกล้กว่าชนะ เพราะนั่นคือสิ่งที่สัตว์จะสนใจก่อน
+                if (SoloAnimalRegistry.HasDiver)
+                {
+                    Vector3 d = SoloAnimalRegistry.DiverPos;
+                    float ddx = here.x - d.x, ddy = here.y - d.y, ddz = here.z - d.z;
+                    float diverD = Mathf.Sqrt(ddx * ddx + ddy * ddy + ddz * ddz);
+                    if (AnimalSolids.DiverStartles(SoloAnimalRegistry.DiverSpeed, diverD, me.ObsR)
+                        && (!hunted || diverD < hunterD))
+                    {
+                        hunted = true;
+                        hunterD = Mathf.Max(diverD, 1e-4f);
+                        threat = d;
+                    }
                 }
 
                 bool predator = _gen.Diet == SpeciesGenome.DietPredator;
@@ -710,7 +729,7 @@ namespace DiveMap.Runtime.Marine
                     // Evade — put the waypoint on the far side of itself from the hunter. Steering,
                     // never a position write: PatrolStep still turns at the capped rate, so the
                     // animal swings away rather than snapping around.
-                    float ax = (here.x - me.Hunter.x) / hunterD, az = (here.z - me.Hunter.z) / hunterD;
+                    float ax = (here.x - threat.x) / hunterD, az = (here.z - threat.z) / hunterD;
                     _patrol.TX = here.x + ax * _roamR;
                     _patrol.TZ = here.z + az * _roamR;
                     _patrol.LegT = 0f;

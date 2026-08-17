@@ -44,6 +44,7 @@
     <Compile Include="../../DiveMap/Assets/Scripts/Core/MarineRouting.cs" />
     <Compile Include="../../DiveMap/Assets/Scripts/Core/AppModes.cs" />
     <Compile Include="../../DiveMap/Assets/Scripts/Core/ChromeInset.cs" />
+    <Compile Include="../../DiveMap/Assets/Scripts/Core/AnimalSolids.cs" />
     <Compile Include="../../DiveMap/Assets/Scripts/Core/SwimStyle.cs" />
     <Compile Include="../../DiveMap/Assets/Scripts/Core/CameraRange.cs" />
     <Compile Include="../../DiveMap/Assets/Scripts/Core/TexTiers.cs" />
@@ -149,6 +150,7 @@
     <Compile Include="../../DiveMap/Assets/Tests/EditMode/BootModeTests.cs" />
     <Compile Include="../../DiveMap/Assets/Tests/EditMode/EditAccessTests.cs" />
     <Compile Include="../../DiveMap/Assets/Tests/EditMode/ChromeInsetTests.cs" />
+    <Compile Include="../../DiveMap/Assets/Tests/EditMode/AnimalSolidsTests.cs" />
     <Compile Include="../../DiveMap/Assets/Tests/EditMode/SculptCoordTests.cs" />
     <Compile Include="../../DiveMap/Assets/Tests/EditMode/MarineMathTests.cs" />
     <Compile Include="../../DiveMap/Assets/Tests/EditMode/FleeMathTests.cs" />

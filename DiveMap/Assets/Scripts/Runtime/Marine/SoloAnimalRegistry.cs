@@ -50,6 +50,24 @@ namespace DiveMap.Runtime.Marine
         private static bool    _predatorsExist;
 
         public static int Count => _count;
+
+        // ── นักดำน้ำ (โดรน) — 17 ส.ค. 2026 ────────────────────────────────────────────
+        // user: "ฟังก์ชันสัตว์ตกใจ...ยังไม่ได้ทำหรอ" · ระบบตกใจของ **ฝูงปลา** ทำมานานแล้ว
+        // (FishSchoolSystem อ่านความเร็วนักดำน้ำผ่าน FleeMath) แต่สัตว์เดี่ยวตัวใหญ่ไม่เคยรับรู้
+        // ว่ามีคนอยู่ตรงนั้นเลย — มันรู้จักแค่ "ผู้ล่า" กับ "เหยื่อ" ที่เป็นสัตว์ด้วยกัน
+        //
+        // เก็บเป็น static ตัวเดียว ไม่ยัดใส่ Entry ทุกตัว: นักดำน้ำมีคนเดียวเสมอ
+        public static Vector3 DiverPos { get; private set; }
+        public static float DiverSpeed { get; private set; }
+        public static bool HasDiver { get; private set; }
+
+        /// <summary>ทัวร์เรียกทุกเฟรมระหว่างดำ · เรียก <see cref="ClearDiver"/> เมื่อออกจากทัวร์</summary>
+        public static void SetDiver(Vector3 pos, float speed)
+        {
+            DiverPos = pos; DiverSpeed = speed; HasDiver = true;
+        }
+
+        public static void ClearDiver() { HasDiver = false; DiverSpeed = 0f; }
         public static bool PredatorsExist => _predatorsExist;
         /// <summary>How many of the registered animals are inside the hunt budget.</summary>
         public static int HuntingCount => _count < MarineRouting.SoloHuntBudget
