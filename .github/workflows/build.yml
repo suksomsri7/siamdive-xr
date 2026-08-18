@@ -664,9 +664,37 @@ jobs:
           STAGE="${{ runner.temp }}/unityLibrary-android"
           rm -rf "$STAGE" && mkdir -p "$STAGE"
           # Unity runs as root inside the container, so the export is root-owned. cp -a preserves
-          # what matters and sudo is what makes it readable to the upload step.
+          # what matters — including the +x on Il2CppOutputProject/IL2CPP/build/deploy/il2cpp,
+          # which Gradle EXECUTES during the host app's build — and sudo is what makes it readable
+          # to the upload step.
           sudo cp -a "$UNITY_LIBRARY" "$STAGE/unityLibrary"
+
+          # 🔴 unityLibrary is NOT self-contained. Its build.gradle line 2 is
+          #     apply from: '../shared/keepUnitySymbols.gradle'
+          # so the sibling `shared/` folder is part of the artifact whether it looks like it or
+          # not. Shipping the module alone produces a Gradle failure in the OTHER repository
+          # ("Could not read script … /shared/keepUnitySymbols.gradle"), hours later, naming a
+          # path that does not exist there.
+          if [ -d "$PARENT/shared" ]; then
+            sudo cp -a "$PARENT/shared" "$STAGE/shared"
+          else
+            echo "::error::the export has no shared/ next to unityLibrary — build.gradle applies ../shared/keepUnitySymbols.gradle"
+            ls -la "$PARENT"
+            exit 1
+          fi
           sudo chown -R "$(id -u):$(id -g)" "$STAGE"
+
+          # Anything else the module reaches OUTSIDE itself is a landmine of the same kind, so
+          # list them rather than discover them one build at a time.
+          echo "── references outside the module ──"
+          grep -rnE "\.\./|rootDir|getProperty\(" "$STAGE/unityLibrary/build.gradle" "$STAGE/shared/"*.gradle || true
+
+          # The export root's own gradle.properties is what Unity would have used. The host app
+          # has to reproduce the parts the module reads (unity.androidSdkPath / androidNdkPath /
+          # unityStreamingAssets), so it travels with the artifact as the reference copy.
+          [ -f "$PARENT/gradle.properties" ] && cp "$PARENT/gradle.properties" "$STAGE/export-root-gradle.properties" || true
+          echo "── export root gradle.properties ──"
+          cat "$STAGE/export-root-gradle.properties" 2>/dev/null || echo "(none)"
 
           # Kept out of the zip on purpose: local.properties points at the CONTAINER's SDK/NDK
           # paths, and a stale one is a Gradle failure on the EAS worker that reads as "SDK not
@@ -685,6 +713,8 @@ jobs:
             echo "signing:      none — the host app signs it when Gradle assembles the apk"
             echo "host needs:   include ':unityLibrary' + minSdk >= 26 + the abiFilters below"
             echo "abis:         $(ls "$STAGE/unityLibrary/src/main/jniLibs" 2>/dev/null | tr '\n' ' ')"
+            echo "gradle needs: shared/keepUnitySymbols.gradle + :unityLibrary:xrmanifest.androidlib"
+            echo "il2cpp:       compiled by Gradle at app-build time (src/main/Il2CppOutputProject)"
           } > "$STAGE/MANIFEST.txt"
           cat "$STAGE/MANIFEST.txt"
 
