@@ -99,10 +99,23 @@ namespace DiveMap.Runtime
         /// </summary>
         public static string OffReason { get; private set; } = "";
 
+        /// <summary>
+        /// Which tracking provider this build is talking to — the log prefix, and the answer to
+        /// "why does an Android log say ARKit". Everything in this class except the loader type
+        /// and the availability check is AR Foundation, which is provider-agnostic; only these
+        /// two spots ever knew the difference, so only they are platform-dependent.
+        /// </summary>
+        private const string Tag =
+#if UNITY_ANDROID && !UNITY_EDITOR
+            "[ARCore]";
+#else
+            "[ARKit]";
+#endif
+
         private static bool Off(string reason)
         {
             OffReason = reason;
-            Debug.LogWarning("[ARKit] " + reason);
+            Debug.LogWarning(Tag + " " + reason);
             return false;
         }
 
@@ -115,12 +128,17 @@ namespace DiveMap.Runtime
         {
             get
             {
-#if UNITY_IOS && !UNITY_EDITOR
+#if (UNITY_IOS || UNITY_ANDROID) && !UNITY_EDITOR
+                // 🔴 Android reaches this too now (ARCore, 18 ส.ค. 2026). The check itself did not
+                // have to change: ARSession.state is AR Foundation's own answer and it is already
+                // "Unsupported" on the many Android phones with no ARCore support — which is the
+                // fallback this app has always had, so a phone without tracking still gets the
+                // camera-and-gyro AR the web has, not an error.
                 if (ARSession.state == ARSessionState.Unsupported)
-                    return Off("ไม่รองรับ ARKit (state=" + ARSession.state + ")");
+                    return Off("ไม่รองรับ " + Tag + " (state=" + ARSession.state + ")");
                 return true;
 #else
-                return Off("build นี้ไม่ได้คอมไพล์ iOS path");
+                return Off("build นี้ไม่ได้คอมไพล์ path ของ iOS/Android");
 #endif
             }
         }
@@ -182,6 +200,21 @@ namespace DiveMap.Runtime
         /// a few seconds of its life, and an ARKit session running behind the map view would hold
         /// the camera, drain the battery and ask for a camera permission nobody wanted yet.
         /// </summary>
+        /// <summary>
+        /// The XR loader this platform's tracking hides behind, as an assembly-qualified NAME.
+        ///
+        /// A name and not a type reference for the reason the old comment gave and which still
+        /// holds on both sides now: each loader lives in a platform-only assembly, so naming
+        /// either one directly would stop this file compiling on the Linux test/QC image where
+        /// neither module exists.
+        /// </summary>
+        private const string LoaderTypeName =
+#if UNITY_ANDROID && !UNITY_EDITOR
+            "UnityEngine.XR.ARCore.ARCoreLoader, Unity.XR.ARCore";
+#else
+            "UnityEngine.XR.ARKit.ARKitLoader, Unity.XR.ARKit";
+#endif
+
         private static XRManagerSettings _manager;
 
         private static bool InitialiseXr()
@@ -260,11 +293,11 @@ namespace DiveMap.Runtime
         private static XRManagerSettings ManagerInCode()
         {
             var mgr = ScriptableObject.CreateInstance<XRManagerSettings>();
-            System.Type loaderType = System.Type.GetType("UnityEngine.XR.ARKit.ARKitLoader, Unity.XR.ARKit");
-            if (loaderType == null) { Off("ไม่พบคลาส ARKitLoader (build นี้ไม่มีโมดูล ARKit)"); return null; }
+            System.Type loaderType = System.Type.GetType(LoaderTypeName);
+            if (loaderType == null) { Off($"ไม่พบคลาส loader ({LoaderTypeName}) — build นี้ไม่มีโมดูลนั้น"); return null; }
 
             var loader = ScriptableObject.CreateInstance(loaderType) as XRLoader;
-            if (loader == null) { Off("สร้าง ARKitLoader ไม่ได้"); return null; }
+            if (loader == null) { Off("สร้าง loader ไม่ได้: " + LoaderTypeName); return null; }
 
             if (!AddLoader(mgr, loader)) { Off("เพิ่ม loader เข้า manager ไม่ได้"); return null; }
             Debug.Log("[ARKit] built an XR manager in code (no settings asset needed)");

@@ -133,6 +133,37 @@ namespace DiveMap.EditorTools
                 // commit — the 3D screen on a phone came from.
                 StampBuildNumber(Environment.GetEnvironmentVariable("ANDROID_BUILD_NUMBER"));
 
+                // ── ARCore (18 ส.ค. 2026) ────────────────────────────────────────────────
+                // The Android twin of the ARKit chain in BuildIos, and it exists for the same
+                // reason: without it the app installs, AR opens, and quietly runs the
+                // camera-and-gyro fallback — the failure that cost four TestFlight builds on the
+                // iOS side before anything said why. So the same two gates are checked here,
+                // BEFORE the expensive part of the build.
+                //
+                // ⚠️ The fallback is not an error: most of what this app shows in AR works
+                // without tracking, and phones with no ARCore support are supposed to land there.
+                // What must never happen is a phone that COULD track silently not tracking.
+                if (!DefinePresent(NamedBuildTarget.Android, "UNITY_XR_ARCORE_LOADER_ENABLED"))
+                {
+                    Fail("UNITY_XR_ARCORE_LOADER_ENABLED is missing from the Android scripting " +
+                         "defines. Without it the ARCore native plug-in is left out and every " +
+                         "device would fall back to the gyro path. Add it under " +
+                         "scriptingDefineSymbols/Android in ProjectSettings.asset.");
+                    return;
+                }
+                if (!EnsureXrSettings(BuildTargetGroup.Android,
+                                      "UnityEngine.XR.ARCore.ARCoreLoader, Unity.XR.ARCore",
+                                      "Android", out string xrWhy))
+                {
+                    Fail("Android XR settings are not usable: " + xrWhy);
+                    return;
+                }
+                PreloadXrSettings("Android");
+                // Optional, not Required — same argument as ARKit: this app has a whole
+                // attitude-only path written for devices without tracking, and "Required" would
+                // make Google Play hide the app from every phone that has no ARCore.
+                MakeArOptional("UnityEditor.XR.ARCore.ARCoreSettings", "Assets/XR/Settings/ARCoreSettings.asset");
+
                 string outputPath = ResolveOutputPathDir("Build/AndroidLibrary");
                 EnsureParentDirectory(Path.Combine(outputPath, "placeholder"));
 
@@ -336,7 +367,7 @@ namespace DiveMap.EditorTools
                 // UnityEditor.iOS` makes every plain `BuildPipeline` in this file ambiguous. Being
                 // in the core editor assembly, this needs no platform guard.
                 StampBuildNumber(buildNumber);
-                if (!ArkitDefinePresent())
+                if (!DefinePresent(NamedBuildTarget.iOS, "UNITY_XR_ARKIT_LOADER_ENABLED"))
                 {
                     Fail("UNITY_XR_ARKIT_LOADER_ENABLED is missing from the iOS scripting defines. " +
                          "Without it the ARKit native plug-in is left out of the Xcode project and " +
@@ -345,12 +376,14 @@ namespace DiveMap.EditorTools
                          "scriptingDefineSymbols/iPhone in ProjectSettings.asset.");
                     return;
                 }
-                if (!EnsureXrSettings(out string xrWhy))
+                if (!EnsureXrSettings(BuildTargetGroup.iOS, "UnityEngine.XR.ARKit.ARKitLoader, Unity.XR.ARKit",
+                                      "iOS", out string xrWhy))
                 {
                     Fail("XR settings are not usable: " + xrWhy);
                     return;
                 }
-                PreloadXrSettings();
+                PreloadXrSettings("iOS");
+                MakeArOptional("UnityEditor.XR.ARKit.ARKitSettings", "Assets/XR/Settings/ARKitSettings.asset");
 
                 var profileUuid = Environment.GetEnvironmentVariable("IOS_PROFILE_UUID");
                 if (!string.IsNullOrWhiteSpace(profileUuid))
@@ -448,9 +481,9 @@ namespace DiveMap.EditorTools
         ///
         /// Doing it here means it happens on every CI build regardless of who created the asset.
         /// </summary>
-        private static void PreloadXrSettings()
+        private static void PreloadXrSettings(string platformTag)
         {
-            const string path = "Assets/XR/Settings/XRGeneralSettings-iOS.asset";
+            string path = $"Assets/XR/Settings/XRGeneralSettings-{platformTag}.asset";
             var settings = AssetDatabase.LoadAssetAtPath<UnityEngine.Object>(path);
             if (settings == null)
             {
@@ -492,11 +525,12 @@ namespace DiveMap.EditorTools
         /// thing to do is stop, loudly, two minutes in rather than after a 45-minute build that
         /// would install and quietly have no AR.
         /// </summary>
-        private static bool ArkitDefinePresent()
+        private static bool DefinePresent(NamedBuildTarget target, string define)
         {
-            string defines = PlayerSettings.GetScriptingDefineSymbols(NamedBuildTarget.iOS) ?? "";
-            bool ok = Array.IndexOf(defines.Split(';'), "UNITY_XR_ARKIT_LOADER_ENABLED") >= 0;
-            Debug.Log($"[CIBuild] iOS scripting defines = '{defines}' → ARKit {(ok ? "ENABLED" : "OFF")}");
+            string defines = PlayerSettings.GetScriptingDefineSymbols(target) ?? "";
+            bool ok = Array.IndexOf(defines.Split(';'), define) >= 0;
+            Debug.Log($"[CIBuild] {target.TargetName} scripting defines = '{defines}' → " +
+                      $"{define} {(ok ? "ENABLED" : "OFF")}");
             return ok;
         }
 
@@ -517,33 +551,54 @@ namespace DiveMap.EditorTools
         // Order matters and is not obvious: the loader has to exist as a saved asset before
         // TryAddLoader will keep it (XR Management stores a reference, not a copy), and the
         // config object has to be registered before ARKitBuildProcessor's own hook looks it up.
-        private const string XrLoaderPath = "Assets/XR/Loaders/ARKitLoader.asset";
-        private const string XrManagerPath = "Assets/XR/Settings/XRManagerSettings-iOS.asset";
-        private const string XrGeneralPath = "Assets/XR/Settings/XRGeneralSettings-iOS.asset";
         private const string XrPerTargetPath = "Assets/XR/XRGeneralSettingsPerBuildTarget.asset";
 
-        private static bool EnsureXrSettings(out string why)
+        /// <summary>
+        /// Build the XR settings chain for one platform, through Unity's own API.
+        ///
+        /// 🔴 Parameterised on 18 ส.ค. 2026 for the Android/ARCore build. NOTHING about the iOS
+        /// path changed — same asset paths, same order, same checks — because every line of it
+        /// was paid for in TestFlight builds (see the wall of comments above). Android simply
+        /// hands in a different loader type and build-target group; the ARCore build processor
+        /// looks up its settings exactly the way ARKitBuildProcessor does, so the same chain that
+        /// makes libUnityARKit.a get copied is what makes the ARCore native library get copied.
+        /// </summary>
+        /// <param name="group">iOS or Android — the group the settings are registered for.</param>
+        /// <param name="loaderTypeName">Assembly-qualified loader, e.g. ARKitLoader / ARCoreLoader.</param>
+        /// <param name="platformTag">Filename tag: "iOS" / "Android" (the assets are per-platform).</param>
+        private static bool EnsureXrSettings(BuildTargetGroup group, string loaderTypeName,
+                                             string platformTag, out string why)
         {
+            // 🔴 The loader asset is named after the LOADER TYPE, not the platform, because the
+            // iOS one is committed as Assets/XR/Loaders/ARKitLoader.asset and must keep resolving
+            // to that exact file. Deriving it from the platform tag instead ("iOSLoader.asset")
+            // silently orphans the tracked asset and rebuilds a fresh one every run — a change to
+            // the one path in this project that four TestFlight builds were spent getting right.
+            string XrManagerPath = $"Assets/XR/Settings/XRManagerSettings-{platformTag}.asset";
+            string XrGeneralPath = $"Assets/XR/Settings/XRGeneralSettings-{platformTag}.asset";
             why = null;
             // Reflection, not a direct reference: this file also compiles on the Linux test image
             // where no iOS module exists. The assembly scan is the fallback for the day the
             // assembly-qualified name stops resolving — a null here would otherwise read as
             // "the package is missing", which is a different and much more misleading problem.
-            Type loaderType = Type.GetType("UnityEngine.XR.ARKit.ARKitLoader, Unity.XR.ARKit");
+            Type loaderType = Type.GetType(loaderTypeName);
             if (loaderType == null)
             {
+                string bare = loaderTypeName.Split(',')[0].Trim();
                 foreach (var asm in AppDomain.CurrentDomain.GetAssemblies())
                 {
-                    loaderType = asm.GetType("UnityEngine.XR.ARKit.ARKitLoader");
+                    loaderType = asm.GetType(bare);
                     if (loaderType != null) break;
                 }
             }
             if (loaderType == null)
             {
-                why = "ARKitLoader type not found — the com.unity.xr.arkit package did not load. " +
+                why = loaderTypeName + " not found — that XR package did not load. " +
                       "Check Packages/manifest.json.";
                 return false;
             }
+
+            string XrLoaderPath = $"Assets/XR/Loaders/{loaderType.Name}.asset";
 
             Directory.CreateDirectory(Path.Combine(Application.dataPath, "XR/Loaders"));
             Directory.CreateDirectory(Path.Combine(Application.dataPath, "XR/Settings"));
@@ -568,7 +623,7 @@ namespace DiveMap.EditorTools
             }
 
             general.Manager = manager;
-            perTarget.SetSettingsForBuildTarget(BuildTargetGroup.iOS, general);
+            perTarget.SetSettingsForBuildTarget(group, general);
 
             EditorUtility.SetDirty(loader);
             EditorUtility.SetDirty(manager);
@@ -582,19 +637,18 @@ namespace DiveMap.EditorTools
             // thing ARKitBuildProcessor actually calls still returns null — which is precisely the
             // failure this method exists to end, so it is checked rather than assumed.
             var seen = UnityEditor.XR.Management.XRGeneralSettingsPerBuildTarget
-                .XRGeneralSettingsForBuildTarget(BuildTargetGroup.iOS);
-            if (seen == null) { why = "XRGeneralSettingsForBuildTarget(iOS) still returns null"; return false; }
-            if (seen.Manager == null) { why = "the iOS settings have no manager"; return false; }
+                .XRGeneralSettingsForBuildTarget(group);
+            if (seen == null) { why = $"XRGeneralSettingsForBuildTarget({group}) still returns null"; return false; }
+            if (seen.Manager == null) { why = $"the {group} settings have no manager"; return false; }
 
             var names = new System.Collections.Generic.List<string>();
             foreach (var l in seen.Manager.activeLoaders) names.Add(l == null ? "null" : l.GetType().Name);
-            if (!names.Contains("ARKitLoader"))
+            if (!names.Contains(loaderType.Name))
             {
-                why = "no ARKitLoader in the iOS loader list — got [" + string.Join(", ", names) + "]";
+                why = $"no {loaderType.Name} in the {group} loader list — got [" + string.Join(", ", names) + "]";
                 return false;
             }
-            Debug.Log($"[CIBuild] XR iOS loaders = [{string.Join(", ", names)}] — libUnityARKit.a will be copied");
-            MakeArkitOptional();
+            Debug.Log($"[CIBuild] XR {group} loaders = [{string.Join(", ", names)}] — the native plug-in will be copied");
             return true;
         }
 
@@ -618,10 +672,8 @@ namespace DiveMap.EditorTools
         /// Reflection because ARKitSettings lives in the ARKit package's own editor assembly, and
         /// this file has to keep compiling on the Linux test image.
         /// </summary>
-        private static void MakeArkitOptional()
+        private static void MakeArOptional(string key, string path)
         {
-            const string key = "UnityEditor.XR.ARKit.ARKitSettings";
-            const string path = "Assets/XR/Settings/ARKitSettings.asset";
             try
             {
                 Type t = null;
@@ -630,26 +682,26 @@ namespace DiveMap.EditorTools
                     t = asm.GetType(key);
                     if (t != null) break;
                 }
-                if (t == null) { Debug.LogWarning("[CIBuild] ARKitSettings type not found — plist stays Required"); return; }
+                if (t == null) { Debug.LogWarning($"[CIBuild] {key} type not found — the platform default (Required) stands"); return; }
 
                 var settings = LoadOrCreate<ScriptableObject>(path, t);
                 if (settings == null) { Debug.LogWarning("[CIBuild] could not create " + path); return; }
 
                 var prop = t.GetProperty("requirement");
-                if (prop == null) { Debug.LogWarning("[CIBuild] ARKitSettings.requirement missing"); return; }
+                if (prop == null) { Debug.LogWarning($"[CIBuild] {key}.requirement missing"); return; }
                 prop.SetValue(settings, Enum.Parse(prop.PropertyType, "Optional"));
 
                 EditorUtility.SetDirty(settings);
                 AssetDatabase.SaveAssets();
                 EditorBuildSettings.AddConfigObject(key, settings, true);
-                Debug.Log($"[CIBuild] ARKit requirement = {prop.GetValue(settings)} " +
-                          "(no 'arkit' in UIRequiredDeviceCapabilities — the gyro fallback stays reachable)");
+                Debug.Log($"[CIBuild] {t.Name}.requirement = {prop.GetValue(settings)} " +
+                          "— the gyro fallback stays reachable on devices without tracking");
             }
             catch (Exception ex)
             {
                 // Not fatal: a Required build still installs and still works on every device the
                 // user actually has. Losing the build over a plist nicety would be the wrong trade.
-                Debug.LogWarning("[CIBuild] could not set ARKit to Optional — " + ex.Message);
+                Debug.LogWarning($"[CIBuild] could not set {key} to Optional — " + ex.Message);
             }
         }
 
