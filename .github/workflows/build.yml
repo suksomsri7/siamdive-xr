@@ -599,7 +599,7 @@ jobs:
           projectPath: ${{ env.PROJECT_PATH }}
           unityVersion: ${{ env.UNITY_VERSION }}
           targetPlatform: Android
-          androidExportType: androidStudio
+          androidExportType: androidStudioProject
           buildMethod: DiveMap.EditorTools.CIBuild.BuildAndroidLibrary
           allowDirtyBuild: true
 
