@@ -92,6 +92,137 @@ namespace DiveMap.EditorTools
             }
         }
 
+        // Called by CI:  -buildMethod DiveMap.EditorTools.CIBuild.BuildAndroidLibrary
+        //
+        // "Unity as a Library" for Android: exports a GRADLE PROJECT instead of an apk, and the
+        // React Native app embeds the `unityLibrary` module out of it. This is the Android twin of
+        // BuildIos + the UnityFramework packaging step — same contract, different shape:
+        //
+        //   iOS      Unity → Xcode project → UnityFramework.framework → pinned by url+sha256
+        //   Android  Unity → Gradle project → unityLibrary/           → pinned by url+sha256
+        //
+        // The bridge itself needs nothing new: NativeBridge.cs already calls
+        // com.azesmwayreactnativeunity.ReactNativeUnityViewManager through AndroidJavaClass, and
+        // UnitySendMessage is the same transport in both directions on both platforms.
+        public static void BuildAndroidLibrary()
+        {
+            try
+            {
+                ConfigurePlayerSettings();
+
+                // The one line that decides apk vs. exported project. Without it BuildPlayer
+                // happily succeeds and hands back a DiveMap.apk — an artifact no host app can
+                // consume, and one that only reveals itself as wrong in the OTHER repository.
+                EditorUserBuildSettings.androidBuildSystem = AndroidBuildSystem.Gradle;
+                EditorUserBuildSettings.exportAsGoogleAndroidProject = true;
+
+                // Streaming assets have to stay INSIDE the module. With a split binary Unity puts
+                // them in a Play asset pack delivered by Google Play alongside the standalone app —
+                // which the React Native app is not, so the reef would boot with no data and no
+                // error naming why.
+                PlayerSettings.Android.splitApplicationBinary = false;
+
+                // Debug symbols are deliberately NOT touched here. The obvious line —
+                // EditorUserBuildSettings.androidCreateSymbols — is deprecated in Unity 6 in favour
+                // of UnityEditor.Android.UserBuildSettings, an Android-module-only type this file
+                // must not reference (it also compiles on the Linux test image). Symbols are packed
+                // by Gradle at assemble time, not by this export, so the artifact is unaffected
+                // either way; the packaging step below reports the real size.
+                // Same reason the iOS framework carries one: once this module is inside the RN app,
+                // the `bNNN` on the in-app badge is the ONLY way to tell which CI run — and so which
+                // commit — the 3D screen on a phone came from.
+                StampBuildNumber(Environment.GetEnvironmentVariable("ANDROID_BUILD_NUMBER"));
+
+                string outputPath = ResolveOutputPathDir("Build/AndroidLibrary");
+                EnsureParentDirectory(Path.Combine(outputPath, "placeholder"));
+
+                var scenes = ResolveScenes();
+                if (scenes.Length == 0)
+                {
+                    Fail("No enabled scenes found in EditorBuildSettings. Aborting build.");
+                    return;
+                }
+
+                var options = new BuildPlayerOptions
+                {
+                    scenes = scenes,
+                    locationPathName = outputPath,
+                    target = BuildTarget.Android,
+                    targetGroup = BuildTargetGroup.Android,
+                    options = BuildOptions.None,
+                };
+
+                Debug.Log($"[CIBuild] Exporting Android Gradle project -> {outputPath} " +
+                          $"id={ApplicationIdentifier} export={EditorUserBuildSettings.exportAsGoogleAndroidProject}");
+                BuildReport report = BuildPipeline.BuildPlayer(options);
+                BuildSummary summary = report.summary;
+
+                if (summary.result != BuildResult.Succeeded)
+                {
+                    Fail($"Build failed: result={summary.result}, errors={summary.totalErrors}, " +
+                         $"warnings={summary.totalWarnings}.");
+                    return;
+                }
+
+                // Prove the shape here, in the job that produced it. "Succeeded" above only says
+                // Unity wrote SOMETHING; the RN plugin needs this exact module, and finding out in
+                // the other repo costs another full round of this build.
+                string module = FindUnityLibrary(summary.outputPath, outputPath);
+                if (module == null)
+                {
+                    Fail($"Export succeeded but no unityLibrary/ module exists under '{outputPath}' " +
+                         "(summary.outputPath='" + summary.outputPath + "'). The host app has " +
+                         "nothing to embed.");
+                    return;
+                }
+
+                string classes = Path.Combine(module, "libs", "unity-classes.jar");
+                if (!File.Exists(classes))
+                {
+                    Fail($"unityLibrary has no libs/unity-classes.jar ({module}). The RN module " +
+                         "compiles against that jar by path (react-native-unity/android/build.gradle), " +
+                         "so the Gradle build would fail on the EAS worker instead of here.");
+                    return;
+                }
+
+                Debug.Log($"[CIBuild] unityLibrary at {module} (unity-classes.jar {new FileInfo(classes).Length} bytes)");
+                EditorApplication.Exit(0);
+            }
+            catch (Exception ex)
+            {
+                Fail($"Unhandled exception during Android library export: {ex}");
+            }
+        }
+
+        /// <summary>
+        /// The exported <c>unityLibrary</c> directory, or null.
+        ///
+        /// Searched rather than assumed for the same reason the iOS job searches for its Xcode
+        /// project: game-ci exports its own BUILD_PATH and has put builds somewhere other than
+        /// where we asked before. Both the summary's own path and the requested path are checked,
+        /// then the workspace as a fallback.
+        /// </summary>
+        private static string FindUnityLibrary(string summaryPath, string requestedPath)
+        {
+            foreach (var root in new[] { summaryPath, requestedPath, Directory.GetCurrentDirectory() })
+            {
+                if (string.IsNullOrWhiteSpace(root)) continue;
+                string direct = Path.Combine(root, "unityLibrary");
+                if (Directory.Exists(direct)) return direct;
+                if (!Directory.Exists(root)) continue;
+                try
+                {
+                    var hit = Directory.GetDirectories(root, "unityLibrary", SearchOption.AllDirectories);
+                    if (hit.Length > 0) return hit[0];
+                }
+                catch (Exception e)
+                {
+                    Debug.LogWarning($"[CIBuild] could not scan {root}: {e.Message}");
+                }
+            }
+            return null;
+        }
+
         // Called by CI:  -buildMethod DiveMap.EditorTools.CIBuild.BuildWindows
         // Windows player (Mono — IL2CPP cross-compile จาก Linux ไป Windows ทำไม่ได้)
         // ใช้เทสบน Windows Server ผ่าน RDP: เมาส์ควบคุมได้ (OrbitCamera มี mouse fallback)

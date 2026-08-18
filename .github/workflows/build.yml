@@ -19,6 +19,10 @@ on:
         description: 'Build UnityFramework.framework for the React Native app (macOS runner — unsigned, no TestFlight).'
         type: boolean
         default: false
+      android_library:
+        description: 'Export unityLibrary/ for the React Native app on Android (ubuntu runner — the Android twin of ios_framework).'
+        type: boolean
+        default: false
       ui_only:
         # 🔴 Measured before it was written, because the obvious guess was wrong. One QC round
         # (b392) breaks down as: Unity build 89 min · model/map/clip captures 16 min · the UI pass
@@ -534,6 +538,172 @@ jobs:
           name: UnityFramework-xcode
           path: ${{ env.XCODE_DIR }}
           retention-days: 7
+
+  # ────────────────────────────────────────────────────────────────────────────
+  # 1c) Android unityLibrary — "Unity as a Library" for the React Native app.
+  #
+  # The Android twin of ios_framework, and deliberately built the same way: an unsigned
+  # artifact pinned in siamdive-rn by url + sha256, never a store upload. It runs on
+  # ubuntu (the Android player needs no macOS), so unlike the iOS half it stays free
+  # even after this repo goes private again on 31 Aug.
+  # ────────────────────────────────────────────────────────────────────────────
+  android_library:
+    name: Build Android unityLibrary
+    needs: test
+    if: github.event_name == 'workflow_dispatch' && inputs.android_library
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - name: Free disk space
+        uses: jlumbroso/free-disk-space@main
+        with:
+          tool-cache: true
+          # NOT true: this job needs the Android SDK/NDK the image ships with.
+          android: false
+          dotnet: true
+          haskell: true
+          large-packages: true
+          swap-storage: false
+
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          lfs: true
+
+      # Its own key family, not the apk job's: the exported project and the apk are different
+      # build shapes and sharing one cache made the second job re-import anyway.
+      - name: Cache Library
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.PROJECT_PATH }}/Library
+          key: Library-androidlib-${{ hashFiles('DiveMap/Packages/manifest.json') }}
+          restore-keys: |
+            Library-androidlib-
+            Library-build-
+            Library-
+
+      - name: Export Gradle project (Unity)
+        uses: game-ci/unity-builder@v4
+        env:
+          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+          # The badge in the corner of the 3D screen. Without it a module on a phone cannot be
+          # traced back to a run.
+          ANDROID_BUILD_NUMBER: ${{ github.run_number }}
+          # CONTAINER path, not ${{ github.workspace }}: Unity runs inside docker here (unlike the
+          # macOS iOS job) and /github/workspace is what the host workspace is mounted as. A host
+          # path would write into the container's own filesystem and vanish with it.
+          DM_BUILD_PATH: /github/workspace/build/AndroidLibrary
+        with:
+          projectPath: ${{ env.PROJECT_PATH }}
+          unityVersion: ${{ env.UNITY_VERSION }}
+          targetPlatform: Android
+          androidExportType: androidStudio
+          buildMethod: DiveMap.EditorTools.CIBuild.BuildAndroidLibrary
+          allowDirtyBuild: true
+
+      - name: Locate and verify the module
+        run: |
+          set -e
+          MOD=$(find . -maxdepth 6 -type d -name unityLibrary -not -path '*/Library/*' -not -path '*/Temp/*' | head -1)
+          if [ -z "$MOD" ]; then
+            echo "::error::Unity reported success but exported no unityLibrary/ module"
+            find . -maxdepth 4 -type d -name 'Android*' -not -path '*/Library/*' || true
+            exit 1
+          fi
+          echo "UNITY_LIBRARY=$MOD" >> "$GITHUB_ENV"
+          echo "found: $MOD"
+          ls -la "$MOD"
+
+          # Everything below is a contract the OTHER repository depends on. Checking it here is the
+          # difference between a 10-second failure and one that surfaces on an EAS worker hours
+          # later as a Gradle error in a module nobody was editing.
+
+          # 1. react-native-unity/android/build.gradle compiles against this jar BY PATH:
+          #      implementation files("${project(':unityLibrary').projectDir}/libs/unity-classes.jar")
+          test -f "$MOD/libs/unity-classes.jar" || {
+            echo "::error::no libs/unity-classes.jar — the RN module cannot compile"; ls -la "$MOD/libs" || true; exit 1; }
+
+          # 2. The IL2CPP player itself. An export missing libunity.so builds fine and shows a
+          #    black view on the phone, which is the failure mode this whole project keeps paying for.
+          SO=$(find "$MOD" -name 'libunity.so' | head -1)
+          [ -n "$SO" ] || { echo "::error::no libunity.so in the module — the player was not exported"; exit 1; }
+          echo "player: $SO ($(du -h "$SO" | cut -f1))"
+          find "$MOD" -name '*.so' -exec du -h {} \; | sort -h | tail -5
+
+          # 3. The reef's own data. With splitApplicationBinary the assets would be in a Play asset
+          #    pack instead — an apk-only delivery the RN app would never receive.
+          if [ -d "$MOD/src/main/assets" ]; then
+            du -sh "$MOD/src/main/assets"
+            ls "$MOD/src/main/assets" | head
+          else
+            echo "::error::no src/main/assets — Unity split the data out of the module (asset pack?)"
+            exit 1
+          fi
+
+          # 4. Printed, not enforced: the RN plugin has to reconcile these with Expo's own values,
+          #    and knowing what they were at export time is what makes that possible without
+          #    guessing. minSdk 26 is the one that matters — Expo defaults lower.
+          echo "── build.gradle of the module ──"
+          grep -nE 'minSdk|targetSdk|compileSdk|ndkVersion|ndkPath|namespace|sourceCompatibility' \
+            "$MOD/build.gradle" || true
+          echo "── gradle wrapper / AGP the export expects ──"
+          grep -rnE 'distributionUrl|com.android.tools.build:gradle|agp' \
+            "$(dirname "$MOD")/gradle/wrapper/gradle-wrapper.properties" \
+            "$(dirname "$MOD")/build.gradle" 2>/dev/null || true
+
+      - name: Package the module
+        run: |
+          set -e
+          PARENT=$(dirname "$UNITY_LIBRARY")
+          STAGE="${{ runner.temp }}/unityLibrary-android"
+          rm -rf "$STAGE" && mkdir -p "$STAGE"
+          # Unity runs as root inside the container, so the export is root-owned. cp -a preserves
+          # what matters and sudo is what makes it readable to the upload step.
+          sudo cp -a "$UNITY_LIBRARY" "$STAGE/unityLibrary"
+          sudo chown -R "$(id -u):$(id -g)" "$STAGE"
+
+          # Kept out of the zip on purpose: local.properties points at the CONTAINER's SDK/NDK
+          # paths, and a stale one is a Gradle failure on the EAS worker that reads as "SDK not
+          # found" with no hint that it came from here.
+          rm -f "$STAGE/unityLibrary/local.properties"
+
+          {
+            echo "artifact:     unityLibrary-android"
+            echo "commit:       ${{ github.sha }}"
+            echo "ref:          ${{ github.ref }}"
+            echo "run_number:   ${{ github.run_number }}  (= bNNN on the in-app badge)"
+            echo "run_id:       ${{ github.run_id }}"
+            echo "unity:        ${{ env.UNITY_VERSION }}"
+            echo "built:        $(date -u '+%Y-%m-%dT%H:%M:%SZ')"
+            echo "size:         $(du -sh "$STAGE/unityLibrary" | cut -f1)"
+            echo "signing:      none — the host app signs it when Gradle assembles the apk"
+            echo "host needs:   include ':unityLibrary' + minSdk >= 26 + the abiFilters below"
+            echo "abis:         $(ls "$STAGE/unityLibrary/src/main/jniLibs" 2>/dev/null | tr '\n' ' ')"
+          } > "$STAGE/MANIFEST.txt"
+          cat "$STAGE/MANIFEST.txt"
+
+          cd "$(dirname "$STAGE")"
+          zip -qry "${{ runner.temp }}/unityLibrary-android.zip" "$(basename "$STAGE")"
+          ls -la "${{ runner.temp }}/unityLibrary-android.zip"
+          sha256sum "${{ runner.temp }}/unityLibrary-android.zip"
+
+      - name: Upload unityLibrary
+        uses: actions/upload-artifact@v4
+        with:
+          name: unityLibrary-android
+          path: ${{ runner.temp }}/unityLibrary-android.zip
+          retention-days: 14
+          if-no-files-found: error
+
+      - name: List the exported tree when something goes wrong
+        if: failure()
+        run: |
+          # The export can be hundreds of MB; only the text that explains a failure is worth keeping.
+          find . -maxdepth 6 -name '*.gradle' -o -maxdepth 6 -name 'gradle.properties' \
+            -o -maxdepth 6 -name 'AndroidManifest.xml' 2>/dev/null | head -40
+          find . -maxdepth 4 -type d -not -path '*/Library/*' | head -40
 
   # ────────────────────────────────────────────────────────────────────────────
   # 2) Android APK build (only after tests pass). Build gate = QC_PLAN §1.3.
