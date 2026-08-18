@@ -122,6 +122,19 @@ namespace DiveMap.EditorTools
                 // error naming why.
                 PlayerSettings.Android.splitApplicationBinary = false;
 
+                // 🔴 The host app enters Unity through an ACTIVITY, not a GameActivity.
+                // ProjectSettings has androidApplicationEntry: 2 (GameActivity only) because that
+                // is what the standalone DiveMap apk launches with — but @azesmway/react-native-unity
+                // creates the player through com.unity3d.player.UnityPlayerForActivityOrService
+                // (android/.../UPlayer.java:21), which is the Activity entry point. A player built
+                // without it hands the RN view a class it cannot drive: a black screen with no log
+                // line naming the cause, which is the exact failure this project keeps paying for.
+                //
+                // Both are enabled rather than swapped, so the standalone apk keeps the entry it
+                // has always used and the embedded module gains the one it needs.
+                PlayerSettings.Android.applicationEntry =
+                    AndroidApplicationEntry.Activity | AndroidApplicationEntry.GameActivity;
+
                 // Debug symbols are deliberately NOT touched here. The obvious line —
                 // EditorUserBuildSettings.androidCreateSymbols — is deprecated in Unity 6 in favour
                 // of UnityEditor.Android.UserBuildSettings, an Android-module-only type this file
@@ -499,7 +512,7 @@ namespace DiveMap.EditorTools
                 preloaded.Add(settings);
                 PlayerSettings.SetPreloadedAssets(preloaded.ToArray());
             }
-            Debug.Log($"[CIBuild] XR settings preloaded ({preloaded.Count} assets) — ARKit can start");
+            Debug.Log($"[CIBuild] XR settings preloaded ({preloaded.Count} assets, {platformTag}) — tracking can start");
         }
 
         /// <summary>
