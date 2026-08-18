@@ -818,11 +818,25 @@ namespace DiveMap.EditorTools
             PlayerSettings.Android.minSdkVersion = AndroidSdkVersions.AndroidApiLevel26;
             PlayerSettings.Android.targetSdkVersion = AndroidSdkVersions.AndroidApiLevelAuto;
 
-            // Vulkan-first graphics (URP on Android XR). Disable auto so Vulkan is chosen.
+            // 🔴 OpenGLES3, NOT Vulkan — and this is ARCore's rule, not a preference.
+            // ARCorePreprocessBuild.EnsureOnlyOpenGLES3IsUsed (ARCoreBuildProcessor.cs:139) FAILS
+            // the build outright with "You have enabled the Vulkan graphics API, which is not
+            // supported by ARCore", and it rejects a [Vulkan, GLES3] fallback list too — so this
+            // is a straight either/or between AR plane detection and Vulkan on Android.
+            //
+            // Nothing here needs Vulkan: the project has no compute shaders, and the reef's fish
+            // are drawn with Graphics.RenderMeshInstanced, which GLES3 supports (FishSchoolSystem
+            // already falls back to per-fish draws anyway). iOS is untouched — it renders with
+            // Metal and knows nothing about this setting.
+            //
+            // To go back to Vulkan: restore the single-entry list below and drop
+            // com.unity.xr.arcore from Packages/manifest.json + the Android define in
+            // ProjectSettings.asset. AR then falls back to the camera-and-gyro path, which is
+            // what the web does and what every non-ARCore phone gets regardless.
             PlayerSettings.SetUseDefaultGraphicsAPIs(BuildTarget.Android, false);
             PlayerSettings.SetGraphicsAPIs(BuildTarget.Android, new[]
             {
-                UnityEngine.Rendering.GraphicsDeviceType.Vulkan,
+                UnityEngine.Rendering.GraphicsDeviceType.OpenGLES3,
             });
         }
 
