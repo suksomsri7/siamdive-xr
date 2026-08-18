@@ -552,7 +552,11 @@ jobs:
     needs: test
     if: github.event_name == 'workflow_dispatch' && inputs.android_library
     runs-on: ubuntu-latest
-    timeout-minutes: 120
+    # 180, not the 120 this started at: the first export was still running at 1h45m, and this
+    # repo's Unity jobs have historically finished between 1h35m and 2h05m. A timeout shorter
+    # than the job's own normal range does not protect anything — it just throws away a nearly
+    # finished build and reads, in the log, exactly like a hang.
+    timeout-minutes: 180
     steps:
       - name: Free disk space
         uses: jlumbroso/free-disk-space@main
