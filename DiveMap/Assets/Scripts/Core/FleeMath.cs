@@ -88,6 +88,67 @@ namespace DiveMap.Core
         /// <summary>Is the diver moving fast enough to frighten anything? (web: <c>camVel&gt;11</c>)</summary>
         public static bool DiverIsThreatening(double diverSpeed) => diverSpeed > DiverPanicSpeed;
 
+        // ── "ปลาตกใจเร็วไปมาก ควรมีระยะตกใจ และสัมพันธ์กับความเร็วโดรน" (user, 21 ส.ค. 2026) ──
+        //
+        // วัดของเดิมก่อนแก้ (โดรน 12 u/s · เกณฑ์ 4.4 u/s):
+        //
+        //     ฝูง        ระยะชน   ระยะตกใจเต็ม   โซนที่ไล่ระดับได้จริง
+        //     R=8         8.6 ม.       10.4 ม.        1.8 ม.
+        //     R=12       12.9 ม.       15.6 ม.        2.7 ม.
+        //     R=20       20.5 ม.       20.0 ม.       -0.5 ม.   ← ไม่มีเลย
+        //     R=30       30.5 ม.       28.5 ม.       -2.0 ม.   ← ไม่มีเลย
+        //
+        // ⇒ สองเรื่องที่รวมกันแล้วได้อาการ "ตกใจง่ายเกิน":
+        //   1. กฎ "โดนตัว = ตกใจเต็ม 1.0" (เพิ่ม 15 ส.ค. ตามที่ user ขอ) ไม่สนความเร็วเลย และ
+        //      ระยะของมัน (ขอบฝูง+1 ตัวปลา) **กว้างกว่า**ระยะตกใจแบบไล่ระดับในฝูงใหญ่
+        //      ⇒ ลอยเข้าไปช้าที่สุดเท่าที่ทำได้ พอแตะขอบฝูงก็แตกฮือเต็มพิกัดทันที ไม่มีขั้นกลาง
+        //   2. ความเร็วเป็นแค่ประตูเปิด/ปิด (เกิน 37% คันเร่ง = ใช่) แล้ว**ระยะคงที่**
+        //      ⇒ คลานผ่านที่ 38% กับพุ่งใส่ที่ 100% ฝูงตอบสนองเท่ากันเป๊ะ
+        //
+        // แก้ตามที่ user บรรยาย: ระยะตกใจโตตามความเร็ว — ช้า = ต้องถึงตัวถึงจะรู้สึก ·
+        // เร็ว = รู้ตัวตั้งแต่ไกล · และ "โดนตัวตอนลอยนิ่ง" = สะดุ้งหลบ ไม่ใช่แตกกระเจิง
+
+        /// <summary>
+        /// ความน่ากลัวของโดรน 0..1 จากความเร็ว: 0 ที่เกณฑ์ (<see cref="DiverPanicSpeed"/>)
+        /// และ 1 ที่คันเร่งเต็ม. เป็นสัดส่วนของคันเร่งเหมือน <see cref="PanicSpeedFraction"/>
+        /// จึงเลื่อนตามเองถ้าความเร็วโดรนถูกจูนอีก (เคยพลาดมาแล้วตอนตัวเลข 11 ถูกฮาร์ดโค้ด).
+        /// </summary>
+        public static double ThreatFraction(double diverSpeed)
+        {
+            double lo = DiverPanicSpeed;
+            double hi = DroneFlight.Speed;
+            if (hi <= lo) return diverSpeed > lo ? 1.0 : 0.0;
+            return Clamp01((diverSpeed - lo) / (hi - lo));
+        }
+
+        /// <summary>
+        /// ระยะที่ฝูงเริ่มรู้สึกถึงโดรน — โตตามความเร็ว.
+        ///
+        /// ที่ความเร็วเกณฑ์ = <see cref="ContactRadius"/> (ต้องถึงตัวจริง ๆ) · ที่คันเร่งเต็ม =
+        /// ระยะของเว็บ (<see cref="DiverPanicRadius"/>) แต่ **อย่างน้อยต้องมีระยะเตือน 6 ช่วงตัว
+        /// เสมอ** เพราะในฝูงใหญ่สูตรของเว็บให้ค่าน้อยกว่าระยะชน ⇒ ถ้าไม่กันไว้ ฝูงใหญ่จะไม่มีวัน
+        /// ตกใจก่อนโดนชนเลยไม่ว่าจะพุ่งเร็วแค่ไหน ซึ่งเป็นอาการตรงข้ามกับที่ user ขอ.
+        /// </summary>
+        public static double StartleRadius(double spreadR, double fishLen, double diverSpeed)
+        {
+            double near = ContactRadius(spreadR, fishLen);
+            double far = DiverPanicRadius(spreadR, fishLen);
+            double warned = near + Math.Max(fishLen, 0.5) * 6.0;
+            if (far < warned) far = warned;
+            return near + (far - near) * ThreatFraction(diverSpeed);
+        }
+
+        /// <summary>ความตกใจขั้นต่ำเมื่อโดนตัวขณะโดรนแทบไม่เคลื่อนที่ — สะดุ้งหลบ ไม่ใช่แตกฝูง.</summary>
+        public const double ContactPanicFloor = 0.35;
+
+        /// <summary>
+        /// ตกใจแค่ไหนเมื่อโดรน "ถึงตัว". ยังตกใจเสมอแม้ลอยนิ่ง (กฎ 15 ส.ค. ของ user ยังอยู่ครบ —
+        /// ปลาต้องหลบสิ่งที่เข้ามาประชิด ไม่งั้นโดรนจะดูทะลุตัวปลา) แต่แรงตามความเร็วที่ชน:
+        /// ลอยไปเบียด = 0.35 · พุ่งเต็มสปีดใส่ = 1.0
+        /// </summary>
+        public static double ContactPanic(double diverSpeed)
+            => ContactPanicFloor + (1.0 - ContactPanicFloor) * ThreatFraction(diverSpeed);
+
         // ── "ฝูงสั่นถี่ๆ" (user, 8-9 ส.ค. 2026) — the gate, not the swimming ──────
         //
         // 🔴 <see cref="DiverIsThreatening(double)"/> is a HARD binary test on a NOISY signal, and
@@ -161,11 +222,17 @@ namespace DiveMap.Core
             // ไม่สนใจเลย ซึ่งผิดธรรมชาติ (ของจริงปลาหลบทุกอย่างที่เข้ามาประชิด ไม่ว่าจะเร็วแค่ไหน)
             // และเป็นเหตุผลที่ user รู้สึกว่าโดรน "ทะลุ" ตัวปลา — ปลาไม่เคยพยายามหลบเลย
             //
-            // ระยะประชิด = หนึ่งช่วงตัวปลาจากขอบฝูง: ใกล้กว่านั้นถือว่าชน ⇒ ตกใจเต็มพิกัด (1.0)
-            // ไม่ว่าจะเคลื่อนที่อยู่หรือไม่ · เกินระยะนั้นกลับไปใช้กฎเดิมทุกประการ
-            if (diverActive && diverDistance <= ContactRadius(spreadR, fishLen)) return 1.0;
+            // ระยะประชิด = หนึ่งช่วงตัวปลาจากขอบฝูง: ใกล้กว่านั้นถือว่าชน ⇒ ตกใจเสมอไม่ว่าจะ
+            // เคลื่อนที่อยู่หรือไม่ · 🔴 21 ส.ค. 2026 แรงของมันไม่ใช่ 1.0 ตายตัวอีกแล้ว แต่ขึ้นกับ
+            // ความเร็วที่ชน (ดู ContactPanic) — ของเดิมทำให้ "ลอยเข้าไปช้า ๆ" กับ "พุ่งใส่เต็มสปีด"
+            // ได้ผลเท่ากันเป๊ะ ซึ่งคือ "ปลาตกใจเร็วไปมาก" ที่ user รายงาน
+            if (diverActive && diverDistance <= ContactRadius(spreadR, fishLen))
+                return ContactPanic(diverSpeed);
 
-            return nowThreatening ? PanicLevel(diverDistance, DiverPanicRadius(spreadR, fishLen)) : 0.0;
+            // เกินระยะประชิด: ระยะตกใจโตตามความเร็ว แทนที่จะคงที่
+            return nowThreatening
+                ? PanicLevel(diverDistance, StartleRadius(spreadR, fishLen, diverSpeed))
+                : 0.0;
         }
 
         /// <summary>
@@ -189,8 +256,11 @@ namespace DiveMap.Core
                 double p = PanicLevel(predatorDistance, PredatorPanicRadius(spreadR, fishLen));
                 if (p > 0.0) return p;
             }
+            // 🔴 โอเวอร์โหลดนี้คือ "กฎของเว็บเปล่า ๆ" ไว้เทียบ ไม่มีทั้งกฎประชิด (15 ส.ค.) และ
+            // hysteresis — ของจริงที่แอปเรียกคือตัว 8 อาร์กิวเมนต์ข้างบน. ที่เปลี่ยนตรงนี้มีอย่าง
+            // เดียวคือระยะที่โตตามความเร็ว เพราะนั่นคือส่วนที่เว็บไม่มีและ user ขอเข้ามา (21 ส.ค.)
             if (diverActive && DiverIsThreatening(diverSpeed))
-                return PanicLevel(diverDistance, DiverPanicRadius(spreadR, fishLen));
+                return PanicLevel(diverDistance, StartleRadius(spreadR, fishLen, diverSpeed));
             return 0.0;
         }
 

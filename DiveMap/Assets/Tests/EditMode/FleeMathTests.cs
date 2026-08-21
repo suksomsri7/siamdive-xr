@@ -320,9 +320,14 @@ namespace DiveMap.Tests
         /// <summary>
         /// 15 ส.ค. 2026 — user: "โดรนต้องไม่บินทะลุตัวสัตว์ · ชนแล้วสัตว์ต้องว่ายเร็วขึ้นมาก ๆ"
         ///
-        /// สิ่งที่ตรึงไว้คือกฎเดียว: **ประชิด = ตกใจเต็มพิกัด ไม่ว่าจะเคลื่อนที่อยู่หรือไม่**
+        /// สิ่งที่ตรึงไว้คือกฎเดียว: **ประชิด = ตกใจ ไม่ว่าจะเคลื่อนที่อยู่หรือไม่**
         /// ก่อนหน้านี้ฝูงสนใจเฉพาะนักดำน้ำที่ว่ายเร็วพอ ⇒ ลอยนิ่งจ่อกลางฝูงแล้วปลาไม่หลบเลย
         /// ซึ่งเป็นเหตุผลที่มันดูเหมือนโดรน "ทะลุ" ตัวปลา
+        ///
+        /// 🔴 21 ส.ค. 2026 — user แก้เกณฑ์เอง: "ปลาตกใจเร็วไปมาก ควรมีระยะตกใจ และสัมพันธ์กับ
+        /// ความเร็วโดรน" ⇒ กฎยังอยู่ (ประชิดแล้วต้องตกใจเสมอ) แต่ **แรงไม่เท่ากันอีกแล้ว**:
+        /// ลอยไปเบียด = สะดุ้งหลบ · พุ่งเต็มสปีดใส่ = แตกฝูง. ค่า 1.0 ตายตัวคือสิ่งที่ทำให้สองอย่าง
+        /// นี้เหมือนกันเป๊ะ ซึ่งคืออาการที่ถูกรายงาน
         /// </summary>
         [Test]
         public void TouchingTheShoal_PanicsEvenWhenTheDiverIsStill()
@@ -336,7 +341,52 @@ namespace DiveMap.Tests
                 diverDistance: contact - 0.01, diverSpeed: 0.0, diverActive: true,
                 spreadR: spreadR, fishLen: fishLen,
                 wasThreatening: false, out bool _);
-            Assert.AreEqual(1.0, panic, 1e-9, "ประชิด = ตกใจเต็มพิกัด แม้นักดำน้ำจะไม่ขยับ");
+            Assert.Greater(panic, 0.0, "ประชิดแล้วต้องตกใจเสมอ — ไม่งั้นโดรนจะดูทะลุตัวปลาอีก");
+            Assert.AreEqual(FleeMath.ContactPanicFloor, panic, 1e-9,
+                            "แต่ลอยนิ่งไปเบียด = สะดุ้ง ไม่ใช่แตกฝูง");
+        }
+
+        /// <summary>
+        /// อีกครึ่งของกฎเดียวกัน: พุ่งเต็มสปีดเข้าชน = ตกใจเต็มพิกัด. สองเทสนี้ต้องอยู่คู่กัน —
+        /// ตัวบนอย่างเดียวจูนลงจนปลาไม่สนใจอะไรเลยก็ยังผ่าน
+        /// </summary>
+        [Test]
+        public void RammingTheShoalAtFullThrottle_IsStillFullPanic()
+        {
+            const double spreadR = 12.0, fishLen = 1.9;
+            double contact = FleeMath.ContactRadius(spreadR, fishLen);
+
+            double panic = FleeMath.SchoolPanic(
+                predatorDistance: 999, hasPredator: false,
+                diverDistance: contact - 0.01, diverSpeed: DroneFlight.Speed, diverActive: true,
+                spreadR: spreadR, fishLen: fishLen,
+                wasThreatening: true, out bool _);
+            Assert.AreEqual(1.0, panic, 1e-9, "พุ่งเต็มสปีดใส่ = แตกฝูงเต็มพิกัด");
+        }
+
+        /// <summary>
+        /// หัวใจของสิ่งที่ user ขอ (21 ส.ค.): **ระยะตกใจต้องโตตามความเร็ว** — ไม่ใช่ประตูเปิด/ปิด
+        /// ที่ระยะคงที่ ซึ่งทำให้ "คลานผ่านที่ 38% คันเร่ง" กับ "พุ่งใส่ที่ 100%" ได้ผลเท่ากัน
+        /// </summary>
+        [Test]
+        public void StartleRadiusGrowsWithSpeed()
+        {
+            const double spreadR = 12.0, fishLen = 1.9;
+            double contact = FleeMath.ContactRadius(spreadR, fishLen);
+
+            double crawl = FleeMath.StartleRadius(spreadR, fishLen, FleeMath.DiverPanicSpeed);
+            double half = FleeMath.StartleRadius(spreadR, fishLen, DroneFlight.Speed * 0.5);
+            double full = FleeMath.StartleRadius(spreadR, fishLen, DroneFlight.Speed);
+
+            Assert.AreEqual(contact, crawl, 1e-9, "ที่เกณฑ์พอดี = ต้องถึงตัวถึงจะรู้สึก");
+            Assert.Greater(half, crawl, "เร็วขึ้น = รู้ตัวไกลขึ้น");
+            Assert.Greater(full, half);
+
+            // ฝูงใหญ่คือเคสที่สูตรของเว็บพัง (ระยะตกใจ < ระยะชน) — เต็มสปีดต้องมีระยะเตือนเสมอ
+            const double bigR = 30.0, smallFish = 0.5;
+            Assert.Greater(FleeMath.StartleRadius(bigR, smallFish, DroneFlight.Speed),
+                           FleeMath.ContactRadius(bigR, smallFish),
+                           "ฝูงใหญ่ก็ต้องตกใจก่อนโดนชน ถ้าโดรนพุ่งมาเต็มสปีด");
         }
 
         /// <summary>พ้นระยะประชิดแล้วต้องกลับไปใช้กฎเดิมเป๊ะ — ไม่ใช่ตกใจตลอดเวลา.</summary>
