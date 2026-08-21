@@ -403,12 +403,39 @@ namespace DiveMap.Tests
                 wasThreatening: false, out bool _);
             Assert.AreEqual(0.0, still, 1e-9, "นอกระยะประชิด + ลอยนิ่ง = ไม่ตกใจ (กฎเดิม)");
 
+            // 🔴 21 ส.ค. 2026 — เดิมตรงนี้ทดสอบที่ "เกณฑ์ + 1 u/s" แล้วคาดว่าต้องตกใจ ซึ่งเป็น
+            // ของที่ user สั่งให้เลิก: แค่พ้นเกณฑ์นิดเดียวต้องยังไม่มีระยะเตือนเลย (ระยะเตือนโต
+            // ตามความเร็ว ไม่ใช่เปิดเต็มทันทีที่พ้นสวิตช์) ⇒ ที่ความเร็วนั้นแถบเตือนกว้าง 0.5 ม.
+            // พอดีจุดที่เทสนี้จิ้ม = ขอบพอดี. ย้ายไปวัดที่ "พุ่งเต็มสปีด" ซึ่งเป็นเคสที่กฎยังต้องทำงาน
             double fast = FleeMath.SchoolPanic(
                 predatorDistance: 999, hasPredator: false,
-                diverDistance: justOutside, diverSpeed: FleeMath.DiverPanicSpeed + 1.0, diverActive: true,
+                diverDistance: justOutside, diverSpeed: DroneFlight.Speed, diverActive: true,
                 spreadR: spreadR, fishLen: fishLen,
                 wasThreatening: false, out bool _);
-            Assert.Greater(fast, 0.0, "นอกระยะประชิดแต่ว่ายเร็ว = ตกใจตามกฎเดิม");
+            Assert.Greater(fast, 0.0, "นอกระยะประชิดแต่พุ่งเต็มสปีด = ตกใจก่อนถึงตัว");
+        }
+
+        /// <summary>
+        /// user 21 ส.ค. 2026: "อยากให้ผู้ใช้งานสนุกกับการเล่น เจอสัตว์ เห็นสัตว์ … ลอยนิ่ง/คลานช้า
+        /// ปลาไม่ควรตกใจจนกว่าจะชน" — ตรึงไว้เป็นข้อสอบ ไม่ใช่แค่ค่าคงที่ที่ใครมาปรับกลับก็ได้
+        /// </summary>
+        [Test]
+        public void CrawlingUpToAShoal_NothingHappensUntilYouTouchIt()
+        {
+            const double spreadR = 12.0, fishLen = 1.9;
+            double contact = FleeMath.ContactRadius(spreadR, fishLen);
+
+            // ไล่ตั้งแต่ลอยนิ่งจนถึงเกณฑ์ ที่ระยะห่างจากขอบฝูงแค่คืบเดียว
+            foreach (double speed in new[] { 0.0, 1.0, 2.5, FleeMath.DiverPanicSpeed })
+            {
+                double panic = FleeMath.SchoolPanic(
+                    predatorDistance: 999, hasPredator: false,
+                    diverDistance: contact + 0.25, diverSpeed: speed, diverActive: true,
+                    spreadR: spreadR, fishLen: fishLen,
+                    wasThreatening: false, out bool _);
+                Assert.AreEqual(0.0, panic, 1e-9,
+                                $"คลานเข้าไปที่ {speed:F1} u/s ยังไม่ถึงตัว = ฝูงต้องอยู่เฉย ๆ ให้ดู");
+            }
         }
 }
 }
