@@ -61,6 +61,16 @@ namespace DiveMap.Runtime
         /// </summary>
         public bool Request(AppMode mode)
         {
+            // A→B ที่ไม่ถูกกฎ แต่ A→View→B ถูกกฎ = พาไปเองผ่านฮับ (ดู ModeRules.RoutesViaHub —
+            // user 21 ส.ค. 2026: จาก AR สั่งโดรนแล้วขยับอะไรไม่ได้เลย). ต้องเดินเป็นสองก้าวจริง
+            // ไม่ใช่เซ็ต _mode ข้าม: ก้าวแรกคือสิ่งที่ทำให้ ArSession.Restore ได้ทำงาน — คืนกล้อง
+            // คืนของที่ซ่อนไว้ ปิดเซสชัน ARKit — ซึ่งการกระโดดตรงจะข้ามไปทั้งหมด
+            if (ModeRules.RoutesViaHub(_mode, mode))
+            {
+                Debug.Log($"[Mode] {_mode}→{mode} ไม่ได้ตรง ๆ — เดินผ่าน {AppMode.View} ให้");
+                if (!Request(AppMode.View)) return false;
+            }
+
             if (!ModeRules.CanEnter(_mode, mode))
             {
                 Debug.Log($"[Mode] refused {_mode}→{mode}");

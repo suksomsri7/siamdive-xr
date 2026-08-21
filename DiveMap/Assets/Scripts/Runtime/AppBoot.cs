@@ -1502,8 +1502,22 @@ namespace DiveMap.Runtime
                     if (!ArSession.Start())
                         Debug.LogWarning("[Native] host asked for AR but this device would not start it");
                     break;
+                case Core.BootMode.Requested.Preview:
+                    // 🔴 21 ส.ค. 2026 — เดิมบรรทัดนี้เป็น `break;` เปล่า พร้อมหมายเหตุว่า
+                    // "Preview = View = ที่ที่แมพขึ้นมาอยู่แล้ว" ซึ่งจริงเฉพาะตอนที่ Unity
+                    // เพิ่งบูตมาสด ๆ. Unity ตัวเดียวอยู่ยาวข้ามการเปิดหลายแมพหลายโหมด
+                    // (เริ่มใหม่ไม่ได้ — ARKit init ซ้ำไม่ได้) ⇒ สั่ง Preview ตอนค้างอยู่ใน
+                    // AR/ทัวร์ = ไม่มีอะไรเกิดขึ้นเลย ผู้ใช้ได้โหมดเดิมพร้อม chrome ของโหมดใหม่
+                    // (user: "เข้าโหมด preview ก็ขยับไม่ได้ แถมยังแสดงหน้าโดรนอีก")
+                    // Preview จึงต้อง "พากลับหน้าแมพ" อย่างตั้งใจ ไม่ใช่ "ไม่ทำอะไร"
+                    if (ModeManager.Current != Core.AppMode.View && ModeManager.Instance != null)
+                    {
+                        Debug.Log($"[Native] host asked for preview while in {ModeManager.Current} — leaving it");
+                        ModeManager.Instance.Exit();
+                    }
+                    break;
                 default:
-                    break;   // Preview = View = ที่ที่แมพขึ้นมาอยู่แล้ว
+                    break;   // None = เจ้าบ้านไม่ได้สั่ง ปล่อยตามพฤติกรรมเดิม
             }
         }
 

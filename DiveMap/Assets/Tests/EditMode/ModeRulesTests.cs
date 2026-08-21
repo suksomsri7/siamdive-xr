@@ -73,6 +73,39 @@ namespace DiveMap.Tests
         }
 
         [Test]
+        public void EveryRefusedMoveStillHasARouteThroughTheHub()
+        {
+            // user 21 ส.ค. 2026 (build 9016): จาก AR สั่งโหมดโดรน → ขยับอะไรไม่ได้เลย
+            // เพราะคำขอถูกปฏิเสธเงียบ ๆ แล้วโหมดค้างอยู่ที่ Ar. กฎ "AR เข้าจากหน้าแมพเท่านั้น"
+            // ยังอยู่ — แต่ต้องมีทางไปให้ถึงเสมอ ไม่ใช่ทางตัน
+            AppMode[] all = { AppMode.View, AppMode.Tour, AppMode.Game, AppMode.Ar, AppMode.Edit };
+            foreach (AppMode from in all)
+                foreach (AppMode to in all)
+                {
+                    if (from == to) continue;
+                    Assert.IsTrue(
+                        ModeRules.CanEnter(from, to) || ModeRules.RoutesViaHub(from, to),
+                        $"{from}→{to} ต้องไปถึงได้ ไม่ทางตรงก็ผ่าน View");
+                }
+        }
+
+        [Test]
+        public void TheHubRouteIsOnlyForMovesThatAreRefused()
+        {
+            // ทางที่ไปตรงได้อยู่แล้วต้องไม่ถูกพาอ้อม — ไม่งั้น Tour↔Game (ริกเดียวกัน) จะถูก
+            // ตัดผ่านหน้าแมพ = ผู้เล่นหลุดออกจากน้ำหนึ่งเฟรมทุกครั้งที่สลับเกม/ทัวร์
+            Assert.IsFalse(ModeRules.RoutesViaHub(AppMode.Tour, AppMode.Game));
+            Assert.IsFalse(ModeRules.RoutesViaHub(AppMode.View, AppMode.Ar));
+            Assert.IsFalse(ModeRules.RoutesViaHub(AppMode.Ar, AppMode.View), "ออกไปฮับคือทางตรงอยู่แล้ว");
+            Assert.IsFalse(ModeRules.RoutesViaHub(AppMode.Ar, AppMode.Ar));
+
+            Assert.IsTrue(ModeRules.RoutesViaHub(AppMode.Ar, AppMode.Tour), "อาการที่ user เจอ");
+            Assert.IsTrue(ModeRules.RoutesViaHub(AppMode.Ar, AppMode.Edit));
+            Assert.IsTrue(ModeRules.RoutesViaHub(AppMode.Tour, AppMode.Ar));
+            Assert.IsTrue(ModeRules.RoutesViaHub(AppMode.Edit, AppMode.Ar));
+        }
+
+        [Test]
         public void EnteringTheModeYouAreAlreadyInIsNotAMove()
         {
             foreach (AppMode m in new[] { AppMode.View, AppMode.Tour, AppMode.Game, AppMode.Ar, AppMode.Edit })
