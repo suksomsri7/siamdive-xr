@@ -428,10 +428,29 @@ namespace DiveMap.Runtime
             _origin.CameraYOffset = 0f;
             _origin.CameraFloorOffsetObject = offset;
 
-            if (_cam.GetComponent<ARCameraManager>() == null) _cam.gameObject.AddComponent<ARCameraManager>();
+            // 🔴 22 ส.ค. 2026 — "AR เข้าได้แค่รอบแรก รอบสองจอดำทันที" (b453 บนเครื่องจริง:
+            // hint 'เจอพื้นแล้ว' ขึ้นบนจอดำสนิท = tracking ทำงาน กล้องไม่ถูกวาด)
+            //
+            // สามตัวนี้เคยใช้ `GetComponent == null ? AddComponent` คู่กับ Destroy ใน StopSession
+            // ซึ่งคือกับดักเดียวกับที่คอมเมนต์บนหัวเมธอดนี้บันทึกไว้กับ ARSession/ARInputManager
+            // ทุกตัวอักษร: Destroy มีผล**ปลายเฟรม** · การเข้า AR ซ้ำบนแมพเดิม (ArSession.Start:
+            // "already in AR — restarting") ทำ End → Begin ใน**เฟรมเดียวกัน** ⇒ GetComponent
+            // เจอซากที่ยังไม่ตาย ⇒ ไม่ Add ตัวใหม่ ⇒ ปลายเฟรมซากตายจริง ⇒ รอบสองไม่มี
+            // ARCameraManager (จ่ายภาพ) / ARCameraBackground (วาดภาพ) / ARPoseDriver (ขับท่า
+            // กล้อง) เลยสักตัว = จอดำ · ส่วน plane detection อยู่บน XROrigin ซึ่งสร้างใหม่
+            // (`new GameObject`) ทุกรอบ จึงทำงานปกติ — ลายเซ็นตรงกับภาพ user เป๊ะ
+            //
+            // ทางแก้ = สูตรเดียวกับ _input ข้างบน: ปิดเก็บไว้ตอนออก (StopSession) แล้วปลุกที่นี่
+            // ด้วย disable→enable เพื่อบังคับ OnEnable ให้ไปเกาะ subsystem ของ session รอบใหม่
+            ARCameraManager camMgr = _cam.GetComponent<ARCameraManager>();
+            if (camMgr == null) camMgr = _cam.gameObject.AddComponent<ARCameraManager>();
+            else { camMgr.enabled = false; camMgr.enabled = true; }
             _background = _cam.GetComponent<ARCameraBackground>();
             if (_background == null) _background = _cam.gameObject.AddComponent<ARCameraBackground>();
-            if (_cam.GetComponent<ARPoseDriver>() == null) _cam.gameObject.AddComponent<ARPoseDriver>();
+            else { _background.enabled = false; _background.enabled = true; }
+            ARPoseDriver pose = _cam.GetComponent<ARPoseDriver>();
+            if (pose == null) _cam.gameObject.AddComponent<ARPoseDriver>();
+            else { pose.enabled = false; pose.enabled = true; }
 
             // Clip planes are in WORLD units and the origin is scaled, so a 0.5 u near plane would
             // sit 0.5/scale metres from the eye — millimetres. Scale them with the world.
@@ -862,9 +881,16 @@ namespace DiveMap.Runtime
                 _cam.farClipPlane = _camFar;
                 _cam.clearFlags = _camClear;
                 _cam.backgroundColor = _camBg;
-                Destroy(_cam.GetComponent<ARPoseDriver>());
-                Destroy(_cam.GetComponent<ARCameraBackground>());
-                Destroy(_cam.GetComponent<ARCameraManager>());
+                // 🔴 ห้าม Destroy สามตัวนี้ (22 ส.ค. 2026) — เหตุผลเดียวกับ _input ด้านล่าง:
+                // Destroy มีผลปลายเฟรม แล้วขาเข้ารอบถัดไป (BuildRig) จะเจอซากผ่าน GetComponent
+                // และไม่สร้างตัวใหม่ ⇒ "AR รอบสองจอดำ" ตามที่ user รายงาน · ปิดเก็บไว้แทน
+                // (ปิดแล้วไม่กินกล้อง ไม่วาด ไม่ขับท่า) BuildRig จะปลุกด้วย disable→enable
+                ARPoseDriver pd = _cam.GetComponent<ARPoseDriver>();
+                if (pd != null) pd.enabled = false;
+                ARCameraBackground bg = _cam.GetComponent<ARCameraBackground>();
+                if (bg != null) bg.enabled = false;
+                ARCameraManager cm = _cam.GetComponent<ARCameraManager>();
+                if (cm != null) cm.enabled = false;
             }
 
             if (_origin != null) Destroy(_origin.gameObject);
