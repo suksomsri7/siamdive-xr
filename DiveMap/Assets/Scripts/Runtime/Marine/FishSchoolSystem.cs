@@ -1091,6 +1091,20 @@ namespace DiveMap.Runtime.Marine
                     //     and merely rises. Ours could reach 29° of nose-up (vy ≤ 0.55×forward).
                     //   • at the slot the speed is very nearly zero by design, and atan2 of a
                     //     near-zero velocity is noise. Head is the state; velocity is a readout.
+                    //
+                    // 🔴 22 ส.ค. 2026 — **บรรทัดคู่นี้คือคำตอบของ "ฝูงปลากะมงตั้งฉากกับพื้น"**
+                    //
+                    // การแก้ข้างบนลงเฉพาะสาขา Formation != 0 ซึ่งตอนนั้นแปลว่า `school:*` เท่านั้น
+                    // · pod เดิน else ด้านล่าง = `LookRotation(vel)` ⇒ **เงยหัวตามความเร็วแนวดิ่ง
+                    // ได้ถึง 29°** และเมื่อฝูงหนึ่งเงยพร้อมกันทั้งฝูง สิ่งที่ตาเห็นคือปลาตั้งเป็นเสา
+                    // ตรงกับภาพ build 244 ที่บันทึกไว้ข้างบนเป๊ะ — เพียงแต่รอบนั้นเป็นบาราคูด้า
+                    //
+                    // ⚠️ อาการอยู่ที่ **ทิศการวาด** ไม่ใช่ที่รูปฝูง — ตอนแรกผมไล่ผิดระบบ (ไปโทษ
+                    // ริบบิ้นของ boids) และเครื่องมือวัดรูปฝูงก็ยืนยันว่าฝูงเป็นแพนเค้กแนวนอนเสมอ
+                    // (BoidsJob หนีบ p.y ที่ ±VertHalf) ⇒ ถ้าวันหลังเจออาการ "ปลาตั้ง" อีก
+                    // ให้มาดูบรรทัดนี้ก่อนไปจูนรูปฝูง (FISH_TUNING.md §1: รู้ให้ได้ก่อนว่าระบบไหน)
+                    //
+                    // ตอนนี้ useForm = true ทุกฝูงแล้ว ⇒ pod เข้าสาขาบน = วาดระนาบ ไม่เงยอีก
                     Quaternion rot;
                     if (_schools[si].Formation != 0)
                     {

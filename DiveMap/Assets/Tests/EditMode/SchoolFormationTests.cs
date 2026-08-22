@@ -58,8 +58,11 @@ namespace DiveMap.Tests
                 Assert.AreNotEqual(SchoolMode.Tornado, m, "ทอร์นาโด = เสาตั้ง (แนวตั้ง 0.99)");
                 Assert.AreNotEqual(SchoolMode.Cone, m, "กรวย = เสาตั้ง (แนวตั้ง 0.83)");
                 Assert.AreNotEqual(SchoolMode.ConeUp, m, "กรวยกลับหัว = เสาตั้ง");
-                Assert.AreNotEqual(SchoolMode.Stream, m, "แถวเดินทาง — วัดได้ rowness 5.61");
             }
+
+            // stream ต้อง **อยู่ต่อ** — มันเป็นแถวก็จริง (rowness 5.61) แต่วัดแนวตั้งได้ 0.00
+            // และ user ระบุชัดว่าอาการคือเสาตั้งฉากกับพื้น ไม่ใช่แถวแนวนอน
+            CollectionAssert.Contains(SchoolFormation.PodModes, SchoolMode.Stream);
 
             // และ pod ต้องได้ถุงของตัวเองจริง ๆ ไม่ใช่ถุงของฝูงปลา
             Assert.AreSame(SchoolFormation.PodModes, SchoolFormation.ModeBag(isPod: true));
