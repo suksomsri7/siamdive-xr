@@ -363,7 +363,10 @@ namespace DiveMap.Runtime
             // แล้วเราจะถือ reference ที่เป็น null · หยิบของเดิมมาใช้ก่อนเสมอจึงปลอดภัยกว่า
             _session = gameObject.GetComponent<ARSession>();
             if (_session == null) _session = gameObject.AddComponent<ARSession>();
-            else _session.enabled = true;
+            // disable→enable เสมอ (ไม่ใช่แค่ enabled=true): ตัวที่ StopSession ปิดเก็บไว้ต้องได้
+            // OnEnable รอบใหม่จริง ๆ เพื่อ start subsystem คืน — enabled=true บนตัวที่เปิดอยู่แล้ว
+            // เป็น no-op เงียบ ๆ ซึ่งคือรูพรุนแบบเดียวกับที่ ARInputManager เคยโดน (คอมเมนต์ล่าง)
+            else { _session.enabled = false; _session.enabled = true; }
 
             // 🔴 ARInputManager is [DisallowMultipleComponent], and this used to add one every
             // time without ever removing it. That single line is what "the first time is right,
@@ -894,7 +897,12 @@ namespace DiveMap.Runtime
             }
 
             if (_origin != null) Destroy(_origin.gameObject);
-            if (_session != null) Destroy(_session);
+            // 🔴 22 ส.ค. 2026 — ARSession เลิก Destroy ด้วยเหตุผลเดียวกับสามตัวบนกล้องข้างบน:
+            // Destroy มีผลปลายเฟรม · การออก-เข้า AR ในเฟรมเดียว (เข้าซ้ำแมพเดิม / คำสั่ง
+            // mode:view + mode:ar มาติดกันในคิวเดียว) ทำให้ BuildRig รอบใหม่หยิบ**ซาก**ผ่าน
+            // GetComponent แล้วไม่สร้างตัวใหม่ ⇒ รอบสองไม่มี ARSession = ไม่มีใคร start
+            // subsystem กล้อง = จอดำ (b457 พิสูจน์ว่าแก้แค่สามตัวกล้องไม่พอ — ตัวแม่ก็โดน)
+            if (_session != null) _session.enabled = false;
             // 🔴 ไม่ทำลาย ARInputManager: มันเป็น [DisallowMultipleComponent] และ OnEnable ของมัน
             // คือจังหวะเดียวที่จะไปหยิบ input subsystem มาถือ — ทำลายแล้วสร้างใหม่ในรอบถัดไป
             // เคยทำให้ท่ากล้องค้าง (ดูหมายเหตุยาวใน BuildRig) · ปิดไว้เฉย ๆ แล้วเปิดใหม่ปลอดภัยกว่า

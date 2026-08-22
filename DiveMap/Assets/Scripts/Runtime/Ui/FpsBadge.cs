@@ -13,6 +13,7 @@ namespace DiveMap.Runtime.Ui
         private float _acc, _fps;
         private int _n;
         private GUIStyle _style;
+        private GUIStyle _tailStyle;
 
         /// <summary>
         /// Should the numbers be on screen right now? (WO-MERGE P1c)
@@ -58,6 +59,32 @@ namespace DiveMap.Runtime.Ui
             var go = new GameObject("FpsBadge");
             DontDestroyOnLoad(go);
             go.AddComponent<FpsBadge>();
+        }
+
+        // ── หาง log บนจอ (ชั่วคราว — คดี "ออกจาก AR แล้วพัง" 22 ส.ค. 2026) ─────────────
+        //
+        // 🔴 ห้ารอบของคดีนี้เผาไปกับการอนุมานจากภาพนิ่ง เพราะ log ที่ตอบคำถามได้จริง
+        // ([Mode] ใครเปลี่ยนโหมด · [Tour] spawn=warp/default · [AR] exit · [UI] orbit on/off)
+        // อยู่ใน syslog ของ iOS ซึ่งไม่มีทางถึงมือเรา ⇒ เอาบรรทัดท้าย ๆ ขึ้นจอไปกับ badge:
+        // ภาพหน้าจอใบเดียว = timeline จริงของเครื่อง · ถอดพร้อม badge เมื่อปิดคดี
+        private static readonly System.Collections.Generic.Queue<string> _tail
+            = new System.Collections.Generic.Queue<string>();
+        private const int TailLines = 7;
+
+        private void OnEnable() => Application.logMessageReceived += OnLog;
+        private void OnDisable() => Application.logMessageReceived -= OnLog;
+
+        private static void OnLog(string msg, string stack, LogType type)
+        {
+            if (string.IsNullOrEmpty(msg)) return;
+            // เฉพาะบรรทัดที่เล่าเรื่องโหมด/กล้อง/จุดเกิด — ไม่ใช่ log ทั้งแอป
+            if (!(msg.StartsWith("[Mode]") || msg.StartsWith("[Tour]") ||
+                  msg.StartsWith("[AR]") || msg.StartsWith("[ARKit]") ||
+                  msg.StartsWith("[Native]") ||
+                  (msg.StartsWith("[UI]") && msg.Contains("orbit")))) return;
+            if (_tail.Count >= TailLines) _tail.Dequeue();
+            // ตัดให้พอดีจอ — ภาพถ่ายมือถืออ่านได้ถึง ~90 ตัวอักษร
+            _tail.Enqueue(msg.Length > 90 ? msg.Substring(0, 90) : msg);
         }
 
         private void Update()
@@ -118,6 +145,35 @@ namespace DiveMap.Runtime.Ui
             {
                 GUI.Label(new Rect(0, bottomY, Screen.width - rightPad, lineH),
                           $"{_fps:0} fps{build}{fish}{state}", _style);
+
+                // หาง log (ดูคอมเมนต์ที่ _tail) + บรรทัดกล้อง: ตำแหน่งจริง vs จุดที่ orbit จะพาไป
+                // — ภาพเดียวบอกได้เลยว่ากล้อง "ค้าง" เพราะ Apply ไม่วิ่ง หรือเพราะ target ผิด
+                if (_tailStyle == null)
+                {
+                    _tailStyle = new GUIStyle(_style)
+                    {
+                        fontSize = Mathf.RoundToInt(Screen.height * 0.013f),
+                    };
+                }
+                _tailStyle.normal.textColor = new Color(1f, 1f, 1f, 0.45f);
+                float tailH = Screen.height * 0.028f;
+                float y = bottomY - lineH * 0.9f;
+                if (bc != null)
+                {
+                    Vector3 cp = bc.transform.position;
+                    string cam = bo != null
+                        ? $"cam({cp.x:F0},{cp.y:F0},{cp.z:F0}) tgt({bo.target.x:F0},{bo.target.y:F0},{bo.target.z:F0}) d={bo.distance:F0}"
+                        : $"cam({cp.x:F0},{cp.y:F0},{cp.z:F0}) no-orbit";
+                    GUI.Label(new Rect(0, y, Screen.width - rightPad, tailH), cam, _tailStyle);
+                    y -= tailH;
+                }
+                // คิวเก็บเก่า→ใหม่ — วาดจากล่างขึ้นบนให้บรรทัดล่าสุดอยู่ล่างสุด
+                string[] lines = _tail.ToArray();
+                for (int i = lines.Length - 1; i >= 0; i--)
+                {
+                    GUI.Label(new Rect(0, y, Screen.width - rightPad, tailH), lines[i], _tailStyle);
+                    y -= tailH;
+                }
             }
 
             if (!MemoryLineVisible) return;
