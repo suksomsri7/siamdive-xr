@@ -678,6 +678,17 @@ namespace DiveMap.Runtime
             _state = DroneFlight.Step(_state, sticks, dt, seabedY, _waterLevel,
                                       _solids, _scaleX, _scaleZ, SettingsStore.SpeedScale);
 
+            // 🔴 22 ส.ค. 2026 — user (Harddeep, b457): "บินโดรนไปชนปลา barracuda ทำไมปลาไม่ตกใจหนี"
+            //
+            // ความเร็วที่สัตว์ใช้ตัดสินความน่ากลัว ต้องเป็นความเร็ว**ขาเข้า** — อ่านตรงนี้ ก่อน
+            // PushOutOfAnimals ข้างล่างจะหักมันทิ้ง. เดิม SetDiver อ่านหลังการดัน ซึ่งตั้ง Vel=0
+            // ทุกเฟรมที่แตะตัว ⇒ วินาทีที่ชน สัตว์เห็นความเร็ว 0 เสมอ — "พุ่งเต็มสปีดใส่" กับ
+            // "ลอยนิ่งมาเบียด" จึงแยกไม่ออกโดยโครงสร้าง และตกใจแบบเบาสุด (สะบัดหลบ) ตลอดกาล
+            // = ทำลายกติกา ContactPanic ("แรงตามความเร็วที่ชน") ที่เพิ่งวางไว้ทั้งชุดเงียบ ๆ
+            float diverSpeedIn = Mathf.Sqrt(_state.Vel.X * _state.Vel.X +
+                                            _state.Vel.Y * _state.Vel.Y +
+                                            _state.Vel.Z * _state.Vel.Z);
+
             // 🔴 17 ส.ค. 2026 — สัตว์ตัวใหญ่กันทาง (user: "บินโดรนทะลุตัวสัตว์ใหญ่ได้อยู่เลย")
             //
             // แยกจาก DroneFlight.Step โดยตั้งใจ: รายการสิ่งกีดขวางของ Step เป็นกล่องนิ่งที่คัดไว้
@@ -696,9 +707,8 @@ namespace DiveMap.Runtime
             if (_reef != null) _reef.SetRepulsor(pos, DiveLightMath.FishBubble * 2f);
             // บอกสัตว์เดี่ยวว่าเราอยู่ตรงไหนและมาเร็วแค่ไหน — ระบบตกใจของมันอ่านจากตรงนี้
             // (ฝูงปลาใช้ SetRepulsor ข้างบนอยู่แล้ว คนละทางแต่เจตนาเดียวกัน)
-            Marine.SoloAnimalRegistry.SetDiver(
-                pos, Mathf.Sqrt(_state.Vel.X * _state.Vel.X + _state.Vel.Y * _state.Vel.Y +
-                                _state.Vel.Z * _state.Vel.Z));
+            // ความเร็ว = diverSpeedIn ที่อ่านไว้ก่อน PushOutOfAnimals — ดูหมายเหตุ 22 ส.ค. ข้างบน
+            Marine.SoloAnimalRegistry.SetDiver(pos, diverSpeedIn);
             AudioBank.ProximityTick(pos, _animals, _animalIds);
             CheckWarpGates(pos);
 
