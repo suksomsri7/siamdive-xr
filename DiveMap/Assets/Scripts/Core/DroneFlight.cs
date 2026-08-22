@@ -75,7 +75,16 @@ namespace DiveMap.Core
         /// <summary>builder.html:3766 — <c>dz=v=&gt;Math.abs(v)&lt;0.12?0:v</c>.</summary>
         public const float DeadZone = 0.12f;
 
-        public const float YawRate = 1.1f;      // rad/s at full deflection — builder.html:3768
+        /// <summary>
+        /// อัตราหันซ้าย-ขวาที่คันบังคับสุดทาง. เว็บ 1.1 rad/s = **63°/วินาที** (builder.html:3768)
+        ///
+        /// 22 ส.ค. 2026 — user: "โดรน หันซ้าย-ขวา ขึ้น-ลง ช้าอีกนิด" ⇒ 1.1 → 0.85 rad/s
+        /// = **49°/วินาที** (ช้าลง 23%) · หมุนรอบตัวเองครบ 360° ใช้ 5.7 วินาที แทน 5.7×0.77=4.4
+        ///
+        /// 🔴 เลขที่ใช้คุยกับ user ต้องเป็นองศา/วินาที ไม่ใช่ rad/s — ค่าดิบ 1.1 ไม่มีความหมาย
+        /// กับใคร และการติดหน่วยผิดเคยทำให้เสียไปหนึ่งรอบมาแล้ว (ดู FleeMath.StartleWarnBodyLengths)
+        /// </summary>
+        public const float YawRate = 0.85f;     // rad/s = 49°/s (เว็บ 3768 = 1.1 = 63°/s)
         /// <summary>
         /// 30 → 24 u/s (5.00 → 4.00 m/s) — user 9 ส.ค.: "ปรับให้โดรนเคลื่อนที่ช้าลงอีกนิด"
         ///
@@ -92,8 +101,19 @@ namespace DiveMap.Core
         // (เกณฑ์ "ว่ายเร็วจนฝูงปลาตกใจ" ยังเป็นสัดส่วนเดิมของความเร็วเต็ม — ตั้งใจตั้งแต่แรก)
         public const float Speed = 12f;         // u/s = 2.00 m/s (เว็บ 3770 = 30; user ขอช้าลง 4 รอบ)
         public const float StrafeRatio = 1f;    // the web strafes at SP   — builder.html:3770-3771
-        public const float AscendRatio = 0.72f; // builder.html:3771 — ty = lift·SP·0.72
-        public const float DescendRatio = 0.72f;// …the same factor both ways; the web has one term
+        /// <summary>
+        /// ขึ้น-ลง เป็นสัดส่วนของ <see cref="Speed"/>. เว็บ 0.72 (builder.html:3771 — ty = lift·SP·0.72)
+        /// ⇒ ที่ Speed=12 คือ 8.64 u/s = **1.44 m/s**
+        ///
+        /// 22 ส.ค. 2026 — user: "หันซ้าย-ขวา ขึ้น-ลง ช้าอีกนิด" ⇒ 0.72 → 0.55
+        /// = 6.6 u/s = **1.10 m/s** (ช้าลง 24% เท่ากับที่ลด <see cref="YawRate"/> ให้รู้สึกเป็นชุดเดียวกัน)
+        ///
+        /// ⚠️ ลดที่ "สัดส่วน" ไม่ใช่ที่ <see cref="Speed"/> โดยตั้งใจ — Speed เป็นฐานของ
+        /// <see cref="FleeMath.DiverPanicSpeed"/> (11/30 ของมัน) แตะแล้วเกณฑ์ตกใจของสัตว์
+        /// ทั้งเกมจะเลื่อนตามไปด้วย ทั้งที่ user ขอแค่ให้บังคับนุ่มขึ้น ไม่ได้ขอให้เดินหน้าช้าลง
+        /// </summary>
+        public const float AscendRatio = 0.55f; // 1.10 m/s (เว็บ 3771 = 0.72 = 1.44 m/s)
+        public const float DescendRatio = 0.55f;// …the same factor both ways; the web has one term
         public const float Inertia = 0.09f;     // response per 60 Hz frame — builder.html:3772
         public const float CamRadius = 3.2f;
         public const float FloorClearance = 1.5f;

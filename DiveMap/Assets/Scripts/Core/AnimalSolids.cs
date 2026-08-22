@@ -68,10 +68,34 @@ namespace DiveMap.Core
         public static bool DiverStartles(double diverSpeed, double distance, double animalRadius)
         {
             if (animalRadius < MinBlockingRadius) return false;          // ปลาเล็กใช้ระบบฝูง
-            if (distance > FleeMath.FleeRadius(animalRadius)) return false;
-            // ชนตัวกันแล้วตกใจเสมอ ไม่ว่าจะเข้ามาช้าแค่ไหน — ของใหญ่เท่าบ้านมาแตะตัวคือเหตุ
-            if (distance <= animalRadius + DiverClearance) return true;
-            return FleeMath.DiverIsThreatening(diverSpeed);
+            return distance <= DiverStartleRadius(animalRadius, diverSpeed);
+        }
+
+        /// <summary>
+        /// ระยะที่สัตว์เดี่ยวเริ่มรู้สึกถึงนักดำน้ำ — **โตตามความเร็วโดรน**.
+        ///
+        /// 🔴 22 ส.ค. 2026 — user: "ผมพยายามขยี่ให้โดรนเคลื่อนที่ช้าแล้ว ฉลามวาฬยังว่ายหนีเร็ว
+        /// ตั้งค่าอะไรผิดไหม" · คำตอบคือ **ไม่มีค่าไหนตั้งผิด** แต่การแก้เรื่อง "ระยะตกใจ" เมื่อ
+        /// 21 ส.ค. (<see cref="FleeMath.StartleRadius"/> + <see cref="FleeMath.ContactPanic"/>)
+        /// ลงเฉพาะ**ฝูงปลา** ส่วนสัตว์เดี่ยว (msh:* — ฉลามวาฬ วาฬ กระเบน) ยังใช้ตรรกะชุดเดิม
+        /// ก่อนหน้านั้น ซึ่งพังด้วยเหตุผลเดียวกันเป๊ะทั้งสองข้อ:
+        ///
+        ///   1. ความเร็วเป็นแค่ประตูเปิด/ปิด (<see cref="FleeMath.DiverIsThreatening"/> = เกิน
+        ///      37% คันเร่ง) แล้วระยะคงที่ ⇒ คลานผ่านกับพุ่งใส่ ได้ผลเท่ากันเป๊ะ
+        ///   2. "ถึงตัว = ตกใจเสมอ" โดยไม่สนความเร็ว — และระยะถึงตัวของสัตว์ใหญ่คือ **ตัวมันเอง**
+        ///      ฉลามวาฬ ObsR ~10 หน่วย ⇒ ยังไม่ทันเห็นเต็มตัวก็เข้าเขตนั้นแล้ว ⇒ ต่อให้ลอยนิ่ง
+        ///      ที่สุดเท่าที่ทำได้ มันก็สะบัดหนีเต็มแรงทุกครั้ง = อาการที่ user รายงาน
+        ///
+        /// ⇒ ช้ากว่าเกณฑ์ = ต้องถึงตัวถึงจะรู้สึก (กฎ 15 ส.ค. "ของใหญ่มาแตะตัวต้องหลบ" ยังอยู่ครบ)
+        /// · พุ่งเต็มสปีด = <see cref="FleeMath.FleeRadius"/> เดิมทุกประการ (ของที่เคยดีไม่เสีย)
+        /// ความ**แรง**ของการหนีไล่ระดับแยกอีกชั้นที่ <see cref="FleeMath.DiverFleeSprint"/>
+        /// </summary>
+        public static double DiverStartleRadius(double animalRadius, double diverSpeed)
+        {
+            double near = animalRadius + DiverClearance;
+            double far  = FleeMath.FleeRadius(animalRadius);
+            if (far < near) far = near;
+            return near + (far - near) * FleeMath.ThreatFraction(diverSpeed);
         }
     }
 }

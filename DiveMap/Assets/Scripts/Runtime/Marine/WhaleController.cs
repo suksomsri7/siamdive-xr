@@ -702,6 +702,8 @@ namespace DiveMap.Runtime.Marine
                 // ใช้ทางหนีเส้นเดียวกับตอนโดนสัตว์อื่นไล่ ไม่เขียนพฤติกรรมชุดที่สอง: สิ่งที่
                 // ต่างกันคือ "ใครคือภัย" ไม่ใช่ "หนียังไง" · ถ้าทั้งคนและผู้ล่าอยู่ใกล้พร้อมกัน
                 // ให้ตัวที่ใกล้กว่าชนะ เพราะนั่นคือสิ่งที่สัตว์จะสนใจก่อน
+                // ภัยตัวนี้เป็น "คน" หรือ "ผู้ล่า" — ตัวเดียวกันหนีคนละแรง (ดู DiverFleeSprint)
+                bool threatIsDiver = false;
                 if (SoloAnimalRegistry.HasDiver)
                 {
                     Vector3 d = SoloAnimalRegistry.DiverPos;
@@ -713,6 +715,7 @@ namespace DiveMap.Runtime.Marine
                         hunted = true;
                         hunterD = Mathf.Max(diverD, 1e-4f);
                         threat = d;
+                        threatIsDiver = true;
                     }
                 }
 
@@ -735,7 +738,11 @@ namespace DiveMap.Runtime.Marine
                     _patrol.LegT = 0f;
                     FishMind.ClampToDomain(_domain, _arriveR * 2f,
                                            ref _patrol.TX, ref _patrol.TY, ref _patrol.TZ);
-                    huntWant = (float)FleeMath.FleeSprint(hunterD, fleeR);
+                    // หนีจากคน = ไล่ระดับตามความเร็วที่เขาเข้ามา · หนีจากผู้ล่า = เต็มแรงเสมอ
+                    // (ผู้ล่าตั้งใจจะกินมัน ความเร็วที่เข้ามาไม่ใช่ข้อมูลที่เปลี่ยนคำตอบ)
+                    huntWant = threatIsDiver
+                        ? (float)FleeMath.DiverFleeSprint(hunterD, fleeR, SoloAnimalRegistry.DiverSpeed)
+                        : (float)FleeMath.FleeSprint(hunterD, fleeR);
                     SetPhase(HuntPhase.Sprint, true);
                 }
                 else if (hs.Phase == HuntPhase.Stalk || hs.Phase == HuntPhase.Sprint ||

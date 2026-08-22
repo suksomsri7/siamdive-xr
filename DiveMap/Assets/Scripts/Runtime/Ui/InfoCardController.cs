@@ -258,6 +258,25 @@ namespace DiveMap.Runtime.Ui
 
         private void PickAt(Vector2 screenPos)
         {
+            // 🔴 22 ส.ค. 2026 — user: "โหมด Ar ตอนคลิกที่แมพจะมี pop up รายละเอียดสัตว์ขึ้นมา
+            // เฉพาะ ar mode ไม่ต้องมีฟังชั่นนี้"
+            //
+            // ด่านนี้อยู่ก่อนทุกอย่างโดยตั้งใจ ไม่ใช่แค่ก่อน ShowFor: ใน AR นิ้วเป็นของ
+            // ArKitSession.HandleTap (วาง/ย้ายไดโอรามาบนโต๊ะ) ⇒ ถ้าปล่อยให้ตัวเลือกวัตถุทำงานต่อ
+            // แผ่นข้อมูลจะขึ้นมาบังภาพจากกล้อง แล้วยังแย่งนิ้วที่ผู้ใช้ตั้งใจใช้วางแมพไปด้วย
+            //
+            // ⚠️ กฎอยู่ที่ ModeRules.ShowsInfoCard เพื่อให้เทสได้ — แต่ต้องเรียกมันตรงนี้จริง ๆ
+            // ก่อนหน้านี้ทั้งไฟล์อ้างแต่ SelectsOnTap ทำให้ ShowsInfoCard เป็นกฎที่ไม่มีใครใช้
+            // (แก้ที่กฎอย่างเดียวจึงไม่มีผลกับเครื่อง — เคยพลาดแบบนี้มาแล้ว)
+            AppBoot tapBoot = FindFirstObjectByType<AppBoot>();
+            bool tapCanEdit = tapBoot != null && tapBoot.CanEditCurrent;
+            if (!ModeRules.ShowsInfoCard(ModeManager.Current, tapCanEdit) &&
+                !ModeRules.SelectsOnTap(ModeManager.Current, tapCanEdit))
+            {
+                Hide();
+                return;
+            }
+
             Camera cam = Camera.main;
             GameObject mapRoot = GameObject.Find("Map");
             if (cam == null || mapRoot == null) { Hide(); return; }

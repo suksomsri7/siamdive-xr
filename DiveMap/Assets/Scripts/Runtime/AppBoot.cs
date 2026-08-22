@@ -1279,6 +1279,31 @@ namespace DiveMap.Runtime
                 // signed in between the two visits, the map they now own would still be read-only
                 // from a verdict computed before they had an account. One small GET closes that.
                 RefreshEditRights();
+
+                // 🔴 22 ส.ค. 2026 — user (build 9017, รายงานครั้งที่สาม): "เข้าโหมด AR แล้วออก
+                // กลับไปเข้า preview หรือ drone จะมีปัญหาขยับไม่ได้เลย"
+                //
+                // นี่คือต้นเหตุจริง และเป็นคนละชั้นกับที่แก้ไป 2 รอบก่อน (RoutesViaHub เมื่อ
+                // 21 ส.ค. · EnterHostMode เคส Preview) — ทั้งสองอันแก้ "ถ้ามีคนสั่งเปลี่ยนโหมด
+                // แล้วจะเกิดอะไร" แต่ในเส้นทางนี้ **ไม่มีใครสั่งเลย**:
+                //
+                //   ผู้ใช้แตะหมุด → เลือกโหมด → แอปเปิดจอ /unity?shortId=X&mode=…
+                //   → postMessage {shortId:X, mode:"tour"} → Apply → ApplyMap(X)
+                //   → SwitchMapFromHost(X) → **แมพเดิม → return ตรงนี้**
+                //
+                // และ EnterHostMode ซึ่งเป็นที่เดียวที่อ่าน HostMode อยู่ใน "เส้นทางโหลดแมพ"
+                // ⇒ แมพเดิม = ไม่โหลดใหม่ = ไม่มีใครอ่านโหมดที่เพิ่งส่งมาเลย. Unity ยังอยู่ใน
+                // AR เงียบ ๆ ส่วนแอปวาด chrome ของโดรนทับ ⇒ "ขยับอะไรไม่ได้ แถมยังแสดงหน้าโดรน"
+                // ตรงตามที่ user รายงานทุกตัวอักษร · เข้าแมพ**อื่น**ไม่เจอ เพราะเส้นนั้นโหลดใหม่
+                //
+                // NativeBoot.Adopt เก็บ HostMode ไว้ให้แล้วตั้งแต่ต้น (Apply เรียกก่อนถึงบรรทัดนี้)
+                // จึงเป็นการอ่านค่าที่มีอยู่ ไม่ใช่ช่องทางสั่งโหมดช่องที่สอง
+                Core.BootMode.Requested again = Core.NativeBoot.HostMode;
+                if (Core.BootMode.OverridesAutoPlay(again) && _mapRoot != null)
+                {
+                    Debug.Log($"[Native] แมพเดิม ({shortId}) แต่เจ้าบ้านสั่ง {again} — เข้าโหมดให้เลย");
+                    ApplyHostMode(again);
+                }
                 return;
             }
 
@@ -1486,7 +1511,16 @@ namespace DiveMap.Runtime
         {
             yield return new WaitForSeconds(Core.ArenaEntry.StartDelaySeconds);
             if (this == null || _mapRoot == null) yield break;
+            ApplyHostMode(mode);
+        }
 
+        /// <summary>
+        /// เข้าโหมดที่เจ้าบ้านสั่ง — ตัวเนื้อของ <see cref="EnterHostMode"/> แยกออกมาเพราะมี
+        /// ผู้เรียกที่สอง (<see cref="SwitchMapFromHost"/> เมื่อแมพเดิม) ที่ต้องทำทันที ไม่ต้องหน่วง
+        /// เพราะแมพอยู่บนจอเรียบร้อยแล้ว
+        /// </summary>
+        private void ApplyHostMode(Core.BootMode.Requested mode)
+        {
             switch (mode)
             {
                 case Core.BootMode.Requested.Tour:

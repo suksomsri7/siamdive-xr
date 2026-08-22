@@ -45,25 +45,56 @@ namespace DiveMap.Tests
             Assert.AreEqual(8 + AnimalSolids.DiverClearance, y, 1e-6);
         }
 
+        /// <summary>
+        /// 🔴 22 ส.ค. 2026 — สัญญาข้อนี้เปลี่ยนตามที่ user รายงาน ("ขยี่ให้โดรนช้าแล้ว ฉลามวาฬ
+        /// ยังว่ายหนีเร็ว"). ของเดิม: ความเร็วเป็นประตูเปิด/ปิดแล้วระยะคงที่ ⇒ เกินเกณฑ์แค่นิดเดียว
+        /// ก็ทำให้สัตว์ตกใจได้จากระยะเต็ม FleeRadius. ของใหม่: **ระยะโตตามความเร็ว** เหมือนที่ฝูงปลา
+        /// ได้ไปเมื่อ 21 ส.ค. (FleeMath.StartleRadius) — ช้า = ต้องถึงตัว · เต็มสปีด = ระยะเดิมเป๊ะ
+        /// </summary>
         [Test]
-        public void StartleNeedsSpeed_ExceptOnContact()
+        public void StartleRadius_GrowsWithDiverSpeed()
         {
-            double slow = FleeMath.DiverPanicSpeed * 0.2;
-            double fast = FleeMath.DiverPanicSpeed * 1.5;
             const double r = 10;
+            double contact = r + AnimalSolids.DiverClearance;
+            double reach = FleeMath.FleeRadius(r);           // ระยะเดิม = ระยะตอนพุ่งเต็มสปีด
+            double crawl = FleeMath.DiverPanicSpeed * 0.2;   // ต่ำกว่าเกณฑ์
+            double charge = DroneFlight.Speed;               // คันเร่งเต็ม
 
-            // ไกลแต่มาเร็ว = ตกใจ · ไกลและมาช้า = ไม่ตกใจ (ไม่งั้นสัตว์จะวิ่งหนีตลอดเวลา)
-            Assert.IsTrue(AnimalSolids.DiverStartles(fast, 40, r));
-            Assert.IsFalse(AnimalSolids.DiverStartles(slow, 40, r));
+            // คลานเข้าไป: ไม่รู้สึกอะไรจนกว่าจะถึงตัว — นี่คือสิ่งที่ user ขอ
+            Assert.IsFalse(AnimalSolids.DiverStartles(crawl, contact + 1, r));
+            Assert.IsTrue(AnimalSolids.DiverStartles(crawl, contact - 0.1, r),
+                          "ของใหญ่มาแตะตัวต้องหลบเสมอ — กฎ 15 ส.ค. ของ user ยังอยู่");
 
-            // แตะตัวกันแล้วตกใจเสมอ ไม่ว่าจะเข้ามาช้าแค่ไหน
-            Assert.IsTrue(AnimalSolids.DiverStartles(slow, r, r));
+            // พุ่งเต็มสปีด: ระยะเดิมทุกประการ ของที่เคยดีต้องไม่เสีย
+            Assert.IsTrue(AnimalSolids.DiverStartles(charge, reach - 1, r));
+            Assert.IsFalse(AnimalSolids.DiverStartles(charge, reach + 1, r));
 
-            // พ้นรัศมีรับรู้ = ไม่รู้เรื่องเลย แม้จะพุ่งมาเร็ว
-            Assert.IsFalse(AnimalSolids.DiverStartles(fast, FleeMath.FleeRadius(r) + 1, r));
+            // และมันต้องไล่ระดับจริง ไม่ใช่กระโดดสองขั้น
+            double mid = AnimalSolids.DiverStartleRadius(r, (FleeMath.DiverPanicSpeed + charge) * 0.5);
+            Assert.Greater(mid, contact);
+            Assert.Less(mid, reach);
 
             // ปลาเล็กไม่ใช้ทางนี้ (ระบบฝูงดูแลอยู่แล้ว)
-            Assert.IsFalse(AnimalSolids.DiverStartles(fast, 1, AnimalSolids.MinBlockingRadius - 0.1));
+            Assert.IsFalse(AnimalSolids.DiverStartles(charge, 1, AnimalSolids.MinBlockingRadius - 0.1));
+        }
+
+        /// <summary>แรงหนีก็ต้องไล่ระดับด้วย ไม่ใช่แค่ระยะ — ไม่งั้นแตะตัวทีเดียวก็สปรินต์เต็มแรง.</summary>
+        [Test]
+        public void DiverFleeSprint_IsGentleWhenTheDroneCrawls()
+        {
+            const double r = 10;
+            double reach = FleeMath.FleeRadius(r);
+            double full = FleeMath.FleeSprint(2, reach);
+
+            double crawl = FleeMath.DiverFleeSprint(2, reach, FleeMath.DiverPanicSpeed * 0.2);
+            double charge = FleeMath.DiverFleeSprint(2, reach, DroneFlight.Speed);
+
+            Assert.AreEqual(full, charge, 1e-9, "พุ่งเต็มสปีด = พฤติกรรมเดิม");
+            Assert.Less(crawl, full, "ลอยเข้าไปช้า ๆ ต้องได้แค่สะบัดตัวหลบ");
+            Assert.Greater(crawl, 1.0, "…แต่ยังต้องขยับหนีจริง ไม่ใช่ยืนเฉย");
+
+            // ผู้ล่ายังหนีเต็มแรงเสมอ — ทางเดิมไม่ถูกแตะ
+            Assert.AreEqual(full, FleeMath.FleeSprint(2, reach), 1e-9);
         }
     }
 }

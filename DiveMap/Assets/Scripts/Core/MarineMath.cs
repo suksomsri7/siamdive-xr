@@ -344,6 +344,21 @@ namespace DiveMap.Core
         public const double ShoalSpeedUserMul = 0.6;
         public const double FormationSpeedPerFrame = 0.065;
         public const double PodSpeedPerFrame       = 0.02;  // pods hold slots + bob, they don't dash
+
+        /// <summary>
+        /// 🔴 22 ส.ค. 2026 — user (เรื่องฝูงปลากะมง = <c>pod:yellowtail</c>):
+        /// "ควรปรับให้ว่ายน้ำช้า เคลื่อนที่ไปข้างหน้าช้าลงอีกนิด"
+        ///
+        /// เส้นทาง Pod ไม่เคยมีตัวคูณของ user เลย — ตอนที่ Shoal ได้
+        /// <see cref="ShoalSpeedUserMul"/> ไปเมื่อ 9 ส.ค. pod ถูกข้ามไป เพราะรอบนั้น user พูดถึง
+        /// "ฝูงปลาข้างเหลือง" ซึ่งตอนนั้นยังเดินเส้น Shoal อยู่ ⇒ ไม่ใช่ค่าที่ตั้งผิด แต่เป็นช่องที่
+        /// ยังไม่มีใครเปิด
+        ///
+        /// 🔴 ลดที่ความเร็ว**เดินทาง**เท่านั้น ไม่แตะจังหวะหาง (<see cref="SwimStyle"/>) —
+        /// เป็นคนละเรื่องกัน และการสับสนสองอย่างนี้คือสิ่งที่ทำให้เสียไปสามคืนเมื่อ 8-9 ส.ค.
+        /// (ดู FISH_TUNING.md §6)
+        /// </summary>
+        public const double PodSpeedUserMul        = 0.75;  // ช้าลง 25%
         public const double ShoalVertFactor        = 0.40;
         public const double ClusterVertFactor      = 0.275;
         public const double PodVertFactor          = 0.25;
@@ -532,7 +547,8 @@ namespace DiveMap.Core
                 double floor = PodRadiusFloorMul * fishWorld;   // pods: 3×, NEVER the 8× school floor
                 if (radius < floor) radius = floor;
                 vertHalf  = radius * PodVertFactor;
-                speed     = SpeedCapPerSecond(animalLocal, PodSpeedPerFrame, sp.SwimMul) * s;
+                speed     = SpeedCapPerSecond(animalLocal, PodSpeedPerFrame, sp.SwimMul)
+                          * s * PodSpeedUserMul;
             }
             else if (sp.Formation == SchoolFormation.Shoal)
             {

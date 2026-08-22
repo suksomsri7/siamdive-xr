@@ -170,6 +170,27 @@ namespace DiveMap.Core
         public static double ContactPanic(double diverSpeed)
             => ContactPanicFloor + (1.0 - ContactPanicFloor) * ThreatFraction(diverSpeed);
 
+        /// <summary>
+        /// แรงหนีของ**สัตว์เดี่ยว**เมื่อภัยคือนักดำน้ำ — ไล่ระดับตามความเร็วที่เข้ามา.
+        /// คู่ขนานของ <see cref="ContactPanic"/> ฝั่งฝูงปลา แต่หน่วยเป็น "ตัวคูณความเร็วว่าย"
+        /// เพราะสัตว์เดี่ยวหนีด้วยการเร่ง ไม่ใช่ด้วยค่า panic 0..1 (ดู WhaleController).
+        ///
+        /// 🔴 22 ส.ค. 2026 — ครึ่งที่สองของคำตอบเรื่องฉลามวาฬ (ครึ่งแรกคือระยะ ดู
+        /// <see cref="AnimalSolids.DiverStartleRadius"/>). เดิมสัตว์ที่ตกใจแล้วเรียก
+        /// <see cref="FleeSprint"/> ตรง ๆ ซึ่งคิดจาก**ระยะอย่างเดียว** ⇒ ลอยเข้าไปเบียดช้า ๆ
+        /// กับพุ่งใส่เต็มสปีด ได้ความเร็วหนีเท่ากัน (1.7–2.3× ความเร็วปกติ) นั่นคือ "ว่ายหนีเร็ว"
+        /// ที่ user เห็น แม้จะบังคับโดรนช้าที่สุดแล้วก็ตาม
+        ///
+        /// ที่ความเร็วเกณฑ์หรือช้ากว่า = สะบัดตัวหลบเบา ๆ · ที่คันเร่งเต็ม = <see cref="FleeSprint"/>
+        /// เดิมทุกประการ
+        /// </summary>
+        public static double DiverFleeSprint(double distance, double fleeRadius, double diverSpeed)
+        {
+            double full = FleeSprint(distance, fleeRadius);
+            double calm = 1.0 + (full - 1.0) * ContactPanicFloor;
+            return calm + (full - calm) * ThreatFraction(diverSpeed);
+        }
+
         // ── "ฝูงสั่นถี่ๆ" (user, 8-9 ส.ค. 2026) — the gate, not the swimming ──────
         //
         // 🔴 <see cref="DiverIsThreatening(double)"/> is a HARD binary test on a NOISY signal, and

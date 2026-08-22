@@ -106,8 +106,20 @@ namespace DiveMap.Core
         /// </summary>
         public static bool SelectsOnTap(AppMode mode, bool canEdit) => canEdit && AllowsEditTools(mode);
 
-        /// <summary>The other side of <see cref="SelectsOnTap"/>; the two must never both be true.</summary>
-        public static bool ShowsInfoCard(AppMode mode, bool canEdit) => !SelectsOnTap(mode, canEdit);
+        /// <summary>
+        /// The other side of <see cref="SelectsOnTap"/>; the two must never both be true.
+        ///
+        /// 🔴 22 ส.ค. 2026 — user: "โหมด AR ตอนคลิกที่แมพจะมี pop up รายละเอียดสัตว์ขึ้นมา
+        /// เฉพาะ ar mode ไม่ต้องมีฟังชั่นนี้"
+        ///
+        /// AR ไม่ได้ถูกยกเว้นมาแต่แรกเพราะกฎนี้ถามคำถามเดียวว่า "แตะแล้วจะเลือกของหรือเปล่า" แล้ว
+        /// เอาผลตรงข้ามเป็นการ์ด ⇒ ทุกโหมดที่ไม่ใช่การแก้ไขได้การ์ดไปโดยปริยาย. บนโต๊ะจริงมันคนละ
+        /// เรื่อง: นิ้วที่แตะคือนิ้วเดียวกับที่ใช้เลื่อน/ย่อขยายไดโอรามา และแผ่นข้อมูลเต็มจอที่เด้ง
+        /// ขึ้นมาบังภาพจากกล้อง = บังของจริงที่ผู้ใช้กำลังส่องอยู่ AR จึงต้องเงียบทั้งสองทาง
+        /// (ไม่เลือก ไม่การ์ด) ซึ่งเป็นสถานะที่กฎคู่นี้รองรับอยู่แล้ว — แค่ยังไม่เคยมีใครใช้
+        /// </summary>
+        public static bool ShowsInfoCard(AppMode mode, bool canEdit)
+            => mode != AppMode.Ar && !SelectsOnTap(mode, canEdit);
 
         /// <summary>Where "exit" lands from <paramref name="mode"/>. Always somewhere usable.</summary>
         public static AppMode ExitTarget(AppMode mode) => AppMode.View;

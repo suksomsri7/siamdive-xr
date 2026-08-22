@@ -171,14 +171,37 @@ namespace DiveMap.Tests
         }
 
         [Test]
-        public void ShowsInfoCard_IsExactlyTheComplementOfSelectsOnTap()
+        public void ShowsInfoCard_AndSelectsOnTap_AreNeverBothTrue()
         {
-            // Two rules that can drift are how you end up with a card AND a gizmo on one tap, or
-            // neither — the second of which looks like the app ignoring the user.
+            // ข้อห้ามที่แท้จริงคือ "ห้ามเป็นจริงพร้อมกัน" — การ์ดขึ้นพร้อมกิซโมในแตะเดียว
+            //
+            // 🔴 22 ส.ค. 2026 — เดิมเทสนี้บังคับให้เป็น "ตรงข้ามกันเป๊ะ" ซึ่งแรงเกินความจำเป็น และ
+            // มันคือสิ่งที่ทำให้ AR ได้การ์ดไปโดยไม่มีใครตั้งใจ (ไม่เลือก ⇒ ต้องได้การ์ด). user สั่ง
+            // ว่า AR ต้องเงียบทั้งสองทาง เพราะนิ้วในโหมดนั้นเป็นของการวางไดโอรามาบนโต๊ะ
             foreach (AppMode m in System.Enum.GetValues(typeof(AppMode)) as AppMode[])
                 foreach (bool canEdit in new[] { true, false })
-                    Assert.AreNotEqual(ModeRules.SelectsOnTap(m, canEdit),
-                                       ModeRules.ShowsInfoCard(m, canEdit), $"{m}/{canEdit}");
+                    Assert.IsFalse(ModeRules.SelectsOnTap(m, canEdit) &&
+                                   ModeRules.ShowsInfoCard(m, canEdit), $"{m}/{canEdit}");
+        }
+
+        /// <summary>AR = แตะแล้วไม่เกิดอะไรทั้งนั้น (user 22 ส.ค.) · โหมดอื่นต้องยังตอบสนองการแตะ.</summary>
+        [Test]
+        public void Ar_IsTheOnlyModeWhereATapDoesNothing()
+        {
+            foreach (bool canEdit in new[] { true, false })
+            {
+                Assert.IsFalse(ModeRules.ShowsInfoCard(AppMode.Ar, canEdit), $"AR/{canEdit}");
+                Assert.IsFalse(ModeRules.SelectsOnTap(AppMode.Ar, canEdit), $"AR/{canEdit}");
+            }
+
+            foreach (AppMode m in System.Enum.GetValues(typeof(AppMode)) as AppMode[])
+            {
+                if (m == AppMode.Ar) continue;
+                foreach (bool canEdit in new[] { true, false })
+                    Assert.IsTrue(ModeRules.ShowsInfoCard(m, canEdit) ||
+                                  ModeRules.SelectsOnTap(m, canEdit),
+                                  $"{m}/{canEdit} — แตะแล้วต้องได้อะไรสักอย่าง");
+            }
         }
 
         [Test]

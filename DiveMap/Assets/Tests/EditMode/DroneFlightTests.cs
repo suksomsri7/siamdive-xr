@@ -129,12 +129,13 @@ namespace DiveMap.Tests
                 fwd = Step(fwd, new DroneFlight.Sticks { Ry = -1f });
             }
             Assert.Greater(up.Vel.Y, 0f);
-            // builder.html:3771 — ty = lift·SP·0.72, ONE factor, so up and down are symmetric.
-            Assert.AreEqual(DroneFlight.Speed * 0.72f, up.Vel.Y, 0.2f);
-            Assert.AreEqual(-DroneFlight.Speed * 0.72f, down.Vel.Y, 0.2f);
-            Assert.AreEqual(System.Math.Abs(down.Vel.Y), up.Vel.Y, 0.01f, "the web has no asymmetry");
+            // เว็บ (builder.html:3771) ใช้ ty = lift·SP·0.72 ตัวเดียวทั้งขึ้นและลง — ความสมมาตร
+            // นั้นยังต้องอยู่ ส่วนตัวเลขเองลดเป็น 0.55 ตามที่ user สั่ง 22 ส.ค. ("ขึ้น-ลง ช้าอีกนิด")
+            Assert.AreEqual(DroneFlight.Speed * DroneFlight.AscendRatio, up.Vel.Y, 0.2f);
+            Assert.AreEqual(-DroneFlight.Speed * DroneFlight.DescendRatio, down.Vel.Y, 0.2f);
+            Assert.AreEqual(System.Math.Abs(down.Vel.Y), up.Vel.Y, 0.01f, "ขึ้นกับลงต้องเท่ากันเสมอ");
             Assert.AreEqual(DroneFlight.Speed, fwd.Vel.Z, 0.2f);
-            Assert.Less(up.Vel.Y, fwd.Vel.Z, "vertical is still 0.72 of horizontal");
+            Assert.Less(up.Vel.Y, fwd.Vel.Z, "ขึ้น-ลง ยังต้องช้ากว่าเดินหน้า");
         }
 
         [Test]
@@ -175,14 +176,15 @@ namespace DiveMap.Tests
         public void FlightConstants_MatchTheWebExactly()
         {
             Assert.AreEqual(0.12f, DroneFlight.DeadZone, 1e-6f, "builder.html:3766");
-            Assert.AreEqual(1.1f, DroneFlight.YawRate, 1e-6f, "builder.html:3768");
+            // user 22 ส.ค. — "หันซ้าย-ขวา ขึ้น-ลง ช้าอีกนิด" · เว็บ 1.1 rad/s = 63°/s → 0.85 = 49°/s
+            Assert.AreEqual(0.85f, DroneFlight.YawRate, 1e-6f, "user 22 ส.ค. — เว็บ 3768 = 1.1 (63°/s)");
             // 🔴 ตัวเดียวในไฟล์นี้ที่ไม่ใช่ค่าเว็บอีกต่อไป: user สั่งลด 9 ส.ค. ("โดรนเคลื่อนที่
             // ช้าลงอีกนิด") · ค่าเว็บคือ 30 ส่วนที่ใช้จริงคือ 24 = 80% · เลขอื่นทุกตัวในเทสนี้
             // ยังตรึงกับ builder.html เหมือนเดิม
             Assert.AreEqual(12f, DroneFlight.Speed, 1e-6f, "user 16 ส.ค. — เว็บ 3770 SP=30 × 0.4 (ขอช้าลงรอบสี่)");
             Assert.AreEqual(1f, DroneFlight.StrafeRatio, 1e-6f, "builder.html:3770 — strafe=rx");
-            Assert.AreEqual(0.72f, DroneFlight.AscendRatio, 1e-6f, "builder.html:3771");
-            Assert.AreEqual(0.72f, DroneFlight.DescendRatio, 1e-6f, "builder.html:3771 — one factor");
+            Assert.AreEqual(0.55f, DroneFlight.AscendRatio, 1e-6f, "user 22 ส.ค. — เว็บ 3771 = 0.72");
+            Assert.AreEqual(0.55f, DroneFlight.DescendRatio, 1e-6f, "user 22 ส.ค. — เว็บ 3771 = 0.72");
             Assert.AreEqual(0.09f, DroneFlight.Inertia, 1e-6f, "builder.html:3772");
             Assert.AreEqual(12f, DroneFlight.LookAhead, 1e-6f, "builder.html:3809");
             Assert.AreEqual(0.14f, DroneFlight.PitchFromLift, 1e-6f, "builder.html:3809");
@@ -206,8 +208,9 @@ namespace DiveMap.Tests
             // อัตราส่วนขึ้น/ลง/สไลด์ยังเป็นของเว็บทั้งหมด — ลดเฉพาะความเร็วฐาน
             Assert.AreEqual(2.0f, DroneFlight.MetresPerSecond(DroneFlight.Speed), 0.01f);
             Assert.AreEqual(2.0f, DroneFlight.MetresPerSecond(DroneFlight.Speed * DroneFlight.StrafeRatio), 0.01f);
-            Assert.AreEqual(1.44f, DroneFlight.MetresPerSecond(DroneFlight.Speed * DroneFlight.AscendRatio), 0.01f);
-            Assert.AreEqual(1.44f, DroneFlight.MetresPerSecond(DroneFlight.Speed * DroneFlight.DescendRatio), 0.01f);
+            // ขึ้น-ลง 1.44 → 1.10 m/s (22 ส.ค. user ขอให้บังคับนุ่มขึ้น) — เดินหน้ายังเท่าเดิม 2.0
+            Assert.AreEqual(1.10f, DroneFlight.MetresPerSecond(DroneFlight.Speed * DroneFlight.AscendRatio), 0.01f);
+            Assert.AreEqual(1.10f, DroneFlight.MetresPerSecond(DroneFlight.Speed * DroneFlight.DescendRatio), 0.01f);
 
             // And the preset that carries build 261's drone forward for anyone who preferred it.
             // 0.30 is SettingsStore.CalmSpeedScale, inlined: SettingsStore needs PlayerPrefs and so
