@@ -1051,6 +1051,10 @@ namespace DiveMap.Runtime.Ui
             }
             if (_orbit == null) { _orbitWanted = on; return; }
             if (_orbitWanted == on && _orbit.enabled == on) return;
+            // log เฉพาะตอนค่าเปลี่ยนจริง (guard ข้างบนกันการยิงซ้ำทุกเฟรมแล้ว) — เวลาไล่อาการ
+            // "ลากแมพไม่ได้/กล้องค้าง" บนเครื่องจริง บรรทัดนี้คือพยานว่าใครปิด orbit และเพราะอะไร
+            Debug.Log($"[UI] orbit {( on ? "on" : "off")} — nav={(_nav != null ? _nav.Count : 0)} " +
+                      $"mode={ModeManager.Current} allowed={ModeManager.OrbitAllowed}");
             _orbitWanted = on;
             _orbit.enabled = on;
         }

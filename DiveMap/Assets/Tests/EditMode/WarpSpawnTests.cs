@@ -267,5 +267,49 @@ namespace DiveMap.Tests
             Assert.AreEqual(float.MaxValue,
                             WarpSpawn.NearestGateDistance(new DroneFlight.Vec3[0], V(0f, 0f, 0f)));
         }
+
+        // ── 22 ส.ค. 2026: จุดเกิดสุ่ม (D9) ต้องผ่าน Settle เหมือนประตูวาป ─────────
+        // user: "จะไปเกิดใต้ท้องเรือในแมพ Chang" — D9 เลือกจุดจากมุม+รัศมี+ความสูงเหนือทราย
+        // โดยไม่รู้จัก solids ⇒ จุดที่เรือคร่อมอยู่ = เกิดในโพรง/ในลำเรือ. Settle เปิด public
+        // เพื่อให้ TourController ใช้ด่านเดียวกัน — เทสนี้ตรึงสัญญานั้นไว้
+
+        /// <summary>เรือจำลอง: กล่องเดียวกลางแมพ กว้าง 80×40×30 ตั้งบนทราย (เหมือน Chang ย่อส่วน).</summary>
+        private static DroneFlight.Solid Wreck()
+            => new DroneFlight.Solid
+            {
+                Bound = new DroneFlight.Box
+                {
+                    MinX = -40f, MinY = 0f, MinZ = -15f,
+                    MaxX = 40f, MaxY = 40f, MaxZ = 15f,
+                },
+                Boxes = null,
+                Rot = DroneFlight.Quat.Identity,
+            };
+
+        [Test]
+        public void Settle_PushesASpawnOutOfAWreck()
+        {
+            // จุดที่ D9 เคยส่งมาจริง: "ทราย+18" ตรง x,z ที่มีเรือคร่อม = กลางลำเรือพอดี
+            var inside = V(0f, 18f, 0f);
+            DroneFlight.Vec3 outp = WarpSpawn.Settle(inside, 0f, Water, new[] { Wreck() }, 1f, 1f);
+
+            // ต้องพ้นตัวเรือ (บวกระยะกล้อง) — ทางใดทางหนึ่ง: ข้าง ๆ หรือเหนือดาดฟ้า
+            bool clear = outp.X <= -40f - DroneFlight.CamRadius + 0.01f ||
+                         outp.X >= 40f + DroneFlight.CamRadius - 0.01f ||
+                         outp.Z <= -15f - DroneFlight.CamRadius + 0.01f ||
+                         outp.Z >= 15f + DroneFlight.CamRadius - 0.01f ||
+                         outp.Y >= 40f + DroneFlight.CamRadius - 0.01f;
+            Assert.IsTrue(clear, $"ยังอยู่ในเรือ: ({outp.X:F1},{outp.Y:F1},{outp.Z:F1})");
+        }
+
+        [Test]
+        public void Settle_LeavesAClearSpawnAlone()
+        {
+            var open = V(120f, 30f, 80f);
+            DroneFlight.Vec3 outp = WarpSpawn.Settle(open, 0f, Water, new[] { Wreck() }, 1f, 1f);
+            Assert.AreEqual(open.X, outp.X, 0.5f);
+            Assert.AreEqual(open.Y, outp.Y, 0.5f);
+            Assert.AreEqual(open.Z, outp.Z, 0.5f);
+        }
     }
 }

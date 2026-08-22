@@ -140,6 +140,17 @@ namespace DiveMap.Runtime
             if (NativeBoot.LibraryMode && !wasLibrary) ApplyHostChrome();
 
             ApplyMap(args.ShortId);
+
+            // 🔴 payload ที่มีแต่ mode ไม่มี shortId — ApplyMap ข้างบนไม่ทำอะไรเลย (SwitchMapFromHost
+            // คืนค่าตั้งแต่บรรทัดแรก) และก่อน 22 ส.ค. 2026 คำสั่งโหมดแบบนี้จึงหายเงียบ.
+            // แอปใช้ payload แบบนี้ตอนผู้ใช้ออกจากจอ Unity ({mode:"view"}) เพื่อการันตีว่า
+            // เครื่องยนต์กลับมายืนอยู่หน้าแมพเสมอ — การเข้าโหมดครั้งถัดไปจึงเป็น View→X ตรง ๆ
+            // ทุกครั้ง ไม่ต้องพึ่งการเดินผ่านฮับจากโหมดค้างซึ่งพังมาแล้วสามรูปแบบ
+            if (string.IsNullOrEmpty(args.ShortId) && _instance != null)
+            {
+                AppBoot boot = FindFirstObjectByType<AppBoot>();
+                if (boot != null) boot.SyncHostMode("mode-only payload");
+            }
         }
 
         /// <summary>

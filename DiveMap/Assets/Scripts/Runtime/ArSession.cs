@@ -631,7 +631,14 @@ namespace DiveMap.Runtime
                     _orbit.distance = _orbitDistance;
                     _orbit.minDistance = _orbitMin;
                 }
-                _orbit.enabled = _orbitWas;
+                // 🔴 22 ส.ค. 2026 — เดิมคืน `_orbitWas` (สถานะตอนเข้า AR) ซึ่งตอบคำถามผิดข้อ:
+                // คำถามตอนออกไม่ใช่ "ตอนเข้ามา orbit เปิดอยู่ไหม" แต่คือ "โหมดที่กำลังกลับไป
+                // อนุญาต orbit ไหม" · สองคำตอบต่างกันทุกครั้งที่เข้า AR จากโหมดที่ orbit ถูกปิด
+                // (เช่นตอนสลับโหมดเร็ว ๆ ระหว่างที่ค่ายืมยังเป็นของรอบก่อน) แล้ว snapshot เก่า
+                // จะปิด orbit ค้างทั้งที่ยืนอยู่ในหน้าแมพ = ลาก/ย่อขยายไม่ได้ กล้องค้างที่เดิม
+                // (UiShell.Update เปิดคืนให้ก็จริง แต่เฉพาะเมื่อเงื่อนไขของมันครบ — กฎตรงนี้ต้อง
+                // ถูกด้วยตัวเอง ไม่ใช่พึ่งตาข่ายชั้นนอก)
+                _orbit.enabled = ModeRules.AllowsOrbit(ModeManager.Current);
                 _orbit = null;
             }
 

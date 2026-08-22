@@ -195,9 +195,15 @@ namespace DiveMap.Core
         /// Let the flight model itself decide whether this spot is legal: sticks at rest, so the
         /// only thing that can move the diver is the push-out, the floor, the ceiling or the map
         /// boundary. Velocity starts and stays at zero, so the dive still begins from a standstill.
+        ///
+        /// 🔴 public ตั้งแต่ 22 ส.ค. 2026 — จุดเกิดสุ่ม (D9) ต้องผ่านด่านเดียวกันนี้ด้วย.
+        /// user (build จริง แมพ Chang): "จะไปเกิดใต้ท้องเรือ" — D9 เลือกจุดจาก มุม+รัศมี+ความสูง
+        /// เหนือทรายเท่านั้น ไม่เคยรู้จัก solids เลย ⇒ จุดที่ทรายมีเรือคร่อมอยู่ = เกิดในโพรง/ในลำเรือ.
+        /// ประตูวาปมีด่านนี้มาตลอด ("pushed out of a wreck the gate happens to stand in") —
+        /// จุดเกิดสุ่มโดนของจริงเข้าถึงรู้ว่าขาด
         /// </summary>
-        private static DroneFlight.Vec3 Settle(DroneFlight.Vec3 pos, float seabedTopY, float waterLevel,
-                                               DroneFlight.Solid[] solids, float scaleX, float scaleZ)
+        public static DroneFlight.Vec3 Settle(DroneFlight.Vec3 pos, float seabedTopY, float waterLevel,
+                                              DroneFlight.Solid[] solids, float scaleX, float scaleZ)
         {
             var s = new DroneFlight.State { Pos = pos };
             for (int i = 0; i < SettlePasses; i++)

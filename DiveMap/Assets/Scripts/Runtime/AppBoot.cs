@@ -1298,12 +1298,7 @@ namespace DiveMap.Runtime
                 //
                 // NativeBoot.Adopt เก็บ HostMode ไว้ให้แล้วตั้งแต่ต้น (Apply เรียกก่อนถึงบรรทัดนี้)
                 // จึงเป็นการอ่านค่าที่มีอยู่ ไม่ใช่ช่องทางสั่งโหมดช่องที่สอง
-                Core.BootMode.Requested again = Core.NativeBoot.HostMode;
-                if (Core.BootMode.OverridesAutoPlay(again) && _mapRoot != null)
-                {
-                    Debug.Log($"[Native] แมพเดิม ({shortId}) แต่เจ้าบ้านสั่ง {again} — เข้าโหมดให้เลย");
-                    ApplyHostMode(again);
-                }
+                SyncHostMode("same map " + shortId);
                 return;
             }
 
@@ -1515,8 +1510,28 @@ namespace DiveMap.Runtime
         }
 
         /// <summary>
+        /// ทำให้โหมดจริงของ Unity ตรงกับโหมดล่าสุดที่เจ้าบ้านสั่ง — เมื่อแมพอยู่บนจอแล้ว.
+        ///
+        /// 🔴 22 ส.ค. 2026 (รอบ 4 ของ "ออกจาก AR แล้วขยับไม่ได้") — จุดนี้เคยมีผู้เรียกเดียวคือ
+        /// เส้นทางโหลดแมพ ⇒ คำสั่งโหมดที่มาโดย**ไม่พาแมพใหม่มาด้วย**ถูกทิ้งเงียบทุกครั้ง.
+        /// ตอนนี้มีผู้เรียกสามทาง ครอบทุกจังหวะที่คำสั่งมาถึงได้:
+        ///   • แมพเดิม (<see cref="SwitchMapFromHost"/>) — บั๊กของ build 9016/9017
+        ///   • payload ที่มีแต่ mode ไม่มี shortId (<see cref="NativeBootReceiver.Apply"/>) —
+        ///     แอปส่ง {mode:"view"} ตอนผู้ใช้ออกจากจอ เพื่อ "คืนเครื่องให้อยู่หน้าแมพ" เสมอ
+        ///   • หลังโหลดแมพจบ (<see cref="EnterHostMode"/> ผ่าน coroutine หน่วงตามเดิม)
+        /// </summary>
+        public void SyncHostMode(string why)
+        {
+            Core.BootMode.Requested want = Core.NativeBoot.HostMode;
+            if (!Core.BootMode.OverridesAutoPlay(want)) return;   // เจ้าบ้านไม่ได้สั่งอะไรไว้
+            if (_mapRoot == null) return;                          // แมพยังไม่ขึ้น — เส้นทางโหลดจัดการเอง
+            Debug.Log($"[Native] sync mode → {want} ({why}) current={ModeManager.Current}");
+            ApplyHostMode(want);
+        }
+
+        /// <summary>
         /// เข้าโหมดที่เจ้าบ้านสั่ง — ตัวเนื้อของ <see cref="EnterHostMode"/> แยกออกมาเพราะมี
-        /// ผู้เรียกที่สอง (<see cref="SwitchMapFromHost"/> เมื่อแมพเดิม) ที่ต้องทำทันที ไม่ต้องหน่วง
+        /// ผู้เรียกอื่น (<see cref="SyncHostMode"/>) ที่ต้องทำทันที ไม่ต้องหน่วง
         /// เพราะแมพอยู่บนจอเรียบร้อยแล้ว
         /// </summary>
         private void ApplyHostMode(Core.BootMode.Requested mode)

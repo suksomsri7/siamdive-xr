@@ -243,14 +243,25 @@ namespace DiveMap.Runtime
                 // Re-read the seabed UNDER the chosen point: the map is sculpted, so the height
                 // above the middle says nothing about the height over a reef 100 units away.
                 var at = new Vector3(pick.X, pick.Y, pick.Z);
-                at.y = Mathf.Max(SeabedY(at) + 18f, _waterLevel * 0.5f);
+                float sandY = SeabedY(at);
+                at.y = Mathf.Max(sandY + 18f, _waterLevel * 0.5f);
                 at.y = Mathf.Min(at.y, _waterLevel - 8f);
-                start = at;
-                startYaw = DroneFlight.YawToward(new DroneFlight.Vec3(at.x, at.y, at.z), centre);
-                Debug.Log($"[Tour] random spawn at ({at.x:F0},{at.y:F0},{at.z:F0}) mapR={mapR:F0} " +
-                          $"askedRandom={wantRandom}");
-                Debug.Log($"[Tour] spawn=default mode=random " +
-                          $"pos=({start.x:F1},{start.y:F1},{start.z:F1})");
+
+                // 🔴 22 ส.ค. 2026 — user: "จะไปเกิดใต้ท้องเรือในแมพ Chang" (แล้วออกไม่ได้)
+                //
+                // D9 เลือกจุดโดยไม่รู้จัก solids เลย — "ทราย+18" ที่จุดซึ่งเรือคร่อมอยู่ = เกิดใน
+                // โพรงใต้ hull หรือในลำเรือ. ประตูวาปทำสองพาสมาตลอด (เลือกจุด → หยิบ solids
+                // แถวนั้น → Settle ให้ flight model ดันออก) — จุดเกิดสุ่มได้ด่านเดียวกันแล้ว:
+                RefreshSolids(at, force: true);
+                DroneFlight.Vec3 settled = WarpSpawn.Settle(
+                    new DroneFlight.Vec3(at.x, at.y, at.z),
+                    sandY, _waterLevel, _solids, _scaleX, _scaleZ);
+                start = new Vector3(settled.X, settled.Y, settled.Z);
+                startYaw = DroneFlight.YawToward(settled, centre);
+                Debug.Log($"[Tour] spawn=default mode=random mapR={mapR:F0} askedRandom={wantRandom} " +
+                          $"picked=({at.x:F1},{at.y:F1},{at.z:F1}) " +
+                          $"settled=({start.x:F1},{start.y:F1},{start.z:F1}) " +
+                          $"moved={(start - at).magnitude:F1}u");
             }
 
 
