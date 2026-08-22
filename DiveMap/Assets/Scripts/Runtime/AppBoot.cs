@@ -132,6 +132,30 @@ namespace DiveMap.Runtime
         private void SetupCamera()
         {
             Camera cam = Camera.main;
+            // 🔴 22 ส.ค. 2026 (b463 บนเครื่องจริง — คดี "กล้องผี") — Camera.main มองไม่เห็นกล้อง
+            // ที่ inactive/disabled. ฉากถูกปล่อยทิ้งตอนพักแอป (ทางแก้ jetsam 16 ส.ค.) แล้วโหลด
+            // ใหม่ตอนกลับมา ⇒ Start นี้รันซ้ำได้ทั้งชีวิตแอป · ถ้าจังหวะนั้นกล้องเดิมยังแขวนใต้
+            // ริก AR (ArKitSession เป็น DontDestroyOnLoad — ของใต้มันรอดการโหลดฉาก) หรือถูกปิดไว้
+            // บรรทัดล่างจะ**คลอดกล้องตัวที่สอง** — ตัวเก่ากลายเป็นผีค้าง pose สุดท้าย วาดทับทุกอย่าง
+            // ตลอดกาล: จอเป็นภาพแช่แข็งขณะที่เกม/จอย/กล้องหลักตัวใหม่ทำงานปกติทุกระบบ
+            // (หลักฐาน: badge b463 โชว์ cam อยู่มุมเฟรมแมพถูกต้องเป๊ะ แต่ภาพบนจอคือใต้ท้องเรือ)
+            // ⇒ ก่อนคลอดใหม่ ตามหาตัวเก่าให้สุดทาง รวม inactive แล้วชุบคืน
+            if (cam == null)
+            {
+                Camera[] all = UnityEngine.Object.FindObjectsByType<Camera>(
+                    FindObjectsInactive.Include, FindObjectsSortMode.None);
+                for (int i = 0; i < all.Length; i++)
+                {
+                    if (!all[i].CompareTag("MainCamera")) continue;
+                    if (all[i].targetTexture != null) continue;   // กล้องพรีวิว (SpeciesCam) ไม่ใช่
+                    cam = all[i];
+                    cam.gameObject.SetActive(true);
+                    cam.enabled = true;
+                    if (cam.transform.parent != null) cam.transform.SetParent(null, true);
+                    Debug.Log($"[Boot] กล้องเดิมถูกชุบคืน ({cam.name}) แทนการสร้างตัวใหม่ซ้อน");
+                    break;
+                }
+            }
             if (cam == null)
             {
                 var camGo = new GameObject("Main Camera");

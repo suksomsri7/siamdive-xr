@@ -163,8 +163,11 @@ namespace DiveMap.Runtime.Ui
                     Vector3 cp = bc.transform.position;
                     // สุขภาพกล้อง: en=เปิดไหม · rect · tt=วาดลง texture อื่นไหม · clr=clearFlags
                     // — สี่ตัวที่ทำ "ภาพแช่แข็ง" ได้ ภาพใบเดียวชี้ตัวเป๊ะ (22 ส.ค. รอบ 7)
+                    // cams=N — คดีกล้องผี: จอปกติต้องมี 1 (กล้องหลัก) — 2+ = มีผี (SpeciesCam
+                    // นับรวมตอนการ์ดเปิด แต่มันวาดลง RT ไม่แตะจอ)
                     string health = $"en={(bc.enabled ? "T" : "F")} r={bc.rect.width:F1}x{bc.rect.height:F1} " +
-                                    $"tt={(bc.targetTexture == null ? "-" : "RT!")} clr={bc.clearFlags}";
+                                    $"tt={(bc.targetTexture == null ? "-" : "RT!")} clr={bc.clearFlags} " +
+                                    $"cams={Camera.allCamerasCount}";
                     string cam = bo != null
                         ? $"cam({cp.x:F0},{cp.y:F0},{cp.z:F0}) tgt({bo.target.x:F0},{bo.target.y:F0},{bo.target.z:F0}) d={bo.distance:F0} · {health}"
                         : $"cam({cp.x:F0},{cp.y:F0},{cp.z:F0}) no-orbit · {health}";

@@ -1021,6 +1021,31 @@ namespace DiveMap.Runtime.Ui
             bool allow = _nav == null || _nav.Count == 0;
             if (allow && !ModeManager.OrbitAllowed) allow = false;
             SetOrbitEnabled(allow);
+
+            // 🔴 กล้องที่วาดลงจอต้องมีตัวเดียว (22 ส.ค. 2026 — คดี "กล้องผี" b447-b463)
+            //
+            // ฉากถูกปล่อยตอนพักแอปแล้วโหลดใหม่ (ทางแก้ jetsam) — ถ้ากล้องเดิมรอดมาด้วย
+            // (แขวนใต้ริก AR ที่เป็น DontDestroyOnLoad) แล้ว AppBoot รอบใหม่หามันไม่เจอ
+            // จะเกิดกล้องซ้อนสองตัว: ตัวใหม่ทำงานปกติทุกระบบ ตัวเก่าแช่ pose สุดท้ายและ
+            // **วาดทับทุกอย่าง** ⇒ "เกมวิ่ง จอยขยับ แต่ภาพนิ่ง" ที่ไล่กันมาทั้งวัน.
+            // SetupCamera แก้ที่ต้นกำเนิดแล้ว — ด่านนี้คือตาข่ายถาวรสำหรับทุกสายพันธุ์ที่เหลือ:
+            // ใครก็ตามที่วาดลงจอ (targetTexture ว่าง) โดยไม่ใช่กล้องหลัก = ผี → ปิดทั้งกล้อง
+            // ทั้งหูฟัง (AudioListener ซ้อนกันสองตัวก็ผิดเหมือนกัน) แล้ว log ชื่อไว้เป็นพยาน
+            if (Camera.allCamerasCount > 1)
+            {
+                Camera main = Camera.main;
+                Camera[] cams = Camera.allCameras;
+                for (int i = 0; i < cams.Length; i++)
+                {
+                    Camera c = cams[i];
+                    if (c == null || c == main || c.targetTexture != null) continue;
+                    c.enabled = false;
+                    var ears = c.GetComponent<AudioListener>();
+                    if (ears != null && main != null && main.GetComponent<AudioListener>() != null)
+                        ears.enabled = false;
+                    Debug.Log($"[UI] กล้องผี '{c.name}' ถูกปิด — จอเป็นของ {(main != null ? main.name : "?")} เท่านั้น");
+                }
+            }
         }
 
         /// <summary>
