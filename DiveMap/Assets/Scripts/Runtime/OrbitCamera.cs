@@ -73,6 +73,40 @@ namespace DiveMap.Runtime
         private float _prevPinchDist;
         private Vector2 _prevTwoFingerMid;
 
+        // ── นิ้วที่เป็นของ UI (จอย/ปุ่ม) ต้องไม่ขยับกล้อง ────────────────────────────
+        //
+        // 🔴 22 ส.ค. 2026 — กติกานี้เคยอยู่ที่ UiShell ในรูป "นิ้วใดอยู่บน UI = ปิด OrbitCamera
+        // ทั้ง component" ซึ่ง touch ผี (นิ้วที่ระบบไม่เคยส่ง touch-up ให้ ตอนแอปเจ้าบ้านสลับจอ/
+        // หมุนจอ — ของจริงบน Unity-as-a-library) ใช้ปักกล้องค้างได้ทั้งระบบ. ที่ถูกคือจำเป็น
+        // รายนิ้ว ณ จังหวะ Began: นิ้วที่เริ่มบน UI ไม่มีสิทธิ์หมุน/ย่อ/แพนตลอดชีวิตของมัน
+        // ส่วนนิ้วอื่นและการ re-frame อัตโนมัติ (Apply ทุกเฟรม) ไม่เกี่ยวข้องกับมันเลย
+        private int _uiFingerA = -1, _uiFingerB = -1;
+        private bool _mouseOnUi;
+
+        private static bool OverUi(int fingerId)
+        {
+            var es = UnityEngine.EventSystems.EventSystem.current;
+            if (es == null) return false;
+            return fingerId >= 0 ? es.IsPointerOverGameObject(fingerId)
+                                 : es.IsPointerOverGameObject();
+        }
+
+        private bool IsUiFinger(int id) => id == _uiFingerA || id == _uiFingerB;
+
+        private void TrackFinger(Touch t)
+        {
+            if (t.phase == TouchPhase.Began && OverUi(t.fingerId))
+            {
+                if (_uiFingerA < 0) _uiFingerA = t.fingerId;
+                else if (_uiFingerB < 0) _uiFingerB = t.fingerId;
+            }
+            else if (t.phase == TouchPhase.Ended || t.phase == TouchPhase.Canceled)
+            {
+                if (t.fingerId == _uiFingerA) _uiFingerA = -1;
+                if (t.fingerId == _uiFingerB) _uiFingerB = -1;
+            }
+        }
+
         private void Start() => Apply();
 
         /// <summary>Frame the map: centre on <paramref name="center"/> and back off to fit radius.</summary>
@@ -147,6 +181,8 @@ namespace DiveMap.Runtime
         private void Update()
         {
             int touches = Input.touchCount;
+            for (int i = 0; i < touches; i++) TrackFinger(Input.GetTouch(i));
+
             if (touches == 1)
             {
                 HandleOneFinger();
@@ -166,7 +202,7 @@ namespace DiveMap.Runtime
         private void HandleOneFinger()
         {
             Touch t = Input.GetTouch(0);
-            if (t.phase == TouchPhase.Moved)
+            if (t.phase == TouchPhase.Moved && !IsUiFinger(t.fingerId))
             {
                 _yaw += t.deltaPosition.x * orbitSpeed;
                 _pitch -= t.deltaPosition.y * orbitSpeed;
@@ -179,6 +215,8 @@ namespace DiveMap.Runtime
         {
             Touch a = Input.GetTouch(0);
             Touch b = Input.GetTouch(1);
+            // นิ้วใดนิ้วหนึ่งเป็นของ UI = ทั้ง gesture ไม่ใช่ของกล้อง (พฤติกรรมเดิมของ UiShell)
+            if (IsUiFinger(a.fingerId) || IsUiFinger(b.fingerId)) { _prevPinchDist = 0f; return; }
 
             float curDist = Vector2.Distance(a.position, b.position);
             Vector2 curMid = (a.position + b.position) * 0.5f;
@@ -201,6 +239,11 @@ namespace DiveMap.Runtime
 
         private void HandleMouse()
         {
+            // กดเมาส์เริ่มบน UI = ลากทั้งช่วงนั้นเป็นของ UI (คู่ขนานกับ TrackFinger ฝั่ง touch)
+            if (Input.GetMouseButtonDown(0) || Input.GetMouseButtonDown(1)) _mouseOnUi = OverUi(-1);
+            if (!Input.GetMouseButton(0) && !Input.GetMouseButton(1)) _mouseOnUi = false;
+            if (_mouseOnUi) return;
+
             if (Input.GetMouseButton(0))
             {
                 _yaw += Input.GetAxis("Mouse X") * orbitSpeed * 12f;

@@ -1007,11 +1007,19 @@ namespace DiveMap.Runtime.Ui
             ApplySafeArea(false);
             HostBackKey();
 
-            // Three independent vetoes: an open screen, a finger on a UI element, and the
-            // current mode (a first-person tour must not also orbit — P0.5).
+            // Two vetoes: an open screen, and the current mode (a first-person tour must not
+            // also orbit — P0.5).
+            //
+            // 🔴 22 ส.ค. 2026 — veto ที่สาม (นิ้วอยู่บน UI) ถูกถอดออกจากชั้นนี้: การ**ปิดทั้ง
+            // component** เพราะนิ้วแตะ UI แปลว่า touch หนึ่งตัวที่ค้างในตาราง input (นิ้วที่
+            // iOS ไม่เคยส่ง touch-up ให้ตอนแอปสลับจอ/หมุนจอ — เกิดจริงบน Unity-as-a-library)
+            // ปักกล้องทั้งระบบไว้กับที่**ตลอดกาล**: Apply() ไม่วิ่ง กล้องไม่ re-frame ลาก/ย่อ
+            // ไม่ได้ — ตรงกับภาพ b453 ของ user (preview ค้างมุมโดรนใต้เรือ) ทุกประการ
+            // เจตนาเดิม ("ลากบนจอยต้องไม่หมุนกล้อง") ยังอยู่ครบ แต่ย้ายไปอยู่ในตัว OrbitCamera
+            // เอง ซึ่งเช็ค**ตอนเริ่ม gesture ต่อนิ้ว** — นิ้วผีทำได้แค่ไม่เริ่ม gesture ของตัวเอง
+            // ฆ่ากล้องของนิ้วอื่นไม่ได้อีก
             bool allow = _nav == null || _nav.Count == 0;
             if (allow && !ModeManager.OrbitAllowed) allow = false;
-            if (allow && PointerOverUi()) allow = false;
             SetOrbitEnabled(allow);
         }
 

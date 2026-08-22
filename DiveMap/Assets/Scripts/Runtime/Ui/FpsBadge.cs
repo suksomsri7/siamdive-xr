@@ -100,6 +100,14 @@ namespace DiveMap.Runtime.Ui
             int tot = Marine.FishSchoolSystem.TotalSchools;
             string fish = tot > 0 ? $" · ปลา {Marine.FishSchoolSystem.GlbSchools}/{tot}" : "";
 
+            // 🔴 22 ส.ค. 2026 — โหมด + สถานะกล้องโคจร ต่อท้าย (ชั่วคราว ระหว่างคดี "ขยับไม่ได้")
+            // คำถามที่ภาพหน้าจอรอบก่อนตอบไม่ได้คือ "Unity คิดว่าตัวเองอยู่โหมดไหน และ orbit
+            // เปิดอยู่ไหม" — สองคำนี้บนป้ายทำให้ภาพใบเดียวชี้ตัวการได้เลย (ธรรมเนียมเดียวกับ
+            // ที่เลข fps ปิดคดีปลาสั่น และ bNNN ปิดคดี "เครื่องรันบิลด์ไหน")
+            Camera bc = Camera.main;
+            OrbitCamera bo = bc != null ? bc.GetComponent<OrbitCamera>() : null;
+            string state = $" · {ModeManager.Current}{(bo != null && bo.enabled ? "+o" : "-o")}";
+
             // แถวล่างสุด = ของเดิม (fps) · เมื่อฝังในแอปแถวนี้ถูกซ่อนตามคำสั่ง user แล้วบรรทัดแรม
             // จะเลื่อนลงมาแทนที่ ไม่ใช่ลอยค้างเว้นช่องว่างไว้ให้สงสัยว่ามีอะไรหายไป
             float bottomY = Screen.height - Screen.height * 0.06f;
@@ -109,7 +117,7 @@ namespace DiveMap.Runtime.Ui
             if (Visible)
             {
                 GUI.Label(new Rect(0, bottomY, Screen.width - rightPad, lineH),
-                          $"{_fps:0} fps{build}{fish}", _style);
+                          $"{_fps:0} fps{build}{fish}{state}", _style);
             }
 
             if (!MemoryLineVisible) return;

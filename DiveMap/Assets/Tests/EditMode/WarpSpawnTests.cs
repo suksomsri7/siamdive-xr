@@ -311,5 +311,49 @@ namespace DiveMap.Tests
             Assert.AreEqual(open.Y, outp.Y, 0.5f);
             Assert.AreEqual(open.Z, outp.Z, 0.5f);
         }
+
+        // ── 22 ส.ค. 2026 รอบสอง (b453 บนเครื่องจริง): "นิ่ง" ≠ "ว่าง" ────────────────
+        // จุดใต้ท้องเรือถูกดันสองทางสมดุลกัน — Settle เห็นว่านิ่งแล้วปล่อยผ่าน แต่โดรน
+        // แช่แข็งอยู่ในกล่องชน จอยสั่งอะไรก็ถูกหักล้าง ⇒ ต้องมีด่านที่ถามคำถามที่ถูก:
+        // SpawnIsClear = จุดนี้พ้นเกณฑ์ของ Resolve จริงไหม
+
+        /// <summary>เรือลอยเหนือทราย (มีโพรงใต้ท้อง) — ทรง Chang ที่ทำให้เกิดสมดุลแรง.</summary>
+        private static DroneFlight.Solid HoveringWreck()
+            => new DroneFlight.Solid
+            {
+                Bound = new DroneFlight.Box
+                {
+                    MinX = -40f, MinY = 6f, MinZ = -15f,   // ท้องเรือสูงจากทราย 6u — โพรงแคบ
+                    MaxX = 40f, MaxY = 46f, MaxZ = 15f,
+                },
+                Boxes = null,
+                Rot = DroneFlight.Quat.Identity,
+            };
+
+        [Test]
+        public void SpawnIsClear_RejectsTheForceEquilibriumPocket()
+        {
+            var wreck = new[] { HoveringWreck() };
+            // จุดในโพรงใต้ท้องเรือ: ต่ำกว่า MinY+CamRadius = ยังแตะกล่อง (Resolve จะดันทุกเฟรม)
+            var pocket = V(0f, 7f, 0f);
+            DroneFlight.Vec3 settled = WarpSpawn.Settle(pocket, 0f, Water, wreck, 1f, 1f);
+            // ไม่บังคับว่า Settle ต้องช่วยได้ — ประเด็นคือด่านสุดท้ายต้องจับได้ว่ายังไม่ว่างจริง
+            if (!DroneFlight.SpawnIsClear(settled, wreck))
+                Assert.Pass("ด่านจับได้ — ผู้เรียกจะจับสลากใบใหม่");
+            // ถ้า Settle ดันหลุดได้จริง จุดนั้นต้องพ้นเกณฑ์ Resolve จริง ๆ
+            Assert.IsTrue(DroneFlight.SpawnIsClear(settled, wreck));
+        }
+
+        [Test]
+        public void SpawnIsClear_MatchesResolveExactly()
+        {
+            var wreck = new[] { Wreck() };
+            // ในกล่อง = ไม่ว่าง · ชิดขอบใน CamRadius = ไม่ว่าง · พ้น CamRadius = ว่าง
+            Assert.IsFalse(DroneFlight.SpawnIsClear(V(0f, 20f, 0f), wreck));
+            Assert.IsFalse(DroneFlight.SpawnIsClear(V(41f, 20f, 0f), wreck), "ชิดขอบใน slack");
+            Assert.IsTrue(DroneFlight.SpawnIsClear(V(40f + DroneFlight.CamRadius + 0.5f, 20f, 0f), wreck));
+            Assert.IsTrue(DroneFlight.SpawnIsClear(V(0f, 46f + DroneFlight.CamRadius, 0f), wreck), "เหนือดาดฟ้า");
+            Assert.IsTrue(DroneFlight.SpawnIsClear(V(0f, 20f, 0f), null), "ไม่มี solids = ว่างเสมอ");
+        }
     }
 }

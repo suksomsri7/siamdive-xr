@@ -236,32 +236,54 @@ namespace DiveMap.Runtime
             {
                 float mapR = SeabedGeom.SandRadius * Mathf.Max(_scaleX, _scaleZ);
                 var centre = new DroneFlight.Vec3(_homeCenter.x, _homeCenter.y, _homeCenter.z);
-                DroneFlight.Vec3 pick = DroneFlight.RandomSpawn(
-                    centre, mapR,
-                    SeabedY(_homeCenter), _waterLevel,
-                    UnityEngine.Random.value, UnityEngine.Random.value);
-                // Re-read the seabed UNDER the chosen point: the map is sculpted, so the height
-                // above the middle says nothing about the height over a reef 100 units away.
-                var at = new Vector3(pick.X, pick.Y, pick.Z);
-                float sandY = SeabedY(at);
-                at.y = Mathf.Max(sandY + 18f, _waterLevel * 0.5f);
-                at.y = Mathf.Min(at.y, _waterLevel - 8f);
 
-                // 🔴 22 ส.ค. 2026 — user: "จะไปเกิดใต้ท้องเรือในแมพ Chang" (แล้วออกไม่ได้)
+                // 🔴 22 ส.ค. 2026 รอบสอง (b453 บนเครื่องจริง — ป้ายบนภาพยืนยัน): Settle อย่างเดียว
+                // ไม่พอ. จุดใต้ท้องเรือ Chang ถูกดันสองทางจนสมดุล ⇒ "นิ่ง" ทั้งที่ยังอยู่ในกล่องชน
+                // ⇒ โดรนแช่แข็ง จอยสั่งอะไรก็ถูก Resolve หักล้างทุกเฟรม · และ depth ค้าง ~20 ม.
+                // ทุกรอบเพราะสูตรความสูง (กลางน้ำ) เป็นค่าตายตัว ส่วนเรือ Chang ยาวคลุมวงสุ่ม
                 //
-                // D9 เลือกจุดโดยไม่รู้จัก solids เลย — "ทราย+18" ที่จุดซึ่งเรือคร่อมอยู่ = เกิดใน
-                // โพรงใต้ hull หรือในลำเรือ. ประตูวาปทำสองพาสมาตลอด (เลือกจุด → หยิบ solids
-                // แถวนั้น → Settle ให้ flight model ดันออก) — จุดเกิดสุ่มได้ด่านเดียวกันแล้ว:
-                RefreshSolids(at, force: true);
-                DroneFlight.Vec3 settled = WarpSpawn.Settle(
-                    new DroneFlight.Vec3(at.x, at.y, at.z),
-                    sandY, _waterLevel, _solids, _scaleX, _scaleZ);
-                start = new Vector3(settled.X, settled.Y, settled.Z);
-                startYaw = DroneFlight.YawToward(settled, centre);
-                Debug.Log($"[Tour] spawn=default mode=random mapR={mapR:F0} askedRandom={wantRandom} " +
-                          $"picked=({at.x:F1},{at.y:F1},{at.z:F1}) " +
-                          $"settled=({start.x:F1},{start.y:F1},{start.z:F1}) " +
-                          $"moved={(start - at).magnitude:F1}u");
+                // ⇒ จับสลากหลายใบ เอาใบแรกที่ "ว่างจริง" (SpawnIsClear = เกณฑ์เดียวกับ Resolve)
+                // ไม่มีเลย = ถอยไปจุดเปิดแมพหน้าเรือ ซึ่งอยู่นอกทุกสิ่งโดยนิยาม — น่าเบื่อ
+                // แต่บังคับได้เสมอ และดีกว่าเกิดในซากเรือหนึ่งร้อยเปอร์เซ็นต์
+                bool found = false;
+                for (int tryN = 0; tryN < 8 && !found; tryN++)
+                {
+                    DroneFlight.Vec3 pick = DroneFlight.RandomSpawn(
+                        centre, mapR,
+                        SeabedY(_homeCenter), _waterLevel,
+                        UnityEngine.Random.value, UnityEngine.Random.value);
+                    // Re-read the seabed UNDER the chosen point: the map is sculpted, so the
+                    // height above the middle says nothing about a reef 100 units away.
+                    var at = new Vector3(pick.X, pick.Y, pick.Z);
+                    float sandY = SeabedY(at);
+                    at.y = Mathf.Max(sandY + 18f, _waterLevel * 0.5f);
+                    at.y = Mathf.Min(at.y, _waterLevel - 8f);
+
+                    RefreshSolids(at, force: true);
+                    DroneFlight.Vec3 settled = WarpSpawn.Settle(
+                        new DroneFlight.Vec3(at.x, at.y, at.z),
+                        sandY, _waterLevel, _solids, _scaleX, _scaleZ);
+
+                    if (!DroneFlight.SpawnIsClear(settled, _solids)) continue;
+
+                    start = new Vector3(settled.X, settled.Y, settled.Z);
+                    startYaw = DroneFlight.YawToward(settled, centre);
+                    found = true;
+                    Debug.Log($"[Tour] spawn=default mode=random try={tryN + 1} mapR={mapR:F0} " +
+                              $"askedRandom={wantRandom} " +
+                              $"picked=({at.x:F1},{at.y:F1},{at.z:F1}) " +
+                              $"settled=({start.x:F1},{start.y:F1},{start.z:F1})");
+                }
+                if (!found)
+                {
+                    // จุดเปิดแมพ (ถอยออกมามองกองของ) — เส้นทางเดิมก่อนมี D9 ไม่เคยติดอะไร
+                    start = _homeCenter - new Vector3(0f, 0f, _startBack);
+                    start.y = Mathf.Clamp(_homeCenter.y + 12f, SeabedY(start) + 10f, _waterLevel - 12f);
+                    startYaw = 0f;
+                    RefreshSolids(start, force: true);
+                    Debug.Log($"[Tour] spawn=default mode=fallback-opening " +
+                              $"pos=({start.x:F1},{start.y:F1},{start.z:F1}) — 8 ฉลากไม่มีใบไหนว่างจริง");
+                }
             }
 
 

@@ -155,6 +155,49 @@ namespace DiveMap.Core
         public static float YawToward(Vec3 from, Vec3 target)
             => (float)Math.Atan2(target.Z - from.Z, target.X - from.X);
 
+        /// <summary>
+        /// จุดนี้ "ว่างจริง" สำหรับเป็นจุดเกิดไหม — ไม่แตะกล่องชนใด ๆ เลย.
+        ///
+        /// 🔴 22 ส.ค. 2026 (b453 บนเครื่องจริง ยืนยันด้วยป้ายบนภาพ) — บทเรียนของ Settle:
+        /// "ตำแหน่งนิ่ง" ≠ "ตำแหน่งว่าง". จุดใต้ท้องเรือ Chang ถูกดันจากสองทางพร้อมกัน
+        /// (ท้องเรือกดลง + พื้นทรายดันขึ้น) จนสมดุล ⇒ Settle เห็นว่านิ่งแล้วปล่อยผ่าน
+        /// แต่ทุกเฟรมหลังจากนั้น Resolve ยังหักล้างทุกคำสั่งจากจอย = โดรนแช่แข็งทั้งลำ
+        /// depth ค้าง ~20 ม. เท่ากันทุกรอบเพราะสูตรความสูง (กลางน้ำ) เป็นค่าตายตัวของแมพ
+        ///
+        /// เกณฑ์เดียวกับ Resolve เป๊ะ (กรอบใหญ่ + hull ต่อกล่อง + CamRadius) — จุดที่ผ่านด่านนี้
+        /// คือจุดที่ Resolve จะไม่มีวันแตะ ⇒ จอยเป็นของผู้เล่นเต็ม ๆ ตั้งแต่เฟรมแรก
+        /// </summary>
+        public static bool SpawnIsClear(Vec3 p, Solid[] solids)
+        {
+            if (solids == null) return true;
+            for (int i = 0; i < solids.Length; i++)
+            {
+                Solid o = solids[i];
+                Box bd = o.Bound;
+                float slack = o.Rotated ? CamRadius * Root3 : CamRadius;
+                if (p.X <= bd.MinX - slack || p.X >= bd.MaxX + slack ||
+                    p.Y <= bd.MinY - slack || p.Y >= bd.MaxY + slack ||
+                    p.Z <= bd.MinZ - slack || p.Z >= bd.MaxZ + slack) continue;
+
+                Box[] boxes = o.Boxes;
+                int n = boxes == null ? 1 : boxes.Length;
+                if (n == 0) continue;
+
+                Vec3 q = new Vec3(p.X - o.Origin.X, p.Y - o.Origin.Y, p.Z - o.Origin.Z);
+                if (o.Rotated) q = Unrotate(o.Rot, q);
+
+                for (int k = 0; k < n; k++)
+                {
+                    Box b = boxes == null ? bd : boxes[k];
+                    if (q.X > b.MinX - CamRadius && q.X < b.MaxX + CamRadius &&
+                        q.Y > b.MinY - CamRadius && q.Y < b.MaxY + CamRadius &&
+                        q.Z > b.MinZ - CamRadius && q.Z < b.MaxZ + CamRadius)
+                        return false;
+                }
+            }
+            return true;
+        }
+
         private static float Clamp01(float v) => v < 0f ? 0f : (v > 1f ? 1f : v);
 
         public struct Vec3
