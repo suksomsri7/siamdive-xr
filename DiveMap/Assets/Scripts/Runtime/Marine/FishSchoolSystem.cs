@@ -86,8 +86,9 @@ namespace DiveMap.Runtime.Marine
         /// </summary>
         private struct SchoolForm
         {
-            public bool   Active;      // false = keep the Reynolds path (pods)
+            public bool   Active;      // false = keep the Reynolds path (ไม่มีใครใช้แล้วตั้งแต่ 22 ส.ค.)
             public bool   IsShoal;     // milling aggregation (scad, batfish) — no named modes
+            public bool   IsPod;       // ฝูงสัตว์ใหญ่จำนวนน้อย — มีวงล้อรูปฝูงของตัวเอง + ไม่รวมเป็นก้อน
             public bool   Calm;        // the web's calm branch (school:barracuda)
             public SchoolFormation.ModeState  Mode;
             public SchoolFormation.Slot[]     Slots;
@@ -520,13 +521,21 @@ namespace DiveMap.Runtime.Marine
                 float capY      = waterLevel - fishWorld;   // never poke through the surface
 
                 // ── WO-F2: does this school run the web's slot formation? ─────────
-                // Every `school:*` does; a pod keeps the Reynolds path. That split is the web's
-                // own (builder.html :1502 `instanced = !pod`): a pod is a handful of real animals
-                // holding a golden-disc slot with a bob, and it was never the thing the iPhone
-                // photographed. Restricting the change to the schools keeps the blast radius on
-                // the species that is actually wrong.
+                // เดิม: `!s.IsPod` — `school:*` ใช้ slot formation ส่วน pod ยังเดิน Reynolds boids
+                // เพราะตอนย้าย (WO-F2) จงใจจำกัดผลกระทบไว้ที่สปีชีส์ที่กำลังมีปัญหาเท่านั้น
+                //
+                // 🔴 22 ส.ค. 2026 — user: "ฝูงปลากะมง ทำไมว่ายน้ำเป็นแถวตั้งตรง ไม่เป็นธรรมชาติ"
+                // (`pod:yellowtail` = Trevally) · นั่นคืออาการของ boids ที่ไฟล์ SchoolFormation.cs
+                // บันทึกไว้เองตั้งแต่ต้นว่า *"an alignment-dominated flock stretches into a long
+                // thin ribbon and keeps stretching"* — ปลาที่วิ่งด้วยความเร็วคงที่และไม่มีจุดหมาย
+                // หยุดไม่ได้ ⇒ แถวยืดออกเรื่อย ๆ. pod ถูกทิ้งไว้บนเส้นทางนั้นมาตลอด
+                //
+                // user เคาะ "ย้ายเลย" (22 ส.ค.) ⇒ ทุกฝูงใช้ระบบเดียวกันแล้ว ตัวแปรนี้เหลือไว้เพื่อ
+                // ให้ QC/เทสยังปิดได้เป็นจุดเดียว · `s.IsPod` ยังใช้ต่อในเรื่องที่มันเป็นเรื่องจริง ๆ
+                // ของ pod คือ **ระยะห่างระหว่างตัว** (sepR 1.0× ไม่ใช่ 1.5×) และการไม่รวมเป็น
+                // bait ball ตอนตกใจ (FleeMath.ShouldBallUp) — สองอย่างนั้นไม่ได้ถูกแตะ
                 MarineMath.SpeciesSpec spec = MarineMath.SpeciesFor(SwimStyle.BareId(s.Species));
-                bool useForm = !s.IsPod;
+                bool useForm = true;
                 bool isShoal = spec.Formation == MarineMath.SchoolFormation.Shoal;
                 // Per-frame cap: shoal flen×0.04×swimMul, formation flen×0.065×swimMul (:1738/:1765).
                 // MaxSpeed already carries both plus the item scale, so /60 gets back to the web's
@@ -576,7 +585,14 @@ namespace DiveMap.Runtime.Marine
                     var slots = new SchoolFormation.Slot[Mathf.Max(0, s.Count)];
                     // spanY is the web's own asymmetry: a school is a PANCAKE, SR*0.7 for a shoal
                     // and R*0.55 for a formation (:1523-1524).
-                    double spanY = R * (isShoal ? 0.7 : 0.55);
+                    //
+                    // 🔴 pod ต้องมีค่าของตัวเอง ไม่ใช่ยืม 0.55 ของ formation — ไม่งั้นการย้ายมา
+                    // ระบบนี้ (22 ส.ค.) จะกาง pod สูงขึ้น 2.2 เท่าจากที่เคยเป็นบน boids
+                    // (PodVertFactor 0.25 → 0.275 ของ formation คือครึ่งของ 0.55) แล้วเราจะได้
+                    // "ฝูงตั้ง" กลับมาอีกรอบ ทั้งที่นั่นคืออาการที่กำลังแก้อยู่พอดี
+                    // 2× เพราะ spanY เป็นความกว้างเต็ม ส่วน *VertFactor เป็นครึ่งหนึ่ง
+                    double spanY = R * (isShoal ? 0.7
+                                                : (s.IsPod ? MarineMath.PodVertFactor * 2.0 : 0.55));
                     for (int k = 0; k < slots.Length; k++)
                         slots[k] = SchoolFormation.SlotFor(k, slots.Length, R, spanY, fishWorld,
                                                            frng.NextDouble(), frng.NextDouble(),
@@ -587,6 +603,7 @@ namespace DiveMap.Runtime.Marine
                     {
                         Active      = true,
                         IsShoal     = isShoal,
+                        IsPod       = s.IsPod,
                         Calm        = spec.Calm,
                         Mode        = SchoolFormation.NewState(MindSeed(s.Species, si),
                                                                frng.NextDouble() * Mathf.PI * 2f),
@@ -1327,7 +1344,11 @@ namespace DiveMap.Runtime.Marine
             // 🔴 จำเป็นเพราะอาการ "ไถลข้าง" เกิดเฉพาะโหมด polarised (cluster/stream) — คลิป CI
             // สองรอบแรกไปจับตอนฝูงอยู่โหมดวงแหวนพอดี ซึ่งไม่มีอาการอยู่แล้ว วัดได้ 4.8° ทั้ง
             // ก่อนและหลังแก้ = เครื่องมือถ่ายไม่ตรงเงื่อนไขที่กำลังทดสอบ (บทเรียนเดียวกับมุมกล้อง)
-            SchoolFormation.Step(ref fm.Mode, t, sp.Panic, false, fm.ModeDurMul, fm.TransDurMul,
+            // 🔴 22 ส.ค. 2026 — เดิมส่ง `false` ตายตัว ตอนนั้นถูกต้องเพราะ pod ไม่เคยเดินมาถึง
+            // บรรทัดนี้เลย (Formation ปิดอยู่) · พอ pod ย้ายมาใช้ระบบนี้ ค่าตายตัวจะกลายเป็นบั๊ก
+            // เงียบ 2 อย่างพร้อมกัน: pod จะจับทรงเสา (Tornado/Cone) จากถุงของฝูงปลา และจะรวมตัว
+            // เป็น bait ball ตอนตกใจ ทั้งที่กติกาของ pod บอกว่าสัตว์ใหญ่ไม่กองรวมกันแบบนั้น
+            SchoolFormation.Step(ref fm.Mode, t, sp.Panic, fm.IsPod, fm.ModeDurMul, fm.TransDurMul,
                                  ModeLockOverride);
             if (SchoolFormation.MorphFinished(fm.Mode, t)) fm.Mode.HasPrev = false;
 

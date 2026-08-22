@@ -43,6 +43,44 @@ namespace DiveMap.Tests
         /// A uniform list of the nine shapes would put a school in a tornado a third of the time,
         /// which is a screensaver, not a reef.
         /// </summary>
+        /// <summary>
+        /// 🔴 22 ส.ค. 2026 — pod ย้ายมาใช้ระบบ slot ตามที่ user สั่ง ("ย้ายเลย") เพราะ boids
+        /// ทำให้ฝูงปลากะมงยืดเป็นแถว · ด่านนี้กันไม่ให้การย้ายนั้นแก้ปัญหาหนึ่งแล้วสร้างอีกปัญหา
+        /// ที่หน้าตาเหมือนกัน: Tornado/Cone/ConeUp วางสลอตด้วย Y = CylY × R×1.8 = เสาที่สูงกว่า
+        /// กว้าง 1.6 เท่า ซึ่งในสายตาผู้ใช้ก็คือ "ฝูงตั้ง" อันเดิม
+        /// </summary>
+        [Test]
+        public void PodModeWheel_HasNoVerticalColumnShapes()
+        {
+            Assert.Greater(SchoolFormation.PodModes.Length, 0);
+            foreach (SchoolMode m in SchoolFormation.PodModes)
+            {
+                Assert.AreNotEqual(SchoolMode.Tornado, m, "ทอร์นาโด = เสาตั้ง (แนวตั้ง 0.99)");
+                Assert.AreNotEqual(SchoolMode.Cone, m, "กรวย = เสาตั้ง (แนวตั้ง 0.83)");
+                Assert.AreNotEqual(SchoolMode.ConeUp, m, "กรวยกลับหัว = เสาตั้ง");
+                Assert.AreNotEqual(SchoolMode.Stream, m, "แถวเดินทาง — วัดได้ rowness 5.61");
+            }
+
+            // และ pod ต้องได้ถุงของตัวเองจริง ๆ ไม่ใช่ถุงของฝูงปลา
+            Assert.AreSame(SchoolFormation.PodModes, SchoolFormation.ModeBag(isPod: true));
+            Assert.AreSame(SchoolFormation.Modes, SchoolFormation.ModeBag(isPod: false));
+
+            // ฝูงปลาต้องไม่ถูกแตะ — ทรงสวย ๆ ยังอยู่ครบ
+            CollectionAssert.Contains(SchoolFormation.Modes, SchoolMode.Tornado);
+        }
+
+        /// <summary>วงล้อของ pod ต้องยังยืนพื้นที่ cluster เป็นหลัก เหมือนของฝูงปลา ไม่ใช่หมุนทรงโชว์.</summary>
+        [Test]
+        public void PodModeWheel_IsMostlyCluster()
+        {
+            int cluster = 0;
+            foreach (SchoolMode m in SchoolFormation.PodModes)
+                if (m == SchoolMode.Cluster) cluster++;
+
+            Assert.GreaterOrEqual(cluster * 2, SchoolFormation.PodModes.Length,
+                                  "อย่างน้อยครึ่งหนึ่งต้องเป็นก้อนธรรมดา");
+        }
+
         [Test]
         public void ModeWheel_IsTheWebsWeightedBag()
         {

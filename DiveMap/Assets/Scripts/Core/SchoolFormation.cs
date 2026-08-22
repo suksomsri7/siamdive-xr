@@ -63,6 +63,39 @@ namespace DiveMap.Core
             SchoolMode.Cone,    SchoolMode.Tornado, SchoolMode.ConeUp,  SchoolMode.Ball,
         };
 
+        /// <summary>
+        /// วงล้อรูปฝูงของ **pod** — ถุงเดียวกับ <see cref="Modes"/> แต่ตัด Tornado/Cone/ConeUp ออก
+        ///
+        /// 🔴 22 ส.ค. 2026 — ถุงนี้เกิดขึ้นพร้อมกับการย้าย pod มาใช้ระบบ slot (user: "ย้ายเลย")
+        /// และมันเป็นเงื่อนไขที่ทำให้การย้ายนั้นแก้ปัญหาได้จริง ไม่ใช่ของแถม:
+        ///
+        /// ทรงสามอันที่ตัดออกวางสลอตด้วย <c>Y = CylY × R×1.8</c> ⇒ **เป็นเสาตั้งสูงกว่ากว้าง
+        /// ราว 1.6 เท่า** · pod มีตัวไม่เยอะ (yellowtail 50 ตัว ส่วน pod อื่น 10) เสาที่มีสมาชิก
+        /// ห้าสิบตัวอ่านออกมาเป็น "แถวตั้ง" พอดีเป๊ะกับอาการที่ user เพิ่งบ่น ⇒ ถ้าย้ายมาเฉย ๆ
+        /// เราจะแก้ริบบิ้นของ boids ได้ แล้วแจกเสาให้แทน ซึ่งไม่ต่างอะไรกันในสายตาคนดู
+        ///
+        /// ที่เหลือกางตามแนวนอนทั้งหมด: Cluster = ก้อนแบน · Stream = แถวเดินทางแนวนอน ·
+        /// Vortex = วงแหวนแบน (<c>Y = YSpread</c> เท่านั้น) · Ball = ทรงกลม
+        ///
+        /// ⚠️ ถ้าวันหนึ่งอยากได้ทอร์นาโดของปลากะมงจริง ๆ (ของจริงมันทำ และสวยมาก) ให้เพิ่มกลับ
+        /// **พร้อมกับ**ลดความสูงกระบอกสำหรับ pod ไม่ใช่เพิ่มเฉย ๆ
+        /// </summary>
+        /// 🔴 **Stream ถูกตัดออกด้วย และนี่คือของที่วัดมา ไม่ใช่ที่เดา** —
+        /// `tools/school_sim/pod_stretch.py` วัด "ความเป็นแถว" (σ1/σ2 ของแกนหลัก) ได้ว่า
+        /// Stream = **5.61** ซึ่งเป็นทรงเดียวในถุงที่เป็นแถวจริง ๆ (สลอตกาง ±2R ตามทางเดิน
+        /// แต่กว้างแค่ ~0.3R) · ทรงที่เหลือ: cluster 1.26 · vortex 1.00 · ball 1.10
+        /// ⇒ ไม่ว่า "แถวตั้งตรง" ของ user จะหมายถึงเสาตั้งหรือแถวเรียงตรง Stream ก็เป็นตัวเสี่ยง
+        /// ที่สุดทั้งสองทาง และ pod มีสมาชิกน้อย แถวยาว 4R ของสัตว์ใหญ่สิบถึงห้าสิบตัวคือสิ่งที่
+        /// อ่านออกมาเป็น "ต่อแถว" ชัดที่สุด
+        public static readonly SchoolMode[] PodModes =
+        {
+            SchoolMode.Cluster, SchoolMode.Cluster, SchoolMode.Cluster,
+            SchoolMode.Cluster, SchoolMode.Vortex,  SchoolMode.Ball,
+        };
+
+        /// <summary>ถุงรูปฝูงที่ฝูงนี้จับได้ — pod มีถุงของตัวเอง (ดู <see cref="PodModes"/>).</summary>
+        public static SchoolMode[] ModeBag(bool isPod) => isPod ? PodModes : Modes;
+
         /// <summary>Base seconds a school holds each shape — builder.html <c>MODE_DUR</c> (:1543).</summary>
         public static double ModeDurSeconds(SchoolMode m)
         {
@@ -400,10 +433,11 @@ namespace DiveMap.Core
 
             if (t > s.Until)
             {
-                int pick = (int)(Rand(ref s, 4) * Modes.Length);
-                if (pick >= Modes.Length) pick = Modes.Length - 1;
+                SchoolMode[] bag = ModeBag(isPod);
+                int pick = (int)(Rand(ref s, 4) * bag.Length);
+                if (pick >= bag.Length) pick = bag.Length - 1;
                 if (pick < 0) pick = 0;
-                SetMode(ref s, Modes[pick], t, false, modeDurMul, transDurMul,
+                SetMode(ref s, bag[pick], t, false, modeDurMul, transDurMul,
                         Rand(ref s, 5), Rand(ref s, 6));
                 s.Tick++;
             }
