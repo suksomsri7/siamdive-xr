@@ -125,6 +125,43 @@ namespace DiveMap.Runtime
 
             UiShell shell = UiShell.Instance;
             if (shell != null) shell.ApplyModeChrome(next);
+
+            // 🔴 22 ส.ค. 2026 (b461 บนเครื่องจริง + หาง log บนจอ) — "ตัวเลขขยับแต่ภาพนิ่ง":
+            // จอย/โดรน/ตำแหน่งกล้อง ทำงานทั้งหมด ([Tour] frame log ยืนยัน velXZ 10.6 u/s,
+            // pos ขยับจริง) แต่ฉาก 3D บนจอเป็นเฟรมแช่แข็ง — มีเพียง HUD/ป้าย (วาดตรงลงจอ
+            // ไม่ผ่านกล้อง 3D) ที่สด ⇒ กล้องหลักอยู่ในสภาพที่ "ไม่วาดลงจอ" หลังผ่าน AR
+            // (enabled=false / targetTexture ค้าง / rect ว่าง / projection ของ ARKit ค้าง —
+            // สี่ตัวนี้ให้อาการเดียวกันหมดจนแยกไม่ออกจากภาพ)
+            //
+            // การคืนค่าเคยพึ่ง ArSession.Restore เพียงทางเดียว ซึ่งผูกกับว่า OnModeChanged
+            // ของมันถูกเรียกครบวงจรหรือไม่ — พังมาแล้วหลายรูปแบบ ⇒ ตาข่ายนี้เป็น idempotent
+            // และรัน**ทุกครั้ง**ที่จอเป็นของโหมดที่ไม่ใช่ AR: กล้องหลักต้องพร้อมวาดลงจอเสมอ
+            // (ระหว่างอยู่ใน AR ห้ามแตะ — ARKit เป็นเจ้าของ projection/pose ของมันเอง)
+            if (next != AppMode.Ar)
+            {
+                Camera main = Camera.main;
+                // Camera.main มองไม่เห็นกล้องที่ถูก disable — ตามหาจาก OrbitCamera ซึ่งเกาะ
+                // กล้องหลักเสมอ (AppBoot ผูกไว้ตอนบูต) แล้วชุบชีวิตมันกลับมา
+                if (main == null)
+                {
+                    OrbitCamera oc = UnityEngine.Object.FindFirstObjectByType<OrbitCamera>();
+                    if (oc != null) main = oc.GetComponent<Camera>();
+                }
+                if (main != null)
+                {
+                    bool wasSick = !main.enabled || main.targetTexture != null ||
+                                   main.rect.width < 0.99f || main.rect.height < 0.99f;
+                    main.enabled = true;
+                    main.targetTexture = null;
+                    main.rect = new Rect(0f, 0f, 1f, 1f);
+                    main.ResetProjectionMatrix();
+                    main.ResetWorldToCameraMatrix();
+                    main.ResetAspect();
+                    main.usePhysicalProperties = false;
+                    if (wasSick)
+                        Debug.Log($"[Mode] กล้องหลักถูกชุบชีวิตตอนเข้า {next} — มีอาการค้างจาก AR");
+                }
+            }
         }
     }
 }

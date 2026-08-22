@@ -161,9 +161,13 @@ namespace DiveMap.Runtime.Ui
                 if (bc != null)
                 {
                     Vector3 cp = bc.transform.position;
+                    // สุขภาพกล้อง: en=เปิดไหม · rect · tt=วาดลง texture อื่นไหม · clr=clearFlags
+                    // — สี่ตัวที่ทำ "ภาพแช่แข็ง" ได้ ภาพใบเดียวชี้ตัวเป๊ะ (22 ส.ค. รอบ 7)
+                    string health = $"en={(bc.enabled ? "T" : "F")} r={bc.rect.width:F1}x{bc.rect.height:F1} " +
+                                    $"tt={(bc.targetTexture == null ? "-" : "RT!")} clr={bc.clearFlags}";
                     string cam = bo != null
-                        ? $"cam({cp.x:F0},{cp.y:F0},{cp.z:F0}) tgt({bo.target.x:F0},{bo.target.y:F0},{bo.target.z:F0}) d={bo.distance:F0}"
-                        : $"cam({cp.x:F0},{cp.y:F0},{cp.z:F0}) no-orbit";
+                        ? $"cam({cp.x:F0},{cp.y:F0},{cp.z:F0}) tgt({bo.target.x:F0},{bo.target.y:F0},{bo.target.z:F0}) d={bo.distance:F0} · {health}"
+                        : $"cam({cp.x:F0},{cp.y:F0},{cp.z:F0}) no-orbit · {health}";
                     GUI.Label(new Rect(0, y, Screen.width - rightPad, tailH), cam, _tailStyle);
                     y -= tailH;
                 }

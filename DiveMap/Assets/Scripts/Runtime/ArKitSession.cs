@@ -915,17 +915,17 @@ namespace DiveMap.Runtime
             _session = null; _origin = null; _planes = null; _raycast = null;
             _anchors = null; _background = null;   // _input ถูกเก็บไว้ใช้ต่อ (ดูด้านบน)
 
-            // 🔴 หยุด subsystem ได้ แต่ **ห้าม DeinitializeLoader** (16 ส.ค. 2026)
+            // 🔴 ห้าม DeinitializeLoader (16 ส.ค. 2026 — ARKit ไม่รองรับ initialize ซ้ำในโปรเซส)
             //
-            // อาการที่ทำให้ต้องเปลี่ยน: ออกจาก AR ของแมพแรก แล้วเปิดแมพที่สอง — ไม่ว่าจะเข้า AR
-            // หรือแม้แต่โหมดดูธรรมดา ก็จอดำ และโหมดโดรนก็ค้างขยับไม่ได้ทั้งจอ ⇒ ไม่ใช่แค่ AR พัง
-            // แต่ทั้งเครื่องเล่นพังหลังจากถอนแล้วโหลด loader ใหม่ในโปรเซสเดียวกัน ซึ่งเป็นท่าที่
-            // ARKit ไม่รองรับจริงจัง (เอกสารของ Unity เองก็เตือนเรื่อง initialize ซ้ำ)
-            //
-            // ราคาที่จ่ายแทน: ARKit ยังถูกโหลดค้างในหน่วยความจำหลังใช้ครั้งแรก — ยอมรับได้ เพราะ
-            // subsystem ถูกหยุดแล้ว (ไม่กินกล้อง ไม่กินแบต) และผู้ใช้ที่เข้า AR หนึ่งครั้งมักเข้าอีก
-            if (_manager != null && _manager.activeLoader != null) _manager.StopSubsystems();
-            Debug.Log($"[ARKit] end step={_step}");
+            // 🔴 และตั้งแต่ 22 ส.ค. 2026 (รอบ 7): **เลิกเรียก StopSubsystems เองด้วย** —
+            // lifecycle เป็นของ component ทางเดียว. เดิมเราทำสองทางพร้อมกัน: ปิด component
+            // (ARSession/ARCameraManager/ฯลฯ ซึ่ง OnDisable ของมัน stop subsystem ของตัวเอง
+            // อยู่แล้วตามดีไซน์ AR Foundation) แล้วยัง StopSubsystems ทับอีกชั้น ⇒ ตอนกลับเข้า
+            // AR รอบสอง OnEnable ของ component ปลุก subsystem ของตัวเองคืน แต่สถานะที่ถูกหยุด
+            // "จากข้างนอก" ไม่ถูกนับรวม — ผลบนเครื่องจริง (b461): session #2 วิ่ง เจอ plane
+            // จากแผนที่เดิม แต่ state ค้าง SessionInitializing และภาพกล้องไม่มา = จอดำ
+            // ผู้จัดการสองคนสั่งเครื่องเดียวกัน ได้สถานะที่ไม่มีใครรู้จัก — เหลือคนเดียวพอ
+            Debug.Log($"[ARKit] end step={_step} (subsystems พักโดย component เอง)");
             _step = ArStep.Searching;
         }
 
